@@ -326,6 +326,9 @@ impl InnerSqliteConnection {
 
                 return Err(e);
             }
+            
+            ffi::sqlite3_busy_timeout(db, 1000 as c_int);
+            
             Ok(InnerSqliteConnection{ db: db })
         })
     }
