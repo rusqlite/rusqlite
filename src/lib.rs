@@ -8,7 +8,7 @@
 //! use time::Timespec;
 //! use rusqlite::SqliteConnection;
 //!
-//! #[deriving(Show)]
+//! #[derive(Show)]
 //! struct Person {
 //!     id: i32,
 //!     name: String,
@@ -50,6 +50,7 @@
 #![feature(globs)]
 #![feature(unsafe_destructor)]
 #![feature(macro_rules)]
+#![feature(associated_types)]
 
 extern crate libc;
 
@@ -58,7 +59,7 @@ use std::ptr;
 use std::fmt;
 use std::rc::{Rc};
 use std::cell::{RefCell, Cell};
-use std::c_str::{CString};
+use std::c_str::{CString, ToCStr};
 use libc::{c_int, c_void, c_char};
 
 use types::{ToSql, FromSql};
@@ -84,7 +85,7 @@ unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
 }
 
 /// Encompasses an error result from a call to the SQLite C API.
-#[deriving(Show)]
+#[derive(Show)]
 pub struct SqliteError {
     /// The error code returned by a SQLite C API call. See [SQLite Result
     /// Codes](http://www.sqlite.org/rescode.html) for details.
@@ -566,8 +567,10 @@ impl<'stmt> SqliteRows<'stmt> {
     }
 }
 
-impl<'stmt> Iterator<SqliteResult<SqliteRow<'stmt>>> for SqliteRows<'stmt> {
-    fn next(&mut self) -> Option<SqliteResult<SqliteRow<'stmt>>> {
+impl<'stmt> Iterator for SqliteRows<'stmt> {
+    type Item = SqliteResult<SqliteRow<'stmt>>;
+    
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         if self.failed {
             return None;
         }

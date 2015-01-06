@@ -55,7 +55,7 @@
 extern crate time;
 
 use libc::{c_int, c_double};
-use std::c_str::{CString};
+use std::c_str::{CString, ToCStr};
 use std::mem;
 use super::ffi;
 use super::{SqliteResult, SqliteError};
@@ -141,7 +141,7 @@ impl<T: ToSql> ToSql for Option<T> {
 ///     conn.execute("INSERT INTO people (name) VALUES (?)", &[&Null])
 /// }
 /// ```
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct Null;
 
 impl ToSql for Null {

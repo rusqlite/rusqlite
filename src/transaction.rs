@@ -7,7 +7,7 @@ pub use SqliteTransactionBehavior::{
 
 /// Options for transaction behavior. See [BEGIN
 /// TRANSACTION](http://www.sqlite.org/lang_transaction.html) for details.
-#[deriving(Copy)]
+#[derive(Copy)]
 pub enum SqliteTransactionBehavior {
     SqliteTransactionDeferred,
     SqliteTransactionImmediate,
@@ -36,7 +36,7 @@ pub enum SqliteTransactionBehavior {
 ///     tx.commit()
 /// }
 /// ```
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct SqliteTransaction<'conn> {
     conn: &'conn SqliteConnection,
     depth: u32,
