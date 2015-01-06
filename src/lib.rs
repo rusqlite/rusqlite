@@ -244,7 +244,7 @@ impl SqliteConnection {
     ///   * The query does not successfully return at least one row.
     ///
     /// If the query returns more than one row, all rows except the first are ignored.
-    pub fn query_row<T>(&self, sql: &str, params: &[&ToSql], f: |SqliteRow| -> T) -> T {
+    pub fn query_row<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> T where F: FnOnce(SqliteRow) -> T {
         let mut stmt = self.prepare(sql).unwrap();
         let mut rows = stmt.query(params).unwrap();
         f(rows.next().expect("Query did not return a row").unwrap())
@@ -328,12 +328,14 @@ impl InnerSqliteConnection {
 
                 return Err(e);
             }
+
             let r = ffi::sqlite3_busy_timeout(db, 5000);
             if r != ffi::SQLITE_OK {
                 let e = SqliteError::from_handle(db, r);
                 ffi::sqlite3_close(db);
                 return Err(e);
             }
+
             Ok(InnerSqliteConnection{ db: db })
         })
     }
