@@ -569,8 +569,8 @@ impl<'stmt> SqliteRows<'stmt> {
 
 impl<'stmt> Iterator for SqliteRows<'stmt> {
     type Item = SqliteResult<SqliteRow<'stmt>>;
-    
-    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+
+    fn next(&mut self) -> Option<SqliteResult<SqliteRow<'stmt>>> {
         if self.failed {
             return None;
         }
