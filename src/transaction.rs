@@ -36,7 +36,6 @@ pub enum SqliteTransactionBehavior {
 ///     tx.commit()
 /// }
 /// ```
-#[derive(Copy)]
 pub struct SqliteTransaction<'conn> {
     conn: &'conn SqliteConnection,
     depth: u32,
