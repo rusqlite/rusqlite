@@ -252,6 +252,21 @@ impl SqliteConnection {
         f(rows.next().expect("Query did not return a row").unwrap())
     }
 
+    /// Safe equivalent to `query_row`. Returns error values instead of panicing.
+    pub fn query_row_safe<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> SqliteResult<T>
+                                where F: FnOnce(SqliteRow) -> T {
+        let mut stmt = try!(self.prepare(sql));
+        let mut rows = try!(stmt.query(params));
+
+        match rows.next() {
+            Some(row) => row.map(f),
+            None      => Err(SqliteError {
+                code: 27, // SQLITE_NOTICE
+                message: format!("Query did not return a row")
+            })
+        }
+    }
+
     /// Prepare a SQL statement for execution.
     ///
     /// ## Example
@@ -714,6 +729,31 @@ mod test {
         assert_eq!(db.execute("INSERT INTO foo(x) VALUES (?)", &[&2i32]).unwrap(), 1);
 
         assert_eq!(3i32, db.query_row("SELECT SUM(x) FROM foo", &[], |r| r.get(0)));
+    }
+
+    #[test]
+    fn query_row_safe() {
+        let db = checked_memory_handle();
+        let sql = "BEGIN;
+                   CREATE TABLE foo(x INTEGER);
+                   INSERT INTO foo VALUES(1);
+                   INSERT INTO foo VALUES(2);
+                   INSERT INTO foo VALUES(3);
+                   INSERT INTO foo VALUES(4);
+                   END;";
+        db.execute_batch(sql).unwrap();
+
+        assert_eq!(10i64, db.query_row_safe("SELECT SUM(x) FROM foo", &[], |r| r.get::<i64>(0)).unwrap());
+
+        let result = db.query_row_safe("SELECT x FROM foo WHERE x > 5", &[], |r| r.get::<i64>(0));
+        let error = result.unwrap_err();
+
+        assert!(error.code == 27);
+        assert!(error.message.as_slice() == "Query did not return a row");
+
+        let bad_query_result = db.query_row_safe("NOT A PROPER QUERY; test123", &[], |_| ());
+
+        assert!(bad_query_result.is_err());
     }
 
     #[test]
