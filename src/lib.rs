@@ -27,7 +27,7 @@
 //!                   )", &[]).unwrap();
 //!     let me = Person {
 //!         id: 0,
-//!         name: "Steven".to_string(),
+//!         name: format!("Steven"),
 //!         time_created: time::get_time(),
 //!         data: None
 //!     };
@@ -43,11 +43,12 @@
 //!             time_created: row.get(2),
 //!             data: row.get(3)
 //!         };
-//!         println!("Found person {}", person);
+//!         println!("Found person {:?}", person);
 //!     }
 //! }
 //! ```
 #![feature(unsafe_destructor)]
+#![allow(unstable)]
 
 extern crate libc;
 
@@ -206,11 +207,11 @@ impl SqliteConnection {
     /// fn update_rows(conn: &SqliteConnection) {
     ///     match conn.execute("UPDATE foo SET bar = 'baz' WHERE qux = ?", &[&1i32]) {
     ///         Ok(updated) => println!("{} rows were updated", updated),
-    ///         Err(err) => println!("update failed: {}", err),
+    ///         Err(err) => println!("update failed: {:?}", err),
     ///     }
     /// }
     /// ```
-    pub fn execute(&self, sql: &str, params: &[&ToSql]) -> SqliteResult<uint> {
+    pub fn execute(&self, sql: &str, params: &[&ToSql]) -> SqliteResult<usize> {
         self.prepare(sql).and_then(|mut stmt| stmt.execute(params))
     }
 
@@ -280,7 +281,7 @@ impl SqliteConnection {
         self.db.borrow_mut().decode_result(code)
     }
 
-    fn changes(&self) -> uint {
+    fn changes(&self) -> usize {
         self.db.borrow_mut().changes()
     }
 }
@@ -390,8 +391,8 @@ impl InnerSqliteConnection {
         })
     }
 
-    fn changes(&mut self) -> uint {
-        unsafe{ ffi::sqlite3_changes(self.db) as uint }
+    fn changes(&mut self) -> usize {
+        unsafe{ ffi::sqlite3_changes(self.db) as usize }
     }
 }
 
@@ -432,7 +433,7 @@ impl<'conn> SqliteStatement<'conn> {
     ///     Ok(())
     /// }
     /// ```
-    pub fn execute(&mut self, params: &[&ToSql]) -> SqliteResult<uint> {
+    pub fn execute(&mut self, params: &[&ToSql]) -> SqliteResult<usize> {
         self.reset_if_needed();
 
         unsafe {
@@ -511,7 +512,7 @@ impl<'conn> SqliteStatement<'conn> {
 
 impl<'conn> fmt::Show for SqliteStatement<'conn> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Statement( conn: {}, stmt: {} )", self.conn, self.stmt)
+        write!(f, "Statement( conn: {:?}, stmt: {:?} )", self.conn, self.stmt)
     }
 }
 
@@ -796,7 +797,7 @@ mod test {
         assert_eq!(db.last_insert_rowid(), 1);
 
         let mut stmt = db.prepare("INSERT INTO foo DEFAULT VALUES").unwrap();
-        for _ in range(0i, 9) {
+        for _ in range(0i32, 9) {
             stmt.execute(&[]).unwrap();
         }
         assert_eq!(db.last_insert_rowid(), 10);

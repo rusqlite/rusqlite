@@ -138,7 +138,7 @@ impl<T: ToSql> ToSql for Option<T> {
 /// ```rust,no_run
 /// # use rusqlite::{SqliteConnection, SqliteResult};
 /// # use rusqlite::types::{Null};
-/// fn insert_null(conn: &SqliteConnection) -> SqliteResult<uint> {
+/// fn insert_null(conn: &SqliteConnection) -> SqliteResult<usize> {
 ///     conn.execute("INSERT INTO people (name) VALUES (?)", &[&Null])
 /// }
 /// ```
@@ -186,7 +186,7 @@ impl FromSql for Vec<u8> {
         let c_blob = ffi::sqlite3_column_blob(stmt, col);
         let len = ffi::sqlite3_column_bytes(stmt, col);
 
-        assert!(len >= 0); let len = len as uint;
+        assert!(len >= 0); let len = len as usize;
 
         Ok(Vec::from_raw_buf(mem::transmute(c_blob), len))
     }
