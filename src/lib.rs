@@ -48,6 +48,7 @@
 //! }
 //! ```
 #![feature(unsafe_destructor)]
+#![allow(unstable)]
 
 extern crate libc;
 
@@ -210,7 +211,7 @@ impl SqliteConnection {
     ///     }
     /// }
     /// ```
-    pub fn execute(&self, sql: &str, params: &[&ToSql]) -> SqliteResult<uint> {
+    pub fn execute(&self, sql: &str, params: &[&ToSql]) -> SqliteResult<usize> {
         self.prepare(sql).and_then(|mut stmt| stmt.execute(params))
     }
 
@@ -280,7 +281,7 @@ impl SqliteConnection {
         self.db.borrow_mut().decode_result(code)
     }
 
-    fn changes(&self) -> uint {
+    fn changes(&self) -> usize {
         self.db.borrow_mut().changes()
     }
 }
@@ -390,8 +391,8 @@ impl InnerSqliteConnection {
         })
     }
 
-    fn changes(&mut self) -> uint {
-        unsafe{ ffi::sqlite3_changes(self.db) as uint }
+    fn changes(&mut self) -> usize {
+        unsafe{ ffi::sqlite3_changes(self.db) as usize }
     }
 }
 
@@ -432,7 +433,7 @@ impl<'conn> SqliteStatement<'conn> {
     ///     Ok(())
     /// }
     /// ```
-    pub fn execute(&mut self, params: &[&ToSql]) -> SqliteResult<uint> {
+    pub fn execute(&mut self, params: &[&ToSql]) -> SqliteResult<usize> {
         self.reset_if_needed();
 
         unsafe {
@@ -796,7 +797,7 @@ mod test {
         assert_eq!(db.last_insert_rowid(), 1);
 
         let mut stmt = db.prepare("INSERT INTO foo DEFAULT VALUES").unwrap();
-        for _ in range(0i, 9) {
+        for _ in range(0i32, 9) {
             stmt.execute(&[]).unwrap();
         }
         assert_eq!(db.last_insert_rowid(), 10);
