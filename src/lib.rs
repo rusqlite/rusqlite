@@ -27,7 +27,7 @@
 //!                   )", &[]).unwrap();
 //!     let me = Person {
 //!         id: 0,
-//!         name: "Steven".to_string(),
+//!         name: format!("Steven"),
 //!         time_created: time::get_time(),
 //!         data: None
 //!     };
@@ -43,11 +43,12 @@
 //!             time_created: row.get(2),
 //!             data: row.get(3)
 //!         };
-//!         println!("Found person {}", person);
+//!         println!("Found person {:?}", person);
 //!     }
 //! }
 //! ```
 #![feature(unsafe_destructor)]
+#![allow(unstable)]
 
 extern crate libc;
 
@@ -206,11 +207,11 @@ impl SqliteConnection {
     /// fn update_rows(conn: &SqliteConnection) {
     ///     match conn.execute("UPDATE foo SET bar = 'baz' WHERE qux = ?", &[&1i32]) {
     ///         Ok(updated) => println!("{} rows were updated", updated),
-    ///         Err(err) => println!("update failed: {}", err),
+    ///         Err(err) => println!("update failed: {:?}", err),
     ///     }
     /// }
     /// ```
-    pub fn execute(&self, sql: &str, params: &[&ToSql]) -> SqliteResult<uint> {
+    pub fn execute(&self, sql: &str, params: &[&ToSql]) -> SqliteResult<usize> {
         self.prepare(sql).and_then(|mut stmt| stmt.execute(params))
     }
 
@@ -251,6 +252,21 @@ impl SqliteConnection {
         f(rows.next().expect("Query did not return a row").unwrap())
     }
 
+    /// Safe equivalent to `query_row`. Returns error values instead of panicing.
+    pub fn query_row_safe<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> SqliteResult<T>
+                                where F: FnOnce(SqliteRow) -> T {
+        let mut stmt = try!(self.prepare(sql));
+        let mut rows = try!(stmt.query(params));
+
+        match rows.next() {
+            Some(row) => row.map(f),
+            None      => Err(SqliteError {
+                code: 27, // SQLITE_NOTICE
+                message: format!("Query did not return a row")
+            })
+        }
+    }
+
     /// Prepare a SQL statement for execution.
     ///
     /// ## Example
@@ -280,7 +296,7 @@ impl SqliteConnection {
         self.db.borrow_mut().decode_result(code)
     }
 
-    fn changes(&self) -> uint {
+    fn changes(&self) -> usize {
         self.db.borrow_mut().changes()
     }
 }
@@ -390,8 +406,8 @@ impl InnerSqliteConnection {
         })
     }
 
-    fn changes(&mut self) -> uint {
-        unsafe{ ffi::sqlite3_changes(self.db) as uint }
+    fn changes(&mut self) -> usize {
+        unsafe{ ffi::sqlite3_changes(self.db) as usize }
     }
 }
 
@@ -432,7 +448,7 @@ impl<'conn> SqliteStatement<'conn> {
     ///     Ok(())
     /// }
     /// ```
-    pub fn execute(&mut self, params: &[&ToSql]) -> SqliteResult<uint> {
+    pub fn execute(&mut self, params: &[&ToSql]) -> SqliteResult<usize> {
         self.reset_if_needed();
 
         unsafe {
@@ -511,7 +527,7 @@ impl<'conn> SqliteStatement<'conn> {
 
 impl<'conn> fmt::Show for SqliteStatement<'conn> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Statement( conn: {}, stmt: {} )", self.conn, self.stmt)
+        write!(f, "Statement( conn: {:?}, stmt: {:?} )", self.conn, self.stmt)
     }
 }
 
@@ -716,6 +732,31 @@ mod test {
     }
 
     #[test]
+    fn query_row_safe() {
+        let db = checked_memory_handle();
+        let sql = "BEGIN;
+                   CREATE TABLE foo(x INTEGER);
+                   INSERT INTO foo VALUES(1);
+                   INSERT INTO foo VALUES(2);
+                   INSERT INTO foo VALUES(3);
+                   INSERT INTO foo VALUES(4);
+                   END;";
+        db.execute_batch(sql).unwrap();
+
+        assert_eq!(10i64, db.query_row_safe("SELECT SUM(x) FROM foo", &[], |r| r.get::<i64>(0)).unwrap());
+
+        let result = db.query_row_safe("SELECT x FROM foo WHERE x > 5", &[], |r| r.get::<i64>(0));
+        let error = result.unwrap_err();
+
+        assert!(error.code == 27);
+        assert!(error.message.as_slice() == "Query did not return a row");
+
+        let bad_query_result = db.query_row_safe("NOT A PROPER QUERY; test123", &[], |_| ());
+
+        assert!(bad_query_result.is_err());
+    }
+
+    #[test]
     fn test_prepare_execute() {
         let db = checked_memory_handle();
         db.execute_batch("CREATE TABLE foo(x INTEGER);").unwrap();
@@ -796,7 +837,7 @@ mod test {
         assert_eq!(db.last_insert_rowid(), 1);
 
         let mut stmt = db.prepare("INSERT INTO foo DEFAULT VALUES").unwrap();
-        for _ in range(0i, 9) {
+        for _ in range(0i32, 9) {
             stmt.execute(&[]).unwrap();
         }
         assert_eq!(db.last_insert_rowid(), 10);
