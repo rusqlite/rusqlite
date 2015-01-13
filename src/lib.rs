@@ -290,8 +290,9 @@ impl SqliteConnection {
     }
 
     // TODO: add docs, example and tests
+    // is it possible to make this thing panic?
     pub fn query_and_collect<T, F, C>(&self, sql: &str, params: &[&ToSql], f: F) -> SqliteResult<C>
-                                   where F: Fn(SqliteRow) -> T + Copy, // FIXME: is the Copy really necessary?
+                                   where F: Fn(SqliteRow) -> T,
                                          C: FromIterator<T> {
         let mut statement = try!(self.prepare(sql));
         
@@ -299,8 +300,10 @@ impl SqliteConnection {
             .query(params)
             .and_then(|rows| {
                 rows
-                    .map(|row| {
-                        row.map(f)
+                    .map(|possible_row| {
+                        possible_row.map(|row| {
+                            f(row)
+                        })
                     })
                     .collect()
             })
