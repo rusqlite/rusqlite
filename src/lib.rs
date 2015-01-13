@@ -60,6 +60,7 @@ use std::rc::{Rc};
 use std::cell::{RefCell, Cell};
 use std::ffi::{CString};
 use std::ffi as std_ffi;
+use std::iter::FromIterator;
 use std::str;
 use libc::{c_int, c_void, c_char};
 
@@ -286,6 +287,23 @@ impl SqliteConnection {
                 message: "Query did not return a row".to_string(),
             })
         }
+    }
+
+    // TODO: add docs, example and tests
+    pub fn query_and_collect<T, F, C>(&self, sql: &str, params: &[&ToSql], f: F) -> SqliteResult<C>
+                                   where F: Fn(SqliteRow) -> T + Copy, // FIXME: is the Copy really necessary?
+                                         C: FromIterator<T> {
+        let mut statement = try!(self.prepare(sql));
+        
+        statement
+            .query(params)
+            .and_then(|rows| {
+                rows
+                    .map(|row| {
+                        row.map(f)
+                    })
+                    .collect()
+            })
     }
 
     /// Prepare a SQL statement for execution.
