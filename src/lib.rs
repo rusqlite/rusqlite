@@ -60,6 +60,7 @@ use std::rc::{Rc};
 use std::cell::{RefCell, Cell};
 use std::ffi::{CString};
 use std::ffi as std_ffi;
+use std::iter::FromIterator;
 use std::str;
 use libc::{c_int, c_void, c_char};
 
@@ -286,6 +287,39 @@ impl SqliteConnection {
                 message: "Query did not return a row".to_string(),
             })
         }
+    }
+
+    /// Convenience method to collect the results of a query. Does not panic.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{SqliteResult,SqliteConnection};
+    /// # use std::collections::HashSet;
+    /// fn fetch_student_names(conn: &SqliteConnection, class_id: i64) -> SqliteResult<HashSet<String>> {
+    ///     conn.query_and_collect(
+    ///         "SELECT name FROM students WHERE class = $1;",
+    ///         &[&class_id],
+    ///         |row| row.get(0)
+    ///     )
+    /// }
+    /// ```
+    pub fn query_and_collect<T, F, C>(&self, sql: &str, params: &[&ToSql], f: F) -> SqliteResult<C>
+                                   where F: Fn(SqliteRow) -> T,
+                                         C: FromIterator<T> {
+        let mut statement = try!(self.prepare(sql));
+        
+        statement
+            .query(params)
+            .and_then(|rows| {
+                rows
+                    .map(|possible_row| {
+                        possible_row.map(|row| {
+                            f(row)
+                        })
+                    })
+                    .collect()
+            })
     }
 
     /// Prepare a SQL statement for execution.
@@ -822,6 +856,25 @@ mod test {
         let bad_query_result = db.query_row_safe("NOT A PROPER QUERY; test123", &[], |_| ());
 
         assert!(bad_query_result.is_err());
+    }
+
+    #[test]
+    fn test_query_and_collect() {
+        let db = checked_memory_handle();
+        let sql = "BEGIN;
+                   CREATE TABLE foo(x INTEGER);
+                   INSERT INTO foo VALUES(1);
+                   INSERT INTO foo VALUES(2);
+                   INSERT INTO foo VALUES(3);
+                   INSERT INTO foo VALUES(4);
+                   END;";
+        db.execute_batch(sql).unwrap();
+
+        let mut vec: Vec<i64> = db.query_and_collect("SELECT x FROM foo;", &[], |row| row.get(0)).unwrap();
+
+        vec.sort();
+
+        assert_eq!(vec![1i64, 2, 3, 4].as_slice(), vec.as_slice());
     }
 
     #[test]
