@@ -99,7 +99,7 @@ pub struct SqliteError {
     pub message: String,
 }
 
-impl fmt::String for SqliteError {
+impl fmt::Display for SqliteError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "SqliteError( code: {}, message: {} )", self.code, self.message)
     }
