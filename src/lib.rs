@@ -323,7 +323,7 @@ impl SqliteConnection {
     }
 }
 
-impl fmt::Show for SqliteConnection {
+impl fmt::Debug for SqliteConnection {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SqliteConnection()")
     }
@@ -550,7 +550,7 @@ impl<'conn> SqliteStatement<'conn> {
     }
 }
 
-impl<'conn> fmt::Show for SqliteStatement<'conn> {
+impl<'conn> fmt::Debug for SqliteStatement<'conn> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Statement( conn: {:?}, stmt: {:?} )", self.conn, self.stmt)
     }
