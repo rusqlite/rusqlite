@@ -486,7 +486,10 @@ impl<'conn> SqliteStatement<'conn> {
                 ffi::SQLITE_DONE => Ok(self.conn.changes()),
                 ffi::SQLITE_ROW => Err(SqliteError{ code: r,
                     message: "Unexpected row result - did you mean to call query?".to_string() }),
-                _ => Err(self.conn.decode_result(r).unwrap_err()),
+                _ => match self.conn.decode_result(r) {
+                    Err(e) => Err(e),
+                    _      => panic!("Did not get expected error")
+                },
             }
         }
     }
@@ -628,7 +631,11 @@ impl<'stmt> Iterator for SqliteRows<'stmt> {
             ffi::SQLITE_DONE => None,
             code => {
                 self.failed = true;
-                Some(Err(self.stmt.conn.decode_result(code).unwrap_err()))
+
+                match self.stmt.conn.decode_result(code) {
+                    Err(e) => Some(Err(e)),
+                    _      => panic!("Did not get expected error")
+                }
             }
         }
     }
@@ -830,8 +837,12 @@ mod test {
         let db = checked_memory_handle();
         db.execute_batch("CREATE TABLE foo(x INTEGER);").unwrap();
 
-        let err = db.prepare("SELECT * FROM does_not_exist").unwrap_err();
-        assert!(err.message.as_slice().contains("does_not_exist"));
+        let err = db.prepare("SELECT * FROM does_not_exist");
+
+        match err {
+            Err(e) => assert!(e.message.as_slice().contains("does_not_exist")),
+            _      => panic!("Did not get expected error")
+        }
     }
 
     #[test]
