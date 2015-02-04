@@ -533,7 +533,7 @@ impl<'conn> SqliteStatement<'conn> {
     /// ```rust,no_run
     /// # use rusqlite::{SqliteConnection, SqliteResult};
     /// fn get_names_for_ids(conn: &rusqlite::SqliteConnection, ids: Vec<i64>) -> Result<Vec<String>, rusqlite::SqliteError> {
-    ///     let id_bindings = repeat("?").take(ids.len()).collect::<Vec<_>>().connect(", ");
+    ///     let id_bindings = std::iter::repeat("?").take(ids.len()).collect::<Vec<_>>().connect(", ");
     ///     let mut stmt = try!(conn.prepare(&*format!("SELECT name FROM people WHERE id IN ({})", id_bindings)));
     ///     let mut rows = try!(stmt.query_iter(ids.iter()));
     ///
