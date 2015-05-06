@@ -36,13 +36,16 @@
 //!                  &[&me.name, &me.time_created, &me.data]).unwrap();
 //!
 //!     let mut stmt = conn.prepare("SELECT id, name, time_created, data FROM person").unwrap();
-//!     for row in stmt.query(&[]).unwrap().map(|row| row.unwrap()) {
-//!         let person = Person {
+//!     let mut rows = stmt.query(&[], |row| {
+//!         Person {
 //!             id: row.get(0),
 //!             name: row.get(1),
 //!             time_created: row.get(2),
 //!             data: row.get(3)
-//!         };
+//!         }
+//!     }).unwrap();
+//!
+//!     for person in rows {
 //!         println!("Found person {:?}", person);
 //!     }
 //! }
@@ -56,8 +59,7 @@ use std::ptr;
 use std::fmt;
 use std::path::{Path};
 use std::error;
-use std::rc::{Rc};
-use std::cell::{RefCell, Cell};
+use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::str;
 use libc::{c_int, c_void, c_char};
@@ -276,7 +278,7 @@ impl SqliteConnection {
     /// ```rust,no_run
     /// # use rusqlite::{SqliteResult,SqliteConnection};
     /// fn preferred_locale(conn: &SqliteConnection) -> SqliteResult<String> {
-    ///     conn.query_row_safe("SELECT value FROM preferences WHERE name='locale'", &[], |row| {
+    ///     conn.query_row("SELECT value FROM preferences WHERE name='locale'", &[], |row| {
     ///         row.get(0)
     ///     })
     /// }
@@ -284,41 +286,16 @@ impl SqliteConnection {
     ///
     /// If the query returns more than one row, all rows except the first are ignored.
     pub fn query_row<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> SqliteResult<T>
-                           where F: FnOnce(MappedRow) -> T {
+                           where F: FnMut(MappedRow) -> T,
+                                 T: 'static {
         let mut stmt = try!(self.prepare(sql));
-        let mut rows = try!(stmt.query(params, |x| x));
+        let mut rows = try!(stmt.query(params, f));
 
-        match rows.next() {
-            Some(row) => row.map(f),
-            None      => Err(SqliteError{
+        rows.next().unwrap_or(
+            Err(SqliteError{
                 code: ffi::SQLITE_NOTICE,
                 message: "Query did not return a row".to_string(),
-            })
-        }
-    }
-
-    /// Convenience method to execute a query that is expected to return a single row.
-    ///
-    /// ## Example
-    ///
-    /// ```rust,no_run
-    /// # use rusqlite::{SqliteResult,SqliteConnection};
-    /// fn preferred_locale(conn: &SqliteConnection) -> SqliteResult<String> {
-    ///     conn.query_row_safe("SELECT value FROM preferences WHERE name='locale'", &[], |row| {
-    ///         row.get(0)
-    ///     })
-    /// }
-    /// ```
-    ///
-    /// If the query returns more than one row, all rows except the first are ignored.
-    ///
-    /// ## Deprecated
-    ///
-    /// This method should be considered deprecated. Use `query_row` instead, which now
-    /// does exactly the same thing.
-    pub fn query_row_safe<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> SqliteResult<T>
-                                where F: FnOnce(MappedRow) -> T {
-        self.query_row(sql, params, f)
+            }))
     }
 
     /// Prepare a SQL statement for execution.
@@ -632,11 +609,10 @@ impl<'conn> SqliteStatement<'conn> {
                     "incorrect number of parameters to query(): expected {}, got {}",
                     ffi::sqlite3_bind_parameter_count(self.stmt),
                     params.len());
-        }
 
-        for (i, p) in params.iter().enumerate() {
-
-            try!(self.conn.decode_result(p.bind_parameter(self.stmt, (i + 1) as c_int)));
+            for (i, p) in params.iter().enumerate() {
+                try!(self.conn.decode_result(p.bind_parameter(self.stmt, (i + 1) as c_int)));
+            }
         }
 
         self.needs_reset = true;
@@ -704,18 +680,18 @@ impl<'stmt> MappedRow<'stmt> {
     /// ## Failure
     ///
     /// Can panic.
-    pub fn get<T: FromSql>(&self, idx: c_int) -> T {
+    pub fn get<'a, T: FromSql<'a>>(&'a self, idx: c_int) -> T {
         self.get_opt(idx).unwrap()
     }
 
     /// Attempt to get the value of a particular column of the result row.
-    pub fn get_opt<T: FromSql>(&self, idx: c_int) -> SqliteResult<T> {
+    pub fn get_opt<'a, T: FromSql<'a>>(&'a self, idx: c_int) -> SqliteResult<T> {
         // Do assertions because these are logic errors.
         // We can probably skip them in release builds.
         assert!(idx >= 0);
         assert!(idx < unsafe { ffi::sqlite3_column_count(self.0.stmt) });
 
-        unsafe { FromSql::column_result(self.0.stmt, idx) }
+        FromSql::column_result(self, idx)
     }
 }
 
@@ -754,9 +730,9 @@ mod test {
 
         let path_string = path.to_str().unwrap();
         let db = SqliteConnection::open(&path_string).unwrap();
-        let the_answer = db.query_row_safe("SELECT x FROM foo",
-                                           &[],
-                                           |r| r.get::<i64>(0));
+        let the_answer = db.query_row("SELECT x FROM foo",
+                                      &[],
+                                      |r| r.get::<i64>(0));
 
         assert_eq!(42i64, the_answer.unwrap());
     }
@@ -829,29 +805,32 @@ mod test {
     }
 
     #[test]
-    // fn test_prepare_query() {
-    //     let db = checked_memory_handle();
-    //     db.execute_batch("CREATE TABLE foo(x INTEGER);").unwrap();
+    fn test_prepare_query() {
+        let db = checked_memory_handle();
+        db.execute_batch("CREATE TABLE foo(x INTEGER);").unwrap();
 
-    //     let mut insert_stmt = db.prepare("INSERT INTO foo(x) VALUES(?)").unwrap();
-    //     assert_eq!(insert_stmt.execute(&[&1i32]).unwrap(), 1);
-    //     assert_eq!(insert_stmt.execute(&[&2i32]).unwrap(), 1);
-    //     assert_eq!(insert_stmt.execute(&[&3i32]).unwrap(), 1);
+        let mut insert_stmt = db.prepare("INSERT INTO foo(x) VALUES(?)").unwrap();
+        assert_eq!(insert_stmt.execute(&[&1i32]).unwrap(), 1);
+        assert_eq!(insert_stmt.execute(&[&2i32]).unwrap(), 1);
+        assert_eq!(insert_stmt.execute(&[&3i32]).unwrap(), 1);
 
-    //     let mut query = db.prepare("SELECT x FROM foo WHERE x < ? ORDER BY x DESC").unwrap();
-    //     {
-    //         let rows = query.query(&[&4i32]).unwrap();
-    //         let v: Vec<i32> = rows.map(|r| r.unwrap().get(0)).collect();
+        let mut query = db.prepare("SELECT x FROM foo WHERE x < ? ORDER BY x DESC").unwrap();
+        {
+            let v: SqliteResult<Vec<i32>> = query.query(&[&4i32], |r| r.get(0))
+                                                 .unwrap()
+                                                 .collect();
 
-    //         assert_eq!(v, [3i32, 2, 1]);
-    //     }
+            assert_eq!(&[3i32, 2, 1][..], &v.unwrap()[..]);
+        }
 
-    //     {
-    //         let rows = query.query(&[&3i32]).unwrap();
-    //         let v: Vec<i32> = rows.map(|r| r.unwrap().get(0)).collect();
-    //         assert_eq!(v, [2i32, 1]);
-    //     }
-    // }
+        {
+            let v: SqliteResult<Vec<i32>> = query.query(&[&3i32], |r| r.get(0))
+                                                 .unwrap()
+                                                 .collect();
+
+            assert_eq!(&[2i32, 1][..], &v.unwrap()[..]);
+        }
+    }
 
     #[test]
     fn test_query_map() {
@@ -872,7 +851,7 @@ mod test {
     }
 
     #[test]
-    fn test_query_row_safe() {
+    fn test_query_row() {
         let db = checked_memory_handle();
         let sql = "BEGIN;
                    CREATE TABLE foo(x INTEGER);
@@ -883,17 +862,17 @@ mod test {
                    END;";
         db.execute_batch(sql).unwrap();
 
-        assert_eq!(10i64, db.query_row_safe("SELECT SUM(x) FROM foo", &[], |r| {
+        assert_eq!(10i64, db.query_row("SELECT SUM(x) FROM foo", &[], |r| {
             r.get::<i64>(0)
         }).unwrap());
 
-        let result = db.query_row_safe("SELECT x FROM foo WHERE x > 5", &[], |r| r.get::<i64>(0));
+        let result = db.query_row("SELECT x FROM foo WHERE x > 5", &[], |r| r.get::<i64>(0));
         let error = result.unwrap_err();
 
         assert!(error.code == ffi::SQLITE_NOTICE);
         assert!(error.message == "Query did not return a row");
 
-        let bad_query_result = db.query_row_safe("NOT A PROPER QUERY; test123", &[], |_| ());
+        let bad_query_result = db.query_row("NOT A PROPER QUERY; test123", &[], |_| ());
 
         assert!(bad_query_result.is_err());
     }
@@ -905,24 +884,6 @@ mod test {
 
         let err = db.prepare("SELECT * FROM does_not_exist").unwrap_err();
         assert!(err.message.contains("does_not_exist"));
-    }
-
-    #[test]
-    fn test_row_expiration() {
-        let db = checked_memory_handle();
-        db.execute_batch("CREATE TABLE foo(x INTEGER)").unwrap();
-        db.execute_batch("INSERT INTO foo(x) VALUES(1)").unwrap();
-        db.execute_batch("INSERT INTO foo(x) VALUES(2)").unwrap();
-
-        let mut stmt = db.prepare("SELECT x FROM foo ORDER BY x").unwrap();
-        let mut rows = stmt.query(&[]).unwrap();
-        let first = rows.next().unwrap().unwrap();
-        let second = rows.next().unwrap().unwrap();
-
-        assert_eq!(2i32, second.get(0));
-
-        let result = first.get_opt::<i32>(0);
-        assert!(result.unwrap_err().message.contains("advancing to next row"));
     }
 
     #[test]
