@@ -36,13 +36,16 @@
 //!                  &[&me.name, &me.time_created, &me.data]).unwrap();
 //!
 //!     let mut stmt = conn.prepare("SELECT id, name, time_created, data FROM person").unwrap();
-//!     for row in stmt.query(&[]).unwrap().map(|row| row.unwrap()) {
-//!         let person = Person {
+//!     let mut rows = stmt.query(&[], |row| {
+//!         Person {
 //!             id: row.get(0),
 //!             name: row.get(1),
 //!             time_created: row.get(2),
 //!             data: row.get(3)
-//!         };
+//!         }
+//!     }).unwrap();
+//!
+//!     for person in rows {
 //!         println!("Found person {:?}", person);
 //!     }
 //! }
@@ -56,8 +59,7 @@ use std::ptr;
 use std::fmt;
 use std::path::{Path};
 use std::error;
-use std::rc::{Rc};
-use std::cell::{RefCell, Cell};
+use std::cell::RefCell;
 use std::ffi::{CStr, CString};
 use std::str;
 use libc::{c_int, c_void, c_char};
@@ -276,7 +278,7 @@ impl SqliteConnection {
     /// ```rust,no_run
     /// # use rusqlite::{SqliteResult,SqliteConnection};
     /// fn preferred_locale(conn: &SqliteConnection) -> SqliteResult<String> {
-    ///     conn.query_row_safe("SELECT value FROM preferences WHERE name='locale'", &[], |row| {
+    ///     conn.query_row("SELECT value FROM preferences WHERE name='locale'", &[], |row| {
     ///         row.get(0)
     ///     })
     /// }
@@ -284,41 +286,16 @@ impl SqliteConnection {
     ///
     /// If the query returns more than one row, all rows except the first are ignored.
     pub fn query_row<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> SqliteResult<T>
-                           where F: FnOnce(SqliteRow) -> T {
+                           where F: FnMut(MappedRow) -> T,
+                                 T: 'static {
         let mut stmt = try!(self.prepare(sql));
-        let mut rows = try!(stmt.query(params));
+        let mut rows = try!(stmt.query(params, f));
 
-        match rows.next() {
-            Some(row) => row.map(f),
-            None      => Err(SqliteError{
+        rows.next().unwrap_or(
+            Err(SqliteError{
                 code: ffi::SQLITE_NOTICE,
                 message: "Query did not return a row".to_string(),
-            })
-        }
-    }
-
-    /// Convenience method to execute a query that is expected to return a single row.
-    ///
-    /// ## Example
-    ///
-    /// ```rust,no_run
-    /// # use rusqlite::{SqliteResult,SqliteConnection};
-    /// fn preferred_locale(conn: &SqliteConnection) -> SqliteResult<String> {
-    ///     conn.query_row_safe("SELECT value FROM preferences WHERE name='locale'", &[], |row| {
-    ///         row.get(0)
-    ///     })
-    /// }
-    /// ```
-    ///
-    /// If the query returns more than one row, all rows except the first are ignored.
-    ///
-    /// ## Deprecated
-    ///
-    /// This method should be considered deprecated. Use `query_row` instead, which now
-    /// does exactly the same thing.
-    pub fn query_row_safe<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> SqliteResult<T>
-                                where F: FnOnce(SqliteRow) -> T {
-        self.query_row(sql, params, f)
+            }))
     }
 
     /// Prepare a SQL statement for execution.
@@ -608,27 +585,25 @@ impl<'conn> SqliteStatement<'conn> {
     }
 
     /// Execute the prepared statement, returning an iterator over the resulting rows.
-    ///
-    /// ## Example
-    ///
-    /// ```rust,no_run
-    /// # use rusqlite::{SqliteConnection, SqliteResult};
-    /// fn get_names(conn: &SqliteConnection) -> SqliteResult<Vec<String>> {
-    ///     let mut stmt = try!(conn.prepare("SELECT name FROM people"));
-    ///     let mut rows = try!(stmt.query(&[]));
-    ///
-    ///     let mut names = Vec::new();
-    ///     for result_row in rows {
-    ///         let row = try!(result_row);
-    ///         names.push(row.get(0));
-    ///     }
-    ///
-    ///     Ok(names)
-    /// }
-    /// ```
-    pub fn query<'a>(&'a mut self, params: &[&ToSql]) -> SqliteResult<SqliteRows<'a>> {
+    pub fn query<'a, 'map, T, F>(&'a mut self, params: &[&ToSql], f: F)
+                                 -> SqliteResult<MappedRows<'a, F>>
+                                 where T: 'static,
+                                       F: FnMut(MappedRow) -> T {
         self.reset_if_needed();
+        try!(self.bind_parameters(params));
 
+        Ok(MappedRows { stmt: self, map: f })
+    }
+
+    /// Consumes the statement.
+    ///
+    /// Functionally equivalent to the `Drop` implementation, but allows callers to see any errors
+    /// that occur.
+    pub fn finalize(mut self) -> SqliteResult<()> {
+        self.finalize_()
+    }
+
+    fn bind_parameters(&mut self, params: &[&ToSql]) -> SqliteResult<()> {
         unsafe {
             assert!(params.len() as c_int == ffi::sqlite3_bind_parameter_count(self.stmt),
                     "incorrect number of parameters to query(): expected {}, got {}",
@@ -638,18 +613,11 @@ impl<'conn> SqliteStatement<'conn> {
             for (i, p) in params.iter().enumerate() {
                 try!(self.conn.decode_result(p.bind_parameter(self.stmt, (i + 1) as c_int)));
             }
-
-            self.needs_reset = true;
-            Ok(SqliteRows::new(self))
         }
-    }
 
-    /// Consumes the statement.
-    ///
-    /// Functionally equivalent to the `Drop` implementation, but allows callers to see any errors
-    /// that occur.
-    pub fn finalize(mut self) -> SqliteResult<()> {
-        self.finalize_()
+        self.needs_reset = true;
+
+        Ok(())
     }
 
     fn reset_if_needed(&mut self) {
@@ -679,137 +647,51 @@ impl<'conn> Drop for SqliteStatement<'conn> {
     }
 }
 
-/// An iterator over the resulting rows of a query.
-///
-/// ## Warning
-///
-/// Due to the way SQLite returns result rows of a query, it is not safe to attempt to get values
-/// from a row after it has become stale (i.e., `next()` has been called again on the `SqliteRows`
-/// iterator). For example:
-///
-/// ```rust,no_run
-/// # use rusqlite::{SqliteConnection, SqliteResult};
-/// fn bad_function_will_panic(conn: &SqliteConnection) -> SqliteResult<i64> {
-///     let mut stmt = try!(conn.prepare("SELECT id FROM my_table"));
-///     let mut rows = try!(stmt.query(&[]));
-///
-///     let row0 = try!(rows.next().unwrap());
-///     // row 0 is value now...
-///
-///     let row1 = try!(rows.next().unwrap());
-///     // row 0 is now STALE, and row 1 is valid
-///
-///     let my_id = row0.get(0); // WILL PANIC because row 0 is stale
-///     Ok(my_id)
-/// }
-/// ```
-///
-/// Please note that this means some of the methods on `Iterator` are not useful, such as `collect`
-/// (which would result in a collection of rows, only the last of which can safely be used) and
-/// `min`/`max` (which could return a stale row unless the last row happened to be the min or max,
-/// respectively).
-///
-/// This problem could be solved by changing the signature of `next` to tie the lifetime of the
-/// returned row to the lifetime of (a mutable reference to) the result rows handle, but this would
-/// no longer implement `Iterator`, and therefore you would lose access to the majority of
-/// functions which are useful (such as support for `for ... in ...` looping, `map`, `filter`,
-/// etc.).
-pub struct SqliteRows<'stmt> {
+pub struct MappedRows<'stmt, F> {
     stmt: &'stmt SqliteStatement<'stmt>,
-    current_row: Rc<Cell<c_int>>,
-    failed: bool,
+    map: F
 }
 
-impl<'stmt> SqliteRows<'stmt> {
-    fn new(stmt: &'stmt SqliteStatement<'stmt>) -> SqliteRows<'stmt> {
-        SqliteRows{ stmt: stmt, current_row: Rc::new(Cell::new(0)), failed: false }
-    }
-}
+impl<'stmt, T, F> Iterator for MappedRows<'stmt, F>
+    where F: FnMut(MappedRow) -> T,
+          T: 'static {
+    type Item = SqliteResult<T>;
 
-impl<'stmt> Iterator for SqliteRows<'stmt> {
-    type Item = SqliteResult<SqliteRow<'stmt>>;
-
-    fn next(&mut self) -> Option<SqliteResult<SqliteRow<'stmt>>> {
-        if self.failed {
-            return None;
-        }
+    fn next(&mut self) -> Option<SqliteResult<T>> {
         match unsafe { ffi::sqlite3_step(self.stmt.stmt) } {
             ffi::SQLITE_ROW => {
-                let current_row = self.current_row.get() + 1;
-                self.current_row.set(current_row);
-                Some(Ok(SqliteRow{
-                    stmt: self.stmt,
-                    current_row: self.current_row.clone(),
-                    row_idx: current_row,
-                }))
+                let result = (self.map)(MappedRow(self.stmt));
+                Some(Ok(result))
             },
             ffi::SQLITE_DONE => None,
             code => {
-                self.failed = true;
                 Some(Err(self.stmt.conn.decode_result(code).unwrap_err()))
             }
         }
     }
 }
 
-/// A single result row of a query.
-pub struct SqliteRow<'stmt> {
-    stmt: &'stmt SqliteStatement<'stmt>,
-    current_row: Rc<Cell<c_int>>,
-    row_idx: c_int,
-}
+/// An iterator over the resulting rows of a query.
+pub struct MappedRow<'stmt>(&'stmt SqliteStatement<'stmt>);
 
-impl<'stmt> SqliteRow<'stmt> {
+impl<'stmt> MappedRow<'stmt> {
     /// Get the value of a particular column of the result row.
-    ///
-    /// Note that `SqliteRow` can panic at runtime if you use it incorrectly. When you are
-    /// retrieving the rows of a query, a row becomes stale once you have requested the next row,
-    /// and the values can no longer be retrieved. In general (when using looping over the rows,
-    /// for example) this isn't an issue, but it means you cannot do something like this:
-    ///
-    /// ```rust,no_run
-    /// # use rusqlite::{SqliteConnection, SqliteResult};
-    /// fn bad_function_will_panic(conn: &SqliteConnection) -> SqliteResult<i64> {
-    ///     let mut stmt = try!(conn.prepare("SELECT id FROM my_table"));
-    ///     let mut rows = try!(stmt.query(&[]));
-    ///
-    ///     let row0 = try!(rows.next().unwrap());
-    ///     // row 0 is value now...
-    ///
-    ///     let row1 = try!(rows.next().unwrap());
-    ///     // row 0 is now STALE, and row 1 is valid
-    ///
-    ///     let my_id = row0.get(0); // WILL PANIC because row 0 is stale
-    ///     Ok(my_id)
-    /// }
-    /// ```
     ///
     /// ## Failure
     ///
-    /// Panics if `idx` is outside the range of columns in the returned query or if this row
-    /// is stale.
-    pub fn get<T: FromSql>(&self, idx: c_int) -> T {
+    /// Can panic.
+    pub fn get<'a, T: FromSql<'a>>(&'a self, idx: c_int) -> T {
         self.get_opt(idx).unwrap()
     }
 
     /// Attempt to get the value of a particular column of the result row.
-    ///
-    /// ## Failure
-    ///
-    /// Returns a `SQLITE_MISUSE`-coded `SqliteError` if `idx` is outside the valid column range
-    /// for this row or if this row is stale.
-    pub fn get_opt<T: FromSql>(&self, idx: c_int) -> SqliteResult<T> {
-        if self.row_idx != self.current_row.get() {
-            return Err(SqliteError{ code: ffi::SQLITE_MISUSE,
-                message: "Cannot get values from a row after advancing to next row".to_string() });
-        }
-        unsafe {
-            if idx < 0 || idx >= ffi::sqlite3_column_count(self.stmt.stmt) {
-                return Err(SqliteError{ code: ffi::SQLITE_MISUSE,
-                    message: "Invalid column index".to_string() });
-            }
-            FromSql::column_result(self.stmt.stmt, idx)
-        }
+    pub fn get_opt<'a, T: FromSql<'a>>(&'a self, idx: c_int) -> SqliteResult<T> {
+        // Do assertions because these are logic errors.
+        // We can probably skip them in release builds.
+        assert!(idx >= 0);
+        assert!(idx < unsafe { ffi::sqlite3_column_count(self.0.stmt) });
+
+        FromSql::column_result(self, idx)
     }
 }
 
@@ -848,9 +730,9 @@ mod test {
 
         let path_string = path.to_str().unwrap();
         let db = SqliteConnection::open(&path_string).unwrap();
-        let the_answer = db.query_row_safe("SELECT x FROM foo",
-                                           &[],
-                                           |r| r.get::<i64>(0));
+        let the_answer = db.query_row("SELECT x FROM foo",
+                                      &[],
+                                      |r| r.get::<i64>(0));
 
         assert_eq!(42i64, the_answer.unwrap());
     }
@@ -934,21 +816,42 @@ mod test {
 
         let mut query = db.prepare("SELECT x FROM foo WHERE x < ? ORDER BY x DESC").unwrap();
         {
-            let rows = query.query(&[&4i32]).unwrap();
-            let v: Vec<i32> = rows.map(|r| r.unwrap().get(0)).collect();
+            let v: SqliteResult<Vec<i32>> = query.query(&[&4i32], |r| r.get(0))
+                                                 .unwrap()
+                                                 .collect();
 
-            assert_eq!(v, [3i32, 2, 1]);
+            assert_eq!(&[3i32, 2, 1][..], &v.unwrap()[..]);
         }
 
         {
-            let rows = query.query(&[&3i32]).unwrap();
-            let v: Vec<i32> = rows.map(|r| r.unwrap().get(0)).collect();
-            assert_eq!(v, [2i32, 1]);
+            let v: SqliteResult<Vec<i32>> = query.query(&[&3i32], |r| r.get(0))
+                                                 .unwrap()
+                                                 .collect();
+
+            assert_eq!(&[2i32, 1][..], &v.unwrap()[..]);
         }
     }
 
     #[test]
-    fn test_query_row_safe() {
+    fn test_query_map() {
+        let db = checked_memory_handle();
+        let sql = "BEGIN;
+                   CREATE TABLE foo(x INTEGER, y TEXT);
+                   INSERT INTO foo VALUES(4, \"hello\");
+                   INSERT INTO foo VALUES(3, \", \");
+                   INSERT INTO foo VALUES(2, \"world\");
+                   INSERT INTO foo VALUES(1, \"!\");
+                   END;";
+        db.execute_batch(sql).unwrap();
+
+        let mut query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC").unwrap();
+        let results: SqliteResult<Vec<String>> = query.query(&[], |row| row.get(1)).unwrap().collect();
+
+        assert_eq!(results.unwrap().concat(), "hello, world!");
+    }
+
+    #[test]
+    fn test_query_row() {
         let db = checked_memory_handle();
         let sql = "BEGIN;
                    CREATE TABLE foo(x INTEGER);
@@ -959,17 +862,17 @@ mod test {
                    END;";
         db.execute_batch(sql).unwrap();
 
-        assert_eq!(10i64, db.query_row_safe("SELECT SUM(x) FROM foo", &[], |r| {
+        assert_eq!(10i64, db.query_row("SELECT SUM(x) FROM foo", &[], |r| {
             r.get::<i64>(0)
         }).unwrap());
 
-        let result = db.query_row_safe("SELECT x FROM foo WHERE x > 5", &[], |r| r.get::<i64>(0));
+        let result = db.query_row("SELECT x FROM foo WHERE x > 5", &[], |r| r.get::<i64>(0));
         let error = result.unwrap_err();
 
         assert!(error.code == ffi::SQLITE_NOTICE);
         assert!(error.message == "Query did not return a row");
 
-        let bad_query_result = db.query_row_safe("NOT A PROPER QUERY; test123", &[], |_| ());
+        let bad_query_result = db.query_row("NOT A PROPER QUERY; test123", &[], |_| ());
 
         assert!(bad_query_result.is_err());
     }
@@ -981,24 +884,6 @@ mod test {
 
         let err = db.prepare("SELECT * FROM does_not_exist").unwrap_err();
         assert!(err.message.contains("does_not_exist"));
-    }
-
-    #[test]
-    fn test_row_expiration() {
-        let db = checked_memory_handle();
-        db.execute_batch("CREATE TABLE foo(x INTEGER)").unwrap();
-        db.execute_batch("INSERT INTO foo(x) VALUES(1)").unwrap();
-        db.execute_batch("INSERT INTO foo(x) VALUES(2)").unwrap();
-
-        let mut stmt = db.prepare("SELECT x FROM foo ORDER BY x").unwrap();
-        let mut rows = stmt.query(&[]).unwrap();
-        let first = rows.next().unwrap().unwrap();
-        let second = rows.next().unwrap().unwrap();
-
-        assert_eq!(2i32, second.get(0));
-
-        let result = first.get_opt::<i32>(0);
-        assert!(result.unwrap_err().message.contains("advancing to next row"));
     }
 
     #[test]
