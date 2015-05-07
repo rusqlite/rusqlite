@@ -788,7 +788,7 @@ impl<'stmt> SqliteRow<'stmt> {
     ///
     /// Panics if `idx` is outside the range of columns in the returned query or if this row
     /// is stale.
-    pub fn get<T: FromSql>(&self, idx: c_int) -> T {
+    pub fn get<T: FromSql<'stmt>>(&self, idx: c_int) -> T {
         self.get_opt(idx).unwrap()
     }
 
@@ -798,7 +798,7 @@ impl<'stmt> SqliteRow<'stmt> {
     ///
     /// Returns a `SQLITE_MISUSE`-coded `SqliteError` if `idx` is outside the valid column range
     /// for this row or if this row is stale.
-    pub fn get_opt<T: FromSql>(&self, idx: c_int) -> SqliteResult<T> {
+    pub fn get_opt<T: FromSql<'stmt>>(&self, idx: c_int) -> SqliteResult<T> {
         if self.row_idx != self.current_row.get() {
             return Err(SqliteError{ code: ffi::SQLITE_MISUSE,
                 message: "Cannot get values from a row after advancing to next row".to_string() });
@@ -808,7 +808,7 @@ impl<'stmt> SqliteRow<'stmt> {
                 return Err(SqliteError{ code: ffi::SQLITE_MISUSE,
                     message: "Invalid column index".to_string() });
             }
-            FromSql::column_result(self.stmt.stmt, idx)
+            FromSql::column_result(self.stmt, idx)
         }
     }
 }
