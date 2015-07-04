@@ -650,7 +650,7 @@ impl<'conn> SqliteStatement<'conn> {
     }
 
     /// Executes the prepared statement and maps a function over the resulting
-    /// rows. 
+    /// rows.
     ///
     /// Unlike the iterator produced by `query`, the returned iterator does not expose the possibility
     /// for accessing stale rows.
@@ -1117,6 +1117,6 @@ mod test {
     #[test]
     fn test_is_autocommit() {
         let db = checked_memory_handle();
-        assert!(db.is_autocommit(), "autocommit expected to be active by default")
+        assert!(db.is_autocommit(), "autocommit expected to be active by default");
     }
 }
