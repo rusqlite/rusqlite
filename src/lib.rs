@@ -406,6 +406,12 @@ impl SqliteConnection {
     fn changes(&self) -> c_int {
         self.db.borrow_mut().changes()
     }
+
+    /// Test for auto-commit mode.
+    /// Autocommit mode is on by default.
+    pub fn is_autocommit(&self) -> bool {
+        self.db.borrow().is_autocommit()
+    }
 }
 
 impl fmt::Debug for SqliteConnection {
@@ -546,6 +552,10 @@ impl InnerSqliteConnection {
 
     fn changes(&mut self) -> c_int {
         unsafe{ ffi::sqlite3_changes(self.db()) }
+    }
+
+    fn is_autocommit(&self) -> bool {
+        unsafe{ ffi::sqlite3_get_autocommit(self.db()) != 0 }
     }
 }
 
@@ -1102,5 +1112,11 @@ mod test {
             stmt.execute(&[]).unwrap();
         }
         assert_eq!(db.last_insert_rowid(), 10);
+    }
+
+    #[test]
+    fn test_is_autocommit() {
+        let db = checked_memory_handle();
+        assert!(db.is_autocommit(), "autocommit expected to be active by default")
     }
 }
