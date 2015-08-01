@@ -58,8 +58,8 @@ use std::default::Default;
 use std::mem;
 use std::ptr;
 use std::fmt;
-use std::path::{Path,PathBuf};
-use std::error;
+use std::path::{Path};
+use std::error::{Error};
 use std::rc::{Rc};
 use std::cell::{RefCell, Cell};
 use std::ffi::{CStr, CString};
@@ -107,7 +107,7 @@ impl fmt::Display for SqliteError {
     }
 }
 
-impl error::Error for SqliteError {
+impl Error for SqliteError {
     fn description(&self) -> &str {
         &self.message
     }
@@ -151,7 +151,6 @@ fn path_to_cstring(p: &Path) -> SqliteResult<CString> {
 /// prepare multiple statements at the same time).
 pub struct SqliteConnection {
     db: RefCell<InnerSqliteConnection>,
-    path: Option<PathBuf>,
 }
 
 unsafe impl Send for SqliteConnection {}
@@ -180,7 +179,7 @@ impl SqliteConnection {
             -> SqliteResult<SqliteConnection> {
         let c_path = try!(path_to_cstring(path.as_ref()));
         InnerSqliteConnection::open_with_flags(&c_path, flags).map(|db| {
-            SqliteConnection{ db: RefCell::new(db), path: Some(path.as_ref().to_path_buf()) }
+            SqliteConnection{ db: RefCell::new(db) }
         })
     }
 
@@ -191,7 +190,7 @@ impl SqliteConnection {
     pub fn open_in_memory_with_flags(flags: SqliteOpenFlags) -> SqliteResult<SqliteConnection> {
         let c_memory = try!(str_to_cstring(":memory:"));
         InnerSqliteConnection::open_with_flags(&c_memory, flags).map(|db| {
-            SqliteConnection{ db: RefCell::new(db), path: None }
+            SqliteConnection{ db: RefCell::new(db) }
         })
     }
 
@@ -412,8 +411,17 @@ impl SqliteConnection {
 
 impl fmt::Debug for SqliteConnection {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let path = unsafe {
+            let c_path = ffi::sqlite3_db_filename(self.db.borrow().db, ptr::null());
+            if c_path.is_null() {
+                Err("null".to_string())
+            } else {
+                let c_slice = CStr::from_ptr(c_path).to_bytes();
+                str::from_utf8(c_slice).map_err(|e| e.description().to_string())
+            }
+        };
         f.debug_struct("SqliteConnection")
-            .field("path", &self.path)
+            .field("path", &path)
             .finish()
     }
 }
