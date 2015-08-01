@@ -59,7 +59,7 @@ use std::default::Default;
 use std::mem;
 use std::ptr;
 use std::fmt;
-use std::path::{Path};
+use std::path::{Path,PathBuf};
 use std::error;
 use std::rc::{Rc};
 use std::cell::{RefCell, Cell};
@@ -155,6 +155,7 @@ fn path_to_cstring(p: &Path) -> SqliteResult<CString> {
 /// prepare multiple statements at the same time).
 pub struct SqliteConnection {
     db: RefCell<InnerSqliteConnection>,
+    path: Option<PathBuf>,
 }
 
 unsafe impl Send for SqliteConnection {}
@@ -183,7 +184,7 @@ impl SqliteConnection {
             -> SqliteResult<SqliteConnection> {
         let c_path = try!(path_to_cstring(path.as_ref()));
         InnerSqliteConnection::open_with_flags(&c_path, flags).map(|db| {
-            SqliteConnection{ db: RefCell::new(db) }
+            SqliteConnection{ db: RefCell::new(db), path: Some(path.as_ref().to_path_buf()) }
         })
     }
 
@@ -194,7 +195,7 @@ impl SqliteConnection {
     pub fn open_in_memory_with_flags(flags: SqliteOpenFlags) -> SqliteResult<SqliteConnection> {
         let c_memory = try!(str_to_cstring(":memory:"));
         InnerSqliteConnection::open_with_flags(&c_memory, flags).map(|db| {
-            SqliteConnection{ db: RefCell::new(db) }
+            SqliteConnection{ db: RefCell::new(db), path: None }
         })
     }
 
@@ -415,7 +416,7 @@ impl SqliteConnection {
 
 impl fmt::Debug for SqliteConnection {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SqliteConnection()")
+        write!(f, "SqliteConnection( path: {:?} )", &self.path)
     }
 }
 
@@ -722,7 +723,11 @@ impl<'conn> SqliteStatement<'conn> {
 
 impl<'conn> fmt::Debug for SqliteStatement<'conn> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Statement( conn: {:?}, stmt: {:?} )", self.conn, self.stmt)
+        let sql = unsafe {
+            let c_slice = CStr::from_ptr(ffi::sqlite3_sql(self.stmt)).to_bytes();
+            str::from_utf8(c_slice)
+        };
+        write!(f, "SqliteStatement( conn: {:?}, stmt: {:?}, sql: {:?} )", self.conn, self.stmt, sql)
     }
 }
 
