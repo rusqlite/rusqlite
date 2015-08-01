@@ -407,6 +407,17 @@ impl SqliteConnection {
     fn changes(&self) -> c_int {
         self.db.borrow_mut().changes()
     }
+
+    /// Test for auto-commit mode.
+    /// Autocommit mode is on by default.
+    pub fn is_autocommit(&self) -> bool {
+        self.db.borrow().is_autocommit()
+    }
+
+    /// Determine if all associated prepared statements have been reset.
+    pub fn is_busy(&self) -> bool {
+        self.db.borrow().is_busy()
+    }
 }
 
 impl fmt::Debug for SqliteConnection {
@@ -556,6 +567,24 @@ impl InnerSqliteConnection {
 
     fn changes(&mut self) -> c_int {
         unsafe{ ffi::sqlite3_changes(self.db()) }
+    }
+
+    fn is_autocommit(&self) -> bool {
+        unsafe{ ffi::sqlite3_get_autocommit(self.db()) != 0 }
+    }
+
+    fn is_busy(&self) -> bool {
+        let db = self.db();
+        unsafe {
+            let mut stmt = ffi::sqlite3_next_stmt(db, ptr::null_mut());
+            while !stmt.is_null() {
+                if ffi::sqlite3_stmt_busy(stmt) != 0 {
+                    return true
+                }
+                stmt = ffi::sqlite3_next_stmt(db, stmt);
+            }
+        }
+        return false
     }
 }
 
@@ -1145,5 +1174,29 @@ mod test {
             stmt.execute(&[]).unwrap();
         }
         assert_eq!(db.last_insert_rowid(), 10);
+    }
+
+    #[test]
+    fn test_is_autocommit() {
+        let db = checked_memory_handle();
+        assert!(db.is_autocommit(), "autocommit expected to be active by default");
+    }
+
+    #[test]
+    fn test_is_busy() {
+        let db = checked_memory_handle();
+        assert!(!db.is_busy());
+        let mut stmt = db.prepare("PRAGMA schema_version").unwrap();
+        assert!(!db.is_busy());
+        {
+            let mut rows = stmt.query(&[]).unwrap();
+            assert!(!db.is_busy());
+            let row = rows.next();
+            assert!(db.is_busy());
+            assert!(row.is_some());
+        }
+        assert!(db.is_busy());
+        stmt.reset_if_needed();
+        assert!(!db.is_busy());
     }
 }
