@@ -420,7 +420,9 @@ impl fmt::Debug for SqliteConnection {
                 str::from_utf8(c_slice).map_err(|e| e.description().to_string())
             }
         };
-        write!(f, "SqliteConnection( path: {:?} )", &path)
+        f.debug_struct("SqliteConnection")
+            .field("path", &path)
+            .finish()
     }
 }
 
@@ -732,7 +734,11 @@ impl<'conn> fmt::Debug for SqliteStatement<'conn> {
             let c_slice = CStr::from_ptr(ffi::sqlite3_sql(self.stmt)).to_bytes();
             str::from_utf8(c_slice)
         };
-        write!(f, "SqliteStatement( conn: {:?}, stmt: {:?}, sql: {:?} )", self.conn, self.stmt, sql)
+        f.debug_struct("SqliteStatement")
+            .field("conn", self.conn)
+            .field("stmt", &self.stmt)
+            .field("sql", &sql)
+            .finish()
     }
 }
 
