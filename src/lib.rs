@@ -83,6 +83,7 @@ mod transaction;
 #[cfg(feature = "trace")] pub mod trace;
 #[cfg(feature = "backup")] mod backup;
 #[cfg(feature = "blob")] pub mod blob;
+#[cfg(feature = "named_params")] pub mod named_params;
 
 /// A typedef of the result returned by many methods.
 pub type SqliteResult<T> = Result<T, SqliteError>;
@@ -621,21 +622,25 @@ impl<'conn> SqliteStatement<'conn> {
         unsafe {
             try!(self.bind_parameters(params));
 
-            let r = ffi::sqlite3_step(self.stmt);
-            ffi::sqlite3_reset(self.stmt);
-            match r {
-                ffi::SQLITE_DONE => {
-                    if self.column_count != 0 {
-                        Err(SqliteError{ code: ffi::SQLITE_MISUSE,
-                            message: "Unexpected column count - did you mean to call query?".to_string() })
-                    } else {
-                        Ok(self.conn.changes())
-                    }
-                },
-                ffi::SQLITE_ROW => Err(SqliteError{ code: r,
-                    message: "Unexpected row result - did you mean to call query?".to_string() }),
-                _ => Err(self.conn.decode_result(r).unwrap_err()),
-            }
+            self.execute_()
+        }
+    }
+
+    unsafe fn execute_(&mut self) -> SqliteResult<c_int> {
+        let r = ffi::sqlite3_step(self.stmt);
+        ffi::sqlite3_reset(self.stmt);
+        match r {
+            ffi::SQLITE_DONE => {
+                if self.column_count != 0 {
+                    Err(SqliteError{ code: ffi::SQLITE_MISUSE,
+                        message: "Unexpected column count - did you mean to call query?".to_string() })
+                } else {
+                    Ok(self.conn.changes())
+                }
+            },
+            ffi::SQLITE_ROW => Err(SqliteError{ code: r,
+                message: "Unexpected row result - did you mean to call query?".to_string() }),
+            _ => Err(self.conn.decode_result(r).unwrap_err()),
         }
     }
 
