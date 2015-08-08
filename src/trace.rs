@@ -1,3 +1,4 @@
+//! Tracing and profiling functions. Error and warning log.
 use libc::{c_char, c_int, c_void};
 use std::ffi::CString;
 use std::ptr;
@@ -30,12 +31,16 @@ pub fn log(err_code: c_int, msg: &str) {
     }
 }
 
+/// The trace callback function signature.
 pub type TraceCallback =
     Option<extern "C" fn (p_arg: *mut c_void, z_sql: *const c_char)>;
+/// The profile callback function signature.
 pub type ProfileCallback =
     Option<extern "C" fn (p_arg: *mut c_void, z_sql: *const c_char, nanoseconds: u64)>;
+
 impl SqliteConnection {
     /// Register or clear a callback function that can be used for tracing the execution of SQL statements.
+    ///
     /// Prepared statement placeholders are replaced/logged with their assigned values.
     /// There can only be a single tracer defined for each database connection.
     /// Setting a new tracer clears the old one.
@@ -44,6 +49,7 @@ impl SqliteConnection {
         unsafe { ffi::sqlite3_trace(c.db(), x_trace, ptr::null_mut()); }
     }
     /// Register or clear a callback function that can be used for profiling the execution of SQL statements.
+    ///
     /// There can only be a single profiler defined for each database connection.
     /// Setting a new profiler clears the old one.
     pub fn profile(&mut self, x_profile: ProfileCallback) {
@@ -80,19 +86,17 @@ mod test {
         super::config_log(None).unwrap();
     }
 
-    extern "C" fn profile_callback(_: *mut ::libc::c_void, sql: *const ::libc::c_char, nanoseconds: u64) {
-        use std::time::Duration;
+    extern "C" fn trace_callback(_: *mut ::libc::c_void, sql: *const ::libc::c_char) {
         unsafe {
             let c_slice = ::std::ffi::CStr::from_ptr(sql).to_bytes();
-            let d = Duration::from_millis(nanoseconds / 1_000_000);
-            let _ = writeln!(::std::io::stderr(), "PROFILE: {:?} ({})", ::std::str::from_utf8(c_slice), d);
+            let _ = writeln!(::std::io::stderr(), "TRACE: {:?}", ::std::str::from_utf8(c_slice));
         }
     }
 
     #[test]
-    fn test_profile() {
+    fn test_trace() {
         let mut db = SqliteConnection::open_in_memory().unwrap();
-        db.profile(Some(profile_callback));
+        db.trace(Some(trace_callback));
         db.execute_batch("PRAGMA application_id = 1").unwrap();
     }
 }
