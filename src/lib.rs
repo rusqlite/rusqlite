@@ -82,7 +82,7 @@ mod transaction;
 #[cfg(feature = "trace")] pub mod trace;
 #[cfg(feature = "backup")] mod backup;
 #[cfg(feature = "blob")] pub mod blob;
-#[cfg(feature = "named_params")] pub mod named_params;
+#[cfg(feature = "named_params")] mod named_params;
 #[cfg(feature = "cache")] pub mod cache;
 
 /// A typedef of the result returned by many methods.
