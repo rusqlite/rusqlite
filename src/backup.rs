@@ -5,7 +5,7 @@ use super::ffi;
 use {SqliteError, SqliteResult, SqliteConnection};
 
 impl SqliteConnection {
-    /// Open or create a database file named `dest_path`.  Transfer the
+    /// Open or create a database file named `dest_path`. Transfer the
     /// content of local database `name` into the `dest_path` database.
     pub fn backup<P: AsRef<Path>>(&self, name: &str, dest_path: &P) -> SqliteResult<()> {
         let dest = try!(SqliteConnection::open(dest_path)); // "cannot open target database: "
@@ -40,7 +40,7 @@ impl SqliteConnection {
         result
     }
 
-    /// Open a database file named `src_path`.  Transfer the content
+    /// Open a database file named `src_path`. Transfer the content
     /// of `src_path` into the local database `name`.
     pub fn restore<P: AsRef<Path>>(&self, name: &str, src_path: &P) -> SqliteResult<()> {
         let src = try!(SqliteConnection::open_with_flags(src_path, super::SQLITE_OPEN_READ_ONLY | super::SQLITE_OPEN_URI)); // "cannot open source database: "
