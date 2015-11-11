@@ -1,5 +1,5 @@
 //! Online backup API
-use std::path::{Path};
+use std::path::Path;
 
 use super::ffi;
 use {SqliteError, SqliteResult, SqliteConnection};
