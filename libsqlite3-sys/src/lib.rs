@@ -5,7 +5,7 @@ extern crate libc;
 pub use self::bindgen::*;
 
 use std::mem;
-use libc::c_int;
+use libc::{c_uchar,c_int};
 
 mod bindgen;
 
@@ -47,6 +47,9 @@ pub const SQLITE_FLOAT   : c_int = 2;
 pub const SQLITE_TEXT    : c_int = 3;
 pub const SQLITE_BLOB    : c_int = 4;
 pub const SQLITE_NULL    : c_int = 5;
+
+// Text Encodings
+pub const SQLITE_UTF8 : c_uchar = 1;
 
 pub fn SQLITE_STATIC() -> sqlite3_destructor_type {
     Some(unsafe { mem::transmute(0isize) })
