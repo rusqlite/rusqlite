@@ -7,6 +7,11 @@ use {SqliteError, SqliteResult, SqliteConnection};
 impl SqliteConnection {
     /// Open or create a database file named `dest_path`. Transfer the
     /// content of local database `name` into the `dest_path` database.
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if `dest_path` cannot be opened or `name` cannot be converted to a C-compatible string
+    /// or backup failed.
     pub fn backup<P: AsRef<Path>>(&self, name: &str, dest_path: &P) -> SqliteResult<()> {
         let dest = try!(SqliteConnection::open(dest_path)); // "cannot open target database: "
 
@@ -42,6 +47,11 @@ impl SqliteConnection {
 
     /// Open a database file named `src_path`. Transfer the content
     /// of `src_path` into the local database `name`.
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if `src_path` cannot be opened or `name` cannot be converted to a C-compatible string
+    /// or restore failed.
     pub fn restore<P: AsRef<Path>>(&self, name: &str, src_path: &P) -> SqliteResult<()> {
         let src = try!(SqliteConnection::open_with_flags(src_path, super::SQLITE_OPEN_READ_ONLY | super::SQLITE_OPEN_URI)); // "cannot open source database: "
 
