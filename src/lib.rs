@@ -81,6 +81,7 @@ pub use transaction::{SqliteTransactionBehavior,
 pub mod types;
 mod transaction;
 #[cfg(feature = "load_extension")] mod load_extension_guard;
+#[cfg(feature = "backup")] mod backup;
 #[cfg(feature = "trace")] pub mod trace;
 
 /// A typedef of the result returned by many methods.
