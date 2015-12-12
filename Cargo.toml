@@ -17,6 +17,7 @@ load_extension = ["libsqlite3-sys/load_extension"]
 backup = []
 functions = []
 trace = []
+bind_text64 = []
 
 [dependencies]
 time = "~0.1.0"
