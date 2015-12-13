@@ -61,6 +61,9 @@ use std::str;
 use super::ffi;
 use super::{Result, Error, str_to_cstring};
 
+#[cfg(feature = "bind_text64")]
+use libc::c_uchar;
+
 pub use ffi::sqlite3_stmt;
 pub use ffi::sqlite3_column_type;
 
@@ -110,9 +113,25 @@ impl ToSql for bool {
 }
 
 impl<'a> ToSql for &'a str {
+    #[cfg(feature = "bind_text64")]
     unsafe fn bind_parameter(&self, stmt: *mut sqlite3_stmt, col: c_int) -> c_int {
-        let length = self.len();
-        if length > ::std::i32::MAX as usize {
+        match str_to_cstring(self) {
+            Ok(c_str) => {
+                ffi::sqlite3_bind_text64(stmt,
+                                         col,
+                                         c_str.as_ptr(),
+                                         self.len() as u64,
+                                         ffi::SQLITE_TRANSIENT(),
+                                         ffi::SQLITE_UTF8 as c_uchar)
+            }
+            Err(_) => ffi::SQLITE_MISUSE,
+        }
+    }
+
+    #[cfg(not(feature = "bind_text64"))]
+    unsafe fn bind_parameter(&self, stmt: *mut sqlite3_stmt, col: c_int) -> c_int {
+        // TODO: This assumes i32 == c_int. Currently always true...
+        if self.len() > ::std::i32::MAX as usize {
             return ffi::SQLITE_TOOBIG;
         }
         match str_to_cstring(self) {
@@ -120,7 +139,7 @@ impl<'a> ToSql for &'a str {
                 ffi::sqlite3_bind_text(stmt,
                                        col,
                                        c_str.as_ptr(),
-                                       length as c_int,
+                                       self.len() as i32,
                                        ffi::SQLITE_TRANSIENT())
             }
             Err(_) => ffi::SQLITE_MISUSE,
@@ -135,14 +154,25 @@ impl ToSql for String {
 }
 
 impl<'a> ToSql for &'a [u8] {
+    #[cfg(feature = "bind_text64")]
     unsafe fn bind_parameter(&self, stmt: *mut sqlite3_stmt, col: c_int) -> c_int {
+        ffi::sqlite3_bind_blob64(stmt,
+                                 col,
+                                 mem::transmute(self.as_ptr()),
+                                 self.len() as u64,
+                                 ffi::SQLITE_TRANSIENT())
+    }
+
+    #[cfg(not(feature = "bind_text64"))]
+    unsafe fn bind_parameter(&self, stmt: *mut sqlite3_stmt, col: c_int) -> c_int {
+        // TODO: This assumes i32 == c_int. Currently always true...
         if self.len() > ::std::i32::MAX as usize {
             return ffi::SQLITE_TOOBIG;
         }
         ffi::sqlite3_bind_blob(stmt,
                                col,
                                mem::transmute(self.as_ptr()),
-                               self.len() as c_int,
+                               self.len() as i32,
                                ffi::SQLITE_TRANSIENT())
     }
 }

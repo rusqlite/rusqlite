@@ -69,6 +69,10 @@ features](http://doc.crates.io/manifest.html#the-features-section). They are:
   allows you to load Rust closures into SQLite connections for use in queries.
 * [`trace`](http://jgallagher.github.io/rusqlite/rusqlite/trace/index.html)
   allows hooks into SQLite's tracing and profiling APIs.
+* `bind_text64` will change the internal parameter binding for strings and blobs to use
+  `sqlite3_bind_text64` and `sqlite3_bind_blob64` (allowing lengths up to 64 bits) instead
+  of `sqlite3_bind_text` and `sqlite3_bind_blob` (which will fail if the length of the text
+  or data does not fit in 32 bits).
 
 ### Design of Rows and Row
 
