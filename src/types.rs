@@ -170,10 +170,10 @@ impl<'a> ToSql for &'a [u8] {
             return ffi::SQLITE_TOOBIG;
         }
         ffi::sqlite3_bind_blob(stmt,
-                                 col,
-                                 mem::transmute(self.as_ptr()),
-                                 self.len() as i32,
-                                 ffi::SQLITE_TRANSIENT())
+                               col,
+                               mem::transmute(self.as_ptr()),
+                               self.len() as i32,
+                               ffi::SQLITE_TRANSIENT())
     }
 }
 
