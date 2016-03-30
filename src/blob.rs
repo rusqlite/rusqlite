@@ -17,6 +17,7 @@
 //! extern crate rusqlite;
 //!
 //! use rusqlite::{Connection, DatabaseName};
+//! use rusqlite::blob::ZeroBlob;
 //! use std::io::{Read, Write, Seek, SeekFrom};
 //!
 //! fn main() {
@@ -38,7 +39,7 @@
 //!     let bytes_read = blob.read(&mut buf[..]).unwrap();
 //!     assert_eq!(bytes_read, 10); // note we read 10 bytes because the blob has size 10
 //!
-//!     db.execute("INSERT INTO test (content) VALUES (ZEROBLOB(64))", &[]).unwrap();
+//!     db.execute("INSERT INTO test (content) VALUES (?)", &[&ZeroBlob(64)]).unwrap();
 //!
 //!     // given a new row ID, we can reopen the blob on that row
 //!     let rowid = db.last_insert_rowid();
@@ -51,8 +52,10 @@ use std::io;
 use std::cmp::min;
 use std::mem;
 use std::ptr;
+use libc::c_int;
 
 use super::ffi;
+use super::types::ToSql;
 use {Result, Connection, DatabaseName};
 
 /// Handle to an open BLOB.
@@ -232,6 +235,19 @@ impl<'conn> Drop for Blob<'conn> {
     }
 }
 
+/// BLOB of length N that is filled with zeroes.
+/// Zeroblobs are intended to serve as placeholders for BLOBs whose content is later written using incremental BLOB I/O routines.
+/// A negative value for the zeroblob results in a zero-length BLOB.
+#[derive(Copy,Clone)]
+pub struct ZeroBlob(pub i32);
+
+impl ToSql for ZeroBlob {
+    unsafe fn bind_parameter(&self, stmt: *mut ffi::sqlite3_stmt, col: c_int) -> c_int {
+        let ZeroBlob(length) = *self;
+        ffi::sqlite3_bind_zeroblob(stmt, col, length)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::io::{BufReader, BufRead, BufWriter, Read, Write, Seek, SeekFrom};
@@ -336,7 +352,8 @@ mod test {
 
         {
             // ... but it should've written the first 10 bytes
-            let mut blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false).unwrap();
+            let mut blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false)
+                             .unwrap();
             let mut bytes = [0u8; 10];
             assert_eq!(10, blob.read(&mut bytes[..]).unwrap());
             assert_eq!(b"0123456701", &bytes);
@@ -353,7 +370,8 @@ mod test {
 
         {
             // ... but it should've written the first 10 bytes
-            let mut blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false).unwrap();
+            let mut blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false)
+                             .unwrap();
             let mut bytes = [0u8; 10];
             assert_eq!(10, blob.read(&mut bytes[..]).unwrap());
             assert_eq!(b"aaaaaaaaaa", &bytes);
