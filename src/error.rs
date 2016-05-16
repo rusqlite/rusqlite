@@ -66,6 +66,9 @@ pub enum Error {
     #[cfg(feature = "functions")]
     #[allow(dead_code)]
     UserFunctionError(Box<error::Error + Send + Sync>),
+
+    /// Error when a query that was expected to insert one row did not insert any or insert many.
+    QueryInsertedRows(c_int),
 }
 
 impl From<str::Utf8Error> for Error {
@@ -102,6 +105,7 @@ impl fmt::Display for Error {
             Error::InvalidColumnIndex(i) => write!(f, "Invalid column index: {}", i),
             Error::InvalidColumnName(ref name) => write!(f, "Invalid column name: {}", name),
             Error::InvalidColumnType => write!(f, "Invalid column type"),
+            Error::QueryInsertedRows(i) => write!(f, "Query inserted {} rows", i),
 
             #[cfg(feature = "functions")]
             Error::InvalidFunctionParameterType => write!(f, "Invalid function parameter type"),
@@ -132,6 +136,7 @@ impl error::Error for Error {
             Error::InvalidColumnIndex(_) => "invalid column index",
             Error::InvalidColumnName(_) => "invalid column name",
             Error::InvalidColumnType => "invalid column type",
+            Error::QueryInsertedRows(_) => "query inserted zero or more than one row",
 
             #[cfg(feature = "functions")]
             Error::InvalidFunctionParameterType => "invalid function parameter type",
@@ -157,10 +162,10 @@ impl error::Error for Error {
             Error::InvalidColumnName(_) |
             Error::InvalidColumnType |
             Error::InvalidPath(_) => None,
+            Error::QueryInsertedRows(_) => None,
 
             #[cfg(feature = "functions")]
             Error::InvalidFunctionParameterType => None,
-
             #[cfg(feature = "functions")]
             Error::UserFunctionError(ref err) => Some(&**err),
         }
