@@ -9,16 +9,10 @@ script:
     - cargo build
     - cargo test
     - cargo test --features backup
+    - cargo test --features blob
     - cargo test --features load_extension
     - cargo test --features trace
     - cargo test --features functions
-    - cargo test --features "backup functions load_extension trace"
-    - cargo doc --no-deps --features "backup functions load_extension trace"
-
-after_success: |
-    [ $TRAVIS_BRANCH = master ] &&
-    [ $TRAVIS_PULL_REQUEST = false ] &&
-    echo '<meta http-equiv=refresh content=0;url=rusqlite/index.html>' > target/doc/index.html &&
-    sudo pip install ghp-import &&
-    ghp-import -n target/doc &&
-    git push -fq https://${GH_TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
+    - cargo test --features chrono
+    - cargo test --features serde_json
+    - cargo test --features "backup blob chrono functions load_extension serde_json trace"

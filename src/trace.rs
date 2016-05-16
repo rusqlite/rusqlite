@@ -8,7 +8,8 @@ use std::str;
 use std::time::Duration;
 
 use super::ffi;
-use {Error, Result, Connection};
+use {Result, Connection};
+use error::error_from_sqlite_code;
 
 /// Set up the process-wide SQLite error logging callback.
 /// This function is marked unsafe for two reasons:
@@ -26,15 +27,16 @@ pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> Result<()> {
         let c_slice = unsafe { CStr::from_ptr(msg).to_bytes() };
         let callback: fn(c_int, &str) = unsafe { mem::transmute(p_arg) };
 
-        if let Ok(s) = str::from_utf8(c_slice) {
-            callback(err, s);
-        }
+        let s = String::from_utf8_lossy(c_slice);
+        callback(err, &s);
     }
 
     let rc = match callback {
         Some(f) => {
             let p_arg: *mut c_void = mem::transmute(f);
-            ffi::sqlite3_config(ffi::SQLITE_CONFIG_LOG, Some(log_callback), p_arg)
+            ffi::sqlite3_config(ffi::SQLITE_CONFIG_LOG,
+                                log_callback as extern "C" fn(_, _, _),
+                                p_arg)
         }
         None => {
             let nullptr: *mut c_void = ptr::null_mut();
@@ -42,14 +44,11 @@ pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> Result<()> {
         }
     };
 
-    if rc != ffi::SQLITE_OK {
-        return Err(Error {
-            code: rc,
-            message: "sqlite3_config(SQLITE_CONFIG_LOG, ...)".to_string(),
-        });
+    if rc == ffi::SQLITE_OK {
+        Ok(())
+    } else {
+        Err(error_from_sqlite_code(rc, None))
     }
-
-    Ok(())
 }
 
 /// Write a message into the error log established by `config_log`.
@@ -67,12 +66,11 @@ impl Connection {
     /// There can only be a single tracer defined for each database connection.
     /// Setting a new tracer clears the old one.
     pub fn trace(&mut self, trace_fn: Option<fn(&str)>) {
-        extern "C" fn trace_callback(p_arg: *mut c_void, z_sql: *const c_char) {
-            let trace_fn: fn(&str) = unsafe { mem::transmute(p_arg) };
-            let c_slice = unsafe { CStr::from_ptr(z_sql).to_bytes() };
-            if let Ok(s) = str::from_utf8(c_slice) {
-                trace_fn(s);
-            }
+        unsafe extern "C" fn trace_callback(p_arg: *mut c_void, z_sql: *const c_char) {
+            let trace_fn: fn(&str) = mem::transmute(p_arg);
+            let c_slice = CStr::from_ptr(z_sql).to_bytes();
+            let s = String::from_utf8_lossy(c_slice);
+            trace_fn(&s);
         }
 
         let c = self.db.borrow_mut();
@@ -91,18 +89,17 @@ impl Connection {
     /// There can only be a single profiler defined for each database connection.
     /// Setting a new profiler clears the old one.
     pub fn profile(&mut self, profile_fn: Option<fn(&str, Duration)>) {
-        extern "C" fn profile_callback(p_arg: *mut c_void,
-                                       z_sql: *const c_char,
-                                       nanoseconds: u64) {
-            let profile_fn: fn(&str, Duration) = unsafe { mem::transmute(p_arg) };
-            let c_slice = unsafe { CStr::from_ptr(z_sql).to_bytes() };
-            if let Ok(s) = str::from_utf8(c_slice) {
-                const NANOS_PER_SEC: u64 = 1_000_000_000;
+        unsafe extern "C" fn profile_callback(p_arg: *mut c_void,
+                                              z_sql: *const c_char,
+                                              nanoseconds: u64) {
+            let profile_fn: fn(&str, Duration) = mem::transmute(p_arg);
+            let c_slice = CStr::from_ptr(z_sql).to_bytes();
+            let s = String::from_utf8_lossy(c_slice);
+            const NANOS_PER_SEC: u64 = 1_000_000_000;
 
-                let duration = Duration::new(nanoseconds / NANOS_PER_SEC,
-                                             (nanoseconds % NANOS_PER_SEC) as u32);
-                profile_fn(s, duration);
-            }
+            let duration = Duration::new(nanoseconds / NANOS_PER_SEC,
+                                         (nanoseconds % NANOS_PER_SEC) as u32);
+            profile_fn(&s, duration);
         }
 
         let c = self.db.borrow_mut();

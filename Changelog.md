@@ -1,5 +1,31 @@
-# Version UPCOMING (TBD)
+# Version UPCOMING (...)
 
+* Adds support for serializing types from the `serde_json` crate. Requires the `serde_json` feature.
+* Adds support for serializing types from the `chrono` crate. Requires the `chrono` feature.
+* Removes `load_extension` feature from `libsqlite3-sys`. `load_extension` is still available
+  on rusqlite itself.
+* Fixes crash on nightly Rust when using the `trace` feature.
+* Adds optional `clippy` feature and addresses issues it found.
+* Adds `column_count()` method to `Statement` and `Row`.
+* Adds `types::Value` for dynamic column types.
+* Adds support for user-defined aggregate functions (behind the existing `functions` Cargo feature).
+* Introduces a `RowIndex` trait allowing columns to be fetched via index (as before) or name (new).
+* Introduces `ZeroBlob` type under the `blob` module/feature exposing SQLite's zeroblob API.
+* Adds CI testing for Windows via AppVeyor.
+* Fixes a warning building libsqlite3-sys under Rust 1.6.
+* Adds an unsafe `handle()` method to `Connection`. Please file an issue if you actually use it.
+
+# Version 0.6.0 (2015-12-17)
+
+* BREAKING CHANGE: `SqliteError` is now an enum instead of a struct. Previously, we were (ab)using
+  the error code and message to send back both underlying SQLite errors and errors that occurred
+  at the Rust level. Now those have been separated out; SQLite errors are returned as 
+  `SqliteFailure` cases (which still include the error code but also include a Rust-friendlier
+  enum as well), and rusqlite-level errors are captured in other cases. Because of this change,
+  `SqliteError` no longer implements `PartialEq`.
+* BREAKING CHANGE: When opening a new detection, rusqlite now detects if SQLite was compiled or
+  configured for single-threaded use only; if it was, connection attempts will fail. If this
+  affects you, please open an issue.
 * BREAKING CHANGE: `SqliteTransactionDeferred`, `SqliteTransactionImmediate`, and
   `SqliteTransactionExclusive` are no longer exported. Instead, use
   `TransactionBehavior::Deferred`, `TransactionBehavior::Immediate`, and
@@ -18,6 +44,7 @@
   The old, prefixed names are still exported but are deprecated.
 * Adds a variety of `..._named` methods for executing queries using named placeholder parameters.
 * Adds `backup` feature that exposes SQLite's online backup API.
+* Adds `blob` feature that exposes SQLite's Incremental I/O for BLOB API.
 * Adds `functions` feature that allows user-defined scalar functions to be added to
   open `SqliteConnection`s.
 
