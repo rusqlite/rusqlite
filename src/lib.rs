@@ -93,6 +93,7 @@ mod convenient;
 #[cfg(feature = "backup")]pub mod backup;
 #[cfg(feature = "functions")]pub mod functions;
 #[cfg(feature = "blob")]pub mod blob;
+#[cfg(feature = "cache")]pub mod cache;
 
 /// Old name for `Result`. `SqliteResult` is deprecated.
 pub type SqliteResult<T> = Result<T>;
@@ -899,6 +900,28 @@ impl<'conn> Statement<'conn> {
         }
 
         Ok(())
+    }
+
+    #[cfg(feature = "cache")]
+    fn clear_bindings(&mut self) {
+        unsafe {
+            ffi::sqlite3_clear_bindings(self.stmt);
+        };
+    }
+
+    #[cfg(feature = "cache")]
+    fn is_busy(&self) -> bool {
+        unsafe {
+            ffi::sqlite3_stmt_busy(self.stmt) != 0
+        }
+    }
+
+    #[cfg(feature = "cache")]
+    fn eq(&self, sql: &str) -> bool {
+        unsafe {
+            let c_slice = CStr::from_ptr(ffi::sqlite3_sql(self.stmt)).to_bytes();
+            str::from_utf8(c_slice).unwrap().eq(sql)
+        }
     }
 
     fn finalize_(&mut self) -> Result<()> {
