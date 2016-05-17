@@ -90,12 +90,14 @@ impl<'conn> StatementCache<'conn> {
     /// Will return `Err` if `stmt` (or the already cached statement implementing the same SQL) statement is `discard`ed
     /// and the underlying SQLite finalize call fails.
     fn release(&self, mut stmt: Statement<'conn>) {
+        if stmt.is_busy() {
+            return;
+        }
         let mut cache = self.cache.borrow_mut();
         if cache.capacity() == cache.len() {
             // is full
             cache.pop_back(); // LRU dropped
         }
-        stmt.reset_if_needed();
         stmt.clear_bindings();
         cache.push_front(stmt)
     }
@@ -133,7 +135,7 @@ mod test {
             let mut stmt = cache.get(sql).unwrap();
             assert_eq!(0, cache.len());
             assert_eq!(0,
-                       stmt.query(&[]).unwrap().get_expected_row().unwrap().get::<i64>(0));
+                       stmt.query(&[]).unwrap().get_expected_row().unwrap().get::<i32,i64>(0));
         }
         assert_eq!(1, cache.len());
 
@@ -141,7 +143,7 @@ mod test {
             let mut stmt = cache.get(sql).unwrap();
             assert_eq!(0, cache.len());
             assert_eq!(0,
-                       stmt.query(&[]).unwrap().get_expected_row().unwrap().get::<i64>(0));
+                       stmt.query(&[]).unwrap().get_expected_row().unwrap().get::<i32,i64>(0));
         }
         assert_eq!(1, cache.len());
 
@@ -160,7 +162,7 @@ mod test {
             let mut stmt = cache.get(sql).unwrap();
             assert_eq!(0, cache.len());
             assert_eq!(0,
-                       stmt.query(&[]).unwrap().get_expected_row().unwrap().get::<i64>(0));
+                       stmt.query(&[]).unwrap().get_expected_row().unwrap().get::<i32,i64>(0));
             stmt.cacheable = false;
         }
         assert_eq!(0, cache.len());
