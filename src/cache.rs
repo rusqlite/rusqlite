@@ -15,11 +15,10 @@ pub struct StatementCache<'conn> {
 /// Cacheable statement.
 ///
 /// Statement will return automatically to the cache by default.
-/// If you want the statement to be discarded, you can set the `cacheable` flag to `false`.
+/// If you want the statement to be discarded, call `discard()` on it.
 pub struct CachedStatement<'c: 's, 's> {
     stmt: Option<Statement<'c>>,
     cache: &'s StatementCache<'c>,
-    pub cacheable: bool,
 }
 
 impl<'c, 's> Deref for CachedStatement<'c, 's> {
@@ -39,10 +38,8 @@ impl<'c, 's> DerefMut for CachedStatement<'c, 's> {
 impl<'c, 's> Drop for CachedStatement<'c, 's> {
     #[allow(unused_must_use)]
     fn drop(&mut self) {
-        if self.cacheable {
-            self.cache.release(self.stmt.take().unwrap());
-        } else {
-            self.stmt.take().unwrap().finalize();
+        if let Some(stmt) = self.stmt.take() {
+            self.cache.cache_stmt(stmt);
         }
     }
 }
@@ -52,8 +49,11 @@ impl<'c, 's> CachedStatement<'c, 's> {
         CachedStatement {
             stmt: Some(stmt),
             cache: cache,
-            cacheable: true,
         }
+    }
+
+    pub fn discard(mut self) {
+        self.stmt = None;
     }
 }
 
@@ -67,7 +67,7 @@ impl<'conn> StatementCache<'conn> {
     }
 
     /// Search the cache for a prepared-statement object that implements `sql`.
-    // If no such prepared-statement can be found, allocate and prepare a new one.
+    /// If no such prepared-statement can be found, allocate and prepare a new one.
     ///
     /// # Failure
     ///
@@ -81,15 +81,8 @@ impl<'conn> StatementCache<'conn> {
         stmt.map(|stmt| CachedStatement::new(stmt, self))
     }
 
-    /// If `discard` is true, then the statement is deleted immediately.
-    /// Otherwise it is added to the LRU list and may be returned
-    /// by a subsequent call to `get()`.
-    ///
-    /// # Failure
-    ///
-    /// Will return `Err` if `stmt` (or the already cached statement implementing the same SQL) statement is `discard`ed
-    /// and the underlying SQLite finalize call fails.
-    fn release(&self, mut stmt: Statement<'conn>) {
+    // Return a statement to the cache.
+    fn cache_stmt(&self, mut stmt: Statement<'conn>) {
         if stmt.is_busy() {
             return;
         }
@@ -153,7 +146,7 @@ mod test {
     }
 
     #[test]
-    fn test_cacheable() {
+    fn test_discard() {
         let db = Connection::open_in_memory().unwrap();
         let cache = StatementCache::new(&db, 15);
 
@@ -163,7 +156,7 @@ mod test {
             assert_eq!(0, cache.len());
             assert_eq!(0,
                        stmt.query(&[]).unwrap().get_expected_row().unwrap().get::<i32,i64>(0));
-            stmt.cacheable = false;
+            stmt.discard();
         }
         assert_eq!(0, cache.len());
     }
