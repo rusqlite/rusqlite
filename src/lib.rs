@@ -1432,8 +1432,6 @@ mod test {
             assert!(db.is_busy());
             assert!(row.is_some());
         }
-        assert!(db.is_busy());
-        stmt.reset_if_needed();
         assert!(!db.is_busy());
     }
 
