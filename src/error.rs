@@ -6,6 +6,7 @@ use libc::c_int;
 use {ffi, errmsg_to_string};
 
 /// Old name for `Error`. `SqliteError` is deprecated.
+#[deprecated(since = "0.6.0", note = "Use Error instead")]
 pub type SqliteError = Error;
 
 /// Enum listing possible errors from rusqlite.
@@ -40,10 +41,6 @@ pub enum Error {
     /// did not return any.
     QueryReturnedNoRows,
 
-    /// Error when trying to access a `Row` after stepping past it. See the discussion on
-    /// the `Rows` type for more details.
-    GetFromStaleRow,
-
     /// Error when the value of a particular column is requested, but the index is out of range
     /// for the statement.
     InvalidColumnIndex(c_int),
@@ -58,10 +55,6 @@ pub enum Error {
 
     /// Error when a query that was expected to insert one row did not insert any or insert many.
     StatementChangedRows(c_int),
-
-    /// Error when a query that was expected to insert a row did not change the connection's
-    /// last_insert_rowid().
-    StatementFailedToInsertRow,
 
     /// Error returned by `functions::Context::get` when the function argument cannot be converted
     /// to the requested type.
@@ -105,12 +98,10 @@ impl fmt::Display for Error {
                 write!(f, "Execute returned results - did you mean to call query?")
             }
             Error::QueryReturnedNoRows => write!(f, "Query returned no rows"),
-            Error::GetFromStaleRow => write!(f, "Attempted to get a value from a stale row"),
             Error::InvalidColumnIndex(i) => write!(f, "Invalid column index: {}", i),
             Error::InvalidColumnName(ref name) => write!(f, "Invalid column name: {}", name),
             Error::InvalidColumnType => write!(f, "Invalid column type"),
             Error::StatementChangedRows(i) => write!(f, "Query changed {} rows", i),
-            Error::StatementFailedToInsertRow => write!(f, "Statement failed to insert new row"),
 
             #[cfg(feature = "functions")]
             Error::InvalidFunctionParameterType => write!(f, "Invalid function parameter type"),
@@ -137,12 +128,10 @@ impl error::Error for Error {
                 "execute returned results - did you mean to call query?"
             }
             Error::QueryReturnedNoRows => "query returned no rows",
-            Error::GetFromStaleRow => "attempted to get a value from a stale row",
             Error::InvalidColumnIndex(_) => "invalid column index",
             Error::InvalidColumnName(_) => "invalid column name",
             Error::InvalidColumnType => "invalid column type",
             Error::StatementChangedRows(_) => "query inserted zero or more than one row",
-            Error::StatementFailedToInsertRow => "statement failed to insert new row",
 
             #[cfg(feature = "functions")]
             Error::InvalidFunctionParameterType => "invalid function parameter type",
@@ -163,13 +152,11 @@ impl error::Error for Error {
             Error::InvalidParameterName(_) |
             Error::ExecuteReturnedResults |
             Error::QueryReturnedNoRows |
-            Error::GetFromStaleRow |
             Error::InvalidColumnIndex(_) |
             Error::InvalidColumnName(_) |
             Error::InvalidColumnType |
-            Error::InvalidPath(_) => None,
+            Error::InvalidPath(_) |
             Error::StatementChangedRows(_) => None,
-            Error::StatementFailedToInsertRow => None,
 
             #[cfg(feature = "functions")]
             Error::InvalidFunctionParameterType => None,

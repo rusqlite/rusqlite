@@ -54,7 +54,6 @@ use std::ffi::CStr;
 use std::mem;
 use std::ptr;
 use std::slice;
-use std::str;
 use libc::{c_int, c_double, c_char, c_void};
 
 use ffi;
@@ -63,7 +62,7 @@ pub use ffi::sqlite3_value;
 pub use ffi::sqlite3_value_type;
 pub use ffi::sqlite3_value_numeric_type;
 
-use types::Null;
+use types::{Null, FromSql, ValueRef};
 
 use {Result, Error, Connection, str_to_cstring, InnerConnection};
 
@@ -111,7 +110,8 @@ impl<'a> ToResult for &'a str {
                                          length as c_int,
                                          ffi::SQLITE_TRANSIENT())
             }
-            Err(_) => ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_MISUSE), // TODO sqlite3_result_error
+            // TODO sqlite3_result_error
+            Err(_) => ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_MISUSE),
         }
     }
 }
@@ -156,107 +156,34 @@ impl ToResult for Null {
     }
 }
 
-/// A trait for types that can be created from a SQLite function parameter value.
-pub trait FromValue: Sized {
-    unsafe fn parameter_value(v: *mut sqlite3_value) -> Result<Self>;
-
-    /// FromValue types can implement this method and use sqlite3_value_type to check that
-    /// the type reported by SQLite matches a type suitable for Self. This method is used
-    /// by `Context::get` to confirm that the parameter contains a valid type before
-    /// attempting to retrieve the value.
-    unsafe fn parameter_has_valid_sqlite_type(_: *mut sqlite3_value) -> bool {
-        true
-    }
-}
-
-
-macro_rules! raw_from_impl(
-    ($t:ty, $f:ident, $c:expr) => (
-        impl FromValue for $t {
-            unsafe fn parameter_value(v: *mut sqlite3_value) -> Result<$t> {
-                Ok(ffi::$f(v))
-            }
-
-            unsafe fn parameter_has_valid_sqlite_type(v: *mut sqlite3_value) -> bool {
-                sqlite3_value_numeric_type(v) == $c
-            }
-        }
-    )
-);
-
-raw_from_impl!(c_int, sqlite3_value_int, ffi::SQLITE_INTEGER);
-raw_from_impl!(i64, sqlite3_value_int64, ffi::SQLITE_INTEGER);
-
-impl FromValue for bool {
-    unsafe fn parameter_value(v: *mut sqlite3_value) -> Result<bool> {
-        match ffi::sqlite3_value_int(v) {
-            0 => Ok(false),
-            _ => Ok(true),
-        }
-    }
-
-    unsafe fn parameter_has_valid_sqlite_type(v: *mut sqlite3_value) -> bool {
-        sqlite3_value_numeric_type(v) == ffi::SQLITE_INTEGER
-    }
-}
-
-impl FromValue for c_double {
-    unsafe fn parameter_value(v: *mut sqlite3_value) -> Result<c_double> {
-        Ok(ffi::sqlite3_value_double(v))
-    }
-
-    unsafe fn parameter_has_valid_sqlite_type(v: *mut sqlite3_value) -> bool {
-        sqlite3_value_numeric_type(v) == ffi::SQLITE_FLOAT ||
-        sqlite3_value_numeric_type(v) == ffi::SQLITE_INTEGER
-    }
-}
-
-impl FromValue for String {
-    unsafe fn parameter_value(v: *mut sqlite3_value) -> Result<String> {
-        let c_text = ffi::sqlite3_value_text(v);
-        if c_text.is_null() {
-            Ok("".to_owned())
-        } else {
-            let c_slice = CStr::from_ptr(c_text as *const c_char).to_bytes();
-            let utf8_str = try!(str::from_utf8(c_slice));
-            Ok(utf8_str.into())
-        }
-    }
-
-    unsafe fn parameter_has_valid_sqlite_type(v: *mut sqlite3_value) -> bool {
-        sqlite3_value_type(v) == ffi::SQLITE_TEXT
-    }
-}
-
-impl FromValue for Vec<u8> {
-    unsafe fn parameter_value(v: *mut sqlite3_value) -> Result<Vec<u8>> {
+impl<'a> ValueRef<'a> {
+    unsafe fn from_value(value: *mut sqlite3_value) -> ValueRef<'a> {
         use std::slice::from_raw_parts;
-        let c_blob = ffi::sqlite3_value_blob(v);
-        let len = ffi::sqlite3_value_bytes(v);
 
-        assert!(len >= 0,
-                "unexpected negative return from sqlite3_value_bytes");
-        let len = len as usize;
+        match ffi::sqlite3_value_type(value) {
+            ffi::SQLITE_NULL => ValueRef::Null,
+            ffi::SQLITE_INTEGER => ValueRef::Integer(ffi::sqlite3_value_int64(value)),
+            ffi::SQLITE_FLOAT => ValueRef::Real(ffi::sqlite3_value_double(value)),
+            ffi::SQLITE_TEXT => {
+                let text = ffi::sqlite3_value_text(value);
+                assert!(!text.is_null(), "unexpected SQLITE_TEXT value type with NULL data");
+                let s = CStr::from_ptr(text as *const c_char);
 
-        Ok(from_raw_parts(mem::transmute(c_blob), len).to_vec())
-    }
+                // sqlite3_value_text returns UTF8 data, so our unwrap here should be fine.
+                let s = s.to_str().expect("sqlite3_value_text returned invalid UTF-8");
+                ValueRef::Text(s)
+            }
+            ffi::SQLITE_BLOB => {
+                let blob = ffi::sqlite3_value_blob(value);
+                assert!(!blob.is_null(), "unexpected SQLITE_BLOB value type with NULL data");
 
-    unsafe fn parameter_has_valid_sqlite_type(v: *mut sqlite3_value) -> bool {
-        sqlite3_value_type(v) == ffi::SQLITE_BLOB
-    }
-}
+                let len = ffi::sqlite3_value_bytes(value);
+                assert!(len >= 0, "unexpected negative return from sqlite3_value_bytes");
 
-impl<T: FromValue> FromValue for Option<T> {
-    unsafe fn parameter_value(v: *mut sqlite3_value) -> Result<Option<T>> {
-        if sqlite3_value_type(v) == ffi::SQLITE_NULL {
-            Ok(None)
-        } else {
-            FromValue::parameter_value(v).map(Some)
+                ValueRef::Blob(from_raw_parts(blob as *const u8, len as usize))
+            }
+            _ => unreachable!("sqlite3_value_type returned invalid value")
         }
-    }
-
-    unsafe fn parameter_has_valid_sqlite_type(v: *mut sqlite3_value) -> bool {
-        sqlite3_value_type(v) == ffi::SQLITE_NULL || T::parameter_has_valid_sqlite_type(v)
     }
 }
 
@@ -287,15 +214,13 @@ impl<'a> Context<'a> {
     /// Will panic if `idx` is greater than or equal to `self.len()`.
     ///
     /// Will return Err if the underlying SQLite type cannot be converted to a `T`.
-    pub fn get<T: FromValue>(&self, idx: usize) -> Result<T> {
+    pub fn get<T: FromSql>(&self, idx: usize) -> Result<T> {
         let arg = self.args[idx];
-        unsafe {
-            if T::parameter_has_valid_sqlite_type(arg) {
-                T::parameter_value(arg)
-            } else {
-                Err(Error::InvalidFunctionParameterType)
-            }
-        }
+        let value = unsafe { ValueRef::from_value(arg) };
+        FromSql::column_result(value).map_err(|err| match err {
+            Error::InvalidColumnType => Error::InvalidFunctionParameterType,
+            _ => err
+        })
     }
 
     /// Sets the auxilliary data associated with a particular parameter. See
@@ -333,7 +258,9 @@ impl<'a> Context<'a> {
 ///
 /// `A` is the type of the aggregation context and `T` is the type of the final result.
 /// Implementations should be stateless.
-pub trait Aggregate<A, T> where T: ToResult {
+pub trait Aggregate<A, T>
+    where T: ToResult
+{
     /// Initializes the aggregation context. Will be called prior to the first call
     /// to `step()` to set up the context for an invocation of the function. (Note:
     /// `init()` will not be called if the there are no rows.)
@@ -708,9 +635,10 @@ mod test {
 
         assert_eq!(true, result.unwrap());
 
-        let result: Result<i64> = db.query_row("SELECT COUNT(*) FROM foo WHERE regexp('l.s[aeiouy]', x) == 1",
-                                  &[],
-                                  |r| r.get(0));
+        let result: Result<i64> =
+            db.query_row("SELECT COUNT(*) FROM foo WHERE regexp('l.s[aeiouy]', x) == 1",
+                         &[],
+                         |r| r.get(0));
 
         assert_eq!(2, result.unwrap());
     }
@@ -758,9 +686,10 @@ mod test {
 
         assert_eq!(true, result.unwrap());
 
-        let result: Result<i64> = db.query_row("SELECT COUNT(*) FROM foo WHERE regexp('l.s[aeiouy]', x) == 1",
-                                  &[],
-                                  |r| r.get(0));
+        let result: Result<i64> =
+            db.query_row("SELECT COUNT(*) FROM foo WHERE regexp('l.s[aeiouy]', x) == 1",
+                         &[],
+                         |r| r.get(0));
 
         assert_eq!(2, result.unwrap());
     }
@@ -769,16 +698,16 @@ mod test {
     fn test_varargs_function() {
         let db = Connection::open_in_memory().unwrap();
         db.create_scalar_function("my_concat", -1, true, |ctx| {
-              let mut ret = String::new();
+                let mut ret = String::new();
 
-              for idx in 0..ctx.len() {
-                  let s = try!(ctx.get::<String>(idx));
-                  ret.push_str(&s);
-              }
+                for idx in 0..ctx.len() {
+                    let s = try!(ctx.get::<String>(idx));
+                    ret.push_str(&s);
+                }
 
-              Ok(ret)
-          })
-          .unwrap();
+                Ok(ret)
+            })
+            .unwrap();
 
         for &(expected, query) in &[("", "SELECT my_concat()"),
                                     ("onetwo", "SELECT my_concat('one', 'two')"),
@@ -829,18 +758,18 @@ mod test {
         // sum should return NULL when given no columns (contrast with count below)
         let no_result = "SELECT my_sum(i) FROM (SELECT 2 AS i WHERE 1 <> 1)";
         let result: Option<i64> = db.query_row(no_result, &[], |r| r.get(0))
-                                    .unwrap();
+            .unwrap();
         assert!(result.is_none());
 
         let single_sum = "SELECT my_sum(i) FROM (SELECT 2 AS i UNION ALL SELECT 2)";
         let result: i64 = db.query_row(single_sum, &[], |r| r.get(0))
-                            .unwrap();
+            .unwrap();
         assert_eq!(4, result);
 
         let dual_sum = "SELECT my_sum(i), my_sum(j) FROM (SELECT 2 AS i, 1 AS j UNION ALL SELECT \
                         2, 1)";
         let result: (i64, i64) = db.query_row(dual_sum, &[], |r| (r.get(0), r.get(1)))
-                                   .unwrap();
+            .unwrap();
         assert_eq!((4, 2), result);
     }
 
@@ -856,7 +785,7 @@ mod test {
 
         let single_sum = "SELECT my_count(i) FROM (SELECT 2 AS i UNION ALL SELECT 2)";
         let result: i64 = db.query_row(single_sum, &[], |r| r.get(0))
-                            .unwrap();
+            .unwrap();
         assert_eq!(2, result);
     }
 }

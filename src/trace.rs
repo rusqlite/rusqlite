@@ -4,7 +4,6 @@ use libc::{c_char, c_int, c_void};
 use std::ffi::{CStr, CString};
 use std::mem;
 use std::ptr;
-use std::str;
 use std::time::Duration;
 
 use super::ffi;
@@ -60,7 +59,8 @@ pub fn log(err_code: c_int, msg: &str) {
 }
 
 impl Connection {
-    /// Register or clear a callback function that can be used for tracing the execution of SQL statements.
+    /// Register or clear a callback function that can be used for tracing the execution of SQL
+    /// statements.
     ///
     /// Prepared statement placeholders are replaced/logged with their assigned values.
     /// There can only be a single tracer defined for each database connection.
@@ -84,7 +84,8 @@ impl Connection {
         }
     }
 
-    /// Register or clear a callback function that can be used for profiling the execution of SQL statements.
+    /// Register or clear a callback function that can be used for profiling the execution of SQL
+    /// statements.
     ///
     /// There can only be a single profiler defined for each database connection.
     /// Setting a new profiler clears the old one.

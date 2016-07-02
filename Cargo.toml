@@ -1,6 +1,6 @@
 [package]
 name = "rusqlite"
-version = "0.6.0"
+version = "0.7.3"
 authors = ["John Gallagher <jgallagher@bignerdranch.com>"]
 description = "Ergonomic wrapper for SQLite"
 repository = "https://github.com/jgallagher/rusqlite"
@@ -21,9 +21,9 @@ trace = []
 
 [dependencies]
 time = "~0.1.0"
-bitflags = "~0.1"
+bitflags = "0.7"
+lru-cache = "0.0.7"
 libc = "~0.2"
-clippy = {version = "~0.0.58", optional = true}
 chrono = { version = "~0.2", optional = true }
 serde_json = { version = "0.6", optional = true }
 
@@ -34,7 +34,7 @@ regex = "~0.1.41"
 
 [dependencies.libsqlite3-sys]
 path = "libsqlite3-sys"
-version = "0.4.0"
+version = "0.5.0"
 
 [[test]]
 name = "config_log"
