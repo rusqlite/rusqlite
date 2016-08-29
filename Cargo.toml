@@ -4,7 +4,7 @@ version = "0.11.0"
 authors = ["John Gallagher <jgallagher@bignerdranch.com>"]
 description = "Ergonomic wrapper for SQLite"
 repository = "https://github.com/jgallagher/rusqlite"
-documentation = "http://jgallagher.github.io/rusqlite/rusqlite/index.html"
+documentation = "http://docs.rs/rusqlite/"
 readme = "README.md"
 keywords = ["sqlite", "database", "ffi"]
 license = "MIT"
@@ -18,6 +18,7 @@ appveyor = { repository = "jgallagher/rusqlite" }
 name = "rusqlite"
 
 [features]
+default = ["backup", "blob", "chrono", "functions", "load_extension", "serde_json", "trace"]
 load_extension = []
 backup = ["libsqlite3-sys/min_sqlite_version_3_6_11"]
 blob = ["libsqlite3-sys/min_sqlite_version_3_7_4"]
