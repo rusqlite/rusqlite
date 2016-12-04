@@ -793,13 +793,11 @@ impl ::std::clone::Clone for Struct___va_list_tag {
 impl ::std::default::Default for Struct___va_list_tag {
     fn default() -> Self { unsafe { ::std::mem::zeroed() } }
 }
-#[link(name = "sqlite3")]
 extern "C" {
     pub static mut sqlite3_version: *const ::libc::c_char;
     pub static mut sqlite3_temp_directory: *mut ::libc::c_char;
     pub static mut sqlite3_data_directory: *mut ::libc::c_char;
 }
-#[link(name = "sqlite3")]
 extern "C" {
     pub fn sqlite3_libversion() -> *const ::libc::c_char;
     pub fn sqlite3_sourceid() -> *const ::libc::c_char;
