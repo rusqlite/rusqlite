@@ -1002,6 +1002,44 @@ impl<'conn> Statement<'conn> {
         })
     }
 
+    /// Execute the prepared statement, supplying parameters via an iterator and
+    /// returning an iterator over the resulting rows.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{SqliteConnection, SqliteResult};
+    /// fn get_names_for_ids(conn: &rusqlite::SqliteConnection, ids: Vec<i64>) -> Result<Vec<String>, rusqlite::SqliteError> {
+    ///     let id_bindings = std::iter::repeat("?").take(ids.len()).collect::<Vec<_>>().connect(", ");
+    ///     let mut stmt = try!(conn.prepare(&*format!("SELECT name FROM people WHERE id IN ({})", id_bindings)));
+    ///     let mut rows = try!(stmt.query_iter(ids.iter()));
+    ///
+    ///     let mut names = Vec::new();
+    ///         for result_row in rows {
+    ///                 let row = try!(result_row);
+    ///                 names.push(row.get(0));
+    ///             }
+    ///
+    ///     Ok(names)
+    /// }
+    /// ```
+    pub fn query_iter<'a, K: ToSql + 'a, I: Iterator<Item = &'a K>>(&'a mut self, params: I) -> SqliteResult<SqliteRows<'a>> 
+    {
+        self.reset_if_needed();
+
+        unsafe {
+            let mut i = 0;
+            for p in params {
+                i +=  1;
+                try!(self.conn.decode_result(p.bind_parameter(self.stmt, i as c_int)));
+            }
+            assert_eq!(i as c_int, ffi::sqlite3_bind_parameter_count(self.stmt));
+
+            self.needs_reset = true;
+            Ok(SqliteRows::new(self))
+        }
+    }
+
     /// Consumes the statement.
     ///
     /// Functionally equivalent to the `Drop` implementation, but allows callers to see any errors
