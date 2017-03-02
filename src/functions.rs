@@ -310,7 +310,7 @@ impl<'a> Context<'a> {
             ffi::sqlite3_set_auxdata(self.ctx,
                                      arg,
                                      mem::transmute(boxed),
-                                     Some(mem::transmute(free_boxed_value::<T>)))
+                                     Some(free_boxed_value::<T>))
         };
     }
 
@@ -442,7 +442,7 @@ impl InnerConnection {
                                             Some(call_boxed_closure::<F, T>),
                                             None,
                                             None,
-                                            Some(mem::transmute(free_boxed_value::<F>)))
+                                            Some(free_boxed_value::<F>))
         };
         self.decode_result(r)
     }
