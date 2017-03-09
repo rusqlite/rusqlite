@@ -1,7 +1,7 @@
 use std::ffi::CStr;
 use std::ptr;
 use std::os::raw::c_int;
-use super::ffi;
+use super::{ffi, Index};
 
 // Private newtype for raw sqlite3_stmts that finalize themselves when dropped.
 #[derive(Debug)]
@@ -16,16 +16,16 @@ impl RawStatement {
         self.0
     }
 
-    pub fn column_count(&self) -> c_int {
-        unsafe { ffi::sqlite3_column_count(self.0) }
+    pub fn column_count(&self) -> Index {
+        unsafe { ffi::sqlite3_column_count(self.0) as Index }
     }
 
-    pub fn column_type(&self, idx: c_int) -> c_int {
-        unsafe { ffi::sqlite3_column_type(self.0, idx) }
+    pub fn column_type(&self, idx: Index) -> c_int {
+        unsafe { ffi::sqlite3_column_type(self.0, idx as c_int) }
     }
 
-    pub fn column_name(&self, idx: c_int) -> &CStr {
-        unsafe { CStr::from_ptr(ffi::sqlite3_column_name(self.0, idx)) }
+    pub fn column_name(&self, idx: Index) -> &CStr {
+        unsafe { CStr::from_ptr(ffi::sqlite3_column_name(self.0, idx as c_int)) }
     }
 
     pub fn step(&self) -> c_int {
@@ -36,12 +36,12 @@ impl RawStatement {
         unsafe { ffi::sqlite3_reset(self.0) }
     }
 
-    pub fn bind_parameter_count(&self) -> c_int {
-        unsafe { ffi::sqlite3_bind_parameter_count(self.0) }
+    pub fn bind_parameter_count(&self) -> Index {
+        unsafe { ffi::sqlite3_bind_parameter_count(self.0) as Index }
     }
 
-    pub fn bind_parameter_index(&self, name: &CStr) -> Option<c_int> {
-        let r = unsafe { ffi::sqlite3_bind_parameter_index(self.0, name.as_ptr()) };
+    pub fn bind_parameter_index(&self, name: &CStr) -> Option<Index> {
+        let r = unsafe { ffi::sqlite3_bind_parameter_index(self.0, name.as_ptr()) as Index };
         match r {
             0 => None,
             i => Some(i),

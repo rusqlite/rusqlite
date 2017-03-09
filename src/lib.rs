@@ -132,6 +132,11 @@ pub type SqliteResult<T> = Result<T>;
 /// A typedef of the result returned by many methods.
 pub type Result<T> = result::Result<T, Error>;
 
+/// Column or Parameter index
+pub type Index = u16;
+/// Number of rows modified
+pub type NumberOfRows = c_int;
+
 unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
     let c_slice = CStr::from_ptr(errmsg).to_bytes();
     String::from_utf8_lossy(c_slice).into_owned()
@@ -294,7 +299,7 @@ impl Connection {
     ///
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string or if the
     /// underlying SQLite call fails.
-    pub fn execute(&self, sql: &str, params: &[&ToSql]) -> Result<c_int> {
+    pub fn execute(&self, sql: &str, params: &[&ToSql]) -> Result<NumberOfRows> {
         self.prepare(sql).and_then(|mut stmt| stmt.execute(params))
     }
 
@@ -316,7 +321,7 @@ impl Connection {
     ///
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string or if the
     /// underlying SQLite call fails.
-    pub fn execute_named(&self, sql: &str, params: &[(&str, &ToSql)]) -> Result<c_int> {
+    pub fn execute_named(&self, sql: &str, params: &[(&str, &ToSql)]) -> Result<NumberOfRows> {
         self.prepare(sql).and_then(|mut stmt| stmt.execute_named(params))
     }
 
@@ -553,7 +558,7 @@ impl Connection {
         self.db.borrow_mut().decode_result(code)
     }
 
-    fn changes(&self) -> c_int {
+    fn changes(&self) -> NumberOfRows {
         self.db.borrow_mut().changes()
     }
 }
@@ -852,7 +857,7 @@ impl InnerConnection {
         self.decode_result(r).map(|_| Statement::new(conn, RawStatement::new(c_stmt)))
     }
 
-    fn changes(&mut self) -> c_int {
+    fn changes(&mut self) -> NumberOfRows {
         unsafe { ffi::sqlite3_changes(self.db()) }
     }
 }

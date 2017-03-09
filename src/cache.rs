@@ -147,7 +147,7 @@ impl StatementCache {
 
 #[cfg(test)]
 mod test {
-    use Connection;
+    use {Connection, Index};
     use super::StatementCache;
 
     impl StatementCache {
@@ -176,14 +176,14 @@ mod test {
         {
             let mut stmt = db.prepare_cached(sql).unwrap();
             assert_eq!(0, cache.len());
-            assert_eq!(0, stmt.query_row(&[], |r| r.get::<i32, i64>(0)).unwrap());
+            assert_eq!(0, stmt.query_row(&[], |r| r.get::<Index, i64>(0)).unwrap());
         }
         assert_eq!(1, cache.len());
 
         {
             let mut stmt = db.prepare_cached(sql).unwrap();
             assert_eq!(0, cache.len());
-            assert_eq!(0, stmt.query_row(&[], |r| r.get::<i32, i64>(0)).unwrap());
+            assert_eq!(0, stmt.query_row(&[], |r| r.get::<Index, i64>(0)).unwrap());
         }
         assert_eq!(1, cache.len());
 
@@ -201,7 +201,7 @@ mod test {
         {
             let mut stmt = db.prepare_cached(sql).unwrap();
             assert_eq!(0, cache.len());
-            assert_eq!(0, stmt.query_row(&[], |r| r.get::<i32, i64>(0)).unwrap());
+            assert_eq!(0, stmt.query_row(&[], |r| r.get::<Index, i64>(0)).unwrap());
         }
         assert_eq!(1, cache.len());
 
@@ -211,7 +211,7 @@ mod test {
         {
             let mut stmt = db.prepare_cached(sql).unwrap();
             assert_eq!(0, cache.len());
-            assert_eq!(0, stmt.query_row(&[], |r| r.get::<i32, i64>(0)).unwrap());
+            assert_eq!(0, stmt.query_row(&[], |r| r.get::<Index, i64>(0)).unwrap());
         }
         assert_eq!(0, cache.len());
 
@@ -219,7 +219,7 @@ mod test {
         {
             let mut stmt = db.prepare_cached(sql).unwrap();
             assert_eq!(0, cache.len());
-            assert_eq!(0, stmt.query_row(&[], |r| r.get::<i32, i64>(0)).unwrap());
+            assert_eq!(0, stmt.query_row(&[], |r| r.get::<Index, i64>(0)).unwrap());
         }
         assert_eq!(1, cache.len());
     }
@@ -233,7 +233,7 @@ mod test {
         {
             let mut stmt = db.prepare_cached(sql).unwrap();
             assert_eq!(0, cache.len());
-            assert_eq!(0, stmt.query_row(&[], |r| r.get::<i32, i64>(0)).unwrap());
+            assert_eq!(0, stmt.query_row(&[], |r| r.get::<Index, i64>(0)).unwrap());
             stmt.discard();
         }
         assert_eq!(0, cache.len());

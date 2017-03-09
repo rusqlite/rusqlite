@@ -62,7 +62,7 @@ use ffi::sqlite3_value;
 
 use types::{ToSql, ToSqlOutput, FromSql, FromSqlError, ValueRef};
 
-use {Result, Error, Connection, str_to_cstring, InnerConnection};
+use {Result, Error, Connection, str_to_cstring, InnerConnection, Index};
 
 fn set_result<'a>(ctx: *mut sqlite3_context, result: &ToSqlOutput<'a>) {
     let value = match *result {
@@ -176,8 +176,8 @@ pub struct Context<'a> {
 
 impl<'a> Context<'a> {
     /// Returns the number of arguments to the function.
-    pub fn len(&self) -> usize {
-        self.args.len()
+    pub fn len(&self) -> Index {
+        self.args.len() as Index
     }
     /// Returns `true` when there is no argument.
     pub fn is_empty(&self) -> bool {
@@ -191,14 +191,14 @@ impl<'a> Context<'a> {
     /// Will panic if `idx` is greater than or equal to `self.len()`.
     ///
     /// Will return Err if the underlying SQLite type cannot be converted to a `T`.
-    pub fn get<T: FromSql>(&self, idx: usize) -> Result<T> {
-        let arg = self.args[idx];
+    pub fn get<T: FromSql>(&self, idx: Index) -> Result<T> {
+        let arg = self.args[idx as usize];
         let value = unsafe { ValueRef::from_value(arg) };
         FromSql::column_result(value).map_err(|err| match err {
             FromSqlError::InvalidType => {
                 Error::InvalidFunctionParameterType(idx, value.data_type())
             }
-            FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx as c_int, i),
+            FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
             FromSqlError::Other(err) => {
                 Error::FromSqlConversionFailure(idx, value.data_type(), err)
             }

@@ -4,7 +4,7 @@ use std::os::raw::{c_char, c_int, c_void};
 use std::slice::from_raw_parts;
 
 use super::ffi;
-use super::{Connection, RawStatement, Result, Error, ValueRef, Row, Rows, AndThenRows, MappedRows};
+use super::{Connection, RawStatement, Result, Error, ValueRef, Row, Rows, AndThenRows, MappedRows, Index, NumberOfRows};
 use super::str_to_cstring;
 use types::{ToSql, ToSqlOutput};
 use row::{RowsCrateImpl, MappedRowsCrateImpl, AndThenRowsCrateImpl};
@@ -29,7 +29,7 @@ impl<'conn> Statement<'conn> {
     }
 
     /// Return the number of columns in the result set returned by the prepared statement.
-    pub fn column_count(&self) -> i32 {
+    pub fn column_count(&self) -> Index {
         self.stmt.column_count()
     }
 
@@ -41,7 +41,7 @@ impl<'conn> Statement<'conn> {
     /// # Failure
     ///
     /// Will return an `Error::InvalidColumnName` when there is no column with the specified `name`.
-    pub fn column_index(&self, name: &str) -> Result<i32> {
+    pub fn column_index(&self, name: &str) -> Result<Index> {
         let bytes = name.as_bytes();
         let n = self.column_count();
         for i in 0..n {
@@ -75,7 +75,7 @@ impl<'conn> Statement<'conn> {
     ///
     /// Will return `Err` if binding parameters fails, the executed statement returns rows (in
     /// which case `query` should be used instead), or the underling SQLite call fails.
-    pub fn execute(&mut self, params: &[&ToSql]) -> Result<c_int> {
+    pub fn execute(&mut self, params: &[&ToSql]) -> Result<NumberOfRows> {
         try!(self.bind_parameters(params));
         self.execute_with_bound_parameters()
     }
@@ -362,19 +362,19 @@ impl<'conn> Statement<'conn> {
     ///
     /// Will return Err if `name` is invalid. Will return Ok(None) if the name
     /// is valid but not a bound parameter of this statement.
-    pub fn parameter_index(&self, name: &str) -> Result<Option<i32>> {
+    pub fn parameter_index(&self, name: &str) -> Result<Option<Index>> {
         let c_name = try!(str_to_cstring(name));
         Ok(self.stmt.bind_parameter_index(&c_name))
     }
 
     fn bind_parameters(&mut self, params: &[&ToSql]) -> Result<()> {
-        assert!(params.len() as c_int == self.stmt.bind_parameter_count(),
+        assert!(params.len() == self.stmt.bind_parameter_count() as usize,
                 "incorrect number of parameters to query(): expected {}, got {}",
                 self.stmt.bind_parameter_count(),
                 params.len());
 
         for (i, p) in params.iter().enumerate() {
-            try!(self.bind_parameter(*p, (i + 1) as c_int));
+            try!(self.bind_parameter(*p, (i + 1) as Index));
         }
 
         Ok(())
@@ -391,8 +391,9 @@ impl<'conn> Statement<'conn> {
         Ok(())
     }
 
-    fn bind_parameter(&self, param: &ToSql, col: c_int) -> Result<()> {
+    fn bind_parameter(&self, param: &ToSql, col: Index) -> Result<()> {
         let value = try!(param.to_sql());
+        let col = col as c_int;
 
         let ptr = unsafe { self.stmt.ptr() };
         let value = match value {
@@ -440,7 +441,7 @@ impl<'conn> Statement<'conn> {
         })
     }
 
-    fn execute_with_bound_parameters(&mut self) -> Result<c_int> {
+    fn execute_with_bound_parameters(&mut self) -> Result<NumberOfRows> {
         let r = self.stmt.step();
         self.stmt.reset();
         match r {
@@ -493,7 +494,7 @@ impl<'conn> Drop for Statement<'conn> {
 // once pub(crate) is stable.
 pub trait StatementCrateImpl<'conn> {
     fn new(conn: &'conn Connection, stmt: RawStatement) -> Self;
-    fn value_ref(&self, col: c_int) -> ValueRef;
+    fn value_ref(&self, col: Index) -> ValueRef;
     fn step(&self) -> Result<bool>;
     fn reset(&self) -> c_int;
 }
@@ -506,18 +507,19 @@ impl<'conn> StatementCrateImpl<'conn> for Statement<'conn> {
         }
     }
 
-    fn value_ref(&self, col: c_int) -> ValueRef {
+    fn value_ref(&self, col: Index) -> ValueRef {
         let raw = unsafe { self.stmt.ptr() };
+        let c_col = col as c_int;
 
         match self.stmt.column_type(col) {
             ffi::SQLITE_NULL => ValueRef::Null,
             ffi::SQLITE_INTEGER => {
-                ValueRef::Integer(unsafe { ffi::sqlite3_column_int64(raw, col) })
+                ValueRef::Integer(unsafe { ffi::sqlite3_column_int64(raw, c_col) })
             }
-            ffi::SQLITE_FLOAT => ValueRef::Real(unsafe { ffi::sqlite3_column_double(raw, col) }),
+            ffi::SQLITE_FLOAT => ValueRef::Real(unsafe { ffi::sqlite3_column_double(raw, c_col) }),
             ffi::SQLITE_TEXT => {
                 let s = unsafe {
-                    let text = ffi::sqlite3_column_text(raw, col);
+                    let text = ffi::sqlite3_column_text(raw, c_col);
                     assert!(!text.is_null(),
                             "unexpected SQLITE_TEXT column type with NULL data");
                     CStr::from_ptr(text as *const c_char)
@@ -529,7 +531,7 @@ impl<'conn> StatementCrateImpl<'conn> for Statement<'conn> {
             }
             ffi::SQLITE_BLOB => {
                 let (blob, len) = unsafe {
-                    (ffi::sqlite3_column_blob(raw, col), ffi::sqlite3_column_bytes(raw, col))
+                    (ffi::sqlite3_column_blob(raw, c_col), ffi::sqlite3_column_bytes(raw, c_col))
                 };
 
                 assert!(len >= 0,
