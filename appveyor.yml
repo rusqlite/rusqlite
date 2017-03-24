@@ -1,5 +1,5 @@
 environment:
-  TARGET: 1.15.0-x86_64-pc-windows-gnu
+  TARGET: x86_64-pc-windows-gnu
   MSYS2_BITS: 64
 install:
   - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
