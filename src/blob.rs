@@ -52,10 +52,9 @@ use std::io;
 use std::cmp::min;
 use std::mem;
 use std::ptr;
-use libc::c_int;
 
 use super::ffi;
-use super::types::ToSql;
+use super::types::{ToSql, ToSqlOutput};
 use {Result, Connection, DatabaseName};
 
 /// Handle to an open BLOB.
@@ -90,11 +89,7 @@ impl Connection {
                                    table.as_ptr(),
                                    column.as_ptr(),
                                    row,
-                                   if read_only {
-                                       0
-                                   } else {
-                                       1
-                                   },
+                                   if read_only { 0 } else { 1 },
                                    &mut blob)
         };
         c.decode_result(rc).map(|_| {
@@ -244,9 +239,9 @@ impl<'conn> Drop for Blob<'conn> {
 pub struct ZeroBlob(pub i32);
 
 impl ToSql for ZeroBlob {
-    unsafe fn bind_parameter(&self, stmt: *mut ffi::sqlite3_stmt, col: c_int) -> c_int {
+    fn to_sql(&self) -> Result<ToSqlOutput> {
         let ZeroBlob(length) = *self;
-        ffi::sqlite3_bind_zeroblob(stmt, col, length)
+        Ok(ToSqlOutput::ZeroBlob(length))
     }
 }
 
@@ -274,7 +269,7 @@ mod test {
         let mut blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false).unwrap();
         assert_eq!(4, blob.write(b"Clob").unwrap());
         assert_eq!(6, blob.write(b"567890xxxxxx").unwrap()); // cannot write past 10
-        assert_eq!(0, blob.write(b"5678").unwrap());         // still cannot write past 10
+        assert_eq!(0, blob.write(b"5678").unwrap()); // still cannot write past 10
 
         blob.reopen(rowid).unwrap();
         blob.close().unwrap();

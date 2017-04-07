@@ -14,3 +14,7 @@ rusqlite contributors
 * [Ronald Kinard](https://github.com/Furyhunter)
 * [maciejkula](https://github.com/maciejkula)
 * [Xidorn Quan](https://github.com/upsuper)
+* [Chip Collier](https://github.com/photex)
+* [Omar Ferrer](https://github.com/chamakits)
+* [Lee Jenkins](https://github.com/reddraggone9)
+* [miedzinski](https://github.com/miedzinski)
