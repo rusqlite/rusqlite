@@ -75,7 +75,11 @@ impl Connection {
                 sql.push_str(&r.to_string());
             }
             ValueRef::Text(s) => {
-                sql.push_str(s);
+                if is_identifier(s) {
+                    sql.push_str(s);
+                } else {
+                    wrap_and_escape(&mut sql, s, '\'');
+                }
             }
             _ => {
                 return Err(Error::SqliteFailure(ffi::Error::new(ffi::SQLITE_MISUSE),
