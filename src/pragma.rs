@@ -35,8 +35,8 @@ impl Sql {
             self.buf.push_str(keyword);
             Ok(())
         } else {
-            return Err(Error::SqliteFailure(ffi::Error::new(ffi::SQLITE_MISUSE),
-                                            Some(format!("Invalid keyword \"{}\"", keyword))));
+            Err(Error::SqliteFailure(ffi::Error::new(ffi::SQLITE_MISUSE),
+                                     Some(format!("Invalid keyword \"{}\"", keyword))))
         }
     }
 
@@ -44,7 +44,7 @@ impl Sql {
         match schema_name {
             DatabaseName::Main => self.buf.push_str("main"),
             DatabaseName::Temp => self.buf.push_str("temp"),
-            DatabaseName::Attached(ref s) => self.push_identifier(s),
+            DatabaseName::Attached(s) => self.push_identifier(s),
         };
     }
 
