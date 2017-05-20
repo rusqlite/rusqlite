@@ -294,34 +294,33 @@ mod test {
     #[test]
     fn pragma_query_value() {
         let db = Connection::open_in_memory().unwrap();
-        let application_id =
-            db.pragma_query_value(None, "application_id", |row| row.get_checked(0))
-                .unwrap();
-        assert_eq!(0, application_id);
+        let user_version = db.pragma_query_value(None, "user_version", |row| row.get_checked(0))
+            .unwrap();
+        assert_eq!(0, user_version);
     }
 
     #[test]
     fn pragma_query_no_schema() {
         let db = Connection::open_in_memory().unwrap();
-        let mut application_id = -1;
-        db.pragma_query(None, "application_id", |row| {
-                application_id = try!(row.get_checked(0));
+        let mut user_version = -1;
+        db.pragma_query(None, "user_version", |row| {
+                user_version = try!(row.get_checked(0));
                 Ok(())
             })
             .unwrap();
-        assert_eq!(0, application_id);
+        assert_eq!(0, user_version);
     }
 
     #[test]
     fn pragma_query_with_schema() {
         let db = Connection::open_in_memory().unwrap();
-        let mut application_id = -1;
-        db.pragma_query(Some(DatabaseName::Main), "application_id", |row| {
-                application_id = try!(row.get_checked(0));
+        let mut user_version = -1;
+        db.pragma_query(Some(DatabaseName::Main), "user_version", |row| {
+                user_version = try!(row.get_checked(0));
                 Ok(())
             })
             .unwrap();
-        assert_eq!(0, application_id);
+        assert_eq!(0, user_version);
     }
 
     #[test]
