@@ -294,8 +294,9 @@ mod test {
     #[test]
     fn pragma_query_value() {
         let db = Connection::open_in_memory().unwrap();
-        let user_version = db.pragma_query_value(None, "user_version", |row| row.get_checked(0))
-            .unwrap();
+        let user_version: i32 =
+            db.pragma_query_value(None, "user_version", |row| row.get_checked(0))
+                .unwrap();
         assert_eq!(0, user_version);
     }
 
