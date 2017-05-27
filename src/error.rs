@@ -35,6 +35,10 @@ pub enum Error {
 
     /// Error converting a string to a C-compatible string because it contained an embedded nul.
     NulError(::std::ffi::NulError),
+    
+    /// This is a temporary Error Enum for the std::io::Error.
+    /// Not sure if this is the correct way of doing things should ask the owner of repo.
+    IOError(::std::io::Error),
 
     /// Error when using SQL named parameters and passing a parameter name not present in the SQL.
     InvalidParameterName(String),
@@ -88,6 +92,14 @@ impl From<::std::ffi::NulError> for Error {
     }
 }
 
+//TODO: This is a quick fix so you can use std::io while also using the rusqlite crate.
+//      Should fix this and figure out wtf this thing is.
+impl From<::std::io::Error> for Error{
+    fn from(err: ::std::io::Error) -> Error {
+        Error::IOError(err)
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -109,6 +121,7 @@ impl fmt::Display for Error {
             }
             Error::Utf8Error(ref err) => err.fmt(f),
             Error::NulError(ref err) => err.fmt(f),
+            Error::IOError(ref err) => err.fmt(f), //TODO: Change it when IOError gets figured out.
             Error::InvalidParameterName(ref name) => write!(f, "Invalid parameter name: {}", name),
             Error::InvalidPath(ref p) => write!(f, "Invalid path: {}", p.to_string_lossy()),
             Error::ExecuteReturnedResults => {
@@ -145,6 +158,7 @@ impl error::Error for Error {
             Error::Utf8Error(ref err) => err.description(),
             Error::InvalidParameterName(_) => "invalid parameter name",
             Error::NulError(ref err) => err.description(),
+            Error::IOError(ref err) => err.description(), //TODO: CHange it when IOError get figured out.
             Error::InvalidPath(_) => "invalid path",
             Error::ExecuteReturnedResults => {
                 "execute returned results - did you mean to call query?"
@@ -168,6 +182,7 @@ impl error::Error for Error {
             Error::FromSqlConversionFailure(_, _, ref err) => Some(&**err),
             Error::Utf8Error(ref err) => Some(err),
             Error::NulError(ref err) => Some(err),
+            Error::IOError(ref err) => Some(err), //TODO: Change this when IOError get figured out.
 
             Error::IntegralValueOutOfRange(_, _) |
             Error::SqliteSingleThreadedMode |
