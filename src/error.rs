@@ -35,7 +35,7 @@ pub enum Error {
 
     /// Error converting a string to a C-compatible string because it contained an embedded nul.
     NulError(::std::ffi::NulError),
-
+    
     /// Error when using SQL named parameters and passing a parameter name not present in the SQL.
     InvalidParameterName(String),
 

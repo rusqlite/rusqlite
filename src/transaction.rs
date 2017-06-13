@@ -46,7 +46,7 @@ pub type SqliteTransaction<'conn> = Transaction<'conn>;
 /// # use rusqlite::{Connection, Result};
 /// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
 /// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
-/// fn perform_queries(conn: &mut Connection) -> Result<()> {
+/// fn perform_queries(conn: &Connection) -> Result<()> {
 ///     let tx = try!(conn.transaction());
 ///
 ///     try!(do_queries_part_1(&tx)); // tx causes rollback if this fails
@@ -75,7 +75,7 @@ pub struct Transaction<'conn> {
 /// # use rusqlite::{Connection, Result};
 /// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
 /// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
-/// fn perform_queries(conn: &mut Connection) -> Result<()> {
+/// fn perform_queries(conn: &Connection) -> Result<()> {
 ///     let sp = try!(conn.savepoint());
 ///
 ///     try!(do_queries_part_1(&sp)); // sp causes rollback if this fails
@@ -94,7 +94,7 @@ pub struct Savepoint<'conn> {
 
 impl<'conn> Transaction<'conn> {
     /// Begin a new transaction. Cannot be nested; see `savepoint` for nested transactions.
-    pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction> {
+    pub fn new(conn: &Connection, behavior: TransactionBehavior) -> Result<Transaction> {
         let query = match behavior {
             TransactionBehavior::Deferred => "BEGIN DEFERRED",
             TransactionBehavior::Immediate => "BEGIN IMMEDIATE",
@@ -122,8 +122,8 @@ impl<'conn> Transaction<'conn> {
     /// ```rust,no_run
     /// # use rusqlite::{Connection, Result};
     /// # fn perform_queries_part_1_succeeds(_conn: &Connection) -> bool { true }
-    /// fn perform_queries(conn: &mut Connection) -> Result<()> {
-    ///     let mut tx = try!(conn.transaction());
+    /// fn perform_queries(conn: &Connection) -> Result<()> {
+    ///     let tx = try!(conn.transaction());
     ///
     ///     {
     ///         let sp = try!(tx.savepoint());
@@ -136,12 +136,12 @@ impl<'conn> Transaction<'conn> {
     ///     tx.commit()
     /// }
     /// ```
-    pub fn savepoint(&mut self) -> Result<Savepoint> {
+    pub fn savepoint(&self) -> Result<Savepoint> {
         Savepoint::with_depth(self.conn, 1)
     }
 
     /// Create a new savepoint with a custom savepoint name. See `savepoint()`.
-    pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint> {
+    pub fn savepoint_with_name<T: Into<String>>(&self, name: T) -> Result<Savepoint> {
         Savepoint::with_depth_and_name(self.conn, 1, name)
     }
 
@@ -235,22 +235,22 @@ impl<'conn> Savepoint<'conn> {
     }
 
     /// Begin a new savepoint. Can be nested.
-    pub fn new(conn: &mut Connection) -> Result<Savepoint> {
+    pub fn new(conn: &Connection) -> Result<Savepoint> {
         Savepoint::with_depth(conn, 0)
     }
 
     /// Begin a new savepoint with a user-provided savepoint name.
-    pub fn with_name<T: Into<String>>(conn: &mut Connection, name: T) -> Result<Savepoint> {
+    pub fn with_name<T: Into<String>>(conn: &Connection, name: T) -> Result<Savepoint> {
         Savepoint::with_depth_and_name(conn, 0, name)
     }
 
     /// Begin a nested savepoint.
-    pub fn savepoint(&mut self) -> Result<Savepoint> {
+    pub fn savepoint(&self) -> Result<Savepoint> {
         Savepoint::with_depth(self.conn, self.depth + 1)
     }
 
     /// Begin a nested savepoint with a user-provided savepoint name.
-    pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint> {
+    pub fn savepoint_with_name<T: Into<String>>(&self, name: T) -> Result<Savepoint> {
         Savepoint::with_depth_and_name(self.conn, self.depth + 1, name)
     }
 
@@ -334,7 +334,7 @@ impl Connection {
     /// # use rusqlite::{Connection, Result};
     /// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
     /// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
-    /// fn perform_queries(conn: &mut Connection) -> Result<()> {
+    /// fn perform_queries(conn: &Connection) -> Result<()> {
     ///     let tx = try!(conn.transaction());
     ///
     ///     try!(do_queries_part_1(&tx)); // tx causes rollback if this fails
@@ -347,7 +347,7 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn transaction(&mut self) -> Result<Transaction> {
+    pub fn transaction(&self) -> Result<Transaction> {
         Transaction::new(self, TransactionBehavior::Deferred)
     }
 
@@ -358,7 +358,7 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn transaction_with_behavior(&mut self,
+    pub fn transaction_with_behavior(&self,
                                      behavior: TransactionBehavior)
                                      -> Result<Transaction> {
         Transaction::new(self, behavior)
@@ -375,7 +375,7 @@ impl Connection {
     /// # use rusqlite::{Connection, Result};
     /// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
     /// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
-    /// fn perform_queries(conn: &mut Connection) -> Result<()> {
+    /// fn perform_queries(conn: &Connection) -> Result<()> {
     ///     let sp = try!(conn.savepoint());
     ///
     ///     try!(do_queries_part_1(&sp)); // sp causes rollback if this fails
@@ -388,7 +388,7 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn savepoint(&mut self) -> Result<Savepoint> {
+    pub fn savepoint(&self) -> Result<Savepoint> {
         Savepoint::new(self)
     }
 
@@ -399,7 +399,7 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint> {
+    pub fn savepoint_with_name<T: Into<String>>(&self, name: T) -> Result<Savepoint> {
         Savepoint::with_name(self, name)
     }
 }
@@ -417,7 +417,7 @@ mod test {
 
     #[test]
     fn test_drop() {
-        let mut db = checked_memory_handle();
+        let db = checked_memory_handle();
         {
             let tx = db.transaction().unwrap();
             tx.execute_batch("INSERT INTO foo VALUES(1)").unwrap();
@@ -438,9 +438,9 @@ mod test {
 
     #[test]
     fn test_explicit_rollback_commit() {
-        let mut db = checked_memory_handle();
+        let db = checked_memory_handle();
         {
-            let mut tx = db.transaction().unwrap();
+            let tx = db.transaction().unwrap();
             {
                 let mut sp = tx.savepoint().unwrap();
                 sp.execute_batch("INSERT INTO foo VALUES(1)").unwrap();
@@ -465,19 +465,19 @@ mod test {
 
     #[test]
     fn test_savepoint() {
-        let mut db = checked_memory_handle();
+        let db = checked_memory_handle();
         {
             let mut tx = db.transaction().unwrap();
             tx.execute_batch("INSERT INTO foo VALUES(1)").unwrap();
             assert_current_sum(1, &tx);
             tx.set_drop_behavior(DropBehavior::Commit);
             {
-                let mut sp1 = tx.savepoint().unwrap();
+                let sp1 = tx.savepoint().unwrap();
                 sp1.execute_batch("INSERT INTO foo VALUES(2)").unwrap();
                 assert_current_sum(3, &sp1);
                 // will rollback sp1
                 {
-                    let mut sp2 = sp1.savepoint().unwrap();
+                    let sp2 = sp1.savepoint().unwrap();
                     sp2.execute_batch("INSERT INTO foo VALUES(4)").unwrap();
                     assert_current_sum(7, &sp2);
                     // will rollback sp2
@@ -499,9 +499,9 @@ mod test {
 
     #[test]
     fn test_ignore_drop_behavior() {
-        let mut db = checked_memory_handle();
+        let db = checked_memory_handle();
 
-        let mut tx = db.transaction().unwrap();
+        let tx = db.transaction().unwrap();
         {
             let mut sp1 = tx.savepoint().unwrap();
             insert(1, &sp1);
@@ -520,7 +520,7 @@ mod test {
 
     #[test]
     fn test_savepoint_names() {
-        let mut db = checked_memory_handle();
+        let db = checked_memory_handle();
 
         {
             let mut sp1 = db.savepoint_with_name("my_sp").unwrap();

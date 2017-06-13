@@ -1,9 +1,9 @@
 [package]
 name = "rusqlite"
-version = "0.12.0"
+version = "0.12.1"
 authors = ["John Gallagher <jgallagher@bignerdranch.com>"]
 description = "Ergonomic wrapper for SQLite"
-repository = "https://github.com/jgallagher/rusqlite"
+repository = "https://github.com/Mason-Chou/rusqlite"
 documentation = "http://jgallagher.github.io/rusqlite/rusqlite/index.html"
 readme = "README.md"
 keywords = ["sqlite", "database", "ffi"]
