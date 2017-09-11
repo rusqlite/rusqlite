@@ -120,7 +120,8 @@ mod test {
 
     fn checked_memory_handle() -> Connection {
         let db = Connection::open_in_memory().unwrap();
-        db.execute_batch("CREATE TABLE foo (b BLOB, t TEXT, i INTEGER, f FLOAT, n)").unwrap();
+        db.execute_batch("CREATE TABLE foo (b BLOB, t TEXT, i INTEGER, f FLOAT, n)")
+            .unwrap();
         db
     }
 
@@ -129,9 +130,11 @@ mod test {
         let db = checked_memory_handle();
 
         let v1234 = vec![1u8, 2, 3, 4];
-        db.execute("INSERT INTO foo(b) VALUES (?)", &[&v1234]).unwrap();
+        db.execute("INSERT INTO foo(b) VALUES (?)", &[&v1234])
+            .unwrap();
 
-        let v: Vec<u8> = db.query_row("SELECT b FROM foo", &[], |r| r.get(0)).unwrap();
+        let v: Vec<u8> = db.query_row("SELECT b FROM foo", &[], |r| r.get(0))
+            .unwrap();
         assert_eq!(v, v1234);
     }
 
@@ -140,9 +143,11 @@ mod test {
         let db = checked_memory_handle();
 
         let empty = vec![];
-        db.execute("INSERT INTO foo(b) VALUES (?)", &[&empty]).unwrap();
+        db.execute("INSERT INTO foo(b) VALUES (?)", &[&empty])
+            .unwrap();
 
-        let v: Vec<u8> = db.query_row("SELECT b FROM foo", &[], |r| r.get(0)).unwrap();
+        let v: Vec<u8> = db.query_row("SELECT b FROM foo", &[], |r| r.get(0))
+            .unwrap();
         assert_eq!(v, empty);
     }
 
@@ -151,9 +156,11 @@ mod test {
         let db = checked_memory_handle();
 
         let s = "hello, world!";
-        db.execute("INSERT INTO foo(t) VALUES (?)", &[&s]).unwrap();
+        db.execute("INSERT INTO foo(t) VALUES (?)", &[&s])
+            .unwrap();
 
-        let from: String = db.query_row("SELECT t FROM foo", &[], |r| r.get(0)).unwrap();
+        let from: String = db.query_row("SELECT t FROM foo", &[], |r| r.get(0))
+            .unwrap();
         assert_eq!(from, s);
     }
 
@@ -162,9 +169,11 @@ mod test {
         let db = checked_memory_handle();
 
         let s = "hello, world!";
-        db.execute("INSERT INTO foo(t) VALUES (?)", &[&s.to_owned()]).unwrap();
+        db.execute("INSERT INTO foo(t) VALUES (?)", &[&s.to_owned()])
+            .unwrap();
 
-        let from: String = db.query_row("SELECT t FROM foo", &[], |r| r.get(0)).unwrap();
+        let from: String = db.query_row("SELECT t FROM foo", &[], |r| r.get(0))
+            .unwrap();
         assert_eq!(from, s);
     }
 
@@ -172,10 +181,12 @@ mod test {
     fn test_value() {
         let db = checked_memory_handle();
 
-        db.execute("INSERT INTO foo(i) VALUES (?)", &[&Value::Integer(10)]).unwrap();
+        db.execute("INSERT INTO foo(i) VALUES (?)", &[&Value::Integer(10)])
+            .unwrap();
 
         assert_eq!(10i64,
-                   db.query_row::<i64, _>("SELECT i FROM foo", &[], |r| r.get(0)).unwrap());
+                   db.query_row::<i64, _>("SELECT i FROM foo", &[], |r| r.get(0))
+                       .unwrap());
     }
 
     #[test]
@@ -185,10 +196,13 @@ mod test {
         let s = Some("hello, world!");
         let b = Some(vec![1u8, 2, 3, 4]);
 
-        db.execute("INSERT INTO foo(t) VALUES (?)", &[&s]).unwrap();
-        db.execute("INSERT INTO foo(b) VALUES (?)", &[&b]).unwrap();
+        db.execute("INSERT INTO foo(t) VALUES (?)", &[&s])
+            .unwrap();
+        db.execute("INSERT INTO foo(b) VALUES (?)", &[&b])
+            .unwrap();
 
-        let mut stmt = db.prepare("SELECT t, b FROM foo ORDER BY ROWID ASC").unwrap();
+        let mut stmt = db.prepare("SELECT t, b FROM foo ORDER BY ROWID ASC")
+            .unwrap();
         let mut rows = stmt.query(&[]).unwrap();
 
         {
@@ -233,9 +247,15 @@ mod test {
         assert_eq!("text", row.get_checked::<Index, String>(1).unwrap());
         assert_eq!(1, row.get_checked::<Index, c_int>(2).unwrap());
         assert!((1.5 - row.get_checked::<Index, c_double>(3).unwrap()).abs() < EPSILON);
-        assert!(row.get_checked::<Index, Option<c_int>>(4).unwrap().is_none());
-        assert!(row.get_checked::<Index, Option<c_double>>(4).unwrap().is_none());
-        assert!(row.get_checked::<Index, Option<String>>(4).unwrap().is_none());
+        assert!(row.get_checked::<Index, Option<c_int>>(4)
+                    .unwrap()
+                    .is_none());
+        assert!(row.get_checked::<Index, Option<c_double>>(4)
+                    .unwrap()
+                    .is_none());
+        assert!(row.get_checked::<Index, Option<String>>(4)
+                    .unwrap()
+                    .is_none());
 
         // check some invalid types
 

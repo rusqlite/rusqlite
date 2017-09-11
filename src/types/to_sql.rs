@@ -32,12 +32,12 @@ impl<'a, T: Into<Value>> From<T> for ToSqlOutput<'a> {
 impl<'a> ToSql for ToSqlOutput<'a> {
     fn to_sql(&self) -> Result<ToSqlOutput> {
         Ok(match *self {
-            ToSqlOutput::Borrowed(v) => ToSqlOutput::Borrowed(v),
-            ToSqlOutput::Owned(ref v) => ToSqlOutput::Borrowed(ValueRef::from(v)),
+               ToSqlOutput::Borrowed(v) => ToSqlOutput::Borrowed(v),
+               ToSqlOutput::Owned(ref v) => ToSqlOutput::Borrowed(ValueRef::from(v)),
 
-            #[cfg(feature = "blob")]
+               #[cfg(feature = "blob")]
             ToSqlOutput::ZeroBlob(i) => ToSqlOutput::ZeroBlob(i),
-        })
+           })
     }
 }
 
@@ -74,6 +74,7 @@ to_sql_self!(i8);
 to_sql_self!(i16);
 to_sql_self!(i32);
 to_sql_self!(i64);
+to_sql_self!(isize);
 to_sql_self!(u8);
 to_sql_self!(u16);
 to_sql_self!(u32);
@@ -93,9 +94,21 @@ impl ToSql for String {
     }
 }
 
+impl ToSql for str {
+    fn to_sql(&self) -> Result<ToSqlOutput> {
+        Ok(ToSqlOutput::from(self))
+    }
+}
+
 impl ToSql for Vec<u8> {
     fn to_sql(&self) -> Result<ToSqlOutput> {
         Ok(ToSqlOutput::from(self.as_slice()))
+    }
+}
+
+impl ToSql for [u8] {
+    fn to_sql(&self) -> Result<ToSqlOutput> {
+        Ok(ToSqlOutput::from(self))
     }
 }
 
