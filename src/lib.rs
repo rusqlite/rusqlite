@@ -74,6 +74,13 @@ use std::sync::{Once, ONCE_INIT};
 use std::sync::atomic::{AtomicBool, ATOMIC_BOOL_INIT, Ordering};
 use std::os::raw::{c_int, c_char};
 
+#[cfg(feature = "unlock_notify")]
+use std::slice;
+#[cfg(feature = "unlock_notify")]
+use std::sync::{Mutex, Condvar};
+#[cfg(feature = "unlock_notify")]
+use std::os::raw::c_void;
+
 use types::{ToSql, ValueRef};
 use error::{error_from_sqlite_code, error_from_handle};
 use raw_statement::RawStatement;
@@ -568,6 +575,10 @@ impl Connection {
     fn changes(&self) -> c_int {
         self.db.borrow_mut().changes()
     }
+
+    fn unlock_notify(&self, code: c_int) -> Result<()> {
+        self.db.borrow_mut().unlock_notify(code)
+    }
 }
 
 impl fmt::Debug for Connection {
@@ -605,7 +616,7 @@ bitflags! {
 
 impl Default for OpenFlags {
     fn default() -> OpenFlags {
-        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE | 
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE |
         OpenFlags::SQLITE_OPEN_NO_MUTEX | OpenFlags::SQLITE_OPEN_URI
     }
 }
@@ -854,20 +865,57 @@ impl InnerConnection {
         }
         let mut c_stmt: *mut ffi::sqlite3_stmt = unsafe { mem::uninitialized() };
         let c_sql = try!(str_to_cstring(sql));
-        let r = unsafe {
-            let len_with_nul = (sql.len() + 1) as c_int;
-            ffi::sqlite3_prepare_v2(self.db(),
-                                    c_sql.as_ptr(),
-                                    len_with_nul,
-                                    &mut c_stmt,
-                                    ptr::null_mut())
-        };
-        self.decode_result(r)
-            .map(|_| Statement::new(conn, RawStatement::new(c_stmt)))
+        let len_with_nul = (sql.len() + 1) as c_int;
+        loop {
+            let r = unsafe {
+                ffi::sqlite3_prepare_v2(self.db(),
+                                        c_sql.as_ptr(),
+                                        len_with_nul,
+                                        &mut c_stmt,
+                                        ptr::null_mut())
+            };
+            if r == ffi::SQLITE_OK {
+                return Ok(Statement::new(conn, RawStatement::new(c_stmt)));
+            }
+            self.unlock_notify(r)?;
+        }
     }
 
     fn changes(&mut self) -> c_int {
         unsafe { ffi::sqlite3_changes(self.db()) }
+    }
+
+    #[cfg(not(feature = "unlock_notify"))]
+    fn unlock_notify(&mut self, code: c_int) -> Result<()> {
+        self.decode_result(code)
+    }
+
+    #[cfg(feature = "unlock_notify")]
+    fn unlock_notify(&mut self, code: c_int) -> Result<()> {
+        if code != ffi::SQLITE_LOCKED_SHAREDCACHE {
+            return self.decode_result(code);
+        }
+
+        let state = NotifyState {
+            lock: Mutex::new(false),
+            cvar: Condvar::new(),
+        };
+
+        let r = unsafe {
+            ffi::sqlite3_unlock_notify(
+                self.db(),
+                Some(notify_callback),
+                &state as *const _ as *mut _,
+            )
+        };
+        self.decode_result(r)?;
+
+        let mut guard = state.lock.lock().unwrap();
+        while !*guard {
+            guard = state.cvar.wait(guard).unwrap();
+        }
+
+        Ok(())
     }
 }
 
@@ -883,6 +931,23 @@ impl Drop for InnerConnection {
                 panic!("Error while closing SQLite connection: {:?}", e);
             }
         }
+    }
+}
+
+#[cfg(feature = "unlock_notify")]
+struct NotifyState {
+    lock: Mutex<bool>,
+    cvar: Condvar,
+}
+
+#[cfg(feature = "unlock_notify")]
+unsafe extern "C" fn notify_callback(ap_arg: *mut *mut c_void, n_arg: c_int) {
+    let states = slice::from_raw_parts(ap_arg as *mut &NotifyState, n_arg as usize);
+
+    for state in states {
+        let mut guard = state.lock.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = true;
+        state.cvar.notify_one();
     }
 }
 
@@ -903,11 +968,11 @@ pub type SqliteRow<'a, 'stmt> = Row<'a, 'stmt>;
 #[cfg(test)]
 mod test {
     extern crate tempdir;
-    pub use super::*;
+    use super::*;
     use ffi;
     use self::tempdir::TempDir;
-    pub use std::error::Error as StdError;
-    pub use std::fmt;
+    use std::error::Error as StdError;
+    use std::fmt;
 
     // this function is never called, but is still type checked; in
     // particular, calls with specific instantiations will require
@@ -941,6 +1006,55 @@ mod test {
         let the_answer: Result<i64> = db.query_row("SELECT x FROM foo", &[], |r| r.get(0));
 
         assert_eq!(42i64, the_answer.unwrap());
+    }
+
+    #[test]
+    #[cfg(feature = "unlock_notify")]
+    fn test_contention() {
+        use std::thread;
+        use std::time::Duration;
+        use std::sync::mpsc;
+
+        let temp_dir = TempDir::new("test_contention").unwrap();
+        let path = temp_dir.path().join("test.db3");
+
+        let flags = OpenFlags::SQLITE_OPEN_READ_WRITE |
+            OpenFlags::SQLITE_OPEN_CREATE |
+            OpenFlags::SQLITE_OPEN_NO_MUTEX |
+            OpenFlags::SQLITE_OPEN_SHARED_CACHE;
+
+        let db = Connection::open_with_flags(&path, flags).unwrap();
+        let sql = "
+            CREATE TABLE a(x INTEGER);
+        ";
+        db.execute_batch(sql).unwrap();
+
+        let (tx, rx) = mpsc::channel();
+
+        let handle = thread::spawn(move || {
+            let mut db = Connection::open_with_flags(&path, flags).unwrap();
+            let trans = db.transaction().unwrap();
+
+            {
+                let mut stmt = trans.prepare("SELECT * FROM a").unwrap();
+                let mut rows = stmt.query(&[]).unwrap();
+
+                while let Some(row) = rows.next() {
+                    row.unwrap();
+                }
+            }
+
+            tx.send(()).unwrap();
+            thread::sleep(Duration::from_millis(100));
+
+            trans.commit().unwrap();
+        });
+
+        rx.recv().unwrap();
+
+        db.execute("INSERT INTO a VALUES (1)", &[]).unwrap();
+
+        handle.join().unwrap();
     }
 
     #[test]
