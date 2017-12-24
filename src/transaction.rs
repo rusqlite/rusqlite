@@ -94,7 +94,7 @@ pub struct Savepoint<'conn> {
 
 impl<'conn> Transaction<'conn> {
     /// Begin a new transaction. Cannot be nested; see `savepoint` for nested transactions.
-    pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction> {
+    pub fn new(conn: &Connection, behavior: TransactionBehavior) -> Result<Transaction> {
         let query = match behavior {
             TransactionBehavior::Deferred => "BEGIN DEFERRED",
             TransactionBehavior::Immediate => "BEGIN IMMEDIATE",
@@ -347,7 +347,7 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn transaction(&mut self) -> Result<Transaction> {
+    pub fn transaction(&self) -> Result<Transaction> {
         Transaction::new(self, TransactionBehavior::Deferred)
     }
 
@@ -417,7 +417,7 @@ mod test {
 
     #[test]
     fn test_drop() {
-        let mut db = checked_memory_handle();
+        let db = checked_memory_handle();
         {
             let tx = db.transaction().unwrap();
             tx.execute_batch("INSERT INTO foo VALUES(1)").unwrap();
@@ -438,7 +438,7 @@ mod test {
 
     #[test]
     fn test_explicit_rollback_commit() {
-        let mut db = checked_memory_handle();
+        let db = checked_memory_handle();
         {
             let mut tx = db.transaction().unwrap();
             {
@@ -465,7 +465,7 @@ mod test {
 
     #[test]
     fn test_savepoint() {
-        let mut db = checked_memory_handle();
+        let db = checked_memory_handle();
         {
             let mut tx = db.transaction().unwrap();
             tx.execute_batch("INSERT INTO foo VALUES(1)").unwrap();
@@ -499,7 +499,7 @@ mod test {
 
     #[test]
     fn test_ignore_drop_behavior() {
-        let mut db = checked_memory_handle();
+        let db = checked_memory_handle();
 
         let mut tx = db.transaction().unwrap();
         {
