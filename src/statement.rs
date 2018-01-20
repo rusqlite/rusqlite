@@ -368,7 +368,7 @@ impl<'conn> Statement<'conn> {
     }
 
     fn bind_parameters(&mut self, params: &[&ToSql]) -> Result<()> {
-        assert!(params.len() == self.stmt.bind_parameter_count() as usize,
+        assert_eq!(params.len() as Index, self.stmt.bind_parameter_count(),
                 "incorrect number of parameters to query(): expected {}, got {}",
                 self.stmt.bind_parameter_count(),
                 params.len());
