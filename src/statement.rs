@@ -446,18 +446,20 @@ impl<'conn> Statement<'conn> {
     }
 
     fn execute_with_bound_parameters(&mut self) -> Result<c_int> {
-        let r = self.stmt.step();
-        self.stmt.reset();
-        match r {
-            ffi::SQLITE_DONE => {
-                if self.column_count() == 0 {
-                    Ok(self.conn.changes())
-                } else {
-                    Err(Error::ExecuteReturnedResults)
+        loop {
+            let r = self.stmt.step();
+            self.stmt.reset();
+            match r {
+                ffi::SQLITE_DONE => {
+                    if self.column_count() == 0 {
+                        return Ok(self.conn.changes())
+                    } else {
+                        return Err(Error::ExecuteReturnedResults)
+                    }
                 }
+                ffi::SQLITE_ROW => return Err(Error::ExecuteReturnedResults),
+                _ => self.conn.unlock_notify(r)?,
             }
-            ffi::SQLITE_ROW => Err(Error::ExecuteReturnedResults),
-            _ => Err(self.conn.decode_result(r).unwrap_err()),
         }
     }
 
@@ -555,10 +557,15 @@ impl<'conn> StatementCrateImpl<'conn> for Statement<'conn> {
     }
 
     fn step(&self) -> Result<bool> {
-        match self.stmt.step() {
-            ffi::SQLITE_ROW => Ok(true),
-            ffi::SQLITE_DONE => Ok(false),
-            code => Err(self.conn.decode_result(code).unwrap_err()),
+        loop {
+            match self.stmt.step() {
+                ffi::SQLITE_ROW => return Ok(true),
+                ffi::SQLITE_DONE => return Ok(false),
+                code => {
+                    self.conn.unlock_notify(code)?;
+                    self.reset();
+                }
+            }
         }
     }
 
