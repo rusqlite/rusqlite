@@ -605,6 +605,7 @@ bitflags! {
         const SQLITE_OPEN_FULL_MUTEX    = ffi::SQLITE_OPEN_FULLMUTEX;
         const SQLITE_OPEN_SHARED_CACHE  = 0x0002_0000;
         const SQLITE_OPEN_PRIVATE_CACHE = 0x0004_0000;
+        const SQLITE_OPEN_WAL           = 0x0008_0000;
     }
 }
 
