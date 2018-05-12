@@ -1262,6 +1262,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "bundled")]
     fn test_is_busy() {
         let db = checked_memory_handle();
         assert!(!db.is_busy());
