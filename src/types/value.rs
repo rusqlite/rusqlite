@@ -36,6 +36,20 @@ impl From<isize> for Value {
     }
 }
 
+#[cfg(i128)]
+impl From<i128> for Value {
+    fn from(i: i128) -> Value {
+        Value::Blob(i.to_bytes().to_vec())
+    }
+}
+
+#[cfg(i128)]
+impl From<u128> for Value {
+    fn from(i: u128) -> Value {
+        Value::Blob(i.to_bytes().to_vec())
+    }
+}
+
 macro_rules! from_i64(
     ($t:ty) => (
         impl From<$t> for Value {

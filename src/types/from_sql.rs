@@ -135,6 +135,17 @@ impl FromSql for Vec<u8> {
     }
 }
 
+#[cfg(i128)]
+impl FromSql for i128 {
+    fn column_result(value: ValueRef) -> FromSqlResult<Self> {
+        value.as_blob().map(|b| b.to_vec()).map(|mut v| {
+            // force the vector to be 16-bytes long for safety reasons
+            v.resize(16, 0); // ...making the next line actually safe
+            i128::from_bytes(unsafe { *(&v as &[u8] as *const [u8] as *const [u8; 16]) })
+        })
+    }
+}
+
 impl<T: FromSql> FromSql for Option<T> {
     fn column_result(value: ValueRef) -> FromSqlResult<Self> {
         match value {
