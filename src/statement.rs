@@ -10,7 +10,7 @@ use super::str_to_cstring;
 use super::{
     AndThenRows, Connection, Error, MappedRows, RawStatement, Result, Row, Rows, ValueRef,
 };
-use types::{ToSql, ToSqlOutput};
+use types::{ToSql, ToSqlOutput, FromSql};
 #[cfg(feature = "array")]
 use vtab::array::{free_array, ARRAY_TYPE};
 
@@ -371,6 +371,36 @@ impl<'conn> Statement<'conn> {
         let mut rows = try!(self.query(params));
 
         rows.get_expected_row().map(|r| f(&r))
+    }
+
+    /// Convenience method to execute a scalar query that is expected to return
+    /// a single column and zero or one row(s).
+    ///
+    /// If the query returns more than one row or column, all except the first
+    /// are ignored. Returns Ok(None) if query returns no rows.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// fn get_user_id(conn: &Connection, username: &str) -> Result<Option<i64>> {
+    ///     let mut stmt = conn.prepare_cached("SELECT id FROM users WHERE name = ?1"))?;
+    ///     let res = stmt.query_scalar(&[&username])?;
+    ///     Ok(res)
+    /// }
+    /// ```
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if the underlying SQLite call fails.
+    pub fn query_scalar<T: FromSql>(&mut self, params: &[&ToSql]) -> Result<Option<T>> {
+        let mut rows = self.query(params)?;
+
+        let res = match rows.next() {
+            Some(r) => Some(r?.get_checked(0)?),
+            None => None
+        };
+        Ok(res)
     }
 
     /// Consumes the statement.
@@ -891,6 +921,28 @@ mod test {
         let mut stmt = db.prepare("SELECT y FROM foo").unwrap();
         let y: Result<i64> = stmt.query_row(&[], |r| r.get("y"));
         assert_eq!(3i64, y.unwrap());
+    }
+
+    #[test]
+    fn test_query_scalar() {
+        let db = Connection::open_in_memory().unwrap();
+
+        let mut stmt = db.prepare("SELECT ?+1").unwrap();
+        let y: Result<Option<i64>> = stmt.query_scalar(&[&2]);
+        assert_eq!(Some(3), y.unwrap());
+
+        let mut stmt = db.prepare("SELECT 1 WHERE 1 = 0").unwrap();
+        let y: Result<Option<i64>> = stmt.query_scalar(&[]);
+        assert_eq!(None, y.unwrap());
+
+        let mut stmt = db.prepare("SELECT NULL").unwrap();
+        let y: Result<Option<Option<i64>>> = stmt.query_scalar(&[]);
+        assert_eq!(Some(None), y.unwrap());
+
+        db.execute_batch("PRAGMA user_version = 123;").unwrap();
+        let mut stmt = db.prepare("PRAGMA user_version").unwrap();
+        let y: Result<Option<i64>> = stmt.query_scalar(&[]);
+        assert_eq!(Some(123), y.unwrap());
     }
 
     #[test]
