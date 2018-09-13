@@ -384,7 +384,7 @@ impl<'conn> Statement<'conn> {
     /// ```rust,no_run
     /// # use rusqlite::{Connection, Result};
     /// fn get_user_id(conn: &Connection, username: &str) -> Result<Option<i64>> {
-    ///     let mut stmt = conn.prepare_cached("SELECT id FROM users WHERE name = ?1"))?;
+    ///     let mut stmt = conn.prepare_cached("SELECT id FROM users WHERE name = ?1")?;
     ///     let res = stmt.query_scalar(&[&username])?;
     ///     Ok(res)
     /// }
