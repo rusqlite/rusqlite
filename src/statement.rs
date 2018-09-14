@@ -368,9 +368,130 @@ impl<'conn> Statement<'conn> {
     where
         F: FnOnce(&Row) -> T,
     {
-        let mut rows = try!(self.query(params));
+        self.query_row_opt(params, f)?.ok_or(Error::QueryReturnedNoRows)
+    }
 
-        rows.get_expected_row().map(|r| f(&r))
+    /// Convenience method to execute a query that is expected to return at
+    /// most single row.
+    ///
+    /// If the query returns more than one row, all rows except the first are
+    /// ignored.
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if the underlying SQLite call fails.
+    pub fn query_row_opt<T, F>(&mut self, params: &[&ToSql], f: F) -> Result<Option<T>>
+        where
+            F: FnOnce(&Row) -> T,
+    {
+        self.query_row_opt_and_then(params, |r| Ok(f(r)))
+    }
+
+    /// Convenience method to execute a query that is expected to return a
+    /// single row.
+    ///
+    /// If the query returns more than one row, all rows except the first are
+    /// ignored.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// struct Person {
+    ///     name: String,
+    ///     phone: String
+    /// };
+    ///
+    /// impl Person {
+    ///     fn new(name: String, phone: String) -> Result<Person> {
+    ///         // validate name and phone
+    ///         Ok(Person { name, phone })
+    ///     }
+    /// }
+    ///
+    /// fn get_person_by_id(conn: &Connection, id: i64) -> Result<Person> {
+    ///     let mut stmt = conn.prepare("SELECT name, phone FROM people WHERE id = ?1")?;
+    ///     stmt.query_row_and_then(&[&id], |row| Person::new(row.get_checked(0)?, row.get_checked(1)?))
+    /// }
+    /// ```
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if the underlying SQLite call fails.
+    pub fn query_row_and_then<T, E, F>(&mut self, params: &[&ToSql], f: F) -> result::Result<T, E>
+        where
+            E: convert::From<Error>,
+            F: FnOnce(&Row) -> result::Result<T, E>,
+    {
+        self.query_row_opt_and_then(params, f)?.ok_or(E::from(Error::QueryReturnedNoRows))
+    }
+
+    /// Convenience method to execute a query that is expected to return at
+    /// most a single row.
+    ///
+    /// If the query returns more than one row, all rows except the first are
+    /// ignored.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// struct Person {
+    ///     name: String,
+    ///     phone: String
+    /// };
+    ///
+    /// impl Person {
+    ///     fn new(name: String, phone: String) -> Result<Person> {
+    ///         // validate name and phone
+    ///         Ok(Person { name, phone })
+    ///     }
+    /// }
+    ///
+    /// fn get_person_by_id(conn: &Connection, id: i64) -> Result<Option<Person>> {
+    ///     let mut stmt = conn.prepare("SELECT name, phone FROM people WHERE id = ?1")?;
+    ///     stmt.query_row_opt_and_then(&[&id], |row| Person::new(row.get_checked(0)?, row.get_checked(1)?))
+    /// }
+    /// ```
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if the underlying SQLite call fails.
+    pub fn query_row_opt_and_then<T, E, F>(&mut self, params: &[&ToSql], f: F) -> result::Result<Option<T>, E>
+    where
+        E: convert::From<Error>,
+        F: FnOnce(&Row) -> result::Result<T, E>,
+    {
+        let mut rows = self.query(params)?;
+
+        let res = match rows.next() {
+            Some(r) => Some(f(&r?)?),
+            None => None
+        };
+        Ok(res)
+    }
+
+    /// Convenience method to execute a scalar query that is expected to return
+    /// a single column and row.
+    ///
+    /// If the query returns more than one row or column, all except the first
+    /// are ignored.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// fn get_user_id(conn: &Connection, username: &str) -> Result<i64> {
+    ///     let mut stmt = conn.prepare_cached("SELECT id FROM users WHERE name = ?1")?;
+    ///     Ok(stmt.query_scalar(&[&username])?)
+    /// }
+    /// ```
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if the underlying SQLite call fails.
+    pub fn query_scalar<T: FromSql>(&mut self, params: &[&ToSql]) -> Result<T> {
+        self.query_row_and_then(params, |r| r.get_checked(0))
     }
 
     /// Convenience method to execute a scalar query that is expected to return
@@ -385,22 +506,15 @@ impl<'conn> Statement<'conn> {
     /// # use rusqlite::{Connection, Result};
     /// fn get_user_id(conn: &Connection, username: &str) -> Result<Option<i64>> {
     ///     let mut stmt = conn.prepare_cached("SELECT id FROM users WHERE name = ?1")?;
-    ///     let res = stmt.query_scalar(&[&username])?;
-    ///     Ok(res)
+    ///     Ok(stmt.query_scalar_opt(&[&username])?)
     /// }
     /// ```
     ///
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn query_scalar<T: FromSql>(&mut self, params: &[&ToSql]) -> Result<Option<T>> {
-        let mut rows = self.query(params)?;
-
-        let res = match rows.next() {
-            Some(r) => Some(r?.get_checked(0)?),
-            None => None
-        };
-        Ok(res)
+    pub fn query_scalar_opt<T: FromSql>(&mut self, params: &[&ToSql]) -> Result<Option<T>> {
+        self.query_row_opt_and_then(params, |r| r.get_checked(0))
     }
 
     /// Consumes the statement.
@@ -926,25 +1040,51 @@ mod test {
     }
 
     #[test]
-    fn test_query_scalar() {
+    fn test_query_scalar_opt() {
         let db = Connection::open_in_memory().unwrap();
 
         let mut stmt = db.prepare("SELECT ?+1").unwrap();
-        let y: Result<Option<i64>> = stmt.query_scalar(&[&2]);
+        let y: Result<Option<i64>> = stmt.query_scalar_opt(&[&2]);
         assert_eq!(Some(3), y.unwrap());
 
         let mut stmt = db.prepare("SELECT 1 WHERE 1 = 0").unwrap();
-        let y: Result<Option<i64>> = stmt.query_scalar(&[]);
+        let y: Result<Option<i64>> = stmt.query_scalar_opt(&[]);
         assert_eq!(None, y.unwrap());
 
         let mut stmt = db.prepare("SELECT NULL").unwrap();
-        let y: Result<Option<Option<i64>>> = stmt.query_scalar(&[]);
+        let y: Result<Option<Option<i64>>> = stmt.query_scalar_opt(&[]);
         assert_eq!(Some(None), y.unwrap());
 
         db.execute_batch("PRAGMA user_version = 123;").unwrap();
         let mut stmt = db.prepare("PRAGMA user_version").unwrap();
-        let y: Result<Option<i64>> = stmt.query_scalar(&[]);
+        let y: Result<Option<i64>> = stmt.query_scalar_opt(&[]);
         assert_eq!(Some(123), y.unwrap());
+    }
+
+    #[test]
+    fn test_query_scalar() {
+        let db = Connection::open_in_memory().unwrap();
+
+        let mut stmt = db.prepare("SELECT ?+1").unwrap();
+        let y: Result<i64> = stmt.query_scalar(&[&2]);
+        assert_eq!(3, y.unwrap());
+
+        let mut stmt = db.prepare("SELECT 1 WHERE 1 = 0").unwrap();
+        let y: Result<i64> = stmt.query_scalar(&[]);
+        match y {
+            Ok(_) => panic!("invalid Ok"),
+            Err(Error::QueryReturnedNoRows) => (),
+            Err(_) => panic!("invalid Err"),
+        }
+
+        let mut stmt = db.prepare("SELECT NULL").unwrap();
+        let y: Result<Option<i64>> = stmt.query_scalar(&[]);
+        assert_eq!(None, y.unwrap());
+
+        db.execute_batch("PRAGMA user_version = 123;").unwrap();
+        let mut stmt = db.prepare("PRAGMA user_version").unwrap();
+        let y: Result<i64> = stmt.query_scalar(&[]);
+        assert_eq!(123, y.unwrap());
     }
 
     #[test]
