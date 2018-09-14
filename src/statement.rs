@@ -368,7 +368,9 @@ impl<'conn> Statement<'conn> {
     where
         F: FnOnce(&Row) -> T,
     {
-        self.query_row_opt(params, f)?.ok_or(Error::QueryReturnedNoRows)
+        let mut rows = try!(self.query(params));
+
+        rows.get_expected_row().map(|r| f(&r))
     }
 
     /// Convenience method to execute a query that is expected to return at
@@ -384,7 +386,10 @@ impl<'conn> Statement<'conn> {
         where
             F: FnOnce(&Row) -> T,
     {
-        self.query_row_opt_and_then(params, |r| Ok(f(r)))
+        match self.query(params)?.next() {
+            None => Ok(None),
+            Some(r) => Ok(Some(f(&r?)))
+        }
     }
 
     /// Convenience method to execute a query that is expected to return a
@@ -423,7 +428,7 @@ impl<'conn> Statement<'conn> {
             E: convert::From<Error>,
             F: FnOnce(&Row) -> result::Result<T, E>,
     {
-        self.query_row_opt_and_then(params, f)?.ok_or(E::from(Error::QueryReturnedNoRows))
+        self.query(params)?.get_expected_row().map_err(E::from).and_then(|r| f(&r))
     }
 
     /// Convenience method to execute a query that is expected to return at
@@ -462,13 +467,10 @@ impl<'conn> Statement<'conn> {
         E: convert::From<Error>,
         F: FnOnce(&Row) -> result::Result<T, E>,
     {
-        let mut rows = self.query(params)?;
-
-        let res = match rows.next() {
-            Some(r) => Some(f(&r?)?),
-            None => None
-        };
-        Ok(res)
+        match self.query(params)?.next() {
+            None => Ok(None),
+            Some(r) => Ok(Some(f(&r?)?)),
+        }
     }
 
     /// Convenience method to execute a scalar query that is expected to return
@@ -788,6 +790,7 @@ impl<'conn> Statement<'conn> {
 #[cfg(test)]
 mod test {
     use {Connection, Error, Result};
+    use types::Type;
 
     #[test]
     fn test_execute_named() {
@@ -1019,11 +1022,20 @@ mod test {
                    CREATE TABLE foo(x INTEGER, y INTEGER);
                    INSERT INTO foo VALUES(1, 3);
                    INSERT INTO foo VALUES(2, 4);
+                   INSERT INTO foo VALUES(5, NULL);
                    END;";
         db.execute_batch(sql).unwrap();
         let mut stmt = db.prepare("SELECT y FROM foo WHERE x = ?").unwrap();
         let y: Result<i64> = stmt.query_row(&[&1i32], |r| r.get(0));
         assert_eq!(3i64, y.unwrap());
+        let y: Result<Option<i64>> = stmt.query_row(&[&5i32], |r| r.get(0));
+        assert_eq!(None, y.unwrap());
+        let y: Result<Option<i64>> = stmt.query_row(&[&3i32], |r| r.get(0));
+        match y {
+            Ok(_) => panic!("invalid Ok"),
+            Err(Error::QueryReturnedNoRows) => (),
+            Err(_) => panic!("invalid Err"),
+        }
     }
 
     #[test]
@@ -1055,6 +1067,14 @@ mod test {
         let y: Result<Option<Option<i64>>> = stmt.query_scalar_opt(&[]);
         assert_eq!(Some(None), y.unwrap());
 
+        let mut stmt = db.prepare("SELECT NULL").unwrap();
+        let y: Result<Option<i64>> = stmt.query_scalar_opt(&[]);
+        match y {
+            Ok(_) => panic!("invalid Ok"),
+            Err(Error::InvalidColumnType(0, Type::Null)) => (),
+            Err(_) => panic!("invalid Err"),
+        }
+
         db.execute_batch("PRAGMA user_version = 123;").unwrap();
         let mut stmt = db.prepare("PRAGMA user_version").unwrap();
         let y: Result<Option<i64>> = stmt.query_scalar_opt(&[]);
@@ -1080,6 +1100,15 @@ mod test {
         let mut stmt = db.prepare("SELECT NULL").unwrap();
         let y: Result<Option<i64>> = stmt.query_scalar(&[]);
         assert_eq!(None, y.unwrap());
+
+        let db = Connection::open_in_memory().unwrap();
+        let mut stmt = db.prepare("SELECT NULL").unwrap();
+        let y: Result<i64> = stmt.query_scalar(&[]);
+        match y {
+            Ok(_) => panic!("invalid Ok"),
+            Err(Error::InvalidColumnType(0, Type::Null)) => (),
+            Err(_) => panic!("invalid Err"),
+        }
 
         db.execute_batch("PRAGMA user_version = 123;").unwrap();
         let mut stmt = db.prepare("PRAGMA user_version").unwrap();
