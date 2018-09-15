@@ -1,4 +1,5 @@
 use super::{Null, Type};
+use std::borrow::Cow;
 
 /// Owning [dynamic type value](http://sqlite.org/datatype3.html). Value's type is typically
 /// dictated by SQLite (not by the caller).
@@ -74,6 +75,12 @@ impl From<String> for Value {
 impl From<Vec<u8>> for Value {
     fn from(v: Vec<u8>) -> Value {
         Value::Blob(v)
+    }
+}
+
+impl<'a> From<Cow<'a, str>> for Value {
+    fn from(s: Cow<'a, str>) -> Value {
+        Value::Text(s.to_string())
     }
 }
 
