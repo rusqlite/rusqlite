@@ -10,7 +10,7 @@ use super::str_to_cstring;
 use super::{
     AndThenRows, Connection, Error, MappedRows, RawStatement, Result, Row, Rows, ValueRef,
 };
-use types::{ToSql, ToSqlOutput, FromSql};
+use types::{ToSql, ToSqlOutput};
 #[cfg(feature = "array")]
 use vtab::array::{free_array, ARRAY_TYPE};
 
@@ -471,52 +471,6 @@ impl<'conn> Statement<'conn> {
             None => Ok(None),
             Some(r) => Ok(Some(f(&r?)?)),
         }
-    }
-
-    /// Convenience method to execute a scalar query that is expected to return
-    /// a single column and row.
-    ///
-    /// If the query returns more than one row or column, all except the first
-    /// are ignored.
-    ///
-    /// ## Example
-    ///
-    /// ```rust,no_run
-    /// # use rusqlite::{Connection, Result};
-    /// fn get_user_id(conn: &Connection, username: &str) -> Result<i64> {
-    ///     let mut stmt = conn.prepare_cached("SELECT id FROM users WHERE name = ?1")?;
-    ///     Ok(stmt.query_scalar(&[&username])?)
-    /// }
-    /// ```
-    ///
-    /// # Failure
-    ///
-    /// Will return `Err` if the underlying SQLite call fails.
-    pub fn query_scalar<T: FromSql>(&mut self, params: &[&ToSql]) -> Result<T> {
-        self.query_row_and_then(params, |r| r.get_checked(0))
-    }
-
-    /// Convenience method to execute a scalar query that is expected to return
-    /// a single column and zero or one row(s).
-    ///
-    /// If the query returns more than one row or column, all except the first
-    /// are ignored. Returns Ok(None) if query returns no rows.
-    ///
-    /// ## Example
-    ///
-    /// ```rust,no_run
-    /// # use rusqlite::{Connection, Result};
-    /// fn get_user_id(conn: &Connection, username: &str) -> Result<Option<i64>> {
-    ///     let mut stmt = conn.prepare_cached("SELECT id FROM users WHERE name = ?1")?;
-    ///     Ok(stmt.query_scalar_opt(&[&username])?)
-    /// }
-    /// ```
-    ///
-    /// # Failure
-    ///
-    /// Will return `Err` if the underlying SQLite call fails.
-    pub fn query_scalar_opt<T: FromSql>(&mut self, params: &[&ToSql]) -> Result<Option<T>> {
-        self.query_row_opt_and_then(params, |r| r.get_checked(0))
     }
 
     /// Consumes the statement.
@@ -1050,23 +1004,23 @@ mod test {
     }
 
     #[test]
-    fn test_query_scalar_opt() {
+    fn test_query_row_opt_and_then() {
         let db = Connection::open_in_memory().unwrap();
 
-        let mut stmt = db.prepare("SELECT ?+1").unwrap();
-        let y: Result<Option<i64>> = stmt.query_scalar_opt(&[&2]);
-        assert_eq!(Some(3), y.unwrap());
+        let mut stmt = db.prepare("SELECT ?+1, ? || ' World'").unwrap();
+        let y: Result<Option<(i64, String)>> = stmt.query_row_opt_and_then(&[&2, &"Hello"], |r| Ok((r.get_checked(0)?, r.get_checked(1)?)));
+        assert_eq!(Some((3, "Hello World".into())), y.unwrap());
 
         let mut stmt = db.prepare("SELECT 1 WHERE 1 = 0").unwrap();
-        let y: Result<Option<i64>> = stmt.query_scalar_opt(&[]);
+        let y: Result<Option<i64>> = stmt.query_row_opt_and_then(&[], |r| r.get_checked(0));
         assert_eq!(None, y.unwrap());
 
         let mut stmt = db.prepare("SELECT NULL").unwrap();
-        let y: Result<Option<Option<i64>>> = stmt.query_scalar_opt(&[]);
+        let y: Result<Option<Option<i64>>> = stmt.query_row_opt_and_then(&[], |r| r.get_checked(0));
         assert_eq!(Some(None), y.unwrap());
 
         let mut stmt = db.prepare("SELECT NULL").unwrap();
-        let y: Result<Option<i64>> = stmt.query_scalar_opt(&[]);
+        let y: Result<Option<i64>> = stmt.query_row_opt_and_then(&[], |r| r.get_checked(0));
         match y {
             Ok(_) => panic!("invalid Ok"),
             Err(Error::InvalidColumnType(0, Type::Null)) => (),
@@ -1075,20 +1029,20 @@ mod test {
 
         db.execute_batch("PRAGMA user_version = 123;").unwrap();
         let mut stmt = db.prepare("PRAGMA user_version").unwrap();
-        let y: Result<Option<i64>> = stmt.query_scalar_opt(&[]);
+        let y: Result<Option<i64>> = stmt.query_row_opt_and_then(&[], |r| r.get_checked(0));
         assert_eq!(Some(123), y.unwrap());
     }
 
     #[test]
-    fn test_query_scalar() {
+    fn test_query_row_and_then() {
         let db = Connection::open_in_memory().unwrap();
 
-        let mut stmt = db.prepare("SELECT ?+1").unwrap();
-        let y: Result<i64> = stmt.query_scalar(&[&2]);
-        assert_eq!(3, y.unwrap());
+        let mut stmt = db.prepare("SELECT ?+1, ? || ' World'").unwrap();
+        let y: Result<(i64, String)> = stmt.query_row_and_then(&[&2, &"Hello"], |r| Ok((r.get_checked(0)?, r.get_checked(1)?)));
+        assert_eq!((3, "Hello World".into()), y.unwrap());
 
         let mut stmt = db.prepare("SELECT 1 WHERE 1 = 0").unwrap();
-        let y: Result<i64> = stmt.query_scalar(&[]);
+        let y: Result<i64> = stmt.query_row_and_then(&[], |r| r.get_checked(0));
         match y {
             Ok(_) => panic!("invalid Ok"),
             Err(Error::QueryReturnedNoRows) => (),
@@ -1096,12 +1050,11 @@ mod test {
         }
 
         let mut stmt = db.prepare("SELECT NULL").unwrap();
-        let y: Result<Option<i64>> = stmt.query_scalar(&[]);
+        let y: Result<Option<i64>> = stmt.query_row_and_then(&[], |r| r.get_checked(0));
         assert_eq!(None, y.unwrap());
 
-        let db = Connection::open_in_memory().unwrap();
         let mut stmt = db.prepare("SELECT NULL").unwrap();
-        let y: Result<i64> = stmt.query_scalar(&[]);
+        let y: Result<i64> = stmt.query_row_and_then(&[], |r| r.get_checked(0));
         match y {
             Ok(_) => panic!("invalid Ok"),
             Err(Error::InvalidColumnType(0, Type::Null)) => (),
@@ -1110,7 +1063,7 @@ mod test {
 
         db.execute_batch("PRAGMA user_version = 123;").unwrap();
         let mut stmt = db.prepare("PRAGMA user_version").unwrap();
-        let y: Result<i64> = stmt.query_scalar(&[]);
+        let y: Result<i64> = stmt.query_row_and_then(&[], |r| r.get_checked(0));
         assert_eq!(123, y.unwrap());
     }
 
