@@ -1008,19 +1008,25 @@ mod test {
         let db = Connection::open_in_memory().unwrap();
 
         let mut stmt = db.prepare("SELECT ?+1, ? || ' World'").unwrap();
-        let y: Result<Option<(i64, String)>> = stmt.query_row_opt_and_then(&[&2, &"Hello"], |r| Ok((r.get_checked(0)?, r.get_checked(1)?)));
+        let y: Result<Option<(i64, String)>> = stmt
+            .query_row_opt_and_then(&[&2, &"Hello"], |r| {
+                Ok((r.get_checked(0)?, r.get_checked(1)?))
+            });
         assert_eq!(Some((3, "Hello World".into())), y.unwrap());
 
         let mut stmt = db.prepare("SELECT 1 WHERE 1 = 0").unwrap();
-        let y: Result<Option<i64>> = stmt.query_row_opt_and_then(&[], |r| r.get_checked(0));
+        let y: Result<Option<i64>> = stmt
+            .query_row_opt_and_then(&[], |r| r.get_checked(0));
         assert_eq!(None, y.unwrap());
 
         let mut stmt = db.prepare("SELECT NULL").unwrap();
-        let y: Result<Option<Option<i64>>> = stmt.query_row_opt_and_then(&[], |r| r.get_checked(0));
+        let y: Result<Option<Option<i64>>> = stmt
+            .query_row_opt_and_then(&[], |r| r.get_checked(0));
         assert_eq!(Some(None), y.unwrap());
 
         let mut stmt = db.prepare("SELECT NULL").unwrap();
-        let y: Result<Option<i64>> = stmt.query_row_opt_and_then(&[], |r| r.get_checked(0));
+        let y: Result<Option<i64>> = stmt
+            .query_row_opt_and_then(&[], |r| r.get_checked(0));
         match y {
             Ok(_) => panic!("invalid Ok"),
             Err(Error::InvalidColumnType(0, Type::Null)) => (),
@@ -1029,7 +1035,8 @@ mod test {
 
         db.execute_batch("PRAGMA user_version = 123;").unwrap();
         let mut stmt = db.prepare("PRAGMA user_version").unwrap();
-        let y: Result<Option<i64>> = stmt.query_row_opt_and_then(&[], |r| r.get_checked(0));
+        let y: Result<Option<i64>> = stmt
+            .query_row_opt_and_then(&[], |r| r.get_checked(0));
         assert_eq!(Some(123), y.unwrap());
     }
 
@@ -1038,7 +1045,10 @@ mod test {
         let db = Connection::open_in_memory().unwrap();
 
         let mut stmt = db.prepare("SELECT ?+1, ? || ' World'").unwrap();
-        let y: Result<(i64, String)> = stmt.query_row_and_then(&[&2, &"Hello"], |r| Ok((r.get_checked(0)?, r.get_checked(1)?)));
+        let y: Result<(i64, String)> = stmt
+            .query_row_and_then(&[&2, &"Hello"], |r| {
+                Ok((r.get_checked(0)?, r.get_checked(1)?))
+            });
         assert_eq!((3, "Hello World".into()), y.unwrap());
 
         let mut stmt = db.prepare("SELECT 1 WHERE 1 = 0").unwrap();
@@ -1050,7 +1060,8 @@ mod test {
         }
 
         let mut stmt = db.prepare("SELECT NULL").unwrap();
-        let y: Result<Option<i64>> = stmt.query_row_and_then(&[], |r| r.get_checked(0));
+        let y: Result<Option<i64>> = stmt
+            .query_row_and_then(&[], |r| r.get_checked(0));
         assert_eq!(None, y.unwrap());
 
         let mut stmt = db.prepare("SELECT NULL").unwrap();
