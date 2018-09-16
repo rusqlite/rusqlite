@@ -387,6 +387,36 @@ impl Connection {
         stmt.query_row(params, f)
     }
 
+    /// Convenience method to execute a query that is expected to return at
+    /// most a single row.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Result,Connection};
+    /// fn preferred_locale(conn: &Connection) -> Result<Option<String>> {
+    ///     conn.query_row_opt(
+    ///         "SELECT value FROM preferences WHERE name='locale'",
+    ///         &[],
+    ///         |row| row.get(0),
+    ///     )
+    /// }
+    /// ```
+    ///
+    /// If the query returns more than one row, all rows except the first are
+    /// ignored.
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if `sql` cannot be converted to a C-compatible string
+    /// or if the underlying SQLite call fails.
+    pub fn query_row_opt<T, F>(&self, sql: &str, params: &[&ToSql], f: F) -> Result<Option<T>>
+        where
+            F: FnOnce(&Row) -> T,
+    {
+        self.prepare(sql)?.query_row_opt(params, f)
+    }
+
     /// Convenience method to execute a query with named parameter(s) that is
     /// expected to return a single row.
     ///
@@ -446,6 +476,44 @@ impl Connection {
         let mut rows = try!(stmt.query(params));
 
         rows.get_expected_row().map_err(E::from).and_then(|r| f(&r))
+    }
+
+    /// Convenience method to execute a query that is expected to return at
+    /// most a single row, and execute a mapping via `f` on that returned row
+    /// with the possibility of failure. The `Result` type of `f` must
+    /// implement `std::convert::From<Error>`.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Result,Connection};
+    /// fn preferred_locale(conn: &Connection) -> Result<Option<String>> {
+    ///     conn.query_row_opt_and_then(
+    ///         "SELECT value FROM preferences WHERE name='locale'",
+    ///         &[],
+    ///         |row| row.get_checked(0),
+    ///     )
+    /// }
+    /// ```
+    ///
+    /// If the query returns more than one row, all rows except the first are
+    /// ignored.
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if `sql` cannot be converted to a C-compatible string
+    /// or if the underlying SQLite call fails.
+    pub fn query_row_opt_and_then<T, E, F>(
+        &self,
+        sql: &str,
+        params: &[&ToSql],
+        f: F,
+    ) -> result::Result<Option<T>, E>
+        where
+            F: FnOnce(&Row) -> result::Result<T, E>,
+            E: convert::From<Error>,
+    {
+        self.prepare(sql)?.query_row_opt_and_then(params, f)
     }
 
     /// Convenience method to execute a query that is expected to return a
@@ -1377,6 +1445,32 @@ mod test {
     }
 
     #[test]
+    fn test_query_row_opt() {
+        let db = checked_memory_handle();
+        let sql = "BEGIN;
+                   CREATE TABLE foo(x INTEGER);
+                   INSERT INTO foo VALUES(1);
+                   INSERT INTO foo VALUES(2);
+                   INSERT INTO foo VALUES(3);
+                   INSERT INTO foo VALUES(4);
+                   END;";
+        db.execute_batch(sql).unwrap();
+
+        assert_eq!(
+            Some(10i64),
+            db.query_row_opt::<i64, _>("SELECT SUM(x) FROM foo", &[], |r| r.get(0))
+                .unwrap()
+        );
+
+        let result: Option<i64> = db.query_row_opt("SELECT x FROM foo WHERE x > 5", &[], |r| r.get(0)).unwrap();
+        assert_eq!(None, result);
+
+        let bad_query_result = db.query_row_opt("NOT A PROPER QUERY; test123", &[], |_| ());
+
+        assert!(bad_query_result.is_err());
+    }
+
+    #[test]
     fn test_prepare_failures() {
         let db = checked_memory_handle();
         db.execute_batch("CREATE TABLE foo(x INTEGER);").unwrap();
@@ -1650,6 +1744,27 @@ mod test {
         }
 
         #[test]
+        fn test_query_row_opt_and_then_custom_error() {
+            let db = checked_memory_handle();
+            let sql = "BEGIN;
+                       CREATE TABLE foo(x INTEGER, y TEXT);
+                       INSERT INTO foo VALUES(4, \"hello\");
+                       END;";
+            db.execute_batch(sql).unwrap();
+
+            let query = "SELECT x, y FROM foo WHERE x > ? ORDER BY x DESC";
+            let results: CustomResult<Option<String>> = db.query_row_opt_and_then(query, &[&1i32], |row| {
+                row.get_checked(1).map_err(CustomError::Sqlite)
+            });
+            assert_eq!(results.unwrap().unwrap(), "hello");
+
+            let results: CustomResult<Option<String>> = db.query_row_opt_and_then(query, &[&4i32], |row| {
+                row.get_checked(1).map_err(CustomError::Sqlite)
+            });
+            assert_eq!(results.unwrap(), None);
+        }
+
+        #[test]
         fn test_query_row_and_then_custom_error_fails() {
             let db = checked_memory_handle();
             let sql = "BEGIN;
@@ -1679,6 +1794,43 @@ mod test {
 
             let non_sqlite_err: CustomResult<String> =
                 db.query_row_and_then(query, &[], |_| Err(CustomError::SomeError));
+
+            match non_sqlite_err.unwrap_err() {
+                CustomError::SomeError => (),
+                err => panic!("Unexpected error {}", err),
+            }
+        }
+
+        #[test]
+        fn test_query_row_opt_and_then_custom_error_fails() {
+            let db = checked_memory_handle();
+            let sql = "BEGIN;
+                       CREATE TABLE foo(x INTEGER, y TEXT);
+                       INSERT INTO foo VALUES(4, \"hello\");
+                       END;";
+            db.execute_batch(sql).unwrap();
+
+            let query = "SELECT x, y FROM foo ORDER BY x DESC";
+            let bad_type: CustomResult<Option<f64>> = db.query_row_opt_and_then(query, &[], |row| {
+                row.get_checked(1).map_err(CustomError::Sqlite)
+            });
+
+            match bad_type.unwrap_err() {
+                CustomError::Sqlite(Error::InvalidColumnType(_, _)) => (),
+                err => panic!("Unexpected error {}", err),
+            }
+
+            let bad_idx: CustomResult<Option<String>> = db.query_row_opt_and_then(query, &[], |row| {
+                row.get_checked(3).map_err(CustomError::Sqlite)
+            });
+
+            match bad_idx.unwrap_err() {
+                CustomError::Sqlite(Error::InvalidColumnIndex(_)) => (),
+                err => panic!("Unexpected error {}", err),
+            }
+
+            let non_sqlite_err: CustomResult<Option<String>> =
+                db.query_row_opt_and_then(query, &[], |_| Err(CustomError::SomeError));
 
             match non_sqlite_err.unwrap_err() {
                 CustomError::SomeError => (),
