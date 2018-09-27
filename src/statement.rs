@@ -88,6 +88,50 @@ impl<'conn> Statement<'conn> {
         self.execute_with_bound_parameters()
     }
 
+    /// Execute the prepared statement.
+    ///
+    /// On success, returns the number of rows that were changed or inserted or
+    /// deleted (via `sqlite3_changes`).
+    ///
+    /// This is a variant of `execute` for the case where the type of every
+    /// item in `params` is already the same (that is, there's no need to go
+    /// through `&dyn ToSql`). This may allow you to avoid allocating an
+    /// intermediate array of `&dyn ToSql`. It is particularly useful for cases
+    /// where the SQL statement is dynamically generated. See also
+    /// `query_static`.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// fn add_names(conn: &Connection, names: &[String]) -> Result<()> {
+    ///     // If rusqlite has the "limits" feature, you should instead use
+    ///     // `conn.limit(Limit::SQLITE_LIMIT_VARIABLE_NUMBER)`, as this
+    ///     // value can be configured and may be higher or lower than 999.
+    ///     let max_vars_per_statement = 999;
+    ///     assert!(names.len() < max_vars_per_statement,
+    ///             "Production code may want to insert in a loop instead");
+    ///
+    ///     let mut values = "(?),".repeat(names.len());
+    ///     values.pop(); // trailing comma
+    ///     let sql = format!("INSERT INTO foo(name) VALUES {}", values);
+    ///
+    ///     let mut stmt = conn.prepare(&sql)?;
+    ///     stmt.execute_static(names)?;
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if binding parameters fails, the executed statement
+    /// returns rows (in which case `query` should be used instead), or the
+    /// underling SQLite call fails.
+    pub fn execute_static(&mut self, params: &[impl ToSql]) -> Result<usize> {
+        self.bind_parameters_static(params)?;
+        self.execute_with_bound_parameters()
+    }
+
     /// Execute the prepared statement with named parameter(s). If any
     /// parameters that were in the prepared statement are not included in
     /// `params`, they will continue to use the most-recently bound value
@@ -172,6 +216,46 @@ impl<'conn> Statement<'conn> {
         Ok(Rows::new(self))
     }
 
+    /// Execute the prepared statement, returning a handle to the resulting
+    /// rows.
+    ///
+    /// This is a variant of `query` for the case where the type of every
+    /// item in `params` is already the same (that is, there's no need to go
+    /// through `&dyn ToSql`). This may allow you to avoid allocating an
+    /// intermediate array of `&dyn ToSql`. It is particularly useful for cases
+    /// where the SQL query is dynamically generated.
+    ///
+    /// Like `query`, the rows handle returned by `query_static` do not
+    /// implement the `Iterator` trait due to lifetime restrictions. Consider
+    /// using `query_map_static` or `query_and_then_static` instead, which do.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// fn get_names(conn: &Connection) -> Result<Vec<String>> {
+    ///     let mut stmt = conn.prepare("SELECT name FROM people WHERE id IN (?, ?, ?)")?;
+    ///     let mut rows = stmt.query_static(&[1, 2, 3])?;
+    ///
+    ///     let mut names = Vec::new();
+    ///     while let Some(result_row) = rows.next() {
+    ///         let row = result_row?;
+    ///         names.push(row.get(0));
+    ///     }
+    ///
+    ///     Ok(names)
+    /// }
+    /// ```
+    ///
+    /// ## Failure
+    ///
+    /// Will return `Err` if binding parameters fails.
+    pub fn query_static<'a>(&'a mut self, params: &[impl ToSql]) -> Result<Rows<'a>> {
+        self.check_readonly()?;
+        self.bind_parameters_static(params)?;
+        Ok(Rows::new(self))
+    }
+
     /// Execute the prepared statement with named parameter(s), returning a
     /// handle for the resulting rows. If any parameters that were in the
     /// prepared statement are not included in `params`, they will continue
@@ -232,6 +316,43 @@ impl<'conn> Statement<'conn> {
         Ok(MappedRows::new(rows, f))
     }
 
+    /// Executes the prepared statement and maps a function over the resulting
+    /// rows, returning an iterator over the mapped function results. Like
+    /// `query_static`, this is a variant of `query` for the case where the type
+    /// of every item in `params` is already the same (that is, there's no need
+    /// to go through `&dyn ToSql`). This may allow you to avoid allocating an
+    /// intermediate array of `&dyn ToSql`. It is particularly useful for cases
+    /// where the SQL query is dynamically generated.
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// fn get_names(conn: &Connection) -> Result<Vec<String>> {
+    ///     let mut stmt = try!(conn.prepare("SELECT name FROM people WHERE id IN (?, ?, ?)"));
+    ///     let rows = try!(stmt.query_map_static(&[1, 2, 3], |row| row.get(0)));
+    ///
+    ///     let mut names = Vec::new();
+    ///     for name_result in rows {
+    ///         names.push(try!(name_result));
+    ///     }
+    ///
+    ///     Ok(names)
+    /// }
+    /// ```
+    ///
+    /// ## Failure
+    ///
+    /// Will return `Err` if binding parameters fails.
+    pub fn query_map_static<'a, T, F, P>(&'a mut self, params: &[P], f: F) -> Result<MappedRows<'a, F>>
+    where
+        F: FnMut(&Row) -> T,
+        P: ToSql
+    {
+        let rows = self.query_static(params)?;
+        Ok(MappedRows::new(rows, f))
+    }
+
     /// Execute the prepared statement with named parameter(s), returning an
     /// iterator over the result of calling the mapping function over the
     /// query's rows. If any parameters that were in the prepared statement
@@ -288,6 +409,31 @@ impl<'conn> Statement<'conn> {
         F: FnMut(&Row) -> result::Result<T, E>,
     {
         let rows = self.query(params)?;
+        Ok(AndThenRows::new(rows, f))
+    }
+
+    /// Executes the prepared statement and maps a function over the resulting
+    /// rows, where the function returns a `Result` with `Error` type
+    /// implementing `std::convert::From<Error>` (so errors can be unified).
+    ///
+    /// This is a variant of `query_and_then` (see `query_static`) for the
+    /// case where the type of every item in `params` is the same, but you do
+    /// not already have a slice of `&dyn ToSql`.
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if binding parameters fails.
+    pub fn query_and_then_static<'a, T, E, F, P>(
+        &'a mut self,
+        params: &[P],
+        f: F,
+    ) -> Result<AndThenRows<'a, F>>
+    where
+        E: convert::From<Error>,
+        F: FnMut(&Row) -> result::Result<T, E>,
+        P: ToSql,
+    {
+        let rows = self.query_static(params)?;
         Ok(AndThenRows::new(rows, f))
     }
 
@@ -412,6 +558,23 @@ impl<'conn> Statement<'conn> {
         Ok(())
     }
 
+    fn bind_parameters_static(&mut self, params: &[impl ToSql]) -> Result<()> {
+        assert_eq!(
+            params.len(),
+            self.stmt.bind_parameter_count(),
+            "incorrect number of parameters to query(): expected {}, got {}",
+            self.stmt.bind_parameter_count(),
+            params.len()
+        );
+
+        for (i, p) in params.iter().enumerate() {
+            let output = p.to_sql()?;
+            self.bind_parameter_output(output, i + 1)?;
+        }
+
+        Ok(())
+    }
+
     fn bind_parameters_named(&mut self, params: &[(&str, &ToSql)]) -> Result<()> {
         for &(name, value) in params {
             if let Some(i) = try!(self.parameter_index(name)) {
@@ -426,6 +589,10 @@ impl<'conn> Statement<'conn> {
     fn bind_parameter(&self, param: &ToSql, col: usize) -> Result<()> {
         let value = try!(param.to_sql());
 
+        self.bind_parameter_output(value, col)
+    }
+
+    fn bind_parameter_output(&self, value: ToSqlOutput, col: usize) -> Result<()> {
         let ptr = unsafe { self.stmt.ptr() };
         let value = match value {
             ToSqlOutput::Borrowed(v) => v,
@@ -694,6 +861,55 @@ mod test {
     }
 
     #[test]
+    fn test_execute_static() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE foo(x INTEGER)").unwrap();
+
+        assert_eq!(
+            db.execute_static("INSERT INTO foo(x) VALUES (:x)", &[1i32])
+                .unwrap(),
+            1
+        );
+        assert_eq!(
+            db.execute_static("INSERT INTO foo(x) VALUES (:x)", &[2i32])
+                .unwrap(),
+            1
+        );
+
+        assert_eq!(
+            3i32,
+            db.query_row_named::<i32, _>(
+                "SELECT SUM(x) FROM foo WHERE x > :x",
+                &[(":x", &0i32)],
+                |r| r.get(0)
+            ).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_stmt_execute_static() {
+        let db = Connection::open_in_memory().unwrap();
+        let sql = "CREATE TABLE test (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL, flag \
+                   INTEGER)";
+        db.execute_batch(sql).unwrap();
+
+        let mut stmt = db
+            .prepare("INSERT INTO test (name) VALUES (:name)")
+            .unwrap();
+
+        stmt.execute_static(&["one"]).unwrap();
+
+        assert_eq!(
+            1i32,
+            db.query_row_named::<i32, _>(
+                "SELECT COUNT(*) FROM test WHERE name = :name",
+                &[(":name", &"one")],
+                |r| r.get(0)
+            ).unwrap()
+        );
+    }
+
+    #[test]
     fn test_query_named() {
         let db = Connection::open_in_memory().unwrap();
         let sql = r#"
@@ -748,6 +964,81 @@ mod test {
             .unwrap();
         let mut rows = stmt
             .query_and_then_named(&[(":name", &"one")], |row| {
+                let id: i32 = row.get(0);
+                if id == 1 {
+                    Ok(id)
+                } else {
+                    Err(Error::SqliteSingleThreadedMode)
+                }
+            }).unwrap();
+
+        // first row should be Ok
+        let doubled_id: i32 = rows.next().unwrap().unwrap();
+        assert_eq!(1, doubled_id);
+
+        // second row should be Err
+        match rows.next().unwrap() {
+            Ok(_) => panic!("invalid Ok"),
+            Err(Error::SqliteSingleThreadedMode) => (),
+            Err(_) => panic!("invalid Err"),
+        }
+    }
+
+    #[test]
+    fn test_query_static() {
+        use types::Value;
+        let db = Connection::open_in_memory().unwrap();
+        let sql = "BEGIN;
+                   CREATE TABLE foo(x INTEGER, y INTEGER);
+                   INSERT INTO foo VALUES (1, 2), (3, 4), (5, 6);
+                   END;";
+        db.execute_batch(sql).unwrap();
+        let mut stmt = db.prepare("SELECT y FROM foo WHERE x in (?, ?) ORDER BY y").unwrap();
+        let mut rows = stmt.query_static(&[Value::Integer(1), Value::Integer(5)]).unwrap();
+        let a: i32 = rows.next().unwrap().unwrap().get(0);
+        let b: i32 = rows.next().unwrap().unwrap().get(0);
+        assert!(rows.next().is_none());
+        assert_eq!(a, 2);
+        assert_eq!(b, 6);
+    }
+
+    #[test]
+    fn test_query_map_static() {
+        let db = Connection::open_in_memory().unwrap();
+        let sql = r#"
+        CREATE TABLE test (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL, flag INTEGER);
+        INSERT INTO test(id, name) VALUES (1, "one");
+        "#;
+        db.execute_batch(sql).unwrap();
+
+        let mut stmt = db
+            .prepare("SELECT id FROM test where name = ?")
+            .unwrap();
+        let mut rows = stmt
+            .query_map_static(&["one"], |row| {
+                let id: i32 = row.get(0);
+                2 * id
+            }).unwrap();
+
+        let doubled_id: i32 = rows.next().unwrap().unwrap();
+        assert_eq!(2, doubled_id);
+    }
+
+    #[test]
+    fn test_query_and_then_static() {
+        let db = Connection::open_in_memory().unwrap();
+        let sql = r#"
+        CREATE TABLE test (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL, flag INTEGER);
+        INSERT INTO test(id, name) VALUES (1, "one");
+        INSERT INTO test(id, name) VALUES (2, "one");
+        "#;
+        db.execute_batch(sql).unwrap();
+
+        let mut stmt = db
+            .prepare("SELECT id FROM test WHERE name = ? ORDER BY id ASC")
+            .unwrap();
+        let mut rows = stmt
+            .query_and_then_static(&["one"], |row| {
                 let id: i32 = row.get(0);
                 if id == 1 {
                     Ok(id)
