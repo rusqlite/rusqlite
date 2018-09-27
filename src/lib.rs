@@ -348,6 +348,34 @@ impl Connection {
             .and_then(|mut stmt| stmt.execute_named(params))
     }
 
+    /// Convenience method to prepare and execute a single SQL statement with
+    /// a list of parameters which are all the same type (see also
+    /// `Statement::execute_static`).
+    ///
+    /// On success, returns the number of rows that were changed or inserted or
+    /// deleted (via `sqlite3_changes`).
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// fn insert(conn: &Connection) -> Result<usize> {
+    ///     conn.execute_static(
+    ///         "INSERT INTO test (name) VALUES (:name)",
+    ///         &["one"],
+    ///     )
+    /// }
+    /// ```
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if `sql` cannot be converted to a C-compatible string
+    /// or if the underlying SQLite call fails.
+    pub fn execute_static(&self, sql: &str, params: &[impl ToSql]) -> Result<usize> {
+        self.prepare(sql)
+            .and_then(|mut stmt| stmt.execute_static(params))
+    }
+
     /// Get the SQLite rowid of the most recent successful INSERT.
     ///
     /// Uses [sqlite3_last_insert_rowid](https://www.sqlite.org/c3ref/last_insert_rowid.html) under
