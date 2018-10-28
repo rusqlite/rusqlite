@@ -1306,7 +1306,7 @@ mod test {
         let err = db
             .execute(
                 "CREATE TABLE foo(x INTEGER); CREATE TABLE foo(x INTEGER)",
-                &[],
+                NO_PARAMS,
             ).unwrap_err();
         match err {
             Error::MultipleStatement => (),
