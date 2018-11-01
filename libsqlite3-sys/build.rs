@@ -226,10 +226,22 @@ mod bindings {
     pub fn write_to_out_dir(header: HeaderLocation, out_path: &Path) {
         let header: String = header.into();
         let mut output = Vec::new();
-        bindgen::builder()
+        let mut bindings = bindgen::builder()
             .header(header.clone())
             .parse_callbacks(Box::new(SqliteTypeChooser))
-            .rustfmt_bindings(true)
+            .rustfmt_bindings(true);
+
+        if cfg!(feature = "unlock_notify") {
+            bindings = bindings.clang_arg("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
+        }
+        if cfg!(feature = "preupdate_hook") {
+            bindings = bindings.clang_arg("-DSQLITE_ENABLE_PREUPDATE_HOOK");
+        }
+        if cfg!(feature = "session") {
+            bindings = bindings.clang_arg("-DSQLITE_ENABLE_SESSION");
+        }
+
+        bindings
             .generate()
             .expect(&format!("could not run bindgen on header {}", header))
             .write(Box::new(&mut output))

@@ -469,7 +469,7 @@ impl<'a> Values<'a> {
             FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
             #[cfg(feature = "i128_blob")]
             FromSqlError::InvalidI128Size(_) => Error::InvalidColumnType(idx, value.data_type()),
-    })
+        })
     }
 
     // `sqlite3_value_type` returns `SQLITE_NULL` for pointer.
