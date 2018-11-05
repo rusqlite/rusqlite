@@ -118,6 +118,7 @@ mod busy;
 mod cache;
 #[cfg(any(feature = "functions", feature = "vtab"))]
 mod context;
+#[macro_use]
 mod error;
 #[cfg(feature = "functions")]
 pub mod functions;

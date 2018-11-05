@@ -6,7 +6,7 @@ use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::slice::from_raw_parts;
 
-use error::{error_from_handle, error_from_sqlite_code};
+use error::error_from_sqlite_code;
 use ffi;
 use {errmsg_to_string, str_to_cstring, Connection, DatabaseName, Result};
 
@@ -17,7 +17,6 @@ use {errmsg_to_string, str_to_cstring, Connection, DatabaseName, Result};
 pub struct Session<'conn> {
     phantom: PhantomData<&'conn ()>,
     s: *mut ffi::sqlite3_session,
-    db: *mut ffi::sqlite3, // TODO Validate: used only for error handling
     filter: Option<Box<Fn(&str) -> bool>>,
 }
 
@@ -35,16 +34,11 @@ impl<'conn> Session<'conn> {
 
         unsafe {
             let mut s: *mut ffi::sqlite3_session = mem::uninitialized();
-            let r = ffi::sqlite3session_create(db, name.as_ptr(), &mut s);
-            if r != ffi::SQLITE_OK {
-                let e = error_from_handle(db, r);
-                return Err(e);
-            }
+            check!(ffi::sqlite3session_create(db, name.as_ptr(), &mut s));
 
             Ok(Session {
                 phantom: PhantomData,
                 s,
-                db,
                 filter: None,
             })
         }
@@ -103,11 +97,7 @@ impl<'conn> Session<'conn> {
         } else {
             ptr::null()
         };
-        let r = unsafe { ffi::sqlite3session_attach(self.s, table) };
-        if r != ffi::SQLITE_OK {
-            let e = error_from_handle(self.db, r);
-            return Err(e);
-        }
+        unsafe { check!(ffi::sqlite3session_attach(self.s, table)) };
         Ok(())
     }
 
@@ -117,11 +107,7 @@ impl<'conn> Session<'conn> {
         unsafe {
             let mut cs: *mut c_void = mem::uninitialized();
             let mut n = 0;
-            let r = ffi::sqlite3session_changeset(self.s, &mut n, &mut cs);
-            if r != ffi::SQLITE_OK {
-                let e = error_from_handle(self.db, r);
-                return Err(e);
-            }
+            check!(ffi::sqlite3session_changeset(self.s, &mut n, &mut cs));
             let _changeset = from_raw_parts(cs, n as usize); // TODO lifetime ?
                                                              // TODO must be sqlite3_free
             unimplemented!()
@@ -134,11 +120,7 @@ impl<'conn> Session<'conn> {
         unsafe {
             let mut ps: *mut c_void = mem::uninitialized();
             let mut n = 0;
-            let r = ffi::sqlite3session_patchset(self.s, &mut n, &mut ps);
-            if r != ffi::SQLITE_OK {
-                let e = error_from_handle(self.db, r);
-                return Err(e);
-            }
+            check!(ffi::sqlite3session_patchset(self.s, &mut n, &mut ps));
             let _patchset = from_raw_parts(ps, n as usize); // TODO lifetime ?
                                                             // TODO must be sqlite3_free
             unimplemented!()
@@ -225,10 +207,7 @@ impl Changegroup {
     pub fn new() -> Result<Self> {
         unsafe {
             let mut cg: *mut ffi::sqlite3_changegroup = mem::uninitialized();
-            let r = ffi::sqlite3changegroup_new(&mut cg);
-            if r != ffi::SQLITE_OK {
-                return Err(error_from_sqlite_code(r, None));
-            }
+            check!(ffi::sqlite3changegroup_new(&mut cg));
             Ok(Changegroup { cg })
         }
     }
@@ -236,13 +215,10 @@ impl Changegroup {
     /// Add A Changeset
     pub fn add(&mut self) -> Result<()> {
         // https://sqlite.org/session/sqlite3changegroup_add.html
-        let r = unsafe {
+        /*unsafe {
             //ffi::sqlite3changegroup_add(self.cg, )
-            unimplemented!()
-        };
-        if r != ffi::SQLITE_OK {
-            return Err(error_from_sqlite_code(r, None));
-        }
+            check!(unimplemented!())
+        };*/
         Ok(())
     }
 
@@ -251,10 +227,7 @@ impl Changegroup {
         unsafe {
             let mut output: *mut c_void = mem::uninitialized();
             let mut n = 0;
-            let r = ffi::sqlite3changegroup_output(self.cg, &mut n, &mut output);
-            if r != ffi::SQLITE_OK {
-                return Err(error_from_sqlite_code(r, None));
-            }
+            check!(ffi::sqlite3changegroup_output(self.cg, &mut n, &mut output));
             let _output = from_raw_parts(output, n as usize); // TODO lifetime ?
                                                               // TODO must be sqlite3_free
             unimplemented!()
