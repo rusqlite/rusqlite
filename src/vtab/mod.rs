@@ -546,7 +546,7 @@ impl InnerConnection {
         module: &Module<T>,
         aux: Option<T::Aux>,
     ) -> Result<()> {
-        let c_name = try!(str_to_cstring(module_name));
+        let c_name = str_to_cstring(module_name)?;
         let r = match aux {
             Some(aux) => {
                 let boxed_aux: *mut T::Aux = Box::into_raw(Box::new(aux));
