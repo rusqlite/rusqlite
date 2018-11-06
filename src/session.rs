@@ -1,10 +1,10 @@
 //! [Session Extension](https://sqlite.org/sessionintro.html)
+#![allow(non_camel_case_types)]
 
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
-use std::slice::from_raw_parts;
 
 use error::error_from_sqlite_code;
 use ffi;
@@ -102,30 +102,29 @@ impl<'conn> Session<'conn> {
     }
 
     /// Generate a Changeset
-    pub fn changeset(&mut self) -> Result<()> {
-        // https://sqlite.org/session/sqlite3session_changeset.html
+    pub fn changeset(&mut self) -> Result<Changeset> {
         unsafe {
             let mut cs: *mut c_void = mem::uninitialized();
             let mut n = 0;
             check!(ffi::sqlite3session_changeset(self.s, &mut n, &mut cs));
-            let _changeset = from_raw_parts(cs, n as usize); // TODO lifetime ?
-                                                             // TODO must be sqlite3_free
-            unimplemented!()
+            Ok(Changeset { cs, n })
         }
     }
 
+    // sqlite3session_changeset_strm
+
     /// Generate a Patchset
-    pub fn patchset(&mut self) -> Result<()> {
-        // https://sqlite.org/session/sqlite3session_patchset.html
+    pub fn patchset(&mut self) -> Result<Changeset> {
         unsafe {
             let mut ps: *mut c_void = mem::uninitialized();
             let mut n = 0;
             check!(ffi::sqlite3session_patchset(self.s, &mut n, &mut ps));
-            let _patchset = from_raw_parts(ps, n as usize); // TODO lifetime ?
-                                                            // TODO must be sqlite3_free
-            unimplemented!()
+            // TODO Validate: same struct
+            Ok(Changeset { cs: ps, n })
         }
     }
+
+    // sqlite3session_patchset_strm
 
     /// Load the difference between tables.
     pub fn diff(&mut self, from: DatabaseName, table: &str) -> Result<()> {
@@ -182,9 +181,120 @@ impl<'conn> Drop for Session<'conn> {
     }
 }
 
+// sqlite3changeset_apply_strm
+// sqlite3changeset_invert_strm
+// sqlite3changeset_start_strm
+// sqlite3changeset_concat_strm
+
+/// Changeset or Patchset
+pub struct Changeset {
+    cs: *mut c_void,
+    n: c_int,
+}
+
+impl Changeset {
+    /// Apply a changeset to a database
+    pub fn apply(&self) -> Result<()> {
+        // https://sqlite.org/session/sqlite3changeset_apply.html
+        /*unsafe {
+            check!(ffi::sqlite3changeset_apply());
+        }*/
+        Ok(())
+    }
+
+    /// Invert a changeset
+    pub fn invert(&self) -> Result<Changeset> {
+        unsafe {
+            let mut cs: *mut c_void = mem::uninitialized();
+            let mut n = 0;
+            check!(ffi::sqlite3changeset_invert(
+                self.n, self.cs, &mut n, &mut cs
+            ));
+            Ok(Changeset { cs, n })
+        }
+    }
+
+    /// Create an iterator to traverse a changeset
+    pub fn iter(&self) -> Result<ChangesetIter> {
+        unsafe {
+            let mut it: *mut ffi::sqlite3_changeset_iter = mem::uninitialized();
+            check!(ffi::sqlite3changeset_start(&mut it, self.n, self.cs));
+            Ok(ChangesetIter { it })
+        }
+    }
+
+    /// Concatenate two changeset objects
+    pub fn concat(a: &Changeset, b: &Changeset) -> Result<Changeset> {
+        unsafe {
+            let mut cs: *mut c_void = mem::uninitialized();
+            let mut n = 0;
+            check!(ffi::sqlite3changeset_concat(
+                a.n, a.cs, b.n, b.cs, &mut n, &mut cs
+            ));
+            Ok(Changeset { cs, n })
+        }
+    }
+}
+
+impl Drop for Changeset {
+    fn drop(&mut self) {
+        unsafe {
+            ffi::sqlite3_free(self.cs);
+        }
+    }
+}
+
 /// Cursor for iterating over the elements of a changeset or patchset.
 pub struct ChangesetIter {
     it: *mut ffi::sqlite3_changeset_iter,
+}
+
+impl ChangesetIter {
+    // This function should only be used with iterator objects passed to a
+    // conflict-handler callback by sqlite3changeset_apply() with either
+    // SQLITE_CHANGESET_DATA or SQLITE_CHANGESET_CONFLICT
+    //sqlite3changeset_conflict
+
+    // This function may only be called with an iterator passed to an
+    // SQLITE_CHANGESET_FOREIGN_KEY conflict handler callback.
+    //sqlite3changeset_fk_conflicts
+
+    // The pIter argument passed to this function may either be an iterator passed
+    // to a conflict-handler by sqlite3changeset_apply(), or an iterator created
+    // by sqlite3changeset_start(). In the latter case, the most recent call to
+    // sqlite3changeset_next() must have returned SQLITE_ROW. Furthermore, it
+    // may only be called if the type of change that the iterator currently points
+    // to is either SQLITE_UPDATE or SQLITE_INSERT. Otherwise, this function
+    // returns SQLITE_MISUSE and sets *ppValue to NULL.
+    //sqlite3changeset_new
+
+    pub fn next(&mut self) -> Result<()> {
+        unsafe {
+            check!(ffi::sqlite3changeset_next(self.it));
+        }
+        // TODO Validate: ()
+        Ok(())
+    }
+    //
+
+    // The pIter argument passed to this function may either be an iterator passed
+    // to a conflict-handler by sqlite3changeset_apply(), or an iterator created
+    // by sqlite3changeset_start(). In the latter case, the most recent call to
+    // sqlite3changeset_next() must have returned SQLITE_ROW. Furthermore, it
+    // may only be called if the type of change that the iterator currently points
+    // to is either SQLITE_DELETE or SQLITE_UPDATE. Otherwise, this function
+    // returns SQLITE_MISUSE and sets *ppValue to NULL.
+    //sqlite3changeset_old
+
+    // The pIter argument passed to this function may either be an iterator passed
+    // to a conflict-handler by sqlite3changeset_apply(), or an iterator created
+    // by sqlite3changeset_start(). In the latter case, the most recent call to
+    // sqlite3changeset_next() must have returned SQLITE_ROW. If this is not the
+    // case, this function returns SQLITE_MISUSE.
+    //sqlite3changeset_op
+
+    //
+    //sqlite3changeset_pk
 }
 
 impl Drop for ChangesetIter {
@@ -201,7 +311,6 @@ pub struct Changegroup {
     cg: *mut ffi::sqlite3_changegroup,
 }
 
-// https://sqlite.org/session/sqlite3changegroup_new.html
 // https://sqlite.org/session/changegroup.html
 impl Changegroup {
     pub fn new() -> Result<Self> {
@@ -212,27 +321,26 @@ impl Changegroup {
         }
     }
 
-    /// Add A Changeset
-    pub fn add(&mut self) -> Result<()> {
-        // https://sqlite.org/session/sqlite3changegroup_add.html
-        /*unsafe {
-            //ffi::sqlite3changegroup_add(self.cg, )
-            check!(unimplemented!())
-        };*/
+    /// Add a changeset
+    pub fn add(&mut self, cs: &Changeset) -> Result<()> {
+        unsafe {
+            check!(ffi::sqlite3changegroup_add(self.cg, cs.n, cs.cs));
+        }
         Ok(())
     }
 
+    // sqlite3changegroup_add_strm
+
     /// Obtain a composite Changeset
-    pub fn output(&mut self) -> Result<()> {
+    pub fn output(&mut self) -> Result<Changeset> {
         unsafe {
             let mut output: *mut c_void = mem::uninitialized();
             let mut n = 0;
             check!(ffi::sqlite3changegroup_output(self.cg, &mut n, &mut output));
-            let _output = from_raw_parts(output, n as usize); // TODO lifetime ?
-                                                              // TODO must be sqlite3_free
-            unimplemented!()
+            Ok(Changeset { cs: output, n })
         }
     }
+    // sqlite3changegroup_output_strm
 }
 
 impl Drop for Changegroup {
@@ -241,4 +349,22 @@ impl Drop for Changegroup {
             ffi::sqlite3changegroup_delete(self.cg);
         }
     }
+}
+
+/// Constants passed to the conflict handler
+#[derive(Debug, PartialEq)]
+pub enum ConflictType {
+    SQLITE_CHANGESET_DATA = ffi::SQLITE_CHANGESET_DATA as isize,
+    SQLITE_CHANGESET_NOTFOUND = ffi::SQLITE_CHANGESET_NOTFOUND as isize,
+    SQLITE_CHANGESET_CONFLICT = ffi::SQLITE_CHANGESET_CONFLICT as isize,
+    SQLITE_CHANGESET_CONSTRAINT = ffi::SQLITE_CHANGESET_CONSTRAINT as isize,
+    SQLITE_CHANGESET_FOREIGN_KEY = ffi::SQLITE_CHANGESET_FOREIGN_KEY as isize,
+}
+
+/// Constants returned by the conflict handler
+#[derive(Debug, PartialEq)]
+pub enum ConflictAction {
+    SQLITE_CHANGESET_OMIT = ffi::SQLITE_CHANGESET_OMIT as isize,
+    SQLITE_CHANGESET_REPLACE = ffi::SQLITE_CHANGESET_REPLACE as isize,
+    SQLITE_CHANGESET_ABORT = ffi::SQLITE_CHANGESET_ABORT as isize,
 }
