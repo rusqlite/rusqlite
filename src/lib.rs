@@ -1277,9 +1277,8 @@ mod test {
     fn test_execute_select() {
         let db = checked_memory_handle();
         let err = db.execute("SELECT 1 WHERE 1 < ?", &[1i32]).unwrap_err();
-        match err {
-            Error::ExecuteReturnedResults => (),
-            _ => panic!("Unexpected error: {}", err),
+        if err != Error::ExecuteReturnedResults {
+            panic!("Unexpected error: {}", err);
         }
     }
 
