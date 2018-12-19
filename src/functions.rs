@@ -194,7 +194,7 @@ impl<'a> Context<'a> {
 /// result. Implementations should be stateless.
 pub trait Aggregate<A, T>
 where
-    A: RefUnwindSafe,
+    A: RefUnwindSafe + UnwindSafe,
     T: ToSql,
 {
     /// Initializes the aggregation context. Will be called prior to the first
@@ -273,7 +273,7 @@ impl Connection {
         aggr: D,
     ) -> Result<()>
     where
-        A: RefUnwindSafe,
+        A: RefUnwindSafe + UnwindSafe,
         D: Aggregate<A, T>,
         T: ToSql,
     {
@@ -370,7 +370,7 @@ impl InnerConnection {
         aggr: D,
     ) -> Result<()>
     where
-        A: RefUnwindSafe,
+        A: RefUnwindSafe + UnwindSafe,
         D: Aggregate<A, T>,
         T: ToSql,
     {
@@ -390,7 +390,7 @@ impl InnerConnection {
             argc: c_int,
             argv: *mut *mut sqlite3_value,
         ) where
-            A: RefUnwindSafe,
+            A: RefUnwindSafe + UnwindSafe,
             D: Aggregate<A, T>,
             T: ToSql,
         {
@@ -432,7 +432,7 @@ impl InnerConnection {
 
         unsafe extern "C" fn call_boxed_final<A, D, T>(ctx: *mut sqlite3_context)
         where
-            A: RefUnwindSafe,
+            A: RefUnwindSafe + UnwindSafe,
             D: Aggregate<A, T>,
             T: ToSql,
         {
