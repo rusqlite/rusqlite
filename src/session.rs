@@ -4,6 +4,7 @@
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
+use std::panic::{catch_unwind, RefUnwindSafe};
 use std::ptr;
 
 use crate::error::error_from_sqlite_code;
@@ -47,14 +48,14 @@ impl<'conn> Session<'conn> {
     /// Set a table filter
     pub fn table_filter<F>(&mut self, filter: Option<F>)
     where
-        F: Fn(&str) -> bool + Send + 'static,
+        F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<F>(
             p_arg: *mut c_void,
             tbl_str: *const c_char,
         ) -> c_int
         where
-            F: Fn(&str) -> bool,
+            F: Fn(&str) -> bool + RefUnwindSafe,
         {
             use std::ffi::CStr;
             use std::str;
@@ -64,7 +65,7 @@ impl<'conn> Session<'conn> {
                 let c_slice = CStr::from_ptr(tbl_str).to_bytes();
                 str::from_utf8_unchecked(c_slice)
             };
-            if (*boxed_filter)(tbl_name) {
+            if let Ok(true) = catch_unwind(|| (*boxed_filter)(tbl_name)) {
                 1
             } else {
                 0
