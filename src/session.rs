@@ -6,9 +6,9 @@ use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 
-use error::error_from_sqlite_code;
-use ffi;
-use {errmsg_to_string, str_to_cstring, Connection, DatabaseName, Result};
+use crate::error::error_from_sqlite_code;
+use crate::ffi;
+use crate::{errmsg_to_string, str_to_cstring, Connection, DatabaseName, Result};
 
 // https://sqlite.org/session.html
 
@@ -17,7 +17,7 @@ use {errmsg_to_string, str_to_cstring, Connection, DatabaseName, Result};
 pub struct Session<'conn> {
     phantom: PhantomData<&'conn ()>,
     s: *mut ffi::sqlite3_session,
-    filter: Option<Box<Fn(&str) -> bool>>,
+    filter: Option<Box<dyn Fn(&str) -> bool>>,
 }
 
 impl<'conn> Session<'conn> {
@@ -27,8 +27,8 @@ impl<'conn> Session<'conn> {
     }
 
     /// Create a new session object
-    pub fn new_with_name(db: &'conn Connection, name: DatabaseName) -> Result<Session<'conn>> {
-        let name = try!(name.to_cstring());
+    pub fn new_with_name(db: &'conn Connection, name: DatabaseName<'_>) -> Result<Session<'conn>> {
+        let name = name.to_cstring()?;
 
         let db = db.db.borrow_mut().db;
 
@@ -93,7 +93,7 @@ impl<'conn> Session<'conn> {
     /// Attach a table. `None` means all tables.
     pub fn attach(&mut self, table: Option<&str>) -> Result<()> {
         let table = if let Some(table) = table {
-            try!(str_to_cstring(table)).as_ptr()
+            str_to_cstring(table)?.as_ptr()
         } else {
             ptr::null()
         };
@@ -127,9 +127,9 @@ impl<'conn> Session<'conn> {
     // sqlite3session_patchset_strm
 
     /// Load the difference between tables.
-    pub fn diff(&mut self, from: DatabaseName, table: &str) -> Result<()> {
-        let from = try!(from.to_cstring());
-        let table = try!(str_to_cstring(table)).as_ptr();
+    pub fn diff(&mut self, from: DatabaseName<'_>, table: &str) -> Result<()> {
+        let from = from.to_cstring()?;
+        let table = str_to_cstring(table)?.as_ptr();
         unsafe {
             let mut errmsg: *mut c_char = mem::uninitialized();
             let r = ffi::sqlite3session_diff(self.s, from.as_ptr(), table, &mut errmsg);

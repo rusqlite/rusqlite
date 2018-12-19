@@ -254,8 +254,8 @@ pub fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
 macro_rules! check {
     ($funcall:expr) => {{
         let rc = $funcall;
-        if rc != ::ffi::SQLITE_OK {
-            Err(::error::error_from_sqlite_code(rc, None))?;
+        if rc != crate::ffi::SQLITE_OK {
+            Err(crate::error::error_from_sqlite_code(rc, None))?;
         }
     }};
 }
