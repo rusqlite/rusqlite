@@ -1,14 +1,14 @@
+use crate::types::Type;
+use crate::{errmsg_to_string, ffi};
 use std::error;
 use std::fmt;
 use std::os::raw::c_int;
 use std::path::PathBuf;
 use std::str;
-use types::Type;
-use {errmsg_to_string, ffi};
 
 /// Enum listing possible errors from rusqlite.
 #[derive(Debug)]
-#[allow(enum_variant_names)]
+#[allow(clippy::enum_variant_names)]
 pub enum Error {
     /// An error from an underlying SQLite call.
     SqliteFailure(ffi::Error, Option<String>),
@@ -19,7 +19,7 @@ pub enum Error {
 
     /// Error when the value of a particular column is requested, but it cannot
     /// be converted to the requested Rust type.
-    FromSqlConversionFailure(usize, Type, Box<error::Error + Send + Sync>),
+    FromSqlConversionFailure(usize, Type, Box<dyn error::Error + Send + Sync>),
 
     /// Error when SQLite gives us an integral value outside the range of the
     /// requested type (e.g., trying to get the value 1000 into a `u8`).
@@ -78,10 +78,10 @@ pub enum Error {
     /// `create_scalar_function`).
     #[cfg(feature = "functions")]
     #[allow(dead_code)]
-    UserFunctionError(Box<error::Error + Send + Sync>),
+    UserFunctionError(Box<dyn error::Error + Send + Sync>),
 
     /// Error available for the implementors of the `ToSql` trait.
-    ToSqlConversionFailure(Box<error::Error + Send + Sync>),
+    ToSqlConversionFailure(Box<dyn error::Error + Send + Sync>),
 
     /// Error when the SQL is not a `SELECT`, is not read-only.
     InvalidQuery,
@@ -91,6 +91,9 @@ pub enum Error {
     #[cfg(feature = "vtab")]
     #[allow(dead_code)]
     ModuleError(String),
+
+    #[cfg(feature = "functions")]
+    UnwindingPanic,
 }
 
 impl From<str::Utf8Error> for Error {
@@ -106,7 +109,7 @@ impl From<::std::ffi::NulError> for Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Error::SqliteFailure(ref err, None) => err.fmt(f),
             Error::SqliteFailure(_, Some(ref s)) => write!(f, "{}", s),
@@ -151,6 +154,8 @@ impl fmt::Display for Error {
             Error::InvalidQuery => write!(f, "Query is not read-only"),
             #[cfg(feature = "vtab")]
             Error::ModuleError(ref desc) => write!(f, "{}", desc),
+            #[cfg(feature = "functions")]
+            Error::UnwindingPanic => write!(f, "unwinding panic"),
         }
     }
 }
@@ -188,10 +193,12 @@ impl error::Error for Error {
             Error::InvalidQuery => "query is not read-only",
             #[cfg(feature = "vtab")]
             Error::ModuleError(ref desc) => desc,
+            #[cfg(feature = "functions")]
+            Error::UnwindingPanic => "unwinding panic",
         }
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
             Error::SqliteFailure(ref err, _) => Some(err),
             Error::Utf8Error(ref err) => Some(err),
@@ -222,6 +229,9 @@ impl error::Error for Error {
 
             #[cfg(feature = "vtab")]
             Error::ModuleError(_) => None,
+
+            #[cfg(feature = "functions")]
+            Error::UnwindingPanic => None,
         }
     }
 }

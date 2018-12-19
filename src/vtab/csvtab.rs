@@ -1,20 +1,20 @@
 //! CSV Virtual Table.
 //!
 //! Port of [csv](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/csv.c) C extension.
-extern crate csv;
+use csv;
 use std::fs::File;
 use std::os::raw::c_int;
 use std::path::Path;
 use std::result;
 use std::str;
 
-use ffi;
-use types::Null;
-use vtab::{
+use crate::ffi;
+use crate::types::Null;
+use crate::vtab::{
     dequote, escape_double_quote, parse_boolean, read_only_module, Context, CreateVTab, IndexInfo,
     Module, VTab, VTabConnection, VTabCursor, Values,
 };
-use {Connection, Error, Result};
+use crate::{Connection, Error, Result};
 
 /// Register the "csv" module.
 /// ```sql
@@ -285,7 +285,12 @@ impl CSVTabCursor {
 impl VTabCursor for CSVTabCursor {
     // Only a full table scan is supported.  So `filter` simply rewinds to
     // the beginning.
-    fn filter(&mut self, _idx_num: c_int, _idx_str: Option<&str>, _args: &Values) -> Result<()> {
+    fn filter(
+        &mut self,
+        _idx_num: c_int,
+        _idx_str: Option<&str>,
+        _args: &Values<'_>,
+    ) -> Result<()> {
         {
             let offset_first_row = self.vtab().offset_first_row.clone();
             self.reader.seek(offset_first_row)?;
@@ -340,8 +345,8 @@ impl From<csv::Error> for Error {
 
 #[cfg(test)]
 mod test {
-    use vtab::csvtab;
-    use {Connection, Result, NO_PARAMS};
+    use crate::vtab::csvtab;
+    use crate::{Connection, Result, NO_PARAMS};
 
     #[test]
     fn test_csv_module() {

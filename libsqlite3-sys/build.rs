@@ -9,7 +9,7 @@ fn main() {
 
 #[cfg(feature = "bundled")]
 mod build {
-    extern crate cc;
+    use cc;
     use std::path::Path;
 
     pub fn main(out_dir: &str, out_path: &Path) {
@@ -94,7 +94,7 @@ impl From<HeaderLocation> for String {
 
 #[cfg(not(feature = "bundled"))]
 mod build {
-    extern crate pkg_config;
+    use pkg_config;
 
     #[cfg(all(feature = "vcpkg", target_env = "msvc"))]
     extern crate vcpkg;
@@ -108,18 +108,27 @@ mod build {
         bindings::write_to_out_dir(header, out_path);
     }
 
+    fn find_link_mode() -> &'static str {
+        // If the user specifies SQLITE_STATIC (or SQLCIPHER_STATIC), do static
+        // linking, unless it's explicitly set to 0.
+        match &env::var(format!("{}_STATIC", env_prefix())) {
+            Ok(v) if v != "0" => "static",
+            _ => "dylib",
+        }
+    }
     // Prints the necessary cargo link commands and returns the path to the header.
     fn find_sqlite() -> HeaderLocation {
         let link_lib = link_lib();
 
         println!("cargo:rerun-if-env-changed={}_INCLUDE_DIR", env_prefix());
         println!("cargo:rerun-if-env-changed={}_LIB_DIR", env_prefix());
+        println!("cargo:rerun-if-env-changed={}_STATIC", env_prefix());
         if cfg!(target_os = "windows") {
             println!("cargo:rerun-if-env-changed=PATH");
         }
         // Allow users to specify where to find SQLite.
         if let Ok(dir) = env::var(format!("{}_LIB_DIR", env_prefix())) {
-            println!("cargo:rustc-link-lib={}", link_lib);
+            println!("cargo:rustc-link-lib={}={}", find_link_mode(), link_lib);
             println!("cargo:rustc-link-search={}", dir);
             return HeaderLocation::FromEnvironment;
         }
@@ -146,7 +155,7 @@ mod build {
                 // request and hope that the library exists on the system paths. We used to
                 // output /usr/lib explicitly, but that can introduce other linking problems;
                 // see https://github.com/jgallagher/rusqlite/issues/207.
-                println!("cargo:rustc-link-lib={}", link_lib);
+                println!("cargo:rustc-link-lib={}={}", find_link_mode(), link_lib);
                 HeaderLocation::Wrapper
             }
         }
@@ -201,7 +210,7 @@ mod bindings {
 
 #[cfg(feature = "buildtime_bindgen")]
 mod bindings {
-    extern crate bindgen;
+    use bindgen;
 
     use self::bindgen::callbacks::{IntKind, ParseCallbacks};
     use super::HeaderLocation;

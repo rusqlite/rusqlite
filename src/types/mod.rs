@@ -98,7 +98,7 @@ pub enum Type {
 }
 
 impl fmt::Display for Type {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Type::Null => write!(f, "Null"),
             Type::Integer => write!(f, "Integer"),
@@ -111,12 +111,12 @@ impl fmt::Display for Type {
 
 #[cfg(test)]
 mod test {
-    extern crate time;
+    use time;
 
     use super::Value;
+    use crate::{Connection, Error, NO_PARAMS};
     use std::f64::EPSILON;
     use std::os::raw::{c_double, c_int};
-    use {Connection, Error, NO_PARAMS};
 
     fn checked_memory_handle() -> Connection {
         let db = Connection::open_in_memory().unwrap();

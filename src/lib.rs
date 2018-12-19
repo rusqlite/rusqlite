@@ -62,16 +62,13 @@
 //! ```
 #![allow(unknown_lints)]
 
-extern crate libsqlite3_sys as ffi;
-extern crate lru_cache;
+use libsqlite3_sys as ffi;
+
 #[macro_use]
 extern crate bitflags;
 #[cfg(any(test, feature = "vtab"))]
 #[macro_use]
 extern crate lazy_static;
-
-#[cfg(feature = "i128_blob")]
-extern crate byteorder;
 
 use std::cell::RefCell;
 use std::convert;
@@ -88,27 +85,27 @@ use std::str;
 use std::sync::atomic::{AtomicBool, Ordering, ATOMIC_BOOL_INIT};
 use std::sync::{Arc, Mutex, Once, ONCE_INIT};
 
-use cache::StatementCache;
-use error::{error_from_handle, error_from_sqlite_code};
-use raw_statement::RawStatement;
-use types::{ToSql, ValueRef};
+use crate::cache::StatementCache;
+use crate::error::{error_from_handle, error_from_sqlite_code};
+use crate::raw_statement::RawStatement;
+use crate::types::{ToSql, ValueRef};
 
-pub use statement::Statement;
+pub use crate::statement::Statement;
 
-pub use row::{AndThenRows, MappedRows, Row, RowIndex, Rows};
+pub use crate::row::{AndThenRows, MappedRows, Row, RowIndex, Rows};
 
-pub use transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
+pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
 
-pub use error::Error;
-pub use ffi::ErrorCode;
+pub use crate::error::Error;
+pub use crate::ffi::ErrorCode;
 
-pub use cache::CachedStatement;
-pub use version::*;
+pub use crate::cache::CachedStatement;
+pub use crate::version::*;
 
 #[cfg(feature = "hooks")]
-pub use hooks::*;
+pub use crate::hooks::*;
 #[cfg(feature = "load_extension")]
-pub use load_extension_guard::LoadExtensionGuard;
+pub use crate::load_extension_guard::LoadExtensionGuard;
 
 #[cfg(feature = "backup")]
 pub mod backup;
@@ -145,10 +142,30 @@ pub mod vtab;
 // Number of cached prepared statements we'll hold on to.
 const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
 /// To be used when your statement has no [parameter](https://sqlite.org/lang_expr.html#varparam).
-pub const NO_PARAMS: &[&ToSql] = &[];
+pub const NO_PARAMS: &[&dyn ToSql] = &[];
 
 /// A typedef of the result returned by many methods.
 pub type Result<T> = result::Result<T, Error>;
+
+/// See the [method documentation](#tymethod.optional).
+pub trait OptionalExtension<T> {
+    /// Converts a `Result<T>` into a `Result<Option<T>>`.
+    ///
+    /// By default, Rusqlite treats 0 rows being returned from a query that is expected to return 1
+    /// row as an error. This method will
+    /// handle that error, and give you back an `Option<T>` instead.
+    fn optional(self) -> Result<Option<T>>;
+}
+
+impl<T> OptionalExtension<T> for Result<T> {
+    fn optional(self) -> Result<Option<T>> {
+        match self {
+            Ok(value) => Ok(Some(value)),
+            Err(Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+}
 
 unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
     let c_slice = CStr::from_ptr(errmsg).to_bytes();
@@ -346,7 +363,7 @@ impl Connection {
     ///
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string
     /// or if the underlying SQLite call fails.
-    pub fn execute_named(&self, sql: &str, params: &[(&str, &ToSql)]) -> Result<usize> {
+    pub fn execute_named(&self, sql: &str, params: &[(&str, &dyn ToSql)]) -> Result<usize> {
         self.prepare(sql)
             .and_then(|mut stmt| stmt.execute_named(params))
     }
@@ -378,6 +395,9 @@ impl Connection {
     /// If the query returns more than one row, all rows except the first are
     /// ignored.
     ///
+    /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the query truly is optional,
+    /// you can call `.optional()` on the result of this to get a `Result<Option<T>>`.
+    ///
     /// # Failure
     ///
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string
@@ -386,7 +406,7 @@ impl Connection {
     where
         P: IntoIterator,
         P::Item: ToSql,
-        F: FnOnce(&Row) -> T,
+        F: FnOnce(&Row<'_, '_>) -> T,
     {
         let mut stmt = self.prepare(sql)?;
         stmt.query_row(params, f)
@@ -398,13 +418,16 @@ impl Connection {
     /// If the query returns more than one row, all rows except the first are
     /// ignored.
     ///
+    /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the query truly is optional,
+    /// you can call `.optional()` on the result of this to get a `Result<Option<T>>`.
+    ///
     /// # Failure
     ///
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string
     /// or if the underlying SQLite call fails.
-    pub fn query_row_named<T, F>(&self, sql: &str, params: &[(&str, &ToSql)], f: F) -> Result<T>
+    pub fn query_row_named<T, F>(&self, sql: &str, params: &[(&str, &dyn ToSql)], f: F) -> Result<T>
     where
-        F: FnOnce(&Row) -> T,
+        F: FnOnce(&Row<'_, '_>) -> T,
     {
         let mut stmt = self.prepare(sql)?;
         let mut rows = stmt.query_named(params)?;
@@ -441,7 +464,7 @@ impl Connection {
     where
         P: IntoIterator,
         P::Item: ToSql,
-        F: FnOnce(&Row) -> result::Result<T, E>,
+        F: FnOnce(&Row<'_, '_>) -> result::Result<T, E>,
         E: convert::From<Error>,
     {
         let mut stmt = self.prepare(sql)?;
@@ -597,7 +620,7 @@ impl Connection {
 }
 
 impl fmt::Debug for Connection {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Connection")
             .field("path", &self.path)
             .finish()
@@ -803,7 +826,7 @@ impl InnerConnection {
     #[cfg(feature = "hooks")]
     fn new(db: *mut ffi::sqlite3) -> InnerConnection {
         InnerConnection {
-            db: db,
+            db,
             interrupt_lock: Arc::new(Mutex::new(db)),
             free_commit_hook: None,
             free_rollback_hook: None,
@@ -1058,12 +1081,12 @@ impl Drop for InnerConnection {
 
 #[cfg(test)]
 mod test {
-    extern crate tempdir;
     use self::tempdir::TempDir;
     pub use super::*;
-    use ffi;
+    use crate::ffi;
     pub use std::error::Error as StdError;
     pub use std::fmt;
+    use tempdir;
 
     // this function is never called, but is still type checked; in
     // particular, calls with specific instantiations will require
@@ -1385,6 +1408,32 @@ mod test {
     }
 
     #[test]
+    fn test_optional() {
+        let db = checked_memory_handle();
+
+        let result: Result<i64> =
+            db.query_row("SELECT 1 WHERE 0 <> 0", NO_PARAMS, |r| r.get(0));
+        let result = result.optional();
+        match result.unwrap() {
+            None => (),
+            _ => panic!("Unexpected result"),
+        }
+
+        let result: Result<i64> =
+            db.query_row("SELECT 1 WHERE 0 == 0", NO_PARAMS, |r| r.get(0));
+        let result = result.optional();
+        match result.unwrap() {
+            Some(1) => (),
+            _ => panic!("Unexpected result"),
+        }
+
+        let bad_query_result: Result<i64> =
+            db.query_row("NOT A PROPER QUERY", NO_PARAMS, |r| r.get(0));
+        let bad_query_result = bad_query_result.optional();
+        assert!(bad_query_result.is_err());
+    }
+
+    #[test]
     fn test_pragma_query_row() {
         let db = checked_memory_handle();
 
@@ -1571,7 +1620,7 @@ mod test {
     }
 
     mod query_and_then_tests {
-        extern crate libsqlite3_sys as ffi;
+
         use super::*;
 
         #[derive(Debug)]
@@ -1581,7 +1630,7 @@ mod test {
         }
 
         impl fmt::Display for CustomError {
-            fn fmt(&self, f: &mut fmt::Formatter) -> ::std::result::Result<(), fmt::Error> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> ::std::result::Result<(), fmt::Error> {
                 match *self {
                     CustomError::SomeError => write!(f, "{}", self.description()),
                     CustomError::Sqlite(ref se) => write!(f, "{}: {}", self.description(), se),
@@ -1594,7 +1643,7 @@ mod test {
                 "my custom error"
             }
 
-            fn cause(&self) -> Option<&StdError> {
+            fn cause(&self) -> Option<&dyn StdError> {
                 match *self {
                     CustomError::SomeError => None,
                     CustomError::Sqlite(ref se) => Some(se),

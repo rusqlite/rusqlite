@@ -55,17 +55,18 @@
 //! ```
 use std::error::Error as StdError;
 use std::os::raw::{c_int, c_void};
+use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
 use std::ptr;
 use std::slice;
 
-use ffi;
-use ffi::sqlite3_context;
-use ffi::sqlite3_value;
+use crate::ffi;
+use crate::ffi::sqlite3_context;
+use crate::ffi::sqlite3_value;
 
-use context::set_result;
-use types::{FromSql, FromSqlError, ToSql, ValueRef};
+use crate::context::set_result;
+use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
 
-use {str_to_cstring, Connection, Error, InnerConnection, Result};
+use crate::{str_to_cstring, Connection, Error, InnerConnection, Result};
 
 unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
     // Extended constraint error codes were added in SQLite 3.7.16. We don't have
@@ -137,6 +138,10 @@ impl<'a> Context<'a> {
             FromSqlError::Other(err) => {
                 Error::FromSqlConversionFailure(idx, value.data_type(), err)
             }
+            #[cfg(feature = "i128_blob")]
+            FromSqlError::InvalidI128Size(_) => {
+                Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
+            }
         })
     }
 
@@ -189,6 +194,7 @@ impl<'a> Context<'a> {
 /// result. Implementations should be stateless.
 pub trait Aggregate<A, T>
 where
+    A: RefUnwindSafe + UnwindSafe,
     T: ToSql,
 {
     /// Initializes the aggregation context. Will be called prior to the first
@@ -198,14 +204,14 @@ where
 
     /// "step" function called once for each row in an aggregate group. May be
     /// called 0 times if there are no rows.
-    fn step(&self, &mut Context, &mut A) -> Result<()>;
+    fn step(&self, _: &mut Context<'_>, _: &mut A) -> Result<()>;
 
     /// Computes and returns the final result. Will be called exactly once for
     /// each invocation of the function. If `step()` was called at least
     /// once, will be given `Some(A)` (the same `A` as was created by
     /// `init` and given to `step`); if `step()` was not called (because
     /// the function is running against 0 rows), will be given `None`.
-    fn finalize(&self, Option<A>) -> Result<T>;
+    fn finalize(&self, _: Option<A>) -> Result<T>;
 }
 
 impl Connection {
@@ -246,7 +252,7 @@ impl Connection {
         x_func: F,
     ) -> Result<()>
     where
-        F: FnMut(&Context) -> Result<T> + Send + 'static,
+        F: FnMut(&Context<'_>) -> Result<T> + Send + UnwindSafe + 'static,
         T: ToSql,
     {
         self.db
@@ -267,6 +273,7 @@ impl Connection {
         aggr: D,
     ) -> Result<()>
     where
+        A: RefUnwindSafe + UnwindSafe,
         D: Aggregate<A, T>,
         T: ToSql,
     {
@@ -297,7 +304,7 @@ impl InnerConnection {
         x_func: F,
     ) -> Result<()>
     where
-        F: FnMut(&Context) -> Result<T> + Send + 'static,
+        F: FnMut(&Context<'_>) -> Result<T> + Send + UnwindSafe + 'static,
         T: ToSql,
     {
         unsafe extern "C" fn call_boxed_closure<F, T>(
@@ -305,23 +312,31 @@ impl InnerConnection {
             argc: c_int,
             argv: *mut *mut sqlite3_value,
         ) where
-            F: FnMut(&Context) -> Result<T>,
+            F: FnMut(&Context<'_>) -> Result<T>,
             T: ToSql,
         {
-            let ctx = Context {
-                ctx,
-                args: slice::from_raw_parts(argv, argc as usize),
+            let r = catch_unwind(|| {
+                let boxed_f: *mut F = ffi::sqlite3_user_data(ctx) as *mut F;
+                assert!(!boxed_f.is_null(), "Internal error - null function pointer");
+                let ctx = Context {
+                    ctx,
+                    args: slice::from_raw_parts(argv, argc as usize),
+                };
+                (*boxed_f)(&ctx)
+            });
+            let t = match r {
+                Err(_) => {
+                    report_error(ctx, &Error::UnwindingPanic);
+                    return;
+                }
+                Ok(r) => r,
             };
-            let boxed_f: *mut F = ffi::sqlite3_user_data(ctx.ctx) as *mut F;
-            assert!(!boxed_f.is_null(), "Internal error - null function pointer");
-
-            let t = (*boxed_f)(&ctx);
             let t = t.as_ref().map(|t| ToSql::to_sql(t));
 
             match t {
-                Ok(Ok(ref value)) => set_result(ctx.ctx, value),
-                Ok(Err(err)) => report_error(ctx.ctx, &err),
-                Err(err) => report_error(ctx.ctx, err),
+                Ok(Ok(ref value)) => set_result(ctx, value),
+                Ok(Err(err)) => report_error(ctx, &err),
+                Err(err) => report_error(ctx, err),
             }
         }
 
@@ -355,6 +370,7 @@ impl InnerConnection {
         aggr: D,
     ) -> Result<()>
     where
+        A: RefUnwindSafe + UnwindSafe,
         D: Aggregate<A, T>,
         T: ToSql,
     {
@@ -374,15 +390,10 @@ impl InnerConnection {
             argc: c_int,
             argv: *mut *mut sqlite3_value,
         ) where
+            A: RefUnwindSafe + UnwindSafe,
             D: Aggregate<A, T>,
             T: ToSql,
         {
-            let boxed_aggr: *mut D = ffi::sqlite3_user_data(ctx) as *mut D;
-            assert!(
-                !boxed_aggr.is_null(),
-                "Internal error - null aggregate pointer"
-            );
-
             let pac = match aggregate_context(ctx, ::std::mem::size_of::<*mut A>()) {
                 Some(pac) => pac,
                 None => {
@@ -391,32 +402,40 @@ impl InnerConnection {
                 }
             };
 
-            if (*pac as *mut A).is_null() {
-                *pac = Box::into_raw(Box::new((*boxed_aggr).init()));
-            }
-
-            let mut ctx = Context {
-                ctx,
-                args: slice::from_raw_parts(argv, argc as usize),
+            let r = catch_unwind(|| {
+                let boxed_aggr: *mut D = ffi::sqlite3_user_data(ctx) as *mut D;
+                assert!(
+                    !boxed_aggr.is_null(),
+                    "Internal error - null aggregate pointer"
+                );
+                if (*pac as *mut A).is_null() {
+                    *pac = Box::into_raw(Box::new((*boxed_aggr).init()));
+                }
+                let mut ctx = Context {
+                    ctx,
+                    args: slice::from_raw_parts(argv, argc as usize),
+                };
+                (*boxed_aggr).step(&mut ctx, &mut **pac)
+            });
+            let r = match r {
+                Err(_) => {
+                    report_error(ctx, &Error::UnwindingPanic);
+                    return;
+                }
+                Ok(r) => r,
             };
-
-            match (*boxed_aggr).step(&mut ctx, &mut **pac) {
+            match r {
                 Ok(_) => {}
-                Err(err) => report_error(ctx.ctx, &err),
+                Err(err) => report_error(ctx, &err),
             };
         }
 
         unsafe extern "C" fn call_boxed_final<A, D, T>(ctx: *mut sqlite3_context)
         where
+            A: RefUnwindSafe + UnwindSafe,
             D: Aggregate<A, T>,
             T: ToSql,
         {
-            let boxed_aggr: *mut D = ffi::sqlite3_user_data(ctx) as *mut D;
-            assert!(
-                !boxed_aggr.is_null(),
-                "Internal error - null aggregate pointer"
-            );
-
             // Within the xFinal callback, it is customary to set N=0 in calls to
             // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
             let a: Option<A> = match aggregate_context(ctx, 0) {
@@ -431,7 +450,21 @@ impl InnerConnection {
                 None => None,
             };
 
-            let t = (*boxed_aggr).finalize(a);
+            let r = catch_unwind(|| {
+                let boxed_aggr: *mut D = ffi::sqlite3_user_data(ctx) as *mut D;
+                assert!(
+                    !boxed_aggr.is_null(),
+                    "Internal error - null aggregate pointer"
+                );
+                (*boxed_aggr).finalize(a)
+            });
+            let t = match r {
+                Err(_) => {
+                    report_error(ctx, &Error::UnwindingPanic);
+                    return;
+                }
+                Ok(r) => r,
+            };
             let t = t.as_ref().map(|t| ToSql::to_sql(t));
             match t {
                 Ok(Ok(ref value)) => set_result(ctx, value),
@@ -483,17 +516,17 @@ impl InnerConnection {
 
 #[cfg(test)]
 mod test {
-    extern crate regex;
+    use regex;
 
     use self::regex::Regex;
     use std::collections::HashMap;
     use std::f64::EPSILON;
     use std::os::raw::c_double;
 
-    use functions::{Aggregate, Context};
-    use {Connection, Error, Result, NO_PARAMS};
+    use crate::functions::{Aggregate, Context};
+    use crate::{Connection, Error, Result, NO_PARAMS};
 
-    fn half(ctx: &Context) -> Result<c_double> {
+    fn half(ctx: &Context<'_>) -> Result<c_double> {
         assert!(ctx.len() == 1, "called with unexpected number of arguments");
         let value = ctx.get::<c_double>(0)?;
         Ok(value / 2f64)
@@ -523,7 +556,7 @@ mod test {
     // This implementation of a regexp scalar function uses SQLite's auxilliary data
     // (https://www.sqlite.org/c3ref/get_auxdata.html) to avoid recompiling the regular
     // expression multiple times within one query.
-    fn regexp_with_auxilliary(ctx: &Context) -> Result<bool> {
+    fn regexp_with_auxilliary(ctx: &Context<'_>) -> Result<bool> {
         assert!(ctx.len() == 2, "called with unexpected number of arguments");
 
         let saved_re: Option<&Regex> = unsafe { ctx.get_aux(0) };
@@ -674,7 +707,7 @@ mod test {
             0
         }
 
-        fn step(&self, ctx: &mut Context, sum: &mut i64) -> Result<()> {
+        fn step(&self, ctx: &mut Context<'_>, sum: &mut i64) -> Result<()> {
             *sum += ctx.get::<i64>(0)?;
             Ok(())
         }
@@ -689,7 +722,7 @@ mod test {
             0
         }
 
-        fn step(&self, _ctx: &mut Context, sum: &mut i64) -> Result<()> {
+        fn step(&self, _ctx: &mut Context<'_>, sum: &mut i64) -> Result<()> {
             *sum += 1;
             Ok(())
         }

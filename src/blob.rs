@@ -64,7 +64,7 @@ use std::ptr;
 
 use super::ffi;
 use super::types::{ToSql, ToSqlOutput};
-use {Connection, DatabaseName, Result};
+use crate::{Connection, DatabaseName, Result};
 
 /// Handle to an open BLOB.
 pub struct Blob<'conn> {
@@ -84,7 +84,7 @@ impl Connection {
     /// fails.
     pub fn blob_open<'a>(
         &'a self,
-        db: DatabaseName,
+        db: DatabaseName<'_>,
         table: &str,
         column: &str,
         row_id: i64,
@@ -254,7 +254,7 @@ impl<'conn> Drop for Blob<'conn> {
 pub struct ZeroBlob(pub i32);
 
 impl ToSql for ZeroBlob {
-    fn to_sql(&self) -> Result<ToSqlOutput> {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         let ZeroBlob(length) = *self;
         Ok(ToSqlOutput::ZeroBlob(length))
     }
@@ -262,8 +262,8 @@ impl ToSql for ZeroBlob {
 
 #[cfg(test)]
 mod test {
+    use crate::{Connection, DatabaseName, Result};
     use std::io::{BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
-    use {Connection, DatabaseName, Result};
 
     fn db_with_test_blob() -> Result<(Connection, i64)> {
         let db = Connection::open_in_memory()?;
