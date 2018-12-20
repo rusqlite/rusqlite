@@ -269,12 +269,15 @@ impl ChangesetIter {
     // returns SQLITE_MISUSE and sets *ppValue to NULL.
     //sqlite3changeset_new
 
-    pub fn next(&mut self) -> Result<()> {
-        unsafe {
-            check!(ffi::sqlite3changeset_next(self.it));
+    /// Advance a changeset iterator
+    // https://sqlite.org/session/sqlite3changeset_next.html
+    pub fn next(&mut self) -> Result<bool> {
+        let rc = unsafe { ffi::sqlite3changeset_next(self.it) };
+        match rc {
+            ffi::SQLITE_ROW => Ok(true),
+            ffi::SQLITE_DONE => Ok(false),
+            code => Err(error_from_sqlite_code(code, None)),
         }
-        // TODO Validate: ()
-        Ok(())
     }
     //
 
