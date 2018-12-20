@@ -216,11 +216,14 @@ impl Changeset {
     }
 
     /// Create an iterator to traverse a changeset
-    pub fn iter(&self) -> Result<ChangesetIter> {
+    pub fn iter<'changeset>(&'changeset self) -> Result<ChangesetIter<'changeset>> {
         unsafe {
             let mut it: *mut ffi::sqlite3_changeset_iter = mem::uninitialized();
             check!(ffi::sqlite3changeset_start(&mut it, self.n, self.cs));
-            Ok(ChangesetIter { it })
+            Ok(ChangesetIter {
+                phantom: PhantomData,
+                it,
+            })
         }
     }
 
@@ -246,11 +249,12 @@ impl Drop for Changeset {
 }
 
 /// Cursor for iterating over the elements of a changeset or patchset.
-pub struct ChangesetIter {
+pub struct ChangesetIter<'changeset> {
+    phantom: PhantomData<&'changeset ()>,
     it: *mut ffi::sqlite3_changeset_iter,
 }
 
-impl ChangesetIter {
+impl<'changeset> ChangesetIter<'changeset> {
     // This function should only be used with iterator objects passed to a
     // conflict-handler callback by sqlite3changeset_apply() with either
     // SQLITE_CHANGESET_DATA or SQLITE_CHANGESET_CONFLICT
@@ -301,7 +305,7 @@ impl ChangesetIter {
     //sqlite3changeset_pk
 }
 
-impl Drop for ChangesetIter {
+impl<'changeset> Drop for ChangesetIter<'changeset> {
     fn drop(&mut self) {
         unsafe {
             ffi::sqlite3changeset_finalize(self.it);
