@@ -499,16 +499,105 @@ pub enum ConflictAction {
 
 #[cfg(test)]
 mod test {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    use super::{ConflictAction, Session};
     use crate::Connection;
-    use super::Session;
 
     #[test]
-    fn test_session() {
-        let db = Connection::open_in_memory().unwrap();
-        db.execute_batch("CREATE TABLE foo(t TEXT)").unwrap();
+    fn test_changeset() {
+        let changeset = {
+            let db = Connection::open_in_memory().unwrap();
+            db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")
+                .unwrap();
 
-        let session = Session::new(&db).unwrap();
+            let mut session = Session::new(&db).unwrap();
+            assert!(session.is_empty());
+
+            session.attach(None).unwrap();
+            db.execute("INSERT INTO foo (t) VALUES (?);", &["bar"])
+                .unwrap();
+
+            session.changeset().unwrap()
+        };
+        let mut iter = changeset.iter().unwrap();
+        assert_eq!(Ok(true), iter.next());
+    }
+
+    #[test]
+    fn test_changeset_apply() {
+        let changeset = {
+            let db = Connection::open_in_memory().unwrap();
+            db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")
+                .unwrap();
+
+            let mut session = Session::new(&db).unwrap();
+            assert!(session.is_empty());
+
+            session.attach(None).unwrap();
+            db.execute("INSERT INTO foo (t) VALUES (?);", &["bar"])
+                .unwrap();
+
+            session.changeset().unwrap()
+        };
+
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")
+            .unwrap();
+
+        lazy_static! {
+            static ref called: AtomicBool = AtomicBool::new(false);
+        }
+        db.apply(
+            &changeset,
+            None::<fn(&str) -> bool>,
+            |_conflict_type, _item| {
+                called.store(true, Ordering::Relaxed);
+                ConflictAction::SQLITE_CHANGESET_OMIT
+            },
+        )
+        .unwrap();
+
+        assert!(!called.load(Ordering::Relaxed));
+        let check = db
+            .query_row("SELECT 1 FROM foo WHERE t = ?", &["bar"], |row| row.get(0))
+            .unwrap();
+        assert_eq!(1, check);
+    }
+
+    #[test]
+    fn test_session_empty() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")
+            .unwrap();
+
+        let mut session = Session::new(&db).unwrap();
         assert!(session.is_empty());
+
+        session.attach(None).unwrap();
+        db.execute("INSERT INTO foo (t) VALUES (?);", &["bar"])
+            .unwrap();
+
+        assert!(!session.is_empty());
+    }
+
+    #[test]
+    fn test_session_set_enabled() {
+        let db = Connection::open_in_memory().unwrap();
+
+        let mut session = Session::new(&db).unwrap();
         assert!(session.is_enabled());
+        session.set_enabled(false);
+        assert!(!session.is_enabled());
+    }
+
+    #[test]
+    fn test_session_set_indirect() {
+        let db = Connection::open_in_memory().unwrap();
+
+        let mut session = Session::new(&db).unwrap();
+        assert!(!session.is_indirect());
+        session.set_indirect(true);
+        assert!(session.is_indirect());
     }
 }

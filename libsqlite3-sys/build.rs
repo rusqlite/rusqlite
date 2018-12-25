@@ -54,6 +54,12 @@ mod build {
         if cfg!(feature = "unlock_notify") {
             cfg.flag("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
         }
+        if cfg!(feature = "preupdate_hook") {
+            cfg.flag("-DSQLITE_ENABLE_PREUPDATE_HOOK");
+        }
+        if cfg!(feature = "session") {
+            cfg.flag("-DSQLITE_ENABLE_SESSION");
+        }
         cfg.compile("libsqlite3.a");
 
         println!("cargo:lib_dir={}", out_dir);
