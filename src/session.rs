@@ -4,12 +4,14 @@
 use std::ffi::CStr;
 use std::marker::PhantomData;
 use std::mem;
-use std::os::raw::{c_char, c_int, c_void};
+use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::panic::{catch_unwind, RefUnwindSafe};
 use std::ptr;
+use std::slice::from_raw_parts;
 
 use crate::error::error_from_sqlite_code;
 use crate::ffi;
+use crate::hooks::Action;
 use crate::{errmsg_to_string, str_to_cstring, Connection, DatabaseName, Result};
 
 // https://sqlite.org/session.html
@@ -34,16 +36,14 @@ impl<'conn> Session<'conn> {
 
         let db = db.db.borrow_mut().db;
 
-        unsafe {
-            let mut s: *mut ffi::sqlite3_session = mem::uninitialized();
-            check!(ffi::sqlite3session_create(db, name.as_ptr(), &mut s));
+        let mut s: *mut ffi::sqlite3_session = unsafe { mem::uninitialized() };
+        check!(unsafe { ffi::sqlite3session_create(db, name.as_ptr(), &mut s) });
 
-            Ok(Session {
-                phantom: PhantomData,
-                s,
-                filter: None,
-            })
-        }
+        Ok(Session {
+            phantom: PhantomData,
+            s,
+            filter: None,
+        })
     }
 
     /// Set a table filter
@@ -105,25 +105,21 @@ impl<'conn> Session<'conn> {
 
     /// Generate a Changeset
     pub fn changeset(&mut self) -> Result<Changeset> {
-        unsafe {
-            let mut cs: *mut c_void = mem::uninitialized();
-            let mut n = 0;
-            check!(ffi::sqlite3session_changeset(self.s, &mut n, &mut cs));
-            Ok(Changeset { cs, n })
-        }
+        let mut n = 0;
+        let mut cs: *mut c_void = unsafe { mem::uninitialized() };
+        check!(unsafe { ffi::sqlite3session_changeset(self.s, &mut n, &mut cs) });
+        Ok(Changeset { cs, n })
     }
 
     // sqlite3session_changeset_strm
 
     /// Generate a Patchset
     pub fn patchset(&mut self) -> Result<Changeset> {
-        unsafe {
-            let mut ps: *mut c_void = mem::uninitialized();
-            let mut n = 0;
-            check!(ffi::sqlite3session_patchset(self.s, &mut n, &mut ps));
-            // TODO Validate: same struct
-            Ok(Changeset { cs: ps, n })
-        }
+        let mut n = 0;
+        let mut ps: *mut c_void = unsafe { mem::uninitialized() };
+        check!(unsafe { ffi::sqlite3session_patchset(self.s, &mut n, &mut ps) });
+        // TODO Validate: same struct
+        Ok(Changeset { cs: ps, n })
     }
 
     // sqlite3session_patchset_strm
@@ -195,49 +191,30 @@ pub struct Changeset {
 }
 
 impl Changeset {
-    /// Apply a changeset to a database
-    pub fn apply(&self) -> Result<()> {
-        // https://sqlite.org/session/sqlite3changeset_apply.html
-        /*unsafe {
-            check!(ffi::sqlite3changeset_apply());
-        }*/
-        Ok(())
-    }
-
     /// Invert a changeset
     pub fn invert(&self) -> Result<Changeset> {
-        unsafe {
-            let mut cs: *mut c_void = mem::uninitialized();
-            let mut n = 0;
-            check!(ffi::sqlite3changeset_invert(
-                self.n, self.cs, &mut n, &mut cs
-            ));
-            Ok(Changeset { cs, n })
-        }
+        let mut n = 0;
+        let mut cs: *mut c_void = unsafe { mem::uninitialized() };
+        check!(unsafe { ffi::sqlite3changeset_invert(self.n, self.cs, &mut n, &mut cs) });
+        Ok(Changeset { cs, n })
     }
 
     /// Create an iterator to traverse a changeset
     pub fn iter<'changeset>(&'changeset self) -> Result<ChangesetIter<'changeset>> {
-        unsafe {
-            let mut it: *mut ffi::sqlite3_changeset_iter = mem::uninitialized();
-            check!(ffi::sqlite3changeset_start(&mut it, self.n, self.cs));
-            Ok(ChangesetIter {
-                phantom: PhantomData,
-                it,
-            })
-        }
+        let mut it: *mut ffi::sqlite3_changeset_iter = unsafe { mem::uninitialized() };
+        check!(unsafe { ffi::sqlite3changeset_start(&mut it, self.n, self.cs) });
+        Ok(ChangesetIter {
+            phantom: PhantomData,
+            it,
+        })
     }
 
     /// Concatenate two changeset objects
     pub fn concat(a: &Changeset, b: &Changeset) -> Result<Changeset> {
-        unsafe {
-            let mut cs: *mut c_void = mem::uninitialized();
-            let mut n = 0;
-            check!(ffi::sqlite3changeset_concat(
-                a.n, a.cs, b.n, b.cs, &mut n, &mut cs
-            ));
-            Ok(Changeset { cs, n })
-        }
+        let mut n = 0;
+        let mut cs: *mut c_void = unsafe { mem::uninitialized() };
+        check!(unsafe { ffi::sqlite3changeset_concat(a.n, a.cs, b.n, b.cs, &mut n, &mut cs) });
+        Ok(Changeset { cs, n })
     }
 }
 
@@ -284,6 +261,7 @@ impl<'changeset> ChangesetIter<'changeset> {
             code => Err(error_from_sqlite_code(code, None)),
         }
     }
+
     //
 
     // The pIter argument passed to this function may either be an iterator passed
@@ -300,21 +278,40 @@ impl<'changeset> ChangesetIter<'changeset> {
         let mut number_of_columns = 0;
         let mut code = 0;
         let mut indirect = 0;
-        unsafe {
+        let tab = unsafe {
             let mut pz_tab: *const c_char = mem::uninitialized();
-            check!(ffi::sqlite3changeset_op(self.it, &mut pz_tab, &mut number_of_columns, &mut code, &mut indirect));
-            let table_name = CStr::from_ptr(pz_tab).to_str()?.to_owned();
-            Ok(Operation {
-                table_name,
-                number_of_columns,
-                code: Action::from(code),
-                indirect: indirect != 0,
-            })
-        }
+            check!(ffi::sqlite3changeset_op(
+                self.it,
+                &mut pz_tab,
+                &mut number_of_columns,
+                &mut code,
+                &mut indirect
+            ));
+            CStr::from_ptr(pz_tab)
+        };
+        let table_name = tab.to_str()?.to_owned();
+        Ok(Operation {
+            table_name,
+            number_of_columns,
+            code: Action::from(code),
+            indirect: indirect != 0,
+        })
     }
 
-    // Obtain The Primary Key Definition Of A Table
-    //sqlite3changeset_pk
+    /// Obtain the primary key definition of a table
+    pub fn pk(&self) -> Result<Vec<bool>> {
+        let mut number_of_columns = 0;
+        let pks = unsafe {
+            let mut pks: *mut c_uchar = mem::uninitialized();
+            check!(ffi::sqlite3changeset_pk(
+                self.it,
+                &mut pks,
+                &mut number_of_columns
+            ));
+            from_raw_parts(pks, number_of_columns as usize)
+        };
+        Ok(pks.iter().map(|pk| *pk != 0).collect())
+    }
 }
 
 pub struct Operation {
@@ -328,12 +325,15 @@ impl Operation {
     pub fn table_name(&self) -> &str {
         &self.table_name
     }
+
     pub fn number_of_columns(&self) -> i32 {
         self.number_of_columns
     }
+
     pub fn code(&self) -> Action {
         self.code
     }
+
     pub fn indirect(&self) -> bool {
         self.indirect
     }
@@ -342,6 +342,8 @@ impl Operation {
 impl<'changeset> Drop for ChangesetIter<'changeset> {
     fn drop(&mut self) {
         unsafe {
+            // This function should only be called on iterators created using the
+            // sqlite3changeset_start() function.
             ffi::sqlite3changeset_finalize(self.it);
         }
     }
@@ -356,18 +358,14 @@ pub struct Changegroup {
 // https://sqlite.org/session/changegroup.html
 impl Changegroup {
     pub fn new() -> Result<Self> {
-        unsafe {
-            let mut cg: *mut ffi::sqlite3_changegroup = mem::uninitialized();
-            check!(ffi::sqlite3changegroup_new(&mut cg));
-            Ok(Changegroup { cg })
-        }
+        let mut cg: *mut ffi::sqlite3_changegroup = unsafe { mem::uninitialized() };
+        check!(unsafe { ffi::sqlite3changegroup_new(&mut cg) });
+        Ok(Changegroup { cg })
     }
 
     /// Add a changeset
     pub fn add(&mut self, cs: &Changeset) -> Result<()> {
-        unsafe {
-            check!(ffi::sqlite3changegroup_add(self.cg, cs.n, cs.cs));
-        }
+        check!(unsafe { ffi::sqlite3changegroup_add(self.cg, cs.n, cs.cs) });
         Ok(())
     }
 
@@ -375,12 +373,10 @@ impl Changegroup {
 
     /// Obtain a composite Changeset
     pub fn output(&mut self) -> Result<Changeset> {
-        unsafe {
-            let mut output: *mut c_void = mem::uninitialized();
-            let mut n = 0;
-            check!(ffi::sqlite3changegroup_output(self.cg, &mut n, &mut output));
-            Ok(Changeset { cs: output, n })
-        }
+        let mut n = 0;
+        let mut output: *mut c_void = unsafe { mem::uninitialized() };
+        check!(unsafe { ffi::sqlite3changegroup_output(self.cg, &mut n, &mut output) });
+        Ok(Changeset { cs: output, n })
     }
     // sqlite3changegroup_output_strm
 }
