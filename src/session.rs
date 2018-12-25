@@ -262,8 +262,6 @@ impl<'changeset> ChangesetIter<'changeset> {
         }
     }
 
-    //
-
     // The pIter argument passed to this function may either be an iterator passed
     // to a conflict-handler by sqlite3changeset_apply(), or an iterator created
     // by sqlite3changeset_start(). In the latter case, the most recent call to
@@ -349,6 +347,10 @@ impl<'changeset> Drop for ChangesetIter<'changeset> {
     }
 }
 
+pub struct ChangesetItem {
+    it: *mut ffi::sqlite3_changeset_iter,
+}
+
 /// Used to combine two or more changesets or
 /// patchsets
 pub struct Changegroup {
@@ -389,14 +391,102 @@ impl Drop for Changegroup {
     }
 }
 
+impl Connection {
+    /// Apply a changeset to a database
+    pub fn apply<F, C>(&self, cs: &Changeset, filter: Option<F>, conflict: C) -> Result<()>
+    where
+        F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
+        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
+    {
+        let db = self.db.borrow_mut().db;
+
+        unsafe extern "C" fn call_filter<F, C>(p_ctx: *mut c_void, tbl_str: *const c_char) -> c_int
+        where
+            F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
+            C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
+        {
+            use std::ffi::CStr;
+            use std::str;
+
+            let tuple: *mut (F, C) = p_ctx as *mut (F, C);
+            let tbl_name = {
+                let c_slice = CStr::from_ptr(tbl_str).to_bytes();
+                str::from_utf8_unchecked(c_slice)
+            };
+            if let Ok(true) = catch_unwind(|| (*tuple).0(tbl_name)) {
+                1
+            } else {
+                0
+            }
+        }
+
+        unsafe extern "C" fn call_conflict<F, C>(
+            p_ctx: *mut c_void,
+            e_conflict: c_int,
+            p: *mut ffi::sqlite3_changeset_iter,
+        ) -> c_int
+        where
+            F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
+            C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
+        {
+            let tuple: *mut (F, C) = p_ctx as *mut (F, C);
+            let conflict_type = ConflictType::from(e_conflict);
+            let item = ChangesetItem { it: p };
+            if let Ok(action) = catch_unwind(|| (*tuple).1(conflict_type, item)) {
+                action as c_int
+            } else {
+                ffi::SQLITE_CHANGESET_ABORT
+            }
+        }
+
+        let filtered = filter.is_some();
+        let tuple = &mut (filter, conflict);
+        check!(unsafe {
+            if filtered {
+                ffi::sqlite3changeset_apply(
+                    db,
+                    cs.n,
+                    cs.cs,
+                    Some(call_filter::<F, C>),
+                    Some(call_conflict::<F, C>),
+                    tuple as *mut (Option<F>, C) as *mut c_void,
+                )
+            } else {
+                ffi::sqlite3changeset_apply(
+                    db,
+                    cs.n,
+                    cs.cs,
+                    None,
+                    Some(call_conflict::<F, C>),
+                    tuple as *mut (Option<F>, C) as *mut c_void,
+                )
+            }
+        });
+        Ok(())
+    }
+}
+
 /// Constants passed to the conflict handler
 #[derive(Debug, PartialEq)]
 pub enum ConflictType {
+    UNKNOWN = -1,
     SQLITE_CHANGESET_DATA = ffi::SQLITE_CHANGESET_DATA as isize,
     SQLITE_CHANGESET_NOTFOUND = ffi::SQLITE_CHANGESET_NOTFOUND as isize,
     SQLITE_CHANGESET_CONFLICT = ffi::SQLITE_CHANGESET_CONFLICT as isize,
     SQLITE_CHANGESET_CONSTRAINT = ffi::SQLITE_CHANGESET_CONSTRAINT as isize,
     SQLITE_CHANGESET_FOREIGN_KEY = ffi::SQLITE_CHANGESET_FOREIGN_KEY as isize,
+}
+impl From<i32> for ConflictType {
+    fn from(code: i32) -> ConflictType {
+        match code {
+            ffi::SQLITE_CHANGESET_DATA => ConflictType::SQLITE_CHANGESET_DATA,
+            ffi::SQLITE_CHANGESET_NOTFOUND => ConflictType::SQLITE_CHANGESET_NOTFOUND,
+            ffi::SQLITE_CHANGESET_CONFLICT => ConflictType::SQLITE_CHANGESET_CONFLICT,
+            ffi::SQLITE_CHANGESET_CONSTRAINT => ConflictType::SQLITE_CHANGESET_CONSTRAINT,
+            ffi::SQLITE_CHANGESET_FOREIGN_KEY => ConflictType::SQLITE_CHANGESET_FOREIGN_KEY,
+            _ => ConflictType::UNKNOWN,
+        }
+    }
 }
 
 /// Constants returned by the conflict handler
