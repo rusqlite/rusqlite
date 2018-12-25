@@ -1,6 +1,7 @@
 //! [Session Extension](https://sqlite.org/sessionintro.html)
 #![allow(non_camel_case_types)]
 
+use std::ffi::CStr;
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_void};
@@ -294,15 +295,48 @@ impl<'changeset> ChangesetIter<'changeset> {
     // returns SQLITE_MISUSE and sets *ppValue to NULL.
     //sqlite3changeset_old
 
-    // The pIter argument passed to this function may either be an iterator passed
-    // to a conflict-handler by sqlite3changeset_apply(), or an iterator created
-    // by sqlite3changeset_start(). In the latter case, the most recent call to
-    // sqlite3changeset_next() must have returned SQLITE_ROW. If this is not the
-    // case, this function returns SQLITE_MISUSE.
-    //sqlite3changeset_op
+    /// Obtain the current operation
+    pub fn op(&self) -> Result<Operation> {
+        let mut number_of_columns = 0;
+        let mut code = 0;
+        let mut indirect = 0;
+        unsafe {
+            let mut pz_tab: *const c_char = mem::uninitialized();
+            check!(ffi::sqlite3changeset_op(self.it, &mut pz_tab, &mut number_of_columns, &mut code, &mut indirect));
+            let table_name = CStr::from_ptr(pz_tab).to_str()?.to_owned();
+            Ok(Operation {
+                table_name,
+                number_of_columns,
+                code: Action::from(code),
+                indirect: indirect != 0,
+            })
+        }
+    }
 
-    //
+    // Obtain The Primary Key Definition Of A Table
     //sqlite3changeset_pk
+}
+
+pub struct Operation {
+    table_name: String,
+    number_of_columns: i32,
+    code: Action,
+    indirect: bool,
+}
+
+impl Operation {
+    pub fn table_name(&self) -> &str {
+        &self.table_name
+    }
+    pub fn number_of_columns(&self) -> i32 {
+        self.number_of_columns
+    }
+    pub fn code(&self) -> Action {
+        self.code
+    }
+    pub fn indirect(&self) -> bool {
+        self.indirect
+    }
 }
 
 impl<'changeset> Drop for ChangesetIter<'changeset> {

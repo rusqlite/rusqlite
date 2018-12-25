@@ -10,7 +10,7 @@ use crate::ffi;
 use crate::{Connection, InnerConnection};
 
 /// Authorizer Action Codes
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Action {
     UNKNOWN = -1,
     SQLITE_CREATE_INDEX = ffi::SQLITE_CREATE_INDEX as isize,
