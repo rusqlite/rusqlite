@@ -496,3 +496,19 @@ pub enum ConflictAction {
     SQLITE_CHANGESET_REPLACE = ffi::SQLITE_CHANGESET_REPLACE as isize,
     SQLITE_CHANGESET_ABORT = ffi::SQLITE_CHANGESET_ABORT as isize,
 }
+
+#[cfg(test)]
+mod test {
+    use crate::Connection;
+    use super::Session;
+
+    #[test]
+    fn test_session() {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE foo(t TEXT)").unwrap();
+
+        let session = Session::new(&db).unwrap();
+        assert!(session.is_empty());
+        assert!(session.is_enabled());
+    }
+}
