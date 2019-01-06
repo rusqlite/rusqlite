@@ -408,15 +408,20 @@ impl Connection {
             use std::ffi::CStr;
             use std::str;
 
-            let tuple: *mut (F, C) = p_ctx as *mut (F, C);
+            let tuple: *mut (Option<F>, C) = p_ctx as *mut (Option<F>, C);
             let tbl_name = {
                 let c_slice = CStr::from_ptr(tbl_str).to_bytes();
                 str::from_utf8_unchecked(c_slice)
             };
-            if let Ok(true) = catch_unwind(|| (*tuple).0(tbl_name)) {
-                1
-            } else {
-                0
+            match *tuple {
+                (Some(ref filter), _) => {
+                    if let Ok(true) = catch_unwind(|| filter(tbl_name)) {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                _ => unimplemented!(),
             }
         }
 
@@ -429,7 +434,7 @@ impl Connection {
             F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
             C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
         {
-            let tuple: *mut (F, C) = p_ctx as *mut (F, C);
+            let tuple: *mut (Option<F>, C) = p_ctx as *mut (Option<F>, C);
             let conflict_type = ConflictType::from(e_conflict);
             let item = ChangesetItem { it: p };
             if let Ok(action) = catch_unwind(|| (*tuple).1(conflict_type, item)) {
