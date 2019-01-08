@@ -9,6 +9,8 @@ use std::panic::{catch_unwind, RefUnwindSafe};
 use std::ptr;
 use std::slice::from_raw_parts;
 
+use fallible_streaming_iterator::FallibleStreamingIterator;
+
 use crate::error::error_from_sqlite_code;
 use crate::ffi;
 use crate::hooks::Action;
@@ -179,7 +181,6 @@ impl<'conn> Drop for Session<'conn> {
     }
 }
 
-// sqlite3changeset_apply_strm
 // sqlite3changeset_invert_strm
 // sqlite3changeset_start_strm
 // sqlite3changeset_concat_strm
@@ -206,6 +207,7 @@ impl Changeset {
         Ok(ChangesetIter {
             phantom: PhantomData,
             it,
+            item: None,
         })
     }
 
@@ -230,6 +232,7 @@ impl Drop for Changeset {
 pub struct ChangesetIter<'changeset> {
     phantom: PhantomData<&'changeset ()>,
     it: *mut ffi::sqlite3_changeset_iter,
+    item: Option<ChangesetItem>,
 }
 
 impl<'changeset> ChangesetIter<'changeset> {
@@ -312,6 +315,24 @@ impl<'changeset> ChangesetIter<'changeset> {
     }
 }
 
+impl<'changeset> FallibleStreamingIterator for ChangesetIter<'changeset> {
+    type Error = crate::error::Error;
+    type Item = ChangesetItem;
+
+    fn advance(&mut self) -> Result<()> {
+        if self.next()? {
+            self.item = Some(ChangesetItem { it: self.it });
+        } else {
+            self.item = None;
+        }
+        Ok(())
+    }
+
+    fn get(&self) -> Option<&ChangesetItem> {
+        self.item.as_ref()
+    }
+}
+
 pub struct Operation {
     table_name: String,
     number_of_columns: i32,
@@ -380,6 +401,7 @@ impl Changegroup {
         check!(unsafe { ffi::sqlite3changegroup_output(self.cg, &mut n, &mut output) });
         Ok(Changeset { cs: output, n })
     }
+
     // sqlite3changegroup_output_strm
 }
 
@@ -469,6 +491,8 @@ impl Connection {
         });
         Ok(())
     }
+
+    // sqlite3changeset_apply_strm
 }
 
 /// Constants passed to the conflict handler
