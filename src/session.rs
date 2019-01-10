@@ -2,12 +2,13 @@
 #![allow(non_camel_case_types)]
 
 use std::ffi::CStr;
+use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::panic::{catch_unwind, RefUnwindSafe};
 use std::ptr;
-use std::slice::from_raw_parts;
+use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 use fallible_streaming_iterator::FallibleStreamingIterator;
 
@@ -524,6 +525,38 @@ pub enum ConflictAction {
     SQLITE_CHANGESET_OMIT = ffi::SQLITE_CHANGESET_OMIT as isize,
     SQLITE_CHANGESET_REPLACE = ffi::SQLITE_CHANGESET_REPLACE as isize,
     SQLITE_CHANGESET_ABORT = ffi::SQLITE_CHANGESET_ABORT as isize,
+}
+
+unsafe extern "C" fn x_input(p_in: *mut c_void, data: *mut c_void, len: *mut c_int) -> c_int {
+    if p_in.is_null() {
+        return ffi::SQLITE_MISUSE;
+    }
+    let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, len as usize);
+    //let reader: &mut Read = &mut *p_in;
+    let reader: &mut Read = &mut std::io::stdin(); // FIXME
+    match reader.read(bytes) {
+        Ok(n) => {
+            *len = n as i32; // TODO Validate: n = 0 may not mean the reader will always no longer be able to
+                             // produce bytes.
+            ffi::SQLITE_OK
+        }
+        Err(_) => ffi::SQLITE_IOERR_READ, // TODO check if err is a (ru)sqlite Error => propagate
+    }
+}
+
+// The sessions module never invokes an xOutput callback with the third
+// parameter set to a value less than or equal to zero.
+unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_int) -> c_int {
+    if p_out.is_null() {
+        return ffi::SQLITE_MISUSE;
+    }
+    let bytes: &[u8] = from_raw_parts(data as *const u8, len as usize);
+    //let writer: &mut Write = &mut *p_out;
+    let writer: &mut Write = &mut std::io::stdout(); // FIXME
+    match writer.write_all(bytes) {
+        Ok(_) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_IOERR_WRITE, // TODO check if err is a (ru)sqlite Error => propagate
+    }
 }
 
 #[cfg(test)]
