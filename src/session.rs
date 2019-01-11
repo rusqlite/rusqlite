@@ -114,14 +114,14 @@ impl<'conn> Session<'conn> {
         Ok(Changeset { cs, n })
     }
 
-    /// Write the set of changes represented by this session to `writer`.
-    pub fn changeset_strm(&mut self, writer: &mut dyn Write) -> Result<()> {
-        let writer_ref = &writer;
+    /// Write the set of changes represented by this session to `output`.
+    pub fn changeset_strm(&mut self, output: &mut dyn Write) -> Result<()> {
+        let output_ref = &output;
         check!(unsafe {
             ffi::sqlite3session_changeset_strm(
                 self.s,
                 Some(x_output),
-                writer_ref as *const &mut dyn Write as *mut c_void,
+                output_ref as *const &mut dyn Write as *mut c_void,
             )
         });
         Ok(())
@@ -136,14 +136,14 @@ impl<'conn> Session<'conn> {
         Ok(Changeset { cs: ps, n })
     }
 
-    /// Write the set of patches represented by this session to `writer`.
-    pub fn patchset_strm(&mut self, writer: &mut dyn Write) -> Result<()> {
-        let writer_ref = &writer;
+    /// Write the set of patches represented by this session to `output`.
+    pub fn patchset_strm(&mut self, output: &mut dyn Write) -> Result<()> {
+        let output_ref = &output;
         check!(unsafe {
             ffi::sqlite3session_patchset_strm(
                 self.s,
                 Some(x_output),
-                writer_ref as *const &mut dyn Write as *mut c_void,
+                output_ref as *const &mut dyn Write as *mut c_void,
             )
         });
         Ok(())
@@ -204,9 +204,42 @@ impl<'conn> Drop for Session<'conn> {
     }
 }
 
-// sqlite3changeset_invert_strm
-// sqlite3changeset_start_strm
-// sqlite3changeset_concat_strm
+/// Invert a changeset
+pub fn invert_strm(input: &mut dyn Read, output: &mut dyn Write) -> Result<()> {
+    let input_ref = &input;
+    let output_ref = &output;
+    check!(unsafe {
+        ffi::sqlite3changeset_invert_strm(
+            Some(x_input),
+            input_ref as *const &mut dyn Read as *mut c_void,
+            Some(x_output),
+            output_ref as *const &mut dyn Write as *mut c_void,
+        )
+    });
+    Ok(())
+}
+
+/// Combine two changesets
+pub fn concat_strm(
+    input_a: &mut dyn Read,
+    input_b: &mut dyn Read,
+    output: &mut dyn Write,
+) -> Result<()> {
+    let input_a_ref = &input_a;
+    let input_b_ref = &input_b;
+    let output_ref = &output;
+    check!(unsafe {
+        ffi::sqlite3changeset_concat_strm(
+            Some(x_input),
+            input_a_ref as *const &mut dyn Read as *mut c_void,
+            Some(x_input),
+            input_b_ref as *const &mut dyn Read as *mut c_void,
+            Some(x_output),
+            output_ref as *const &mut dyn Write as *mut c_void,
+        )
+    });
+    Ok(())
+}
 
 /// Changeset or Patchset
 pub struct Changeset {
@@ -336,6 +369,10 @@ impl<'changeset> ChangesetIter<'changeset> {
         };
         Ok(pks.iter().map(|pk| *pk != 0).collect())
     }
+
+    // sqlite3changeset_start_strm
+    // > the xInput callback may be invoked by the sessions module at any point
+    // during the lifetime of the iterator.
 }
 
 impl<'changeset> FallibleStreamingIterator for ChangesetIter<'changeset> {
@@ -415,14 +452,14 @@ impl Changegroup {
         Ok(())
     }
 
-    /// Add a changeset read from `reader` to this change group.
-    pub fn add_stream(&mut self, reader: &mut dyn Read) -> Result<()> {
-        let reader_ref = &reader;
+    /// Add a changeset read from `input` to this change group.
+    pub fn add_stream(&mut self, input: &mut dyn Read) -> Result<()> {
+        let input_ref = &input;
         check!(unsafe {
             ffi::sqlite3changegroup_add_strm(
                 self.cg,
                 Some(x_input),
-                reader_ref as *const &mut dyn Read as *mut c_void,
+                input_ref as *const &mut dyn Read as *mut c_void,
             )
         });
         Ok(())
@@ -436,14 +473,14 @@ impl Changegroup {
         Ok(Changeset { cs: output, n })
     }
 
-    /// Write the combined set of changes to `writer`.
-    pub fn output_strm(&mut self, writer: &mut dyn Write) -> Result<()> {
-        let writer_ref = &writer;
+    /// Write the combined set of changes to `output`.
+    pub fn output_strm(&mut self, output: &mut dyn Write) -> Result<()> {
+        let output_ref = &output;
         check!(unsafe {
             ffi::sqlite3changegroup_output_strm(
                 self.cg,
                 Some(x_output),
-                writer_ref as *const &mut dyn Write as *mut c_void,
+                output_ref as *const &mut dyn Write as *mut c_void,
             )
         });
         Ok(())
@@ -496,7 +533,7 @@ impl Connection {
     /// Apply a changeset to a database
     pub fn apply_strm<F, C>(
         &self,
-        reader: &mut dyn Read,
+        input: &mut dyn Read,
         filter: Option<F>,
         conflict: C,
     ) -> Result<()>
@@ -504,7 +541,7 @@ impl Connection {
         F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
         C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
     {
-        let reader_ref = &reader;
+        let input_ref = &input;
         let db = self.db.borrow_mut().db;
 
         let filtered = filter.is_some();
@@ -514,7 +551,7 @@ impl Connection {
                 ffi::sqlite3changeset_apply_strm(
                     db,
                     Some(x_input),
-                    reader_ref as *const &mut dyn Read as *mut c_void,
+                    input_ref as *const &mut dyn Read as *mut c_void,
                     Some(call_filter::<F, C>),
                     Some(call_conflict::<F, C>),
                     tuple as *mut (Option<F>, C) as *mut c_void,
@@ -523,7 +560,7 @@ impl Connection {
                 ffi::sqlite3changeset_apply_strm(
                     db,
                     Some(x_input),
-                    reader_ref as *const &mut dyn Read as *mut c_void,
+                    input_ref as *const &mut dyn Read as *mut c_void,
                     None,
                     Some(call_conflict::<F, C>),
                     tuple as *mut (Option<F>, C) as *mut c_void,
@@ -614,8 +651,8 @@ unsafe extern "C" fn x_input(p_in: *mut c_void, data: *mut c_void, len: *mut c_i
         return ffi::SQLITE_MISUSE;
     }
     let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, len as usize);
-    let reader = p_in as *mut &mut dyn Read;
-    match (*reader).read(bytes) {
+    let input = p_in as *mut &mut dyn Read;
+    match (*input).read(bytes) {
         Ok(n) => {
             *len = n as i32; // TODO Validate: n = 0 may not mean the reader will always no longer be able to
                              // produce bytes.
@@ -632,8 +669,8 @@ unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_in
         return ffi::SQLITE_MISUSE;
     }
     let bytes: &[u8] = from_raw_parts(data as *const u8, len as usize);
-    let writer = p_out as *mut &mut dyn Write;
-    match (*writer).write_all(bytes) {
+    let output = p_out as *mut &mut dyn Write;
+    match (*output).write_all(bytes) {
         Ok(_) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_IOERR_WRITE, // TODO check if err is a (ru)sqlite Error => propagate
     }
