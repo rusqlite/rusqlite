@@ -114,7 +114,18 @@ impl<'conn> Session<'conn> {
         Ok(Changeset { cs, n })
     }
 
-    // sqlite3session_changeset_strm
+    /// Write the set of changes represented by this session to `writer`.
+    pub fn changeset_strm(&mut self, writer: &mut dyn Write) -> Result<()> {
+        let writer_ref = &writer;
+        check!(unsafe {
+            ffi::sqlite3session_changeset_strm(
+                self.s,
+                Some(x_output),
+                writer_ref as *const &mut dyn Write as *mut c_void,
+            )
+        });
+        Ok(())
+    }
 
     /// Generate a Patchset
     pub fn patchset(&mut self) -> Result<Changeset> {
@@ -125,7 +136,18 @@ impl<'conn> Session<'conn> {
         Ok(Changeset { cs: ps, n })
     }
 
-    // sqlite3session_patchset_strm
+    /// Write the set of patches represented by this session to `writer`.
+    pub fn patchset_strm(&mut self, writer: &mut dyn Write) -> Result<()> {
+        let writer_ref = &writer;
+        check!(unsafe {
+            ffi::sqlite3session_patchset_strm(
+                self.s,
+                Some(x_output),
+                writer_ref as *const &mut dyn Write as *mut c_void,
+            )
+        });
+        Ok(())
+    }
 
     /// Load the difference between tables.
     pub fn diff(&mut self, from: DatabaseName<'_>, table: &str) -> Result<()> {
@@ -393,7 +415,18 @@ impl Changegroup {
         Ok(())
     }
 
-    // sqlite3changegroup_add_strm
+    /// Add a changeset read from `reader` to this change group.
+    pub fn add_stream(&mut self, reader: &mut dyn Read) -> Result<()> {
+        let reader_ref = &reader;
+        check!(unsafe {
+            ffi::sqlite3changegroup_add_strm(
+                self.cg,
+                Some(x_input),
+                reader_ref as *const &mut dyn Read as *mut c_void,
+            )
+        });
+        Ok(())
+    }
 
     /// Obtain a composite Changeset
     pub fn output(&mut self) -> Result<Changeset> {
@@ -403,7 +436,18 @@ impl Changegroup {
         Ok(Changeset { cs: output, n })
     }
 
-    // sqlite3changegroup_output_strm
+    /// Write the combined set of changes to `writer`.
+    pub fn output_strm(&mut self, writer: &mut dyn Write) -> Result<()> {
+        let writer_ref = &writer;
+        check!(unsafe {
+            ffi::sqlite3changegroup_output_strm(
+                self.cg,
+                Some(x_output),
+                writer_ref as *const &mut dyn Write as *mut c_void,
+            )
+        });
+        Ok(())
+    }
 }
 
 impl Drop for Changegroup {
@@ -422,50 +466,6 @@ impl Connection {
         C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
     {
         let db = self.db.borrow_mut().db;
-
-        unsafe extern "C" fn call_filter<F, C>(p_ctx: *mut c_void, tbl_str: *const c_char) -> c_int
-        where
-            F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
-            C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
-        {
-            use std::ffi::CStr;
-            use std::str;
-
-            let tuple: *mut (Option<F>, C) = p_ctx as *mut (Option<F>, C);
-            let tbl_name = {
-                let c_slice = CStr::from_ptr(tbl_str).to_bytes();
-                str::from_utf8_unchecked(c_slice)
-            };
-            match *tuple {
-                (Some(ref filter), _) => {
-                    if let Ok(true) = catch_unwind(|| filter(tbl_name)) {
-                        1
-                    } else {
-                        0
-                    }
-                }
-                _ => unimplemented!(),
-            }
-        }
-
-        unsafe extern "C" fn call_conflict<F, C>(
-            p_ctx: *mut c_void,
-            e_conflict: c_int,
-            p: *mut ffi::sqlite3_changeset_iter,
-        ) -> c_int
-        where
-            F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
-            C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
-        {
-            let tuple: *mut (Option<F>, C) = p_ctx as *mut (Option<F>, C);
-            let conflict_type = ConflictType::from(e_conflict);
-            let item = ChangesetItem { it: p };
-            if let Ok(action) = catch_unwind(|| (*tuple).1(conflict_type, item)) {
-                action as c_int
-            } else {
-                ffi::SQLITE_CHANGESET_ABORT
-            }
-        }
 
         let filtered = filter.is_some();
         let tuple = &mut (filter, conflict);
@@ -493,7 +493,45 @@ impl Connection {
         Ok(())
     }
 
-    // sqlite3changeset_apply_strm
+    /// Apply a changeset to a database
+    pub fn apply_strm<F, C>(
+        &self,
+        reader: &mut dyn Read,
+        filter: Option<F>,
+        conflict: C,
+    ) -> Result<()>
+    where
+        F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
+        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
+    {
+        let reader_ref = &reader;
+        let db = self.db.borrow_mut().db;
+
+        let filtered = filter.is_some();
+        let tuple = &mut (filter, conflict);
+        check!(unsafe {
+            if filtered {
+                ffi::sqlite3changeset_apply_strm(
+                    db,
+                    Some(x_input),
+                    reader_ref as *const &mut dyn Read as *mut c_void,
+                    Some(call_filter::<F, C>),
+                    Some(call_conflict::<F, C>),
+                    tuple as *mut (Option<F>, C) as *mut c_void,
+                )
+            } else {
+                ffi::sqlite3changeset_apply_strm(
+                    db,
+                    Some(x_input),
+                    reader_ref as *const &mut dyn Read as *mut c_void,
+                    None,
+                    Some(call_conflict::<F, C>),
+                    tuple as *mut (Option<F>, C) as *mut c_void,
+                )
+            }
+        });
+        Ok(())
+    }
 }
 
 /// Constants passed to the conflict handler
@@ -527,14 +565,57 @@ pub enum ConflictAction {
     SQLITE_CHANGESET_ABORT = ffi::SQLITE_CHANGESET_ABORT as isize,
 }
 
+unsafe extern "C" fn call_filter<F, C>(p_ctx: *mut c_void, tbl_str: *const c_char) -> c_int
+where
+    F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
+    C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
+{
+    use std::ffi::CStr;
+    use std::str;
+
+    let tuple: *mut (Option<F>, C) = p_ctx as *mut (Option<F>, C);
+    let tbl_name = {
+        let c_slice = CStr::from_ptr(tbl_str).to_bytes();
+        str::from_utf8_unchecked(c_slice)
+    };
+    match *tuple {
+        (Some(ref filter), _) => {
+            if let Ok(true) = catch_unwind(|| filter(tbl_name)) {
+                1
+            } else {
+                0
+            }
+        }
+        _ => unimplemented!(),
+    }
+}
+
+unsafe extern "C" fn call_conflict<F, C>(
+    p_ctx: *mut c_void,
+    e_conflict: c_int,
+    p: *mut ffi::sqlite3_changeset_iter,
+) -> c_int
+where
+    F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
+    C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
+{
+    let tuple: *mut (Option<F>, C) = p_ctx as *mut (Option<F>, C);
+    let conflict_type = ConflictType::from(e_conflict);
+    let item = ChangesetItem { it: p };
+    if let Ok(action) = catch_unwind(|| (*tuple).1(conflict_type, item)) {
+        action as c_int
+    } else {
+        ffi::SQLITE_CHANGESET_ABORT
+    }
+}
+
 unsafe extern "C" fn x_input(p_in: *mut c_void, data: *mut c_void, len: *mut c_int) -> c_int {
     if p_in.is_null() {
         return ffi::SQLITE_MISUSE;
     }
     let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, len as usize);
-    //let reader: &mut Read = &mut *p_in;
-    let reader: &mut Read = &mut std::io::stdin(); // FIXME
-    match reader.read(bytes) {
+    let reader = p_in as *mut &mut dyn Read;
+    match (*reader).read(bytes) {
         Ok(n) => {
             *len = n as i32; // TODO Validate: n = 0 may not mean the reader will always no longer be able to
                              // produce bytes.
@@ -551,9 +632,8 @@ unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_in
         return ffi::SQLITE_MISUSE;
     }
     let bytes: &[u8] = from_raw_parts(data as *const u8, len as usize);
-    //let writer: &mut Write = &mut *p_out;
-    let writer: &mut Write = &mut std::io::stdout(); // FIXME
-    match writer.write_all(bytes) {
+    let writer = p_out as *mut &mut dyn Write;
+    match (*writer).write_all(bytes) {
         Ok(_) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_IOERR_WRITE, // TODO check if err is a (ru)sqlite Error => propagate
     }
