@@ -292,17 +292,6 @@ pub struct ChangesetIter<'changeset> {
 }
 
 impl<'changeset> ChangesetIter<'changeset> {
-    /// Advance a changeset iterator
-    // https://sqlite.org/session/sqlite3changeset_next.html
-    pub fn next(&mut self) -> Result<bool> {
-        let rc = unsafe { ffi::sqlite3changeset_next(self.it) };
-        match rc {
-            ffi::SQLITE_ROW => Ok(true),
-            ffi::SQLITE_DONE => Ok(false),
-            code => Err(error_from_sqlite_code(code, None)),
-        }
-    }
-
     /// Create an iterator on `input`
     pub fn start_strm<'input>(input: &'input mut dyn Read) -> Result<ChangesetIter<'input>> {
         let input_ref = &input;
@@ -327,12 +316,18 @@ impl<'changeset> FallibleStreamingIterator for ChangesetIter<'changeset> {
     type Item = ChangesetItem;
 
     fn advance(&mut self) -> Result<()> {
-        if self.next()? {
-            self.item = Some(ChangesetItem { it: self.it });
-        } else {
-            self.item = None;
+        let rc = unsafe { ffi::sqlite3changeset_next(self.it) };
+        match rc {
+            ffi::SQLITE_ROW => {
+                self.item = Some(ChangesetItem { it: self.it });
+                Ok(())
+            }
+            ffi::SQLITE_DONE => {
+                self.item = None;
+                Ok(())
+            }
+            code => Err(error_from_sqlite_code(code, None)),
         }
-        Ok(())
     }
 
     fn get(&self) -> Option<&ChangesetItem> {
@@ -340,16 +335,16 @@ impl<'changeset> FallibleStreamingIterator for ChangesetIter<'changeset> {
     }
 }
 
-pub struct Operation {
-    table_name: String,
+pub struct Operation<'item> {
+    table_name: &'item str,
     number_of_columns: i32,
     code: Action,
     indirect: bool,
 }
 
-impl Operation {
+impl<'item> Operation<'item> {
     pub fn table_name(&self) -> &str {
-        &self.table_name
+        self.table_name
     }
 
     pub fn number_of_columns(&self) -> i32 {
@@ -368,8 +363,6 @@ impl Operation {
 impl<'changeset> Drop for ChangesetIter<'changeset> {
     fn drop(&mut self) {
         unsafe {
-            // This function should only be called on iterators created using the
-            // sqlite3changeset_start() function.
             ffi::sqlite3changeset_finalize(self.it);
         }
     }
@@ -410,7 +403,7 @@ impl ChangesetItem {
     //sqlite3changeset_old
 
     /// Obtain the current operation
-    pub fn op(&self) -> Result<Operation> {
+    pub fn op(&self) -> Result<Operation<'_>> {
         let mut number_of_columns = 0;
         let mut code = 0;
         let mut indirect = 0;
@@ -425,7 +418,7 @@ impl ChangesetItem {
             ));
             CStr::from_ptr(pz_tab)
         };
-        let table_name = tab.to_str()?.to_owned();
+        let table_name = tab.to_str()?;
         Ok(Operation {
             table_name,
             number_of_columns,
@@ -456,7 +449,6 @@ pub struct Changegroup {
     cg: *mut ffi::sqlite3_changegroup,
 }
 
-// https://sqlite.org/session/changegroup.html
 impl Changegroup {
     pub fn new() -> Result<Self> {
         let mut cg: *mut ffi::sqlite3_changegroup = unsafe { mem::uninitialized() };
@@ -680,12 +672,12 @@ unsafe extern "C" fn x_input(p_in: *mut c_void, data: *mut c_void, len: *mut c_i
     }
 }
 
-// The sessions module never invokes an xOutput callback with the third
-// parameter set to a value less than or equal to zero.
 unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_int) -> c_int {
     if p_out.is_null() {
         return ffi::SQLITE_MISUSE;
     }
+    // The sessions module never invokes an xOutput callback with the third
+    // parameter set to a value less than or equal to zero.
     let bytes: &[u8] = from_raw_parts(data as *const u8, len as usize);
     let output = p_out as *mut &mut dyn Write;
     match (*output).write_all(bytes) {
@@ -696,9 +688,11 @@ unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_in
 
 #[cfg(test)]
 mod test {
+    use fallible_streaming_iterator::FallibleStreamingIterator;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use super::{Changeset, ChangesetIter, ConflictAction, Session};
+    use crate::hooks::Action;
     use crate::Connection;
 
     fn one_changeset() -> Changeset {
@@ -737,7 +731,15 @@ mod test {
     fn test_changeset() {
         let changeset = one_changeset();
         let mut iter = changeset.iter().unwrap();
-        assert_eq!(Ok(true), iter.next());
+        let item = iter.next().unwrap();
+        assert!(item.is_some());
+
+        let item = item.unwrap();
+        let op = item.op().unwrap();
+        assert_eq!("foo", op.table_name());
+        assert_eq!(1, op.number_of_columns());
+        assert_eq!(Action::SQLITE_INSERT, op.code());
+        assert_eq!(false, op.indirect());
     }
 
     #[test]
@@ -748,7 +750,8 @@ mod test {
 
         let mut input = output.as_slice();
         let mut iter = ChangesetIter::start_strm(&mut input).unwrap();
-        assert_eq!(Ok(true), iter.next());
+        let item = iter.next().unwrap();
+        assert!(item.is_some());
     }
 
     #[test]
