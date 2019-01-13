@@ -680,45 +680,58 @@ unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_in
 mod test {
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    use super::{ConflictAction, Session};
+    use super::{Changeset, ConflictAction, Session};
     use crate::Connection;
+
+    fn one_changeset() -> Changeset {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")
+            .unwrap();
+
+        let mut session = Session::new(&db).unwrap();
+        assert!(session.is_empty());
+
+        session.attach(None).unwrap();
+        db.execute("INSERT INTO foo (t) VALUES (?);", &["bar"])
+            .unwrap();
+
+        session.changeset().unwrap()
+    }
+
+    fn one_changeset_strm() -> Vec<u8> {
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")
+            .unwrap();
+
+        let mut session = Session::new(&db).unwrap();
+        assert!(session.is_empty());
+
+        session.attach(None).unwrap();
+        db.execute("INSERT INTO foo (t) VALUES (?);", &["bar"])
+            .unwrap();
+
+        let mut output = Vec::new();
+        session.changeset_strm(&mut output).unwrap();
+        output
+    }
 
     #[test]
     fn test_changeset() {
-        let changeset = {
-            let db = Connection::open_in_memory().unwrap();
-            db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")
-                .unwrap();
-
-            let mut session = Session::new(&db).unwrap();
-            assert!(session.is_empty());
-
-            session.attach(None).unwrap();
-            db.execute("INSERT INTO foo (t) VALUES (?);", &["bar"])
-                .unwrap();
-
-            session.changeset().unwrap()
-        };
+        let changeset = one_changeset();
         let mut iter = changeset.iter().unwrap();
         assert_eq!(Ok(true), iter.next());
     }
 
     #[test]
+    fn test_changeset_strm() {
+        let output = one_changeset_strm();
+        assert!(!output.is_empty());
+        assert_eq!(14, output.len());
+    }
+
+    #[test]
     fn test_changeset_apply() {
-        let changeset = {
-            let db = Connection::open_in_memory().unwrap();
-            db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")
-                .unwrap();
-
-            let mut session = Session::new(&db).unwrap();
-            assert!(session.is_empty());
-
-            session.attach(None).unwrap();
-            db.execute("INSERT INTO foo (t) VALUES (?);", &["bar"])
-                .unwrap();
-
-            session.changeset().unwrap()
-        };
+        let changeset = one_changeset();
 
         let db = Connection::open_in_memory().unwrap();
         db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")
@@ -738,6 +751,39 @@ mod test {
         .unwrap();
 
         assert!(!called.load(Ordering::Relaxed));
+        let check = db
+            .query_row("SELECT 1 FROM foo WHERE t = ?", &["bar"], |row| row.get(0))
+            .unwrap();
+        assert_eq!(1, check);
+
+        // conflict expected when same changeset applied again on the same db
+        db.apply(
+            &changeset,
+            None::<fn(&str) -> bool>,
+            |_conflict_type, _item| {
+                called.store(true, Ordering::Relaxed);
+                ConflictAction::SQLITE_CHANGESET_OMIT
+            },
+        )
+        .unwrap();
+        assert!(called.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn test_changeset_apply_strm() {
+        let output = one_changeset_strm();
+
+        let db = Connection::open_in_memory().unwrap();
+        db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")
+            .unwrap();
+
+        db.apply_strm(
+            &mut output.as_slice(),
+            None::<fn(&str) -> bool>,
+            |_conflict_type, _item| ConflictAction::SQLITE_CHANGESET_OMIT,
+        )
+        .unwrap();
+
         let check = db
             .query_row("SELECT 1 FROM foo WHERE t = ?", &["bar"], |row| row.get(0))
             .unwrap();
