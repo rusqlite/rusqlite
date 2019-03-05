@@ -44,6 +44,14 @@ impl<'stmt> Rows<'stmt> {
             }
         })
     }
+
+    /// Analogous to `Iterator::peekable`, creates a streaming iterator which allows to look at the
+    /// next row before calling `next`.
+    ///
+    /// See `Peekable::peek` for more information.
+    pub fn peekable(self) -> Peekable<'stmt> {
+        Peekable::new(self)
+    }
 }
 
 impl<'stmt> Rows<'stmt> {
@@ -62,6 +70,51 @@ impl<'stmt> Rows<'stmt> {
 impl Drop for Rows<'_> {
     fn drop(&mut self) {
         self.reset();
+    }
+}
+
+/// `Rows` wrapper which adds the `peek` method.
+///
+/// This struct is created by the `peekable` method on `Rows`.
+pub struct Peekable<'stmt> {
+    rows: Rows<'stmt>,
+    peeking: bool,
+}
+
+impl<'stmt> Peekable<'stmt> {
+    /// Same as `Rows::next`.
+    #[allow(clippy::should_implement_trait)] // cannot implement Iterator
+    pub fn next<'a>(&'a mut self) -> Option<Result<Row<'a, 'stmt>>> {
+        self.step(false)
+    }
+
+    /// Returns the row which would be returned by `next` without advancing the iterator.
+    pub fn peek<'a>(&'a mut self) -> Option<Result<Row<'a, 'stmt>>> {
+        self.step(true)
+    }
+
+    fn step<'a>(&'a mut self, peek: bool) -> Option<Result<Row<'a, 'stmt>>> {
+        let result = if self.peeking {
+            self.rows.stmt.map(|stmt| {
+                Ok(Row {
+                    stmt,
+                    phantom: PhantomData,
+                })
+            })
+        } else {
+            self.rows.next()
+        };
+        self.peeking = peek;
+        result
+    }
+}
+
+impl<'stmt> Peekable<'stmt> {
+    fn new(rows: Rows<'stmt>) -> Self {
+        Peekable {
+            rows,
+            peeking: false,
+        }
     }
 }
 
@@ -249,5 +302,34 @@ impl RowIndex for &'_ str {
     #[inline]
     fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
         stmt.column_index(*self)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{Connection, Result, NO_PARAMS};
+
+    #[test]
+    fn test_peek() {
+        let db = Connection::open_in_memory().unwrap();
+        let sql = r#"
+        CREATE TABLE test (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL);
+        INSERT INTO test(id, name) VALUES (1, "one");
+        "#;
+        db.execute_batch(sql).unwrap();
+
+        let mut stmt = db
+            .prepare("SELECT id FROM test where name = 'one'")
+            .unwrap();
+        let mut rows = stmt.query(NO_PARAMS).unwrap().peekable();
+
+        let peek1: Result<i32> = rows.peek().unwrap().and_then(|row| row.get(0));
+        assert_eq!(Ok(1), peek1);
+        let peek2: Result<i32> = rows.peek().unwrap().and_then(|row| row.get(0));
+        assert_eq!(Ok(1), peek2);
+        let next1: Result<i32> = rows.next().unwrap().and_then(|row| row.get(0));
+        assert_eq!(Ok(1), next1);
+        let next2 = rows.next().map(|res| res.unwrap());
+        assert!(next2.is_none());
     }
 }
