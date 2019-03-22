@@ -59,7 +59,7 @@ use crate::ffi::sqlite3_context;
 use crate::ffi::sqlite3_value;
 
 use crate::context::set_result;
-use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
+use crate::types::{FromSql, ToSql, ValueRef};
 
 use crate::{str_to_cstring, Connection, Error, InnerConnection, Result};
 
@@ -125,19 +125,8 @@ impl Context<'_> {
     pub fn get<T: FromSql>(&self, idx: usize) -> Result<T> {
         let arg = self.args[idx];
         let value = unsafe { ValueRef::from_value(arg) };
-        FromSql::column_result(value).map_err(|err| match err {
-            FromSqlError::InvalidType => {
-                Error::InvalidFunctionParameterType(idx, value.data_type())
-            }
-            FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
-            FromSqlError::Other(err) => {
-                Error::FromSqlConversionFailure(idx, value.data_type(), err)
-            }
-            #[cfg(feature = "i128_blob")]
-            FromSqlError::InvalidI128Size(_) => {
-                Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
-            }
-        })
+        FromSql::column_result(value)
+            .map_err(|err| Error::from_function_param(err, idx, value.data_type()))
     }
 
     /// Returns the `idx`th argument as a `ValueRef`.

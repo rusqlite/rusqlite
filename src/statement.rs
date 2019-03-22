@@ -925,6 +925,20 @@ mod test {
     }
 
     #[test]
+    fn test_query_row_get_raw() {
+        use crate::types::Type;
+        let db = Connection::open_in_memory().unwrap();
+        let mut stmt = db.prepare("SELECT X'00010001'").unwrap();
+        let y: Result<Vec<u8>> = stmt.query_row(NO_PARAMS, |r| {
+            r.get_raw_checked(0)?
+                .as_blob()
+                .map_err(|err| Error::from_column(err, 0, Type::Blob))
+                .map(|blob| blob.to_vec())
+        });
+        assert_eq!(b"0101", y.unwrap().as_slice());
+    }
+
+    #[test]
     fn test_query_by_column_name() {
         let db = Connection::open_in_memory().unwrap();
         let sql = "BEGIN;

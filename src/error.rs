@@ -1,4 +1,4 @@
-use crate::types::Type;
+use crate::types::{FromSqlError, Type};
 use crate::{errmsg_to_string, ffi};
 use std::error;
 use std::fmt;
@@ -152,6 +152,26 @@ impl From<str::Utf8Error> for Error {
 impl From<::std::ffi::NulError> for Error {
     fn from(err: ::std::ffi::NulError) -> Error {
         Error::NulError(err)
+    }
+}
+
+impl Error {
+    pub fn from_column(err: FromSqlError, idx: usize, data_type: Type) -> Error {
+        match err {
+            FromSqlError::InvalidType => Error::InvalidColumnType(idx, data_type),
+            FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
+            FromSqlError::Other(err) => Error::FromSqlConversionFailure(idx, data_type, err),
+            #[cfg(feature = "i128_blob")]
+            FromSqlError::InvalidI128Size(_) => Error::InvalidColumnType(idx, data_type),
+        }
+    }
+
+    #[cfg(feature = "functions")]
+    pub fn from_function_param(err: FromSqlError, idx: usize, data_type: Type) -> Error {
+        match err {
+            FromSqlError::InvalidType => Error::InvalidFunctionParameterType(idx, data_type),
+            _ => Error::from_column(err, idx, data_type),
+        }
     }
 }
 

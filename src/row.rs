@@ -3,7 +3,7 @@ use fallible_streaming_iterator::FallibleStreamingIterator;
 use std::{convert, result};
 
 use super::{Error, Result, Statement};
-use crate::types::{FromSql, FromSqlError, ValueRef};
+use crate::types::{FromSql, ValueRef};
 
 /// An handle for the resulting rows of a query.
 pub struct Rows<'stmt> {
@@ -222,15 +222,7 @@ impl<'stmt> Row<'stmt> {
     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
         let idx = idx.idx(self.stmt)?;
         let value = self.stmt.value_ref(idx);
-        FromSql::column_result(value).map_err(|err| match err {
-            FromSqlError::InvalidType => Error::InvalidColumnType(idx, value.data_type()),
-            FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
-            FromSqlError::Other(err) => {
-                Error::FromSqlConversionFailure(idx as usize, value.data_type(), err)
-            }
-            #[cfg(feature = "i128_blob")]
-            FromSqlError::InvalidI128Size(_) => Error::InvalidColumnType(idx, value.data_type()),
-        })
+        FromSql::column_result(value).map_err(|err| Error::from_column(err, idx, value.data_type()))
     }
 
     /// Get the value of a particular column of the result row as a `ValueRef`,
