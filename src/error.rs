@@ -156,6 +156,8 @@ impl From<::std::ffi::NulError> for Error {
 }
 
 impl Error {
+    /// Convert a `FromSqlError` into an `Error` for the specified column index
+    /// and type
     pub fn from_column(err: FromSqlError, idx: usize, data_type: Type) -> Error {
         match err {
             FromSqlError::InvalidType => Error::InvalidColumnType(idx, data_type),
@@ -166,6 +168,8 @@ impl Error {
         }
     }
 
+    /// Convert a `FromSqlError` into an `Error` for the specified function
+    /// parameter index and type
     #[cfg(feature = "functions")]
     pub fn from_function_param(err: FromSqlError, idx: usize, data_type: Type) -> Error {
         match err {
@@ -174,6 +178,8 @@ impl Error {
         }
     }
 
+    /// Convert a `FromSqlError` into an `Error` for the specified filter
+    /// parameter index and type
     #[cfg(feature = "vtab")]
     pub fn from_filter_param(err: FromSqlError, idx: usize, data_type: Type) -> Error {
         match err {
