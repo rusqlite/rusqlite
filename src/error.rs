@@ -173,6 +173,14 @@ impl Error {
             _ => Error::from_column(err, idx, data_type),
         }
     }
+
+    #[cfg(feature = "vtab")]
+    pub fn from_filter_param(err: FromSqlError, idx: usize, data_type: Type) -> Error {
+        match err {
+            FromSqlError::InvalidType => Error::InvalidFilterParameterType(idx, data_type),
+            _ => Error::from_column(err, idx, data_type),
+        }
+    }
 }
 
 impl fmt::Display for Error {
