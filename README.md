@@ -165,6 +165,12 @@ bundled version of SQLite. If you need other specific pregenerated binding
 versions, please file an issue. If you want to run `bindgen` at buildtime to
 produce your own bindings, use the `buildtime_bindgen` Cargo feature.
 
+## Note To Beginners
+Because this project utilizes a binding to SQLite, if you receive an error like:
+    note: /usr/bin/ld: cannot find -lsqlite3
+Please ensure that you have installed the sqlite development library to your system with:
+     sudo apt install libsqlite3-dev
+
 ## Author
 
 John Gallagher, johnkgallagher@gmail.com
