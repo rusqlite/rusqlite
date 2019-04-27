@@ -108,6 +108,9 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
 * `i128_blob` allows storing values of type `i128` type in SQLite databases. Internally, the data is stored as a 16 byte big-endian blob, with the most significant bit flipped, which allows ordering and comparison between different blobs storing i128s to work as expected.
 * `uuid` allows storing and retrieving `Uuid` values from the [`uuid`](https://docs.rs/uuid/) crate using blobs.
 * [`session`](https://sqlite.org/sessionintro.html), Session module extension.
+* [`regexp_fn`](https://www.sqlite.org/lang_expr.html#like), Implements the sql "REGEXP" function
+  using the [`regex` crate](https://crates.io/crates/regex). See that crate for details of regex
+  syntax.
 
 ## Notes on building rusqlite and libsqlite3-sys
 

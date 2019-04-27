@@ -42,9 +42,10 @@ script:
   - cargo test --features sqlcipher
   - cargo test --features i128_blob
   - cargo test --features uuid
+  - cargo test --features regexp_fn
   - cargo test --features "unlock_notify bundled"
   - cargo test --features "array bundled csvtab vtab"
-  - cargo test --features "backup blob chrono csvtab functions hooks limits load_extension serde_json trace url vtab"
-  - cargo test --features "backup blob chrono csvtab functions hooks limits load_extension serde_json trace url vtab buildtime_bindgen"
-  - cargo test --features "backup blob chrono csvtab functions hooks limits load_extension serde_json trace url vtab bundled"
-  - cargo test --features "backup blob chrono csvtab functions hooks limits load_extension serde_json trace url vtab bundled buildtime_bindgen"
+  - cargo test --features "backup blob chrono csvtab functions hooks limits load_extension serde_json trace url vtab regexp_fn"
+  - cargo test --features "backup blob chrono csvtab functions hooks limits load_extension serde_json trace url vtab regexp_fn buildtime_bindgen"
+  - cargo test --features "backup blob chrono csvtab functions hooks limits load_extension serde_json trace url vtab regexp_fn bundled"
+  - cargo test --features "backup blob chrono csvtab functions hooks limits load_extension serde_json trace url vtab regexp_fn bundled buildtime_bindgen"
