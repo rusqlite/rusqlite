@@ -48,6 +48,7 @@ csvtab = ["csv", "vtab"]
 array = ["vtab"]
 # session extension: 3.13.0
 session = ["libsqlite3-sys/session", "hooks"]
+regexp_fn = ["libsqlite3-sys/min_sqlite_version_3_7_7", "regex", "lazy_static"]
 
 [dependencies]
 time = "0.1.0"
@@ -63,6 +64,7 @@ fallible-iterator = "0.2"
 fallible-streaming-iterator = "0.1"
 memchr = "2.2.0"
 uuid = { version = "0.7", optional = true }
+regex = { version = "1.0", optional = true }
 
 [dev-dependencies]
 tempdir = "0.3"

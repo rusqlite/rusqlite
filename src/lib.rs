@@ -120,6 +120,8 @@ pub mod limits;
 mod load_extension_guard;
 mod pragma;
 mod raw_statement;
+#[cfg(feature = "regexp_fn")]
+mod regexp_fn;
 mod row;
 #[cfg(feature = "session")]
 pub mod session;
