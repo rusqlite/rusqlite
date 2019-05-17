@@ -277,6 +277,11 @@ impl<'stmt> Row<'stmt> {
     pub fn get_raw<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
         self.get_raw_checked(idx).unwrap()
     }
+
+    /// Get all the column names in the result set of the prepared statement.
+    pub fn column_names(&self) -> Vec<&str> {
+        self.stmt.column_names()
+    }
 }
 
 /// A trait implemented by types that can index into columns of a row.
