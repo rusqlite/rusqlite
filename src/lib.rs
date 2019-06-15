@@ -60,6 +60,7 @@ pub use libsqlite3_sys as ffi;
 
 #[macro_use]
 extern crate bitflags;
+
 #[cfg(any(test, feature = "vtab"))]
 #[macro_use]
 extern crate lazy_static;
@@ -824,6 +825,7 @@ impl InterruptHandle {
     pub fn interrupt(&self) {
         let db_handle = self.db_lock.lock().unwrap();
         if !db_handle.is_null() {
+	    #[cfg(not(any(feature = "loadable_extension", feature = "loadable_extension_embedded")))] // no sqlite3_interrupt in a loadable extension
             unsafe { ffi::sqlite3_interrupt(*db_handle) }
         }
     }

@@ -34,6 +34,9 @@ functions = ["libsqlite3-sys/min_sqlite_version_3_7_7"]
 trace = ["libsqlite3-sys/min_sqlite_version_3_6_23"]
 bundled = ["libsqlite3-sys/bundled"]
 buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
+loadable_extension = ["libsqlite3-sys/loadable_extension"]
+loadable_extension_embedded = ["libsqlite3-sys/loadable_extension_embedded"]
+non_threadsafe = [] # sqlite library was built without thread safety (-DSQLITE_THREADSAFE=0)
 limits = []
 hooks = []
 i128_blob = ["byteorder"]
@@ -41,13 +44,15 @@ sqlcipher = ["libsqlite3-sys/sqlcipher"]
 unlock_notify = ["libsqlite3-sys/unlock_notify"]
 # xSavepoint, xRelease and xRollbackTo: 3.7.7 (2011-06-23)
 vtab = ["libsqlite3-sys/min_sqlite_version_3_7_7", "lazy_static"]
-# xShadowName: 3.26.0
-vtab_v3 = ["vtab"]
 csvtab = ["csv", "vtab"]
-# pointer passing interfaces: 3.20.0
-array = ["vtab"]
 # session extension: 3.13.0
-session = ["libsqlite3-sys/session", "hooks"]
+session = ["libsqlite3-sys/min_sqlite_version_3_13_0", "libsqlite3-sys/session", "hooks"]
+# sqlite3_api_routines typedef stub: 3.20.0
+api_routines_stub = ["libsqlite3-sys/min_sqlite_version_3_20_0"]
+# pointer passing interfaces: 3.20.0
+array = ["libsqlite3-sys/min_sqlite_version_3_20_0", "vtab"]
+# xShadowName: 3.26.0
+vtab_v3 = ["libsqlite3-sys/min_sqlite_version_3_26_0", "vtab"]
 
 [dependencies]
 time = "0.1.0"
