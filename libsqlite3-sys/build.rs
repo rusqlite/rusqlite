@@ -295,7 +295,6 @@ mod build_loadable_extension {
     // Prints the necessary cargo link commands and returns the path to the header.
     fn find_sqlite() -> HeaderLocation {
         let link_lib = "sqlite3";
-
         println!("cargo:rerun-if-env-changed={}_INCLUDE_DIR", env_prefix());
         println!("cargo:rerun-if-env-changed={}_LIB_DIR", env_prefix());
         println!("cargo:rerun-if-env-changed={}_STATIC", env_prefix());
@@ -336,8 +335,9 @@ mod build_loadable_extension {
 
     #[cfg(all(feature = "vcpkg", target_env = "msvc"))]
     fn try_vcpkg() -> Option<HeaderLocation> {
+        let link_lib = "sqlite3";
         // See if vcpkg can find it.
-        if let Ok(mut lib) = vcpkg::Config::new().probe(link_lib()) {
+        if let Ok(mut lib) = vcpkg::Config::new().probe(link_lib) {
             if let Some(mut header) = lib.include_paths.pop() {
                 header.push(header_file());
                 return Some(HeaderLocation::FromPath(header.to_string_lossy().into()));
