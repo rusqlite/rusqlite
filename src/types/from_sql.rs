@@ -175,13 +175,14 @@ impl FromSql for Vec<u8> {
 #[cfg(feature = "i128_blob")]
 impl FromSql for i128 {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        use byteorder::{BigEndian, ByteOrder};
-
-        value.as_blob().and_then(|bytes| {
-            if bytes.len() == 16 {
-                Ok(BigEndian::read_i128(bytes) ^ (1i128 << 127))
+        value.as_blob().and_then(|b| {
+            if b.len() == 16 {
+                Ok(i128::from_be_bytes([
+                    b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11],
+                    b[12], b[13], b[14], b[15],
+                ]) ^ (1i128 << 127))
             } else {
-                Err(FromSqlError::InvalidI128Size(bytes.len()))
+                Err(FromSqlError::InvalidI128Size(b.len()))
             }
         })
     }

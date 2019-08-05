@@ -1,5 +1,5 @@
-use crate::types::Type;
 use crate::types::FromSqlError;
+use crate::types::Type;
 use crate::{errmsg_to_string, ffi};
 use std::error;
 use std::fmt;
@@ -190,20 +190,24 @@ impl fmt::Display for Error {
                 f,
                 "SQLite was compiled or configured for single-threaded use only"
             ),
-            Error::FromSqlConversionFailure(i, ref t, ref err) => if i != UNKNOWN_COLUMN {
-                write!(
-                    f,
-                    "Conversion error from type {} at index: {}, {}",
-                    t, i, err
-                )
-            } else {
-                err.fmt(f)
-            },
-            Error::IntegralValueOutOfRange(col, val) => if col != UNKNOWN_COLUMN {
-                write!(f, "Integer {} out of range at index {}", val, col)
-            } else {
-                write!(f, "Integer {} out of range", val)
-            },
+            Error::FromSqlConversionFailure(i, ref t, ref err) => {
+                if i != UNKNOWN_COLUMN {
+                    write!(
+                        f,
+                        "Conversion error from type {} at index: {}, {}",
+                        t, i, err
+                    )
+                } else {
+                    err.fmt(f)
+                }
+            }
+            Error::IntegralValueOutOfRange(col, val) => {
+                if col != UNKNOWN_COLUMN {
+                    write!(f, "Integer {} out of range at index {}", val, col)
+                } else {
+                    write!(f, "Integer {} out of range", val)
+                }
+            }
             Error::Utf8Error(ref err) => err.fmt(f),
             Error::NulError(ref err) => err.fmt(f),
             Error::InvalidParameterName(ref name) => write!(f, "Invalid parameter name: {}", name),
