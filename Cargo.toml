@@ -69,7 +69,7 @@ byteorder = { version = "1.2", features = ["i128"], optional = true }
 fallible-iterator = "0.2"
 fallible-streaming-iterator = "0.1"
 memchr = "2.2.0"
-uuid = { version = "0.7", optional = true }
+uuid = { version = "0.8", optional = true }
 
 [dev-dependencies]
 tempdir = "0.3"
