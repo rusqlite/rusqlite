@@ -120,6 +120,8 @@ bencher = "0.1"
 [dependencies.libsqlite3-sys]
 path = "libsqlite3-sys"
 version = "0.19.0"
+default-features = false
+features = ["min_sqlite_version_3_6_8"]
 
 [[test]]
 name = "config_log"
