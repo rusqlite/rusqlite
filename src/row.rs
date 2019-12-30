@@ -1,6 +1,6 @@
 use fallible_iterator::FallibleIterator;
 use fallible_streaming_iterator::FallibleStreamingIterator;
-use std::{convert, result};
+use std::{convert, fmt, result};
 
 use super::{Error, Result, Statement};
 use crate::types::{FromSql, FromSqlError, ValueRef};
@@ -186,7 +186,37 @@ pub struct Row<'stmt> {
     pub(crate) stmt: &'stmt Statement<'stmt>,
 }
 
+impl<'stmt> fmt::Debug for Row<'stmt> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut row = Vec::new();
+        let columns = self.stmt.columns();
+        for (count, c) in columns.iter().enumerate() {
+            // unwrap shouldn't panic since count will always be in range here?
+            row.push((count, c, self.get_lossy(count).unwrap()))
+        }
+        write!(f, "{:#?}", row)
+    }
+}
+
 impl<'stmt> Row<'stmt> {
+    /// Get the value as a string of a particular column of the result row.
+    ///
+    /// ## Failure
+    ///
+    /// Returns an `Error::InvalidColumnIndex` if `idx` is outside the valid
+    /// column range for this row.
+    ///
+    /// Returns an `Error::InvalidColumnName` if `idx` is not a valid column
+    /// name for this row.
+    pub fn get_lossy<I: RowIndex>(&self, idx: I) -> Result<Option<String>> {
+        let idx = idx.idx(self.stmt)?;
+        let value = self.stmt.value_ref(idx);
+        match value.as_str() {
+            Ok(v) => Ok(Some(v.to_string())),
+            Err(_) => Ok(None),
+        }
+    }
+
     /// Get the value of a particular column of the result row.
     ///
     /// ## Failure
