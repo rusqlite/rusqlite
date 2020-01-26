@@ -1,9 +1,9 @@
 use fallible_iterator::FallibleIterator;
 use fallible_streaming_iterator::FallibleStreamingIterator;
-use std::{convert, result};
+use std::{convert, fmt, result};
 
 use super::{Error, Result, Statement};
-use crate::types::{FromSql, FromSqlError, ValueRef};
+use crate::types::{FromSql, FromSqlError, Value, ValueRef};
 
 /// An handle for the resulting rows of a query.
 pub struct Rows<'stmt> {
@@ -184,6 +184,18 @@ impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
 /// A single result row of a query.
 pub struct Row<'stmt> {
     pub(crate) stmt: &'stmt Statement<'stmt>,
+}
+
+impl<'stmt> fmt::Debug for Row<'stmt> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut row = Vec::new();
+        let columns = self.stmt.columns();
+        for (count, c) in columns.iter().enumerate() {
+            // unwrap shouldn't panic since count will always be in range here?
+            row.push((count, c, self.get::<_, Value>(count).unwrap()))
+        }
+        write!(f, "{:#?}", row)
+    }
 }
 
 impl<'stmt> Row<'stmt> {
