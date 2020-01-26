@@ -10,7 +10,8 @@
 //!
 //! ```rust
 //! use regex::Regex;
-//! use rusqlite::{Connection, Error, FunctionFlags, Result, NO_PARAMS};
+//! use rusqlite::functions::FunctionFlags;
+//! use rusqlite::{Connection, Error, Result, NO_PARAMS};
 //!
 //! fn add_regexp_function(db: &Connection) -> Result<()> {
 //!     db.create_scalar_function(
@@ -284,11 +285,17 @@ impl Connection {
     ///
     /// ```rust
     /// # use rusqlite::{Connection, Result, NO_PARAMS};
+    /// # use rusqlite::functions::FunctionFlags;
     /// fn scalar_function_example(db: Connection) -> Result<()> {
-    ///     db.create_scalar_function("halve", 1, true, |ctx| {
-    ///         let value = ctx.get::<f64>(0)?;
-    ///         Ok(value / 2f64)
-    ///     })?;
+    ///     db.create_scalar_function(
+    ///         "halve",
+    ///         1,
+    ///         FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+    ///         |ctx| {
+    ///             let value = ctx.get::<f64>(0)?;
+    ///             Ok(value / 2f64)
+    ///         },
+    ///     )?;
     ///
     ///     let six_halved: f64 = db.query_row("SELECT halve(6)", NO_PARAMS, |r| r.get(0))?;
     ///     assert_eq!(six_halved, 3f64);
