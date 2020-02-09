@@ -1,5 +1,3 @@
-use time;
-
 use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use crate::Result;
 
@@ -36,7 +34,6 @@ impl FromSql for time::Timespec {
 
 #[cfg(test)]
 mod test {
-    use super::time;
     use crate::{Connection, Result, NO_PARAMS};
 
     fn checked_memory_handle() -> Connection {
