@@ -59,8 +59,6 @@ series = ["vtab"]
 # check for invalid query.
 extra_check = []
 modern_sqlite = ["libsqlite3-sys/bundled_bindings"]
-# sqlite3_api_routines typedef stub: 3.20.0
-api_routines_stub = ["libsqlite3-sys/min_sqlite_version_3_20_0"]
 
 [dependencies]
 time = "0.1.0"

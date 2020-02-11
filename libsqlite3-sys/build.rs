@@ -406,8 +406,6 @@ mod bindings {
         "bindgen-bindings/bindgen_3.6.8",
         #[cfg(feature = "min_sqlite_version_3_7_16")]
         "bindgen-bindings/bindgen_3.7.16",
-        #[cfg(feature = "min_sqlite_version_3_20_0")]
-        "bindgen-bindings/bindgen_3.20.0",
     ];
 
     pub fn write_to_out_dir(_header: HeaderLocation, out_path: &Path) {
