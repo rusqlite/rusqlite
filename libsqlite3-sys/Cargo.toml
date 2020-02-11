@@ -20,8 +20,6 @@ loadable_extension = ["syn", "quote"]
 loadable_extension_embedded = ["loadable_extension"]
 sqlcipher = []
 min_sqlite_version_3_6_8 = ["pkg-config", "vcpkg"]
-min_sqlite_version_3_6_23 = ["pkg-config", "vcpkg"]
-min_sqlite_version_3_7_7 = ["pkg-config", "vcpkg"]
 min_sqlite_version_3_7_16 = ["pkg-config", "vcpkg"]
 min_sqlite_version_3_20_0 = ["pkg-config", "vcpkg"]
 # Bundle only the bindings file. Note that this does nothing if

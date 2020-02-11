@@ -69,10 +69,6 @@ function generate_bindgen_binding {
     cp  "${bindgen_file}" "${output_path}"
 }
 
-generate_bindgen_bindings 3.26.0 https://sqlite.org/2018/sqlite-amalgamation-3260000.zip sqlite-amalgamation-3260000/
 generate_bindgen_bindings 3.20.0 https://sqlite.org/2017/sqlite-amalgamation-3200000.zip sqlite-amalgamation-3200000/
-generate_bindgen_bindings 3.13.0 https://sqlite.org/2016/sqlite-amalgamation-3130000.zip sqlite-amalgamation-3130000/
 generate_bindgen_bindings 3.7.16 https://sqlite.org/2013/sqlite-amalgamation-3071600.zip sqlite-amalgamation-3071600/
-generate_bindgen_bindings 3.7.7 https://sqlite.org/sqlite-amalgamation-3070700.zip sqlite-amalgamation-3070700/
-generate_bindgen_bindings 3.6.23 https://sqlite.org/sqlite-amalgamation-3_6_23.zip ./
 generate_bindgen_bindings 3.6.8 https://sqlite.org/sqlite-amalgamation-3_6_8.zip ./

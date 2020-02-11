@@ -404,10 +404,6 @@ mod bindings {
 
     static PREBUILT_BINDGEN_PATHS: &'static [&'static str] = &[
         "bindgen-bindings/bindgen_3.6.8",
-        #[cfg(feature = "min_sqlite_version_3_6_23")]
-        "bindgen-bindings/bindgen_3.6.23",
-        #[cfg(feature = "min_sqlite_version_3_7_7")]
-        "bindgen-bindings/bindgen_3.7.7",
         #[cfg(feature = "min_sqlite_version_3_7_16")]
         "bindgen-bindings/bindgen_3.7.16",
         #[cfg(feature = "min_sqlite_version_3_20_0")]
