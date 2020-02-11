@@ -341,9 +341,6 @@ mod build_loadable_extension {
         println!("cargo:rerun-if-env-changed={}_INCLUDE_DIR", env_prefix());
         println!("cargo:rerun-if-env-changed={}_LIB_DIR", env_prefix());
         println!("cargo:rerun-if-env-changed={}_STATIC", env_prefix());
-        if cfg!(target_os = "windows") {
-            println!("cargo:rerun-if-env-changed=PATH");
-        }
         if cfg!(all(feature = "vcpkg", target_env = "msvc")) {
             println!("cargo:rerun-if-env-changed=VCPKGRS_DYNAMIC");
         }
