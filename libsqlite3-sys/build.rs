@@ -712,7 +712,7 @@ pub static mut sqlite3_api: *mut sqlite3_api_routines = 0 as *mut sqlite3_api_ro
                 let input_ident =
                     syn::Ident::new(&format!("vararg{}", index + 1), field_ident.span());
                 let colon = Token![:](field_ident.span());
-                input.name = Some((syn::BareFnArgName::Named(input_ident), colon));
+                input.name = Some((input_ident, colon));
                 match var_arg_type.to_owned() {
                     Some(t) => {
                         input.ty = t;
@@ -727,7 +727,7 @@ pub static mut sqlite3_api: *mut sqlite3_api_routines = 0 as *mut sqlite3_api_ro
         let api_fn_input_idents: Vec<syn::Ident> = (&api_fn_inputs)
             .into_iter()
             .map(|input| match &input.name {
-                Some((syn::BareFnArgName::Named(ident), _)) => ident.to_owned(),
+                Some((ident, _)) => ident.to_owned(),
                 _ => {
                     panic!("Input has no name {:#?}", input);
                 }
