@@ -37,7 +37,6 @@ bundled = ["libsqlite3-sys/bundled", "modern_sqlite"]
 buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
 loadable_extension = ["libsqlite3-sys/loadable_extension"]
 loadable_extension_embedded = ["libsqlite3-sys/loadable_extension_embedded"]
-non_threadsafe = [] # sqlite library was built without thread safety (-DSQLITE_THREADSAFE=0)
 limits = []
 hooks = []
 i128_blob = ["byteorder"]
