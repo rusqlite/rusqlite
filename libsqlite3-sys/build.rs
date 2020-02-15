@@ -300,7 +300,7 @@ mod build_linked {
     }
 }
 
-#[cfg(feature = "loadable_extension")]
+#[cfg(not(any(feature = "bundled", all(windows, feature = "bundled-windows"))))]
 mod build_loadable_extension {
     use pkg_config;
 
