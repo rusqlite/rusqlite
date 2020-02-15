@@ -325,6 +325,7 @@ impl Drop for InnerConnection {
 
 #[cfg(not(feature = "bundled"))]
 static SQLITE_VERSION_CHECK: Once = Once::new();
+#[cfg(not(feature = "bundled"))]
 pub static BYPASS_VERSION_CHECK: AtomicBool = AtomicBool::new(false);
 
 #[cfg(not(feature = "bundled"))]
