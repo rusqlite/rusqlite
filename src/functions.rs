@@ -256,7 +256,7 @@ bitflags::bitflags! {
         const SQLITE_UTF16LE  = ffi::SQLITE_UTF16LE;
         const SQLITE_UTF16BE  = ffi::SQLITE_UTF16BE;
         const SQLITE_UTF16    = ffi::SQLITE_UTF16;
-        const SQLITE_DETERMINISTIC = ffi::SQLITE_DETERMINISTIC;
+        const SQLITE_DETERMINISTIC = 0x0000_0000_0800; // 3.8.3
         const SQLITE_DIRECTONLY    = 0x0000_0008_0000; // 3.30.0
         const SQLITE_SUBTYPE       = 0x0000_0010_0000; // 3.30.0
         const SQLITE_INNOCUOUS     = 0x0000_0020_0000; // 3.31.0

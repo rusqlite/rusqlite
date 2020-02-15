@@ -562,16 +562,6 @@ pub static mut sqlite3_api: *mut sqlite3_api_routines = 0 as *mut sqlite3_api_ro
             output.push_str("\n");
         }
 
-        // rusqlite's functions feature ors in the SQLITE_DETERMINISTIC flag when it
-        // can. This flag was added in SQLite 3.8.3, but oring it in in prior
-        // versions of SQLite is harmless. We don't want to not build just
-        // because this flag is missing (e.g., if we're linking against
-        // SQLite 3.7.x), so append the flag manually if it isn't present in bindgen's
-        // output.
-        if !output.contains("pub const SQLITE_DETERMINISTIC") {
-            output.push_str("\npub const SQLITE_DETERMINISTIC: i32 = 2048;\n");
-        }
-
         let mut file = OpenOptions::new()
             .write(true)
             .truncate(true)
