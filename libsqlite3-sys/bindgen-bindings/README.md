@@ -12,8 +12,6 @@ The general recipe for doing this is:
 
 Repeat the above process for each desired version, and also re-run each build using `--features "buildtime_bindgen,loadable_extension"` to generate the `-ext.h` versions to support sqlite3 loadable extensions.
 
-The script `generate-bindgen-bindings.sh` will attempt to rebuild all of the prepackaged bindings.
-
 sqlite3 amalgamation source links
 ---------------------------------
 The location of the amalgamation sources used to build these are:
