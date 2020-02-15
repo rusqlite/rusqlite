@@ -414,10 +414,8 @@ mod bindings {
     use bindgen::callbacks::{IntKind, ParseCallbacks};
 
     use std::fs::OpenOptions;
-    use std::io::copy;
     use std::io::Write;
     use std::path::Path;
-    use std::process::{Command, Stdio};
 
     #[derive(Debug)]
     struct SqliteTypeChooser;
@@ -438,7 +436,7 @@ mod bindings {
         let mut bindings = bindgen::builder()
             .header(header.clone())
             .parse_callbacks(Box::new(SqliteTypeChooser))
-            .rustfmt_bindings(false); // we'll run rustfmt after (possibly) adding wrappers
+            .rustfmt_bindings(true);
 
         if cfg!(feature = "unlock_notify") {
             bindings = bindings.clang_arg("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
@@ -581,45 +579,8 @@ pub static mut sqlite3_api: *mut sqlite3_api_routines = 0 as *mut sqlite3_api_ro
             .open(out_path)
             .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
 
-        // pipe generated bindings through rustfmt
-        let rustfmt = which::which("rustfmt")
-            .expect("rustfmt not on PATH")
-            .to_owned();
-        let mut cmd = Command::new(rustfmt);
-        cmd.stdin(Stdio::piped()).stdout(Stdio::piped());
-        let mut rustfmt_child = cmd.spawn().expect("failed to execute rustfmt");
-        let mut rustfmt_child_stdin = rustfmt_child.stdin.take().unwrap();
-        let mut rustfmt_child_stdout = rustfmt_child.stdout.take().unwrap();
-
-        // spawn a thread to write output string to rustfmt stdin
-        let stdin_handle = ::std::thread::spawn(move || {
-            let _ = rustfmt_child_stdin.write_all(output.as_bytes());
-            output
-        });
-
-        // read stdout of rustfmt and write it to bindings file at out_path
-        copy(&mut rustfmt_child_stdout, &mut file)
+        file.write_all(output.as_bytes())
             .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
-
-        let status = rustfmt_child
-            .wait()
-            .expect("failed to wait for rustfmt to complete");
-        stdin_handle
-            .join()
-            .expect("The impossible: writer to rustfmt stdin cannot panic");
-
-        match status.code() {
-            Some(0) => {}
-            Some(2) => {
-                panic!("rustfmt parsing error");
-            }
-            Some(3) => {
-                panic!("rustfmt could not format some lines.");
-            }
-            _ => {
-                panic!("Internal rustfmt error");
-            }
-        }
     }
 
     #[cfg(feature = "loadable_extension")]

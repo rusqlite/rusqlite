@@ -7,8 +7,6 @@ rust:
   - beta
   - nightly
 
-before_script: rustup component add rustfmt
-
 matrix:
   fast_finish: true
   allow_failures:

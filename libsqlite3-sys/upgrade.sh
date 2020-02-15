@@ -25,7 +25,8 @@ function generate_bindgen_binding() {
   find $SCRIPT_DIR/../target -type f -name bindgen.rs -exec rm {} \;
   cargo build --features "$features" --no-default-features
   find $SCRIPT_DIR/../target -type f -name bindgen.rs -exec cp {} $target_file \;
-  # TODO rustfmt $target_file
+  # rerun rustfmt after (possibly) adding wrappers
+  rustfmt $target_file
 }
 
 generate_bindgen_binding "buildtime_bindgen" $SQLITE3_LIB_DIR/bindgen_bundled_version.rs
