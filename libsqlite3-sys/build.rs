@@ -15,23 +15,18 @@ fn main() {
                  This can lead to issues if your version of SQLCipher is not up to date!");
         }
         build_linked::main(&out_dir, &out_path)
+    } else if cfg!(feature = "loadable_extension") {
+        build_loadable_extension::main(&out_dir, &out_path)
     } else {
         // This can't be `cfg!` without always requiring our `mod build_bundled` (and
         // thus `cc`)
         #[cfg(any(feature = "bundled", all(windows, feature = "bundled-windows")))]
         {
-            if cfg!(feature = "loadable_extension") {
-                panic!("Building a loadable extension bundled is not supported");
-            }
             build_bundled::main(&out_dir, &out_path)
         }
         #[cfg(not(any(feature = "bundled", all(windows, feature = "bundled-windows"))))]
         {
-            if cfg!(feature = "loadable_extension") {
-                build_loadable_extension::main(&out_dir, &out_path)
-            } else {
-                build_linked::main(&out_dir, &out_path)
-            }
+            build_linked::main(&out_dir, &out_path)
         }
     }
 }
@@ -48,18 +43,9 @@ mod build_bundled {
             panic!("Builds with bundled SQLCipher are not supported");
         }
 
-        #[cfg(feature = "buildtime_bindgen")]
-        {
-            use super::{bindings, header_file, HeaderLocation};
-            let header = HeaderLocation::FromPath(format!("sqlite3/{}", header_file()).to_owned());
-            bindings::write_to_out_dir(header, out_path);
-        }
-        #[cfg(not(feature = "buildtime_bindgen"))]
-        {
-            use std::fs;
-            fs::copy("sqlite3/bindgen_bundled_version.rs", out_path)
-                .expect("Could not copy bindings to output directory");
-        }
+        use super::{bindings, header_file, HeaderLocation};
+        let header = HeaderLocation::FromPath(format!("sqlite3/{}", header_file()).to_owned());
+        bindings::write_to_out_dir(header, out_path);
 
         let mut cfg = cc::Build::new();
         cfg.file("sqlite3/sqlite3.c")
@@ -180,32 +166,13 @@ impl From<HeaderLocation> for String {
 mod build_linked {
     use pkg_config;
 
-    #[cfg(all(feature = "vcpkg", target_env = "msvc"))]
-    extern crate vcpkg;
-
     use super::{bindings, env_prefix, header_file, HeaderLocation};
     use std::env;
     use std::path::Path;
 
     pub fn main(_out_dir: &str, out_path: &Path) {
         let header = find_sqlite();
-        if cfg!(any(
-            feature = "bundled_bindings",
-            feature = "bundled",
-            all(windows, feature = "bundled-windows")
-        )) && !cfg!(feature = "buildtime_bindgen")
-        {
-            // Generally means the `bundled_bindings` feature is enabled
-            // (there's also an edge case where we get here involving
-            // sqlcipher). In either case most users are better off with turning
-            // on buildtime_bindgen instead, but this is still supported as we
-            // have runtime version checks and there are good reasons to not
-            // want to run bindgen.
-            std::fs::copy("sqlite3/bindgen_bundled_version.rs", out_path)
-                .expect("Could not copy bindings to output directory");
-        } else {
-            bindings::write_to_out_dir(header, out_path);
-        }
+        bindings::write_to_out_dir(header, out_path);
     }
 
     fn find_link_mode() -> &'static str {
@@ -300,7 +267,6 @@ mod build_linked {
     }
 }
 
-#[cfg(not(any(feature = "bundled", all(windows, feature = "bundled-windows"))))]
 mod build_loadable_extension {
     use pkg_config;
 
@@ -381,6 +347,12 @@ mod bindings {
         "bindgen-bindings/bindgen_3.6.8",
         #[cfg(feature = "min_sqlite_version_3_7_16")]
         "bindgen-bindings/bindgen_3.7.16",
+        #[cfg(any(
+            feature = "bundled_bindings",
+            feature = "bundled",
+            all(windows, feature = "bundled-windows")
+        ))]
+        "sqlite3/bindgen_bundled_version",
     ];
 
     pub fn write_to_out_dir(_header: HeaderLocation, out_path: &Path) {
