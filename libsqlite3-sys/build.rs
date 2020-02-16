@@ -356,10 +356,12 @@ mod bindings {
             PREBUILT_BINDGEN_PATHS[PREBUILT_BINDGEN_PATHS.len() - 1],
             prebuilt_bindgen_ext()
         );
-        fs::copy(in_path.to_owned(), out_path).unwrap_or_else(|_| panic!(
-            "Could not copy bindings to output directory from {}",
-            in_path
-        ));
+        fs::copy(in_path.to_owned(), out_path).unwrap_or_else(|_| {
+            panic!(
+                "Could not copy bindings to output directory from {}",
+                in_path
+            )
+        });
     }
 
     fn prebuilt_bindgen_ext() -> &'static str {

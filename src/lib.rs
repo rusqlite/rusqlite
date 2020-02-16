@@ -101,6 +101,10 @@ mod cache;
 #[cfg(feature = "collation")]
 mod collation;
 mod column;
+#[cfg(not(any(
+    feature = "loadable_extension",
+    feature = "loadable_extension_embedded"
+)))]
 pub mod config;
 #[cfg(any(feature = "functions", feature = "vtab"))]
 mod context;

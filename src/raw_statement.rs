@@ -1,5 +1,9 @@
 use super::ffi;
 use super::unlock_notify;
+#[cfg(not(any(
+    feature = "loadable_extension",
+    feature = "loadable_extension_embedded"
+)))]
 use super::StatementStatus;
 use std::ffi::CStr;
 use std::os::raw::c_int;
@@ -133,6 +137,10 @@ impl RawStatement {
         }
     }
 
+    #[cfg(not(any(
+        feature = "loadable_extension",
+        feature = "loadable_extension_embedded"
+    )))]
     pub fn get_status(&self, status: StatementStatus, reset: bool) -> i32 {
         assert!(!self.0.is_null());
         unsafe { ffi::sqlite3_stmt_status(self.0, status as i32, reset as i32) }
