@@ -5,8 +5,8 @@ use std::os::raw::{c_char, c_int};
 use std::path::Path;
 use std::ptr;
 use std::str;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, Once};
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 
 use super::ffi;
 use super::{str_for_sqlite, str_to_cstring};
@@ -15,7 +15,6 @@ use crate::error::{error_from_handle, error_from_sqlite_code, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
 use crate::unlock_notify;
-use crate::version::version_number;
 
 pub struct InnerConnection {
     pub db: *mut ffi::sqlite3,
@@ -324,13 +323,14 @@ impl Drop for InnerConnection {
 }
 
 #[cfg(not(feature = "bundled"))]
-static SQLITE_VERSION_CHECK: Once = Once::new();
+static SQLITE_VERSION_CHECK: std::sync::Once = std::sync::Once::new();
 #[cfg(not(feature = "bundled"))]
 pub static BYPASS_VERSION_CHECK: AtomicBool = AtomicBool::new(false);
 
 #[cfg(not(feature = "bundled"))]
 fn ensure_valid_sqlite_version() {
-    use crate::version::version;
+    use crate::version::{version, version_number};
+    use std::sync::atomic::Ordering;
 
     SQLITE_VERSION_CHECK.call_once(|| {
         let version_number = version_number();
@@ -376,7 +376,7 @@ rusqlite was built against SQLite {} but the runtime SQLite version is {}. To fi
     feature = "loadable_extension",
     feature = "loadable_extension_embedded",
 )))]
-static SQLITE_INIT: Once = Once::new();
+static SQLITE_INIT: std::sync::Once = std::sync::Once::new();
 pub static BYPASS_SQLITE_INIT: AtomicBool = AtomicBool::new(false);
 
 // threading mode checks are not possible when built as a loadable extension
@@ -395,6 +395,9 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
     feature = "loadable_extension_embedded",
 )))]
 fn ensure_safe_sqlite_threading_mode() -> Result<()> {
+    use crate::version::version_number;
+    use std::sync::atomic::Ordering;
+
     // Ensure SQLite was compiled in thredsafe mode.
     if unsafe { ffi::sqlite3_threadsafe() == 0 } {
         return Err(Error::SqliteSingleThreadedMode);
