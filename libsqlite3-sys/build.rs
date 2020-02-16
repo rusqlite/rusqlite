@@ -441,7 +441,7 @@ mod bindings {
             .unwrap_or_else(|_| panic!("could not run bindgen on header {}", header))
             .write(Box::new(&mut output))
             .expect("could not write output of bindgen");
-        let output = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
+        let mut output = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
 
         // Get the list of API functions supported by sqlite3_api_routines,
         // set the corresponding sqlite3 api routine to be blacklisted in the
