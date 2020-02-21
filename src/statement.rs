@@ -424,7 +424,7 @@ impl Statement<'_> {
         Ok(self.stmt.bind_parameter_index(&c_name))
     }
 
-    fn bind_parameters<P>(&mut self, params: P) -> Result<()>
+    pub fn bind_parameters<P>(&mut self, params: P) -> Result<()>
     where
         P: IntoIterator,
         P::Item: ToSql,
