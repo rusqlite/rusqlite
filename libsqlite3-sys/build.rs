@@ -365,9 +365,7 @@ mod bindings {
     }
 
     fn prebuilt_bindgen_ext() -> &'static str {
-        if cfg!(feature = "loadable_extension_embedded") {
-            "-ext-embed"
-        } else if cfg!(feature = "loadable_extension") {
+        if cfg!(feature = "loadable_extension") {
             "-ext"
         } else {
             ""
@@ -446,11 +444,11 @@ mod bindings {
         // Get the list of API functions supported by sqlite3_api_routines,
         // set the corresponding sqlite3 api routine to be blacklisted in the
         // final bindgen run, and add wrappers for each of the API functions to
-        // dispatch the API call through a sqlite3_api global, which is also
-        // declared in the bindings (either as a built-in or an extern symbol
-        // in the case of loadable_extension_embedded (i.e. when the rust code
-        // will be a part of an extension but not implement the extension
-        // entrypoint itself).
+        // dispatch the API call through a sqlite3_api global, which is defined
+        // outside the generated bindings in lib.rs, either as a built-in static
+        // or an extern symbol in the case of loadable_extension_embedded (i.e.
+        // when the rust code will be a part of an extension but not implement
+        // the extension entrypoint itself).
         #[cfg(feature = "loadable_extension")]
         {
             let api_routines_struct_name = "sqlite3_api_routines".to_owned();
@@ -464,46 +462,22 @@ mod bindings {
                     );
                 }
             };
-
-            #[cfg(feature = "loadable_extension_embedded")]
+            
+            #[cfg(feature = "loadable_extension")]
             {
-                // an embedded loadable extension is one in which the rust code will be linked
-                // in to external code that implements the loadable extension
-                // and exports the sqlite3_api interface as a symbol
                 output.push_str(
                     r#"
 
-// bindings were built with loadable_extension_embedded:
-// define sqlite3_api as an extern since this code will be embedded
-// within a loadable extension that defines and exports this itself
-extern {
-    #[no_mangle]
-    pub static mut sqlite3_api: *mut sqlite3_api_routines;
-}
+// sqlite3_api is defined in lib.rs as either a static or an extern when compiled as a loadable_extension
+#[cfg(feature = "loadable_extension")]
+use crate::sqlite3_api;
 
 "#,
                 );
             }
-
-            #[cfg(not(feature = "loadable_extension_embedded"))]
-            {
-                // a non-embedded loadable extension is a standalone rust loadable extension,
-                // so we need our own sqlite3_api global
-                output.push_str(
-                    r#"
-
-// bindings were built with (non-embedded) loadable_extension:
-// we define our own sqlite_api static variable and export it
-// to C
-#[no_mangle]
-pub static mut sqlite3_api: *mut sqlite3_api_routines = 0 as *mut sqlite3_api_routines;
-
-"#,
-                );
-            }
-
+            
             output.push_str(
-		r"
+                r"
 // sqlite3 API wrappers to support loadable extensions (Note: these were generated from build.rs - not by rust-bindgen)
 
 ");

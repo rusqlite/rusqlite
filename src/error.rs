@@ -351,6 +351,10 @@ pub fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     error_from_sqlite_code(code, message)
 }
 
+#[cfg(not(any(
+    feature = "loadable_extension",
+    feature = "loadable_extension_embedded"
+)))]
 macro_rules! check {
     ($funcall:expr) => {{
         let rc = $funcall;

@@ -31,7 +31,6 @@ function generate_bindgen_binding() {
 
 generate_bindgen_binding "buildtime_bindgen" $SQLITE3_LIB_DIR/bindgen_bundled_version.rs
 generate_bindgen_binding "buildtime_bindgen,loadable_extension" $SQLITE3_LIB_DIR/bindgen_bundled_version-ext.rs
-generate_bindgen_binding "buildtime_bindgen,loadable_extension_embedded" $SQLITE3_LIB_DIR/bindgen_bundled_version-ext-embed.rs
 
 # Sanity check
 cd $SCRIPT_DIR/..
