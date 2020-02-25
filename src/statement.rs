@@ -452,7 +452,7 @@ impl Statement<'_> {
             if let Some(i) = self.parameter_index(name)? {
                 self.bind_parameter(value, i)?;
             } else {
-                return Err(Error::InvalidParameterName(name.into()));
+                // Parameter is not used in the query; ignore
             }
         }
         Ok(())
