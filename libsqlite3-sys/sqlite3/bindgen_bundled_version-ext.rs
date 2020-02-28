@@ -7895,12 +7895,6 @@ fn bindgen_test_layout___va_list_tag() {
     );
 }
 
-// bindings were built with (non-embedded) loadable_extension:
-// we define our own sqlite_api static variable and export it
-// to C
-#[no_mangle]
-pub static mut sqlite3_api: *mut sqlite3_api_routines = 0 as *mut sqlite3_api_routines;
-
 // sqlite3 API wrappers to support loadable extensions (Note: these were generated from build.rs - not by rust-bindgen)
 
 pub unsafe fn sqlite3_aggregate_context(
