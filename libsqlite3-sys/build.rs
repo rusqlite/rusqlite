@@ -462,7 +462,7 @@ mod bindings {
                     );
                 }
             };
-            
+
             #[cfg(feature = "loadable_extension")]
             {
                 output.push_str(
@@ -475,7 +475,7 @@ use crate::sqlite3_api;
 "#,
                 );
             }
-            
+
             output.push_str(
                 r"
 // sqlite3 API wrappers to support loadable extensions (Note: these were generated from build.rs - not by rust-bindgen)

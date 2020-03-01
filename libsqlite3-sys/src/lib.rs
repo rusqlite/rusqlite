@@ -53,12 +53,15 @@ pub enum Limit {
 // bindings were built with loadable_extension_embedded:
 // define sqlite3_api as an extern since this code will be embedded
 // within a loadable extension that defines and exports this itself
-extern {
+extern "C" {
     #[no_mangle]
     pub static mut sqlite3_api: *mut sqlite3_api_routines;
 }
 
-#[cfg(all(feature = "loadable_extension", not(feature = "loadable_extension_embedded")))]
+#[cfg(all(
+    feature = "loadable_extension",
+    not(feature = "loadable_extension_embedded")
+))]
 // bindings were built with (non-embedded) loadable_extension:
 // we define our own (i.e. not extern) sqlite_api static
 // variable and export it publicly so that it is included in
