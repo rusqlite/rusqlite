@@ -359,3 +359,52 @@ macro_rules! check {
         }
     }};
 }
+
+#[cfg(any(
+    feature = "vtab",
+    feature = "loadable_extension",
+    feature = "loadable_extension_embedded"
+))]
+pub unsafe fn to_sqlite_error(
+    e: &Error,
+    err_msg: *mut *mut std::os::raw::c_char,
+) -> std::os::raw::c_int {
+    match e {
+        Error::SqliteFailure(err, s) => {
+            if let Some(s) = s {
+                *err_msg = alloc(&s);
+            }
+            err.extended_code
+        }
+        err => {
+            *err_msg = alloc(&err.to_string());
+            ffi::SQLITE_ERROR
+        }
+    }
+}
+
+// Space to hold this string must be obtained
+// from an SQLite memory allocation function
+#[cfg(any(
+    feature = "vtab",
+    feature = "loadable_extension",
+    feature = "loadable_extension_embedded"
+))]
+pub(crate) unsafe fn alloc<S: AsRef<[u8]>>(s: S) -> *mut std::os::raw::c_char {
+    use std::convert::TryInto;
+    let s = s.as_ref();
+    if memchr::memchr(0, s).is_some() {
+        panic!("Null character found")
+    }
+    let len = s.len();
+    let total_len = len.checked_add(1).unwrap();
+
+    let dst = ffi::sqlite3_malloc(total_len.try_into().unwrap()) as *mut std::os::raw::c_char;
+    if dst.is_null() {
+        panic!("Out of memory")
+    }
+    std::ptr::copy_nonoverlapping(s.as_ptr() as *const std::os::raw::c_char, dst, len);
+    // null terminator
+    *dst.offset(len.try_into().unwrap()) = 0;
+    dst
+}

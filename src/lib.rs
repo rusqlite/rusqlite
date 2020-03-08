@@ -77,6 +77,11 @@ use crate::types::ValueRef;
 
 pub use crate::cache::CachedStatement;
 pub use crate::column::Column;
+#[cfg(any(
+    feature = "loadable_extension",
+    feature = "loadable_extension_embedded"
+))]
+pub use crate::error::to_sqlite_error;
 pub use crate::error::Error;
 pub use crate::ffi::ErrorCode;
 #[cfg(feature = "hooks")]
