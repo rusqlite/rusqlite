@@ -20,7 +20,7 @@ maintenance = { status = "actively-developed" }
 name = "rusqlite"
 
 [workspace]
-members = ["libsqlite3-sys"]
+members = ["libsqlite3-sys", "dummy-extension"]
 
 [features]
 load_extension = []
