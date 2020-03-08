@@ -40,6 +40,7 @@ loadable_extension_embedded = ["libsqlite3-sys/loadable_extension_embedded"]
 limits = []
 hooks = []
 i128_blob = ["byteorder"]
+# when `sqlcipher` is used, `bundled` and `loadable_extension` are ignored
 sqlcipher = ["libsqlite3-sys/sqlcipher"]
 unlock_notify = ["libsqlite3-sys/unlock_notify"]
 # xSavepoint, xRelease and xRollbackTo: 3.7.7 (2011-06-23)

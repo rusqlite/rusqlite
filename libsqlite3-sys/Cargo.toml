@@ -14,10 +14,12 @@ categories = ["external-ffi-bindings"]
 [features]
 default = ["min_sqlite_version_3_6_8"]
 bundled = ["cc", "bundled_bindings"]
+# allows a dependency to use `bundled` only on windows
 bundled-windows = ["cc", "bundled_bindings"]
 buildtime_bindgen = ["bindgen", "pkg-config", "vcpkg"]
 loadable_extension = ["syn", "quote"]
 loadable_extension_embedded = ["loadable_extension"]
+# when `sqlcipher` is used, `bundled` and `loadable_extension` are ignored
 sqlcipher = []
 min_sqlite_version_3_6_8 = ["pkg-config", "vcpkg"]
 min_sqlite_version_3_7_16 = ["pkg-config", "vcpkg"]
