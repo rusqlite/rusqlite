@@ -7895,6 +7895,10 @@ fn bindgen_test_layout___va_list_tag() {
     );
 }
 
+// sqlite3_api is defined in lib.rs as either a static or an extern when compiled as a loadable_extension
+#[cfg(feature = "loadable_extension")]
+use crate::sqlite3_api;
+
 // sqlite3 API wrappers to support loadable extensions (Note: these were generated from build.rs - not by rust-bindgen)
 
 pub unsafe fn sqlite3_aggregate_context(
