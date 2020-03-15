@@ -32,8 +32,8 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - run: cargo build --features bundled
-      - run: cargo test --features bundled
+      - run: cargo build --all --all-targets --features bundled
+      - run: cargo test --all-targets --features bundled
       - name: Static build
         if: matrix.platform.os == 'windows-latest'
         shell: cmd

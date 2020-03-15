@@ -8,6 +8,9 @@ description = "Dummy extension"
 license = "MIT"
 keywords = ["sqlite", "extension"]
 
+[lib]
+crate-type = ["cdylib"]
+
 [dependencies.rusqlite]
 path = ".."
 default-features = false
