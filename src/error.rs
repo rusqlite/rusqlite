@@ -351,6 +351,17 @@ pub fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     error_from_sqlite_code(code, message)
 }
 
+/// Check SQLite method call.
+/// ```rust,no_run
+/// fn xyz() -> Result<()> {
+///     unsafe {
+///        // returns an Error if sqlite3_initialize fails
+///        check!(ffi::sqlite3_initialize());
+///     }
+///     Ok(())
+/// }
+/// ```
+#[macro_export]
 macro_rules! check {
     ($funcall:expr) => {{
         let rc = $funcall;
@@ -360,6 +371,7 @@ macro_rules! check {
     }};
 }
 
+/// Transform Rust error to SQLite error (message and code).
 #[cfg(any(
     feature = "vtab",
     feature = "loadable_extension",
