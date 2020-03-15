@@ -33,8 +33,8 @@ jobs:
           toolchain: stable
           override: true
       - run: cargo build --features bundled --workspace --all-targets
-      - run: cargo test --features bundled --workspace --all-targets
-      - run: cargo test --features bundled --workspace --doc
+      - run: cargo test --features bundled --workspace --all-targets --exclude dummy-extension
+      - run: cargo test --features bundled --workspace --doc --exclude dummy-extension
       - name: Static build
         if: matrix.platform.os == 'windows-latest'
         shell: cmd

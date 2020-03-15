@@ -353,15 +353,16 @@ pub fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
 
 /// Check SQLite method call.
 /// ```rust,no_run
+/// # use rusqlite::{self, ffi, Result};
+///
 /// fn xyz() -> Result<()> {
 ///     unsafe {
 ///        // returns an Error if sqlite3_initialize fails
-///        check!(ffi::sqlite3_initialize());
+///        rusqlite::check!(ffi::sqlite3_initialize());
 ///     }
 ///     Ok(())
 /// }
 /// ```
-#[macro_export]
 macro_rules! check {
     ($funcall:expr) => {{
         let rc = $funcall;
