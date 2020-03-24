@@ -658,10 +658,10 @@ impl Statement<'_> {
                 ValueRef::Real(unsafe { ffi::sqlite3_column_double(raw, col as c_int) })
             }
             ffi::SQLITE_TEXT | ffi::SQLITE_BLOB => {
-                let (blob, len) = unsafe {
+                let (len, blob) = unsafe {
                     (
-                        ffi::sqlite3_column_blob(raw, col as c_int),
                         ffi::sqlite3_column_bytes(raw, col as c_int),
+                        ffi::sqlite3_column_blob(raw, col as c_int),
                     )
                 };
 
@@ -1099,5 +1099,20 @@ mod test {
             .query_row("select val from tbl", NO_PARAMS, |row| row.get(0))
             .unwrap();
         assert_eq!(text, expected);
+    }
+
+    #[test]
+    fn test_utf16_conversion() {
+        let db = Connection::open_in_memory().unwrap();
+        db.pragma_update(None, "encoding", &"utf16").unwrap();
+        db.execute_batch("create table tbl(val text);").unwrap();
+
+        let expected = "テスト".to_string();
+        db.execute("insert into tbl values (?)", params![expected])
+            .unwrap();
+        let text: String = db
+            .query_row("select val from tbl", NO_PARAMS, |row| row.get(0))
+            .unwrap();
+        assert_eq!(text.as_bytes(), expected.as_bytes());
     }
 }
