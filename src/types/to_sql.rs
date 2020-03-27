@@ -209,12 +209,6 @@ impl<T: ToSql> ToSql for Option<T> {
     }
 }
 
-impl ToSql for Cow<'_, str> {
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(self.as_ref()))
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::ToSql;
