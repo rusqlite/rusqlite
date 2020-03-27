@@ -96,7 +96,7 @@ impl ToSql for Box<dyn ToSql> {
 
 impl<T: ToSql + Clone> ToSql for Cow<'_, T> {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        self.to_sql()
+        self.as_ref().to_sql()
     }
 }
 
