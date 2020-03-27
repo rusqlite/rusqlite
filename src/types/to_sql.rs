@@ -94,6 +94,33 @@ impl ToSql for Box<dyn ToSql> {
     }
 }
 
+impl<T: ToSql + Clone> ToSql for Cow<'_, T> {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        self.to_sql()
+    }
+}
+
+impl<T: ToSql> ToSql for Box<T> {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        let derefed: &dyn ToSql = &**self;
+        derefed.to_sql()
+    }
+}
+
+impl<T: ToSql> ToSql for std::rc::Rc<T> {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        let derefed: &dyn ToSql = &**self;
+        derefed.to_sql()
+    }
+}
+
+impl<T: ToSql> ToSql for std::sync::Arc<T> {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        let derefed: &dyn ToSql = &**self;
+        derefed.to_sql()
+    }
+}
+
 // We should be able to use a generic impl like this:
 //
 // impl<T: Copy> ToSql for T where T: Into<Value> {
@@ -188,12 +215,6 @@ impl ToSql for Cow<'_, str> {
     }
 }
 
-impl ToSql for Box<str> {
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(self.as_ref()))
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::ToSql;
@@ -220,6 +241,29 @@ mod test {
         assert!(r.is_ok());
         let cow = Cow::Owned::<str>(String::from(s));
         let r = cow.to_sql();
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_box() {
+        let s: Box<str> = "Hello world!".into();
+        let r = s.to_sql();
+
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_cells() {
+        use std::{rc::Rc, sync::Arc};
+
+        let source_str: Box<str> = "Hello world!".into();
+
+        let s: Rc<_> = Rc::new(source_str.clone());
+        let r = s.to_sql();
+        assert!(r.is_ok());
+
+        let s: Arc<_> = Arc::new(source_str);
+        let r = s.to_sql();
         assert!(r.is_ok());
     }
 
