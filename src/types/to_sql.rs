@@ -101,15 +101,13 @@ impl<T: ToSql + ?Sized> ToSql for Box<T> {
 
 impl<T: ToSql> ToSql for std::rc::Rc<T> {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let derefed: &dyn ToSql = &**self;
-        derefed.to_sql()
+        self.as_ref().to_sql()
     }
 }
 
 impl<T: ToSql> ToSql for std::sync::Arc<T> {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let derefed: &dyn ToSql = &**self;
-        derefed.to_sql()
+        self.as_ref().to_sql()
     }
 }
 
