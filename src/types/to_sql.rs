@@ -87,23 +87,15 @@ pub trait ToSql {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>>;
 }
 
-impl ToSql for Box<dyn ToSql> {
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let derefed: &dyn ToSql = &**self;
-        derefed.to_sql()
-    }
-}
-
 impl<T: ToSql + Clone> ToSql for Cow<'_, T> {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         self.as_ref().to_sql()
     }
 }
 
-impl<T: ToSql> ToSql for Box<T> {
+impl<T: ToSql + ?Sized> ToSql for Box<T> {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let derefed: &dyn ToSql = &**self;
-        derefed.to_sql()
+        self.as_ref().to_sql()
     }
 }
 
@@ -241,7 +233,7 @@ mod test {
     #[test]
     fn test_box() {
         let s: Box<str> = "Hello world!".into();
-        let r = s.to_sql();
+        let r = ToSql::to_sql(&s);
 
         assert!(r.is_ok());
     }
