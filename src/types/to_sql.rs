@@ -87,7 +87,7 @@ pub trait ToSql {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>>;
 }
 
-impl<T: ToSql + Clone> ToSql for Cow<'_, T> {
+impl<T: ToSql + Clone + ?Sized> ToSql for Cow<'_, T> {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         self.as_ref().to_sql()
     }
@@ -99,13 +99,13 @@ impl<T: ToSql + ?Sized> ToSql for Box<T> {
     }
 }
 
-impl<T: ToSql> ToSql for std::rc::Rc<T> {
+impl<T: ToSql + ?Sized> ToSql for std::rc::Rc<T> {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         self.as_ref().to_sql()
     }
 }
 
-impl<T: ToSql> ToSql for std::sync::Arc<T> {
+impl<T: ToSql + ?Sized> ToSql for std::sync::Arc<T> {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         self.as_ref().to_sql()
     }
