@@ -229,7 +229,23 @@ mod test {
     }
 
     #[test]
-    fn test_box() {
+    fn test_box_dyn() {
+        let s: Box<dyn ToSql> = Box::new("Hello world!");
+        let r = ToSql::to_sql(&s);
+
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_box_deref() {
+        let s: Box<str> = "Hello world!".into();
+        let r = s.to_sql();
+
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_box_direct() {
         let s: Box<str> = "Hello world!".into();
         let r = ToSql::to_sql(&s);
 
