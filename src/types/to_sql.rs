@@ -87,10 +87,27 @@ pub trait ToSql {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>>;
 }
 
-impl ToSql for Box<dyn ToSql> {
+impl<T: ToSql + Clone + ?Sized> ToSql for Cow<'_, T> {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let derefed: &dyn ToSql = &**self;
-        derefed.to_sql()
+        self.as_ref().to_sql()
+    }
+}
+
+impl<T: ToSql + ?Sized> ToSql for Box<T> {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        self.as_ref().to_sql()
+    }
+}
+
+impl<T: ToSql + ?Sized> ToSql for std::rc::Rc<T> {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        self.as_ref().to_sql()
+    }
+}
+
+impl<T: ToSql + ?Sized> ToSql for std::sync::Arc<T> {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        self.as_ref().to_sql()
     }
 }
 
@@ -182,12 +199,6 @@ impl<T: ToSql> ToSql for Option<T> {
     }
 }
 
-impl ToSql for Cow<'_, str> {
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(self.as_ref()))
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::ToSql;
@@ -214,6 +225,45 @@ mod test {
         assert!(r.is_ok());
         let cow = Cow::Owned::<str>(String::from(s));
         let r = cow.to_sql();
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_box_dyn() {
+        let s: Box<dyn ToSql> = Box::new("Hello world!");
+        let r = ToSql::to_sql(&s);
+
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_box_deref() {
+        let s: Box<str> = "Hello world!".into();
+        let r = s.to_sql();
+
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_box_direct() {
+        let s: Box<str> = "Hello world!".into();
+        let r = ToSql::to_sql(&s);
+
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn test_cells() {
+        use std::{rc::Rc, sync::Arc};
+
+        let source_str: Box<str> = "Hello world!".into();
+
+        let s: Rc<_> = Rc::new(source_str.clone());
+        let r = s.to_sql();
+        assert!(r.is_ok());
+
+        let s: Arc<_> = Arc::new(source_str);
+        let r = s.to_sql();
         assert!(r.is_ok());
     }
 
