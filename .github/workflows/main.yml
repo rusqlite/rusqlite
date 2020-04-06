@@ -19,7 +19,7 @@ jobs:
         platform:
 #          - { target: x86_64-pc-windows-gnu, os: windows-latest }
           - { target: x86_64-pc-windows-msvc, os: windows-latest }
-#          - { target: x86_64-unknown-linux-gnu, os: ubuntu-latest }
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-latest }
 
     runs-on: ${{ matrix.platform.os }}
 
@@ -35,6 +35,7 @@ jobs:
       - run: cargo build --features bundled --workspace --all-targets
       - run: cargo test --features bundled --workspace --all-targets
       - run: cargo test --features bundled --workspace --doc
+      - run: cargo test --features 'array backup blob bundled chrono collation csvtab extra_check functions hooks i128_blob limits load_extension serde_json series trace url vtab_v3 window'
       - name: Static build
         if: matrix.platform.os == 'windows-latest'
         shell: cmd
