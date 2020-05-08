@@ -66,22 +66,38 @@ mod build_bundled {
             .flag("-DSQLITE_DEFAULT_FOREIGN_KEYS=1")
             .flag("-DSQLITE_ENABLE_API_ARMOR")
             .flag("-DSQLITE_ENABLE_COLUMN_METADATA")
-            .flag("-DSQLITE_ENABLE_DBSTAT_VTAB")
-            .flag("-DSQLITE_ENABLE_FTS3")
-            .flag("-DSQLITE_ENABLE_FTS3_PARENTHESIS")
-            .flag("-DSQLITE_ENABLE_FTS5")
             .flag("-DSQLITE_ENABLE_JSON1")
-            .flag("-DSQLITE_ENABLE_LOAD_EXTENSION=1")
-            .flag("-DSQLITE_ENABLE_MEMORY_MANAGEMENT")
-            .flag("-DSQLITE_ENABLE_RTREE")
             .flag("-DSQLITE_ENABLE_STAT2")
             .flag("-DSQLITE_ENABLE_STAT4")
             .flag("-DSQLITE_SOUNDEX")
             .flag("-DSQLITE_THREADSAFE=1")
-            .flag("-DSQLITE_USE_URI")
             .flag("-DHAVE_USLEEP=1")
             .flag("-D_POSIX_THREAD_SAFE_FUNCTIONS") // cross compile with MinGW
             .warnings(false);
+
+        if cfg!(feature = "os-other") {
+            cfg.flag("-DSQLITE_OS_OTHER")
+                .flag("-DSQLITE_DEFAULT_MEMSTATUS=0")
+                .flag("-DSQLITE_MAX_EXPR_DEPTH=0")
+                .flag("-DSQLITE_OMIT_DEPRECATED")
+                .flag("-DSQLITE_OMIT_PROGRESS_CALLBACK")
+                .flag("-DSQLITE_OMIT_SHARED_CACHE")
+                .flag("-DSQLITE_OMIT_AUTOINIT")
+                .flag("-DSQLITE_OMIT_WAL")
+                .flag("-DSQLITE_OMIT_LOCALTIME")
+                .flag("-DSQLITE_MAX_MMAP_SIZE=0")
+                .flag("-DSQLITE_OMIT_LOAD_EXTENSION")
+                .flag("-D_FORTIFY_SOURCE=2");
+        } else {
+            cfg.flag("-DSQLITE_ENABLE_DBSTAT_VTAB")
+                .flag("-DSQLITE_ENABLE_FTS3")
+                .flag("-DSQLITE_ENABLE_FTS3_PARENTHESIS")
+                .flag("-DSQLITE_ENABLE_FTS5")
+                .flag("-DSQLITE_ENABLE_LOAD_EXTENSION=1")
+                .flag("-DSQLITE_ENABLE_MEMORY_MANAGEMENT")
+                .flag("-DSQLITE_ENABLE_RTREE")
+                .flag("-DSQLITE_USE_URI");
+        }
 
         if cfg!(feature = "with-asan") {
             cfg.flag("-fsanitize=address");
