@@ -310,7 +310,7 @@ pub struct IndexInfo(*mut ffi::sqlite3_index_info);
 
 impl IndexInfo {
     /// Record WHERE clause constraints.
-    pub fn constraints(&self) -> IndexConstraintIter<'_> {
+    pub fn constraints(&self) -> impl Iterator<Item = IndexConstraint<'_>> {
         let constraints =
             unsafe { slice::from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint as usize) };
         IndexConstraintIter {
@@ -319,7 +319,7 @@ impl IndexInfo {
     }
 
     /// Information about the ORDER BY clause.
-    pub fn order_bys(&self) -> OrderByIter<'_> {
+    pub fn order_bys(&self) -> impl Iterator<Item = OrderBy<'_>> {
         let order_bys =
             unsafe { slice::from_raw_parts((*self.0).aOrderBy, (*self.0).nOrderBy as usize) };
         OrderByIter {
@@ -375,8 +375,7 @@ impl IndexInfo {
     // TODO sqlite3_vtab_collation (http://sqlite.org/c3ref/vtab_collation.html)
 }
 
-/// `feature = "vtab"`
-pub struct IndexConstraintIter<'a> {
+struct IndexConstraintIter<'a> {
     iter: slice::Iter<'a, ffi::sqlite3_index_constraint>,
 }
 
@@ -428,8 +427,7 @@ impl IndexConstraintUsage<'_> {
     }
 }
 
-/// `feature = "vtab"`
-pub struct OrderByIter<'a> {
+struct OrderByIter<'a> {
     iter: slice::Iter<'a, ffi::sqlite3_index_info_sqlite3_index_orderby>,
 }
 
