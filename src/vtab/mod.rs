@@ -565,7 +565,7 @@ impl Values<'_> {
     }
 
     /// Turns `Values` into an iterator.
-    pub fn iter(&self) -> ValueIter<'_> {
+    pub fn iter(&self) -> impl Iterator<Item = ValueRef<'_>> + '_ {
         ValueIter {
             iter: self.args.iter(),
         }
@@ -577,7 +577,9 @@ impl<'a> IntoIterator for &'a Values<'a> {
     type Item = ValueRef<'a>;
 
     fn into_iter(self) -> ValueIter<'a> {
-        self.iter()
+        ValueIter {
+            iter: self.args.iter(),
+        }
     }
 }
 
