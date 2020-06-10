@@ -377,6 +377,7 @@ mod bindings {
         let header: String = header.into();
         let mut output = Vec::new();
         let mut bindings = bindgen::builder()
+            .trust_clang_mangling(false)
             .header(header.clone())
             .parse_callbacks(Box::new(SqliteTypeChooser))
             .rustfmt_bindings(true);
