@@ -4920,16 +4920,6 @@ fn bindgen_test_layout_sqlite3_api_routines() {
         )
     );
     assert_eq!(
-        unsafe { &(*(::std::ptr::null::<sqlite3_api_routines>())).vmprintf as *const _ as usize },
-        912usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(sqlite3_api_routines),
-            "::",
-            stringify!(vmprintf)
-        )
-    );
-    assert_eq!(
         unsafe {
             &(*(::std::ptr::null::<sqlite3_api_routines>())).overload_function as *const _ as usize
         },
@@ -5774,16 +5764,6 @@ fn bindgen_test_layout_sqlite3_api_routines() {
             stringify!(sqlite3_api_routines),
             "::",
             stringify!(uri_parameter)
-        )
-    );
-    assert_eq!(
-        unsafe { &(*(::std::ptr::null::<sqlite3_api_routines>())).vsnprintf as *const _ as usize },
-        1520usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(sqlite3_api_routines),
-            "::",
-            stringify!(vsnprintf)
         )
     );
     assert_eq!(
