@@ -53,7 +53,7 @@
 //!     Ok(())
 //! }
 //! ```
-#![allow(unknown_lints)]
+#![warn(missing_docs)]
 
 pub use libsqlite3_sys as ffi;
 
@@ -137,6 +137,9 @@ mod version;
 #[cfg(feature = "vtab")]
 pub mod vtab;
 
+pub(crate) mod util;
+pub(crate) use util::SmallCString;
+
 // Number of cached prepared statements we'll hold on to.
 const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
 /// To be used when your statement has no [parameter](https://sqlite.org/lang_expr.html#varparam).
@@ -213,7 +216,7 @@ macro_rules! named_params {
 }
 
 /// A typedef of the result returned by many methods.
-pub type Result<T> = result::Result<T, Error>;
+pub type Result<T, E = Error> = result::Result<T, E>;
 
 /// See the [method documentation](#tymethod.optional).
 pub trait OptionalExtension<T> {
@@ -240,8 +243,8 @@ unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
     String::from_utf8_lossy(c_slice).into_owned()
 }
 
-fn str_to_cstring(s: &str) -> Result<CString> {
-    Ok(CString::new(s)?)
+fn str_to_cstring(s: &str) -> Result<SmallCString> {
+    Ok(SmallCString::new(s)?)
 }
 
 /// Returns `Ok((string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT))`
@@ -274,9 +277,16 @@ fn len_as_c_int(len: usize) -> Result<c_int> {
     }
 }
 
+#[cfg(unix)]
+fn path_to_cstring(p: &Path) -> Result<CString> {
+    use std::os::unix::ffi::OsStrExt;
+    Ok(CString::new(p.as_os_str().as_bytes())?)
+}
+
+#[cfg(not(unix))]
 fn path_to_cstring(p: &Path) -> Result<CString> {
     let s = p.to_str().ok_or_else(|| Error::InvalidPath(p.to_owned()))?;
-    str_to_cstring(s)
+    Ok(CString::new(s)?)
 }
 
 /// Name for a database within a SQLite connection.
@@ -301,7 +311,7 @@ pub enum DatabaseName<'a> {
     feature = "modern_sqlite"
 ))]
 impl DatabaseName<'_> {
-    fn to_cstring(&self) -> Result<CString> {
+    fn to_cstring(&self) -> Result<util::SmallCString> {
         use self::DatabaseName::{Attached, Main, Temp};
         match *self {
             Main => str_to_cstring("main"),
@@ -611,11 +621,11 @@ impl Connection {
     ///
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string
     /// or if the underlying SQLite call fails.
-    pub fn query_row_and_then<T, E, P, F>(&self, sql: &str, params: P, f: F) -> result::Result<T, E>
+    pub fn query_row_and_then<T, E, P, F>(&self, sql: &str, params: P, f: F) -> Result<T, E>
     where
         P: IntoIterator,
         P::Item: ToSql,
-        F: FnOnce(&Row<'_>) -> result::Result<T, E>,
+        F: FnOnce(&Row<'_>) -> Result<T, E>,
         E: convert::From<Error>,
     {
         let mut stmt = self.prepare(sql)?;
@@ -656,14 +666,14 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn close(self) -> std::result::Result<(), (Connection, Error)> {
+    pub fn close(self) -> Result<(), (Connection, Error)> {
         self.flush_prepared_statement_cache();
         let r = self.db.borrow_mut().close();
         r.map_err(move |err| (self, err))
     }
 
-    /// Enable loading of SQLite extensions. Strongly consider using
-    /// `LoadExtensionGuard` instead of this function.
+    /// `feature = "load_extension"` Enable loading of SQLite extensions.
+    /// Strongly consider using `LoadExtensionGuard` instead of this function.
     ///
     /// ## Example
     ///
@@ -685,7 +695,7 @@ impl Connection {
         self.db.borrow_mut().enable_load_extension(1)
     }
 
-    /// Disable loading of SQLite extensions.
+    /// `feature = "load_extension"` Disable loading of SQLite extensions.
     ///
     /// See `load_extension_enable` for an example.
     ///
@@ -697,9 +707,9 @@ impl Connection {
         self.db.borrow_mut().enable_load_extension(0)
     }
 
-    /// Load the SQLite extension at `dylib_path`. `dylib_path` is passed
-    /// through to `sqlite3_load_extension`, which may attempt OS-specific
-    /// modifications if the file cannot be loaded directly.
+    /// `feature = "load_extension"` Load the SQLite extension at `dylib_path`.
+    /// `dylib_path` is passed through to `sqlite3_load_extension`, which may
+    /// attempt OS-specific modifications if the file cannot be loaded directly.
     ///
     /// If `entry_point` is `None`, SQLite will attempt to find the entry
     /// point. If it is not `None`, the entry point will be passed through
@@ -736,7 +746,7 @@ impl Connection {
     /// # Warning
     ///
     /// You should not need to use this function. If you do need to, please
-    /// [open an issue on the rusqlite repository](https://github.com/jgallagher/rusqlite/issues) and describe
+    /// [open an issue on the rusqlite repository](https://github.com/rusqlite/rusqlite/issues) and describe
     /// your use case.
     ///
     /// # Safety
@@ -805,19 +815,32 @@ impl fmt::Debug for Connection {
 }
 
 bitflags::bitflags! {
-    #[doc = "Flags for opening SQLite database connections."]
-    #[doc = "See [sqlite3_open_v2](http://www.sqlite.org/c3ref/open.html) for details."]
+    /// Flags for opening SQLite database connections.
+    /// See [sqlite3_open_v2](http://www.sqlite.org/c3ref/open.html) for details.
     #[repr(C)]
     pub struct OpenFlags: ::std::os::raw::c_int {
+        /// The database is opened in read-only mode.
+        /// If the database does not already exist, an error is returned.
         const SQLITE_OPEN_READ_ONLY     = ffi::SQLITE_OPEN_READONLY;
+        /// The database is opened for reading and writing if possible,
+        /// or reading only if the file is write protected by the operating system.
+        /// In either case the database must already exist, otherwise an error is returned.
         const SQLITE_OPEN_READ_WRITE    = ffi::SQLITE_OPEN_READWRITE;
+        /// The database is created if it does not already exist
         const SQLITE_OPEN_CREATE        = ffi::SQLITE_OPEN_CREATE;
+        /// The filename can be interpreted as a URI if this flag is set.
         const SQLITE_OPEN_URI           = 0x0000_0040;
+        /// The database will be opened as an in-memory database.
         const SQLITE_OPEN_MEMORY        = 0x0000_0080;
+        /// The new database connection will use the "multi-thread" threading mode.
         const SQLITE_OPEN_NO_MUTEX      = ffi::SQLITE_OPEN_NOMUTEX;
+        /// The new database connection will use the "serialized" threading mode.
         const SQLITE_OPEN_FULL_MUTEX    = ffi::SQLITE_OPEN_FULLMUTEX;
+        /// The database is opened shared cache enabled.
         const SQLITE_OPEN_SHARED_CACHE  = 0x0002_0000;
+        /// The database is opened shared cache disabled.
         const SQLITE_OPEN_PRIVATE_CACHE = 0x0004_0000;
+        /// The database filename is not allowed to be a symbolic link.
         const SQLITE_OPEN_NOFOLLOW = 0x0100_0000;
     }
 }
@@ -1034,6 +1057,35 @@ mod test {
         }
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn test_invalid_unicode_file_names() {
+        use std::ffi::OsStr;
+        use std::fs::File;
+        use std::os::unix::ffi::OsStrExt;
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        let path = temp_dir.path();
+        if File::create(path.join(OsStr::from_bytes(&[0xFE]))).is_err() {
+            // Skip test, filesystem doesn't support invalid Unicode
+            return;
+        }
+        let db_path = path.join(OsStr::from_bytes(&[0xFF]));
+        {
+            let db = Connection::open(&db_path).unwrap();
+            let sql = "BEGIN;
+                   CREATE TABLE foo(x INTEGER);
+                   INSERT INTO foo VALUES(42);
+                   END;";
+            db.execute_batch(sql).unwrap();
+        }
+
+        let db = Connection::open(&db_path).unwrap();
+        let the_answer: Result<i64> = db.query_row("SELECT x FROM foo", NO_PARAMS, |r| r.get(0));
+
+        assert_eq!(42i64, the_answer.unwrap());
+    }
+
     #[test]
     fn test_close_retry() {
         let db = checked_memory_handle();
@@ -1043,25 +1095,23 @@ mod test {
         // statement first.
         let raw_stmt = {
             use super::str_to_cstring;
-            use std::mem::MaybeUninit;
             use std::os::raw::c_int;
             use std::ptr;
 
             let raw_db = db.db.borrow_mut().db;
             let sql = "SELECT 1";
-            let mut raw_stmt = MaybeUninit::uninit();
+            let mut raw_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
             let cstring = str_to_cstring(sql).unwrap();
             let rc = unsafe {
                 ffi::sqlite3_prepare_v2(
                     raw_db,
                     cstring.as_ptr(),
                     (sql.len() + 1) as c_int,
-                    raw_stmt.as_mut_ptr(),
+                    &mut raw_stmt,
                     ptr::null_mut(),
                 )
             };
             assert_eq!(rc, ffi::SQLITE_OK);
-            let raw_stmt: *mut ffi::sqlite3_stmt = unsafe { raw_stmt.assume_init() };
             raw_stmt
         };
 
@@ -1507,7 +1557,7 @@ mod test {
         }
 
         impl fmt::Display for CustomError {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> ::std::result::Result<(), fmt::Error> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
                 match *self {
                     CustomError::SomeError => write!(f, "my custom error"),
                     CustomError::Sqlite(ref se) => write!(f, "my custom error: {}", se),
@@ -1534,7 +1584,7 @@ mod test {
             }
         }
 
-        type CustomResult<T> = ::std::result::Result<T, CustomError>;
+        type CustomResult<T> = Result<T, CustomError>;
 
         #[test]
         fn test_query_and_then() {

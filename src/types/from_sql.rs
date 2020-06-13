@@ -4,6 +4,7 @@ use std::fmt;
 
 /// Enum listing possible errors from `FromSql` trait.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum FromSqlError {
     /// Error when an SQLite value is requested, but the type of the result
     /// cannot be converted to the requested Rust type.
@@ -13,18 +14,19 @@ pub enum FromSqlError {
     /// requested type.
     OutOfRange(i64),
 
-    /// Error returned when reading an `i128` from a blob with a size
-    /// other than 16. Only available when the `i128_blob` feature is enabled.
+    /// `feature = "i128_blob"` Error returned when reading an `i128` from a
+    /// blob with a size other than 16. Only available when the `i128_blob`
+    /// feature is enabled.
     #[cfg(feature = "i128_blob")]
     InvalidI128Size(usize),
 
-    /// Error returned when reading a `uuid` from a blob with a size
-    /// other than 16. Only available when the `uuid` feature is enabled.
+    /// `feature = "uuid"` Error returned when reading a `uuid` from a blob with
+    /// a size other than 16. Only available when the `uuid` feature is enabled.
     #[cfg(feature = "uuid")]
     InvalidUuidSize(usize),
 
     /// An error case available for implementors of the `FromSql` trait.
-    Other(Box<dyn Error + Send + Sync>),
+    Other(Box<dyn Error + Send + Sync + 'static>),
 }
 
 impl PartialEq for FromSqlError {
@@ -60,25 +62,11 @@ impl fmt::Display for FromSqlError {
 }
 
 impl Error for FromSqlError {
-    #[allow(deprecated)]
-    fn description(&self) -> &str {
-        match *self {
-            FromSqlError::InvalidType => "invalid type",
-            FromSqlError::OutOfRange(_) => "value out of range",
-            #[cfg(feature = "i128_blob")]
-            FromSqlError::InvalidI128Size(_) => "unexpected blob size for 128bit value",
-            #[cfg(feature = "uuid")]
-            FromSqlError::InvalidUuidSize(_) => "unexpected blob size for UUID value",
-            FromSqlError::Other(ref err) => err.description(),
-        }
-    }
-
-    #[allow(clippy::match_same_arms)]
-    #[allow(deprecated)]
-    fn cause(&self) -> Option<&dyn Error> {
-        match *self {
-            FromSqlError::Other(ref err) => err.cause(),
-            _ => None,
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        if let FromSqlError::Other(ref err) = self {
+            Some(&**err)
+        } else {
+            None
         }
     }
 }
@@ -98,6 +86,7 @@ pub type FromSqlResult<T> = Result<T, FromSqlError>;
 /// fetching values as i64 and then doing the interpretation themselves or by
 /// defining a newtype and implementing `FromSql`/`ToSql` for it.
 pub trait FromSql: Sized {
+    /// Converts SQLite value into Rust value.
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self>;
 }
 

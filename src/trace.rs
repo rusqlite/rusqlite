@@ -1,4 +1,4 @@
-//! Tracing and profiling functions. Error and warning log.
+//! `feature = "trace"` Tracing and profiling functions. Error and warning log.
 
 use std::ffi::CStr;
 use std::mem;
@@ -10,7 +10,7 @@ use std::time::Duration;
 use super::ffi;
 use crate::Connection;
 
-/// Set up the process-wide SQLite error logging callback.
+/// `feature = "trace"` Set up the process-wide SQLite error logging callback.
 ///
 /// # Safety
 ///
@@ -61,7 +61,8 @@ pub unsafe fn config_log(callback: Option<fn(std::os::raw::c_int, &str)>) -> cra
     }
 }
 
-/// Write a message into the error log established by `config_log`.
+/// `feature = "trace"` Write a message into the error log established by
+/// `config_log`.
 #[cfg(not(any(
     feature = "loadable_extension",
     feature = "loadable_extension_embedded"
@@ -70,13 +71,13 @@ pub fn log(err_code: std::os::raw::c_int, msg: &str) {
     use std::ffi::CString;
     let msg = CString::new(msg).expect("SQLite log messages cannot contain embedded zeroes");
     unsafe {
-        ffi::sqlite3_log(err_code, msg.as_ptr());
+        ffi::sqlite3_log(err_code, b"%s\0" as *const _ as *const c_char, msg.as_ptr());
     }
 }
 
 impl Connection {
-    /// Register or clear a callback function that can be used for tracing the
-    /// execution of SQL statements.
+    /// `feature = "trace"` Register or clear a callback function that can be
+    /// used for tracing the execution of SQL statements.
     ///
     /// Prepared statement placeholders are replaced/logged with their assigned
     /// values. There can only be a single tracer defined for each database
@@ -100,8 +101,8 @@ impl Connection {
         }
     }
 
-    /// Register or clear a callback function that can be used for profiling
-    /// the execution of SQL statements.
+    /// `feature = "trace"` Register or clear a callback function that can be
+    /// used for profiling the execution of SQL statements.
     ///
     /// There can only be a single profiler defined for each database
     /// connection. Setting a new profiler clears the old one.

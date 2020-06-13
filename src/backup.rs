@@ -1,4 +1,4 @@
-//! Online SQLite backup API.
+//! `feature = "backup"` Online SQLite backup API.
 //!
 //! To create a `Backup`, you must have two distinct `Connection`s - one
 //! for the source (which can be used while the backup is running) and one for
@@ -43,7 +43,9 @@ use crate::error::{error_from_handle, error_from_sqlite_code};
 use crate::{Connection, DatabaseName, Result};
 
 impl Connection {
-    /// Back up the `name` database to the given destination path.
+    /// `feature = "backup"` Back up the `name` database to the given
+    /// destination path.
+    ///
     /// If `progress` is not `None`, it will be called periodically
     /// until the backup completes.
     ///
@@ -75,15 +77,15 @@ impl Connection {
 
         match r {
             Done => Ok(()),
-            Busy => Err(error_from_handle(ptr::null_mut(), ffi::SQLITE_BUSY)),
-            Locked => Err(error_from_handle(ptr::null_mut(), ffi::SQLITE_LOCKED)),
+            Busy => Err(unsafe { error_from_handle(ptr::null_mut(), ffi::SQLITE_BUSY) }),
+            Locked => Err(unsafe { error_from_handle(ptr::null_mut(), ffi::SQLITE_LOCKED) }),
             More => unreachable!(),
         }
     }
 
-    /// Restore the given source path into the `name` database.
-    /// If `progress` is not `None`, it will be called periodically
-    /// until the restore completes.
+    /// `feature = "backup"` Restore the given source path into the
+    /// `name` database. If `progress` is not `None`, it will be
+    /// called periodically until the restore completes.
     ///
     /// For more fine-grained control over the restore process (e.g.,
     /// to sleep periodically during the restore or to restore from an
@@ -121,15 +123,16 @@ impl Connection {
 
         match r {
             Done => Ok(()),
-            Busy => Err(error_from_handle(ptr::null_mut(), ffi::SQLITE_BUSY)),
-            Locked => Err(error_from_handle(ptr::null_mut(), ffi::SQLITE_LOCKED)),
+            Busy => Err(unsafe { error_from_handle(ptr::null_mut(), ffi::SQLITE_BUSY) }),
+            Locked => Err(unsafe { error_from_handle(ptr::null_mut(), ffi::SQLITE_LOCKED) }),
             More => unreachable!(),
         }
     }
 }
 
-/// Possible successful results of calling `Backup::step`.
+/// `feature = "backup"` Possible successful results of calling `Backup::step`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum StepResult {
     /// The backup is complete.
     Done,
@@ -147,11 +150,11 @@ pub enum StepResult {
     Locked,
 }
 
-/// Struct specifying the progress of a backup. The percentage completion can
-/// be calculated as `(pagecount - remaining) / pagecount`. The progress of a
-/// backup is as of the last call to `step` - if the source database is
-/// modified after a call to `step`, the progress value will become outdated
-/// and potentially incorrect.
+/// `feature = "backup"` Struct specifying the progress of a backup. The
+/// percentage completion can be calculated as `(pagecount - remaining) /
+/// pagecount`. The progress of a backup is as of the last call to `step` - if
+/// the source database is modified after a call to `step`, the progress value
+/// will become outdated and potentially incorrect.
 #[derive(Copy, Clone, Debug)]
 pub struct Progress {
     /// Number of pages in the source database that still need to be backed up.
@@ -160,10 +163,10 @@ pub struct Progress {
     pub pagecount: c_int,
 }
 
-/// A handle to an online backup.
+/// `feature = "backup"` A handle to an online backup.
 pub struct Backup<'a, 'b> {
-    phantom_from: PhantomData<&'a ()>,
-    phantom_to: PhantomData<&'b ()>,
+    phantom_from: PhantomData<&'a Connection>,
+    phantom_to: PhantomData<&'b Connection>,
     b: *mut ffi::sqlite3_backup,
 }
 

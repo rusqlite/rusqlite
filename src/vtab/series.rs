@@ -1,25 +1,24 @@
-//! generate series virtual table.
+//! `feature = "series"` Generate series virtual table.
 //!
-//! Port of C [generate series "function"](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/series.c).
+//! Port of C [generate series
+//! "function"](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/series.c):
+//! https://www.sqlite.org/series.html
 use std::default::Default;
+use std::marker::PhantomData;
 use std::os::raw::c_int;
 
 use crate::ffi;
 use crate::types::Type;
 use crate::vtab::{
-    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, Module, VTab, VTabConnection,
-    VTabCursor, Values,
+    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConnection, VTabCursor,
+    Values,
 };
 use crate::{Connection, Result};
 
-/// Register the "generate_series" module.
+/// `feature = "series"` Register the "generate_series" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module("generate_series", &SERIES_MODULE, aux)
-}
-
-lazy_static::lazy_static! {
-    static ref SERIES_MODULE: Module<SeriesTab> = eponymous_only_module::<SeriesTab>(1);
+    conn.create_module("generate_series", eponymous_only_module::<SeriesTab>(), aux)
 }
 
 // Column numbers
@@ -51,9 +50,9 @@ struct SeriesTab {
     base: ffi::sqlite3_vtab,
 }
 
-impl VTab for SeriesTab {
+unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
     type Aux = ();
-    type Cursor = SeriesTabCursor;
+    type Cursor = SeriesTabCursor<'vtab>;
 
     fn connect(
         _: &mut VTabConnection,
@@ -153,15 +152,14 @@ impl VTab for SeriesTab {
         Ok(())
     }
 
-    fn open(&self) -> Result<SeriesTabCursor> {
+    fn open(&self) -> Result<SeriesTabCursor<'_>> {
         Ok(SeriesTabCursor::new())
     }
 }
 
 /// A cursor for the Series virtual table
-#[derive(Default)]
 #[repr(C)]
-struct SeriesTabCursor {
+struct SeriesTabCursor<'vtab> {
     /// Base class. Must be first
     base: ffi::sqlite3_vtab_cursor,
     /// True to count down rather than up
@@ -176,14 +174,24 @@ struct SeriesTabCursor {
     max_value: i64,
     /// Increment ("step")
     step: i64,
+    phantom: PhantomData<&'vtab SeriesTab>,
 }
 
-impl SeriesTabCursor {
-    fn new() -> SeriesTabCursor {
-        SeriesTabCursor::default()
+impl SeriesTabCursor<'_> {
+    fn new<'vtab>() -> SeriesTabCursor<'vtab> {
+        SeriesTabCursor {
+            base: ffi::sqlite3_vtab_cursor::default(),
+            is_desc: false,
+            row_id: 0,
+            value: 0,
+            min_value: 0,
+            max_value: 0,
+            step: 0,
+            phantom: PhantomData,
+        }
     }
 }
-impl VTabCursor for SeriesTabCursor {
+unsafe impl VTabCursor for SeriesTabCursor<'_> {
     fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
         let idx_num = QueryPlanFlags::from_bits_truncate(idx_num);
         let mut i = 0;

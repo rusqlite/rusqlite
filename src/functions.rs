@@ -1,4 +1,4 @@
-//! Create or redefine SQL functions.
+//! `feature = "functions"` Create or redefine SQL functions.
 //!
 //! # Example
 //!
@@ -12,6 +12,8 @@
 //! use regex::Regex;
 //! use rusqlite::functions::FunctionFlags;
 //! use rusqlite::{Connection, Error, Result, NO_PARAMS};
+//! use std::sync::Arc;
+//! type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 //!
 //! fn add_regexp_function(db: &Connection) -> Result<()> {
 //!     db.create_scalar_function(
@@ -20,33 +22,18 @@
 //!         FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
 //!         move |ctx| {
 //!             assert_eq!(ctx.len(), 2, "called with unexpected number of arguments");
-//!
-//!             let saved_re: Option<&Regex> = ctx.get_aux(0)?;
-//!             let new_re = match saved_re {
-//!                 None => {
-//!                     let s = ctx.get::<String>(0)?;
-//!                     match Regex::new(&s) {
-//!                         Ok(r) => Some(r),
-//!                         Err(err) => return Err(Error::UserFunctionError(Box::new(err))),
-//!                     }
-//!                 }
-//!                 Some(_) => None,
-//!             };
-//!
+//!             let regexp: Arc<Regex> = ctx
+//!                 .get_or_create_aux(0, |vr| -> Result<_, BoxError> {
+//!                     Ok(Regex::new(vr.as_str()?)?)
+//!                 })?;
 //!             let is_match = {
-//!                 let re = saved_re.unwrap_or_else(|| new_re.as_ref().unwrap());
-//!
 //!                 let text = ctx
 //!                     .get_raw(1)
 //!                     .as_str()
 //!                     .map_err(|e| Error::UserFunctionError(e.into()))?;
 //!
-//!                 re.is_match(text)
+//!                 regexp.is_match(text)
 //!             };
-//!
-//!             if let Some(re) = new_re {
-//!                 ctx.set_aux(0, re);
-//!             }
 //!
 //!             Ok(is_match)
 //!         },
@@ -67,10 +54,12 @@
 //!     Ok(())
 //! }
 //! ```
+use std::any::Any;
 use std::os::raw::{c_int, c_void};
 use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
 use std::ptr;
 use std::slice;
+use std::sync::Arc;
 
 use crate::ffi;
 use crate::ffi::sqlite3_context;
@@ -115,7 +104,8 @@ unsafe extern "C" fn free_boxed_value<T>(p: *mut c_void) {
     drop(Box::from_raw(p as *mut T));
 }
 
-/// Context is a wrapper for the SQLite function evaluation context.
+/// `feature = "functions"` Context is a wrapper for the SQLite function
+/// evaluation context.
 pub struct Context<'a> {
     ctx: *mut sqlite3_context,
     args: &'a [*mut sqlite3_value],
@@ -172,40 +162,69 @@ impl Context<'_> {
         unsafe { ValueRef::from_value(arg) }
     }
 
+    /// Fetch or insert the the auxilliary data associated with a particular
+    /// parameter. This is intended to be an easier-to-use way of fetching it
+    /// compared to calling `get_aux` and `set_aux` separately.
+    ///
+    /// See https://www.sqlite.org/c3ref/get_auxdata.html for a discussion of
+    /// this feature, or the unit tests of this module for an example.
+    pub fn get_or_create_aux<T, E, F>(&self, arg: c_int, func: F) -> Result<Arc<T>>
+    where
+        T: Send + Sync + 'static,
+        E: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
+        F: FnOnce(ValueRef<'_>) -> Result<T, E>,
+    {
+        if let Some(v) = self.get_aux(arg)? {
+            Ok(v)
+        } else {
+            let vr = self.get_raw(arg as usize);
+            self.set_aux(
+                arg,
+                func(vr).map_err(|e| Error::UserFunctionError(e.into()))?,
+            )
+        }
+    }
+
     /// Sets the auxilliary data associated with a particular parameter. See
     /// https://www.sqlite.org/c3ref/get_auxdata.html for a discussion of
     /// this feature, or the unit tests of this module for an example.
-    pub fn set_aux<T: 'static>(&self, arg: c_int, value: T) {
-        let boxed = Box::into_raw(Box::new((std::any::TypeId::of::<T>(), value)));
+    pub fn set_aux<T: Send + Sync + 'static>(&self, arg: c_int, value: T) -> Result<Arc<T>> {
+        let orig: Arc<T> = Arc::new(value);
+        let inner: AuxInner = orig.clone();
+        let outer = Box::new(inner);
+        let raw: *mut AuxInner = Box::into_raw(outer);
         unsafe {
             ffi::sqlite3_set_auxdata(
                 self.ctx,
                 arg,
-                boxed as *mut c_void,
-                Some(free_boxed_value::<(std::any::TypeId, T)>),
+                raw as *mut _,
+                Some(free_boxed_value::<AuxInner>),
             )
         };
+        Ok(orig)
     }
 
-    /// Gets the auxilliary data that was associated with a given parameter
-    /// via `set_aux`. Returns `Ok(None)` if no data has been associated,
-    /// and .
-    pub fn get_aux<T: 'static>(&self, arg: c_int) -> Result<Option<&T>> {
-        let p = unsafe { ffi::sqlite3_get_auxdata(self.ctx, arg) as *mut (std::any::TypeId, T) };
+    /// Gets the auxilliary data that was associated with a given parameter via
+    /// `set_aux`. Returns `Ok(None)` if no data has been associated, and
+    /// Ok(Some(v)) if it has. Returns an error if the requested type does not
+    /// match.
+    pub fn get_aux<T: Send + Sync + 'static>(&self, arg: c_int) -> Result<Option<Arc<T>>> {
+        let p = unsafe { ffi::sqlite3_get_auxdata(self.ctx, arg) as *const AuxInner };
         if p.is_null() {
             Ok(None)
         } else {
-            let id_val = unsafe { &*p };
-            if std::any::TypeId::of::<T>() != id_val.0 {
-                Err(Error::GetAuxWrongType)
-            } else {
-                Ok(Some(&id_val.1))
-            }
+            let v: AuxInner = AuxInner::clone(unsafe { &*p });
+            v.downcast::<T>()
+                .map(Some)
+                .map_err(|_| Error::GetAuxWrongType)
         }
     }
 }
 
-/// Aggregate is the callback interface for user-defined aggregate function.
+type AuxInner = Arc<dyn Any + Send + Sync + 'static>;
+
+/// `feature = "functions"` Aggregate is the callback interface for user-defined
+/// aggregate function.
 ///
 /// `A` is the type of the aggregation context and `T` is the type of the final
 /// result. Implementations should be stateless.
@@ -231,8 +250,8 @@ where
     fn finalize(&self, _: Option<A>) -> Result<T>;
 }
 
-/// WindowAggregate is the callback interface for user-defined aggregate window
-/// function.
+/// `feature = "window"` WindowAggregate is the callback interface for
+/// user-defined aggregate window function.
 #[cfg(feature = "window")]
 pub trait WindowAggregate<A, T>: Aggregate<A, T>
 where
@@ -248,17 +267,26 @@ where
 }
 
 bitflags::bitflags! {
-    #[doc = "Function Flags."]
-    #[doc = "See [sqlite3_create_function](https://sqlite.org/c3ref/create_function.html) for details."]
+    /// Function Flags.
+    /// See [sqlite3_create_function](https://sqlite.org/c3ref/create_function.html)
+    /// and [Function Flags](https://sqlite.org/c3ref/c_deterministic.html) for details.
     #[repr(C)]
     pub struct FunctionFlags: ::std::os::raw::c_int {
+        /// Specifies UTF-8 as the text encoding this SQL function prefers for its parameters.
         const SQLITE_UTF8     = ffi::SQLITE_UTF8;
+        /// Specifies UTF-16 using little-endian byte order as the text encoding this SQL function prefers for its parameters.
         const SQLITE_UTF16LE  = ffi::SQLITE_UTF16LE;
+        /// Specifies UTF-16 using big-endian byte order as the text encoding this SQL function prefers for its parameters.
         const SQLITE_UTF16BE  = ffi::SQLITE_UTF16BE;
+        /// Specifies UTF-16 using native byte order as the text encoding this SQL function prefers for its parameters.
         const SQLITE_UTF16    = ffi::SQLITE_UTF16;
-        const SQLITE_DETERMINISTIC = 0x0000_0000_0800; // 3.8.3
+        /// Means that the function always gives the same output when the input parameters are the same.
+        const SQLITE_DETERMINISTIC = ffi::SQLITE_DETERMINISTIC;
+        /// Means that the function may only be invoked from top-level SQL.
         const SQLITE_DIRECTONLY    = 0x0000_0008_0000; // 3.30.0
+        /// Indicates to SQLite that a function may call `sqlite3_value_subtype()` to inspect the sub-types of its arguments.
         const SQLITE_SUBTYPE       = 0x0000_0010_0000; // 3.30.0
+        /// Means that the function is unlikely to cause problems even if misused.
         const SQLITE_INNOCUOUS     = 0x0000_0020_0000; // 3.31.0
     }
 }
@@ -270,7 +298,8 @@ impl Default for FunctionFlags {
 }
 
 impl Connection {
-    /// Attach a user-defined scalar function to this database connection.
+    /// `feature = "functions"` Attach a user-defined scalar function to
+    /// this database connection.
     ///
     /// `fn_name` is the name the function will be accessible from SQL.
     /// `n_arg` is the number of arguments to the function. Use `-1` for a
@@ -321,7 +350,8 @@ impl Connection {
             .create_scalar_function(fn_name, n_arg, flags, x_func)
     }
 
-    /// Attach a user-defined aggregate function to this database connection.
+    /// `feature = "functions"` Attach a user-defined aggregate function to this
+    /// database connection.
     ///
     /// # Failure
     ///
@@ -343,6 +373,11 @@ impl Connection {
             .create_aggregate_function(fn_name, n_arg, flags, aggr)
     }
 
+    /// `feature = "window"` Attach a user-defined aggregate window function to
+    /// this database connection.
+    ///
+    /// See https://sqlite.org/windowfunctions.html#udfwinfunc for more
+    /// information.
     #[cfg(feature = "window")]
     pub fn create_window_function<A, W, T>(
         &self,
@@ -361,7 +396,8 @@ impl Connection {
             .create_window_function(fn_name, n_arg, flags, aggr)
     }
 
-    /// Removes a user-defined function from this database connection.
+    /// `feature = "functions"` Removes a user-defined function from this
+    /// database connection.
     ///
     /// `fn_name` and `n_arg` should match the name and number of arguments
     /// given to `create_scalar_function` or `create_aggregate_function`.
@@ -756,33 +792,20 @@ mod test {
     // expression multiple times within one query.
     fn regexp_with_auxilliary(ctx: &Context<'_>) -> Result<bool> {
         assert_eq!(ctx.len(), 2, "called with unexpected number of arguments");
-
-        let saved_re: Option<&Regex> = ctx.get_aux(0)?;
-        let new_re = match saved_re {
-            None => {
-                let s = ctx.get::<String>(0)?;
-                match Regex::new(&s) {
-                    Ok(r) => Some(r),
-                    Err(err) => return Err(Error::UserFunctionError(Box::new(err))),
-                }
-            }
-            Some(_) => None,
-        };
+        type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
+        let regexp: std::sync::Arc<Regex> = ctx
+            .get_or_create_aux(0, |vr| -> Result<_, BoxError> {
+                Ok(Regex::new(vr.as_str()?)?)
+            })?;
 
         let is_match = {
-            let re = saved_re.unwrap_or_else(|| new_re.as_ref().unwrap());
-
             let text = ctx
                 .get_raw(1)
                 .as_str()
                 .map_err(|e| Error::UserFunctionError(e.into()))?;
 
-            re.is_match(text)
+            regexp.is_match(text)
         };
-
-        if let Some(re) = new_re {
-            ctx.set_aux(0, re);
-        }
 
         Ok(is_match)
     }
@@ -858,10 +881,10 @@ mod test {
         let db = Connection::open_in_memory().unwrap();
         db.create_scalar_function("example", 2, FunctionFlags::default(), |ctx| {
             if !ctx.get::<bool>(1)? {
-                ctx.set_aux::<i64>(0, 100);
+                ctx.set_aux::<i64>(0, 100)?;
             } else {
                 assert_eq!(ctx.get_aux::<String>(0), Err(Error::GetAuxWrongType));
-                assert_eq!(ctx.get_aux::<i64>(0), Ok(Some(&100)));
+                assert_eq!(*ctx.get_aux::<i64>(0).unwrap().unwrap(), 100);
             }
             Ok(true)
         })

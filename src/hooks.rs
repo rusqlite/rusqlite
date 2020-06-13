@@ -1,4 +1,4 @@
-//! Commit, Data Change and Rollback Notification Callbacks
+//! `feature = "hooks"` Commit, Data Change and Rollback Notification Callbacks
 #![allow(non_camel_case_types)]
 
 use std::os::raw::{c_char, c_int, c_void};
@@ -9,13 +9,18 @@ use crate::ffi;
 
 use crate::{Connection, InnerConnection};
 
-/// Action Codes
+/// `feature = "hooks"` Action Codes
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(i32)]
+#[non_exhaustive]
 pub enum Action {
+    /// Unsupported / unexpected action
     UNKNOWN = -1,
+    /// DELETE command
     SQLITE_DELETE = ffi::SQLITE_DELETE,
+    /// INSERT command
     SQLITE_INSERT = ffi::SQLITE_INSERT,
+    /// UPDATE command
     SQLITE_UPDATE = ffi::SQLITE_UPDATE,
 }
 
@@ -31,8 +36,8 @@ impl From<i32> for Action {
 }
 
 impl Connection {
-    /// Register a callback function to be invoked whenever a transaction is
-    /// committed.
+    /// `feature = "hooks"` Register a callback function to be invoked whenever
+    /// a transaction is committed.
     ///
     /// The callback returns `true` to rollback.
     pub fn commit_hook<F>(&self, hook: Option<F>)
@@ -42,8 +47,8 @@ impl Connection {
         self.db.borrow_mut().commit_hook(hook);
     }
 
-    /// Register a callback function to be invoked whenever a transaction is
-    /// committed.
+    /// `feature = "hooks"` Register a callback function to be invoked whenever
+    /// a transaction is committed.
     ///
     /// The callback returns `true` to rollback.
     pub fn rollback_hook<F>(&self, hook: Option<F>)
@@ -53,8 +58,8 @@ impl Connection {
         self.db.borrow_mut().rollback_hook(hook);
     }
 
-    /// Register a callback function to be invoked whenever a row is updated,
-    /// inserted or deleted in a rowid table.
+    /// `feature = "hooks"` Register a callback function to be invoked whenever
+    /// a row is updated, inserted or deleted in a rowid table.
     ///
     /// The callback parameters are:
     ///
@@ -101,7 +106,7 @@ impl InnerConnection {
         // `sqlite3_commit_hook`. so we keep the `xDestroy` function in
         // `InnerConnection.free_boxed_hook`.
         let free_commit_hook = if hook.is_some() {
-            Some(free_boxed_hook::<F> as fn(*mut c_void))
+            Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
         } else {
             None
         };
@@ -121,7 +126,7 @@ impl InnerConnection {
         };
         if !previous_hook.is_null() {
             if let Some(free_boxed_hook) = self.free_commit_hook {
-                free_boxed_hook(previous_hook);
+                unsafe { free_boxed_hook(previous_hook) };
             }
         }
         self.free_commit_hook = free_commit_hook;
@@ -142,7 +147,7 @@ impl InnerConnection {
         }
 
         let free_rollback_hook = if hook.is_some() {
-            Some(free_boxed_hook::<F> as fn(*mut c_void))
+            Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
         } else {
             None
         };
@@ -162,7 +167,7 @@ impl InnerConnection {
         };
         if !previous_hook.is_null() {
             if let Some(free_boxed_hook) = self.free_rollback_hook {
-                free_boxed_hook(previous_hook);
+                unsafe { free_boxed_hook(previous_hook) };
             }
         }
         self.free_rollback_hook = free_rollback_hook;
@@ -187,21 +192,26 @@ impl InnerConnection {
             let action = Action::from(action_code);
             let db_name = {
                 let c_slice = CStr::from_ptr(db_str).to_bytes();
-                str::from_utf8_unchecked(c_slice)
+                str::from_utf8(c_slice)
             };
             let tbl_name = {
                 let c_slice = CStr::from_ptr(tbl_str).to_bytes();
-                str::from_utf8_unchecked(c_slice)
+                str::from_utf8(c_slice)
             };
 
             let _ = catch_unwind(|| {
                 let boxed_hook: *mut F = p_arg as *mut F;
-                (*boxed_hook)(action, db_name, tbl_name, row_id);
+                (*boxed_hook)(
+                    action,
+                    db_name.expect("illegal db name"),
+                    tbl_name.expect("illegal table name"),
+                    row_id,
+                );
             });
         }
 
         let free_update_hook = if hook.is_some() {
-            Some(free_boxed_hook::<F> as fn(*mut c_void))
+            Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
         } else {
             None
         };
@@ -221,15 +231,15 @@ impl InnerConnection {
         };
         if !previous_hook.is_null() {
             if let Some(free_boxed_hook) = self.free_update_hook {
-                free_boxed_hook(previous_hook);
+                unsafe { free_boxed_hook(previous_hook) };
             }
         }
         self.free_update_hook = free_update_hook;
     }
 }
 
-fn free_boxed_hook<F>(p: *mut c_void) {
-    drop(unsafe { Box::from_raw(p as *mut F) });
+unsafe fn free_boxed_hook<F>(p: *mut c_void) {
+    drop(Box::from_raw(p as *mut F));
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-//! Add, remove, or modify a collation
+//! `feature = "collation"` Add, remove, or modify a collation
 use std::cmp::Ordering;
 use std::os::raw::{c_char, c_int, c_void};
 use std::panic::{catch_unwind, UnwindSafe};
@@ -14,7 +14,7 @@ unsafe extern "C" fn free_boxed_value<T>(p: *mut c_void) {
 }
 
 impl Connection {
-    /// Add or modify a collation.
+    /// `feature = "collation"` Add or modify a collation.
     pub fn create_collation<C>(&self, collation_name: &str, x_compare: C) -> Result<()>
     where
         C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'static,
@@ -24,7 +24,7 @@ impl Connection {
             .create_collation(collation_name, x_compare)
     }
 
-    /// Collation needed callback
+    /// `feature = "collation"` Collation needed callback
     pub fn collation_needed(
         &self,
         x_coll_needed: fn(&Connection, &str) -> Result<()>,
@@ -32,7 +32,7 @@ impl Connection {
         self.db.borrow_mut().collation_needed(x_coll_needed)
     }
 
-    /// Remove collation.
+    /// `feature = "collation"` Remove collation.
     pub fn remove_collation(&self, collation_name: &str) -> Result<()> {
         self.db.borrow_mut().remove_collation(collation_name)
     }
@@ -53,20 +53,18 @@ impl InnerConnection {
         where
             C: Fn(&str, &str) -> Ordering,
         {
-            use std::str;
-
             let r = catch_unwind(|| {
                 let boxed_f: *mut C = arg1 as *mut C;
                 assert!(!boxed_f.is_null(), "Internal error - null function pointer");
                 let s1 = {
                     let c_slice = slice::from_raw_parts(arg3 as *const u8, arg2 as usize);
-                    str::from_utf8_unchecked(c_slice)
+                    String::from_utf8_lossy(c_slice)
                 };
                 let s2 = {
                     let c_slice = slice::from_raw_parts(arg5 as *const u8, arg4 as usize);
-                    str::from_utf8_unchecked(c_slice)
+                    String::from_utf8_lossy(c_slice)
                 };
-                (*boxed_f)(s1, s2)
+                (*boxed_f)(s1.as_ref(), s2.as_ref())
             });
             let t = match r {
                 Err(_) => {
@@ -118,16 +116,15 @@ impl InnerConnection {
             }
 
             let callback: fn(&Connection, &str) -> Result<()> = mem::transmute(arg1);
-            if catch_unwind(|| {
+            let res = catch_unwind(|| {
                 let conn = Connection::from_handle(arg2).unwrap();
                 let collation_name = {
                     let c_slice = CStr::from_ptr(arg3).to_bytes();
-                    str::from_utf8_unchecked(c_slice)
+                    str::from_utf8(c_slice).expect("illegal coallation sequence name")
                 };
                 callback(&conn, collation_name)
-            })
-            .is_err()
-            {
+            });
+            if res.is_err() {
                 return; // FIXME How ?
             }
         }

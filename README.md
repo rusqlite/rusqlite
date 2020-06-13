@@ -1,11 +1,13 @@
 # Rusqlite
 
-[![Travis Build Status](https://api.travis-ci.org/jgallagher/rusqlite.svg?branch=master)](https://travis-ci.org/jgallagher/rusqlite)
-[![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/github/jgallagher/rusqlite?branch=master&svg=true)](https://ci.appveyor.com/project/jgallagher/rusqlite)
-[![Build Status](https://github.com/jgallagher/rusqlite/workflows/CI/badge.svg)](https://github.com/jgallagher/rusqlite/actions)
-[![dependency status](https://deps.rs/repo/github/jgallagher/rusqlite/status.svg)](https://deps.rs/repo/github/jgallagher/rusqlite)
+[![Travis Build Status](https://api.travis-ci.org/rusqlite/rusqlite.svg?branch=master)](https://travis-ci.org/rusqlite/rusqlite)
+[![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/github/rusqlite/rusqlite?branch=master&svg=true)](https://ci.appveyor.com/project/rusqlite/rusqlite)
+[![Build Status](https://github.com/rusqlite/rusqlite/workflows/CI/badge.svg)](https://github.com/rusqlite/rusqlite/actions)
+[![dependency status](https://deps.rs/repo/github/rusqlite/rusqlite/status.svg)](https://deps.rs/repo/github/rusqlite/rusqlite)
 [![Latest Version](https://img.shields.io/crates/v/rusqlite.svg)](https://crates.io/crates/rusqlite)
+[![Gitter](https://badges.gitter.im/rusqlite.svg)](https://gitter.im/rusqlite/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 [![Docs](https://docs.rs/rusqlite/badge.svg)](https://docs.rs/rusqlite)
+[![codecov](https://codecov.io/gh/rusqlite/rusqlite/branch/master/graph/badge.svg)](https://codecov.io/gh/rusqlite/rusqlite)
 
 Rusqlite is an ergonomic wrapper for using SQLite from Rust. It attempts to expose
 an interface similar to [rust-postgres](https://github.com/sfackler/rust-postgres).
@@ -101,7 +103,7 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
 * [`array`](https://sqlite.org/carray.html), The `rarray()` Table-Valued Function.
 * `i128_blob` allows storing values of type `i128` type in SQLite databases. Internally, the data is stored as a 16 byte big-endian blob, with the most significant bit flipped, which allows ordering and comparison between different blobs storing i128s to work as expected.
 * `uuid` allows storing and retrieving `Uuid` values from the [`uuid`](https://docs.rs/uuid/) crate using blobs.
-* [`session`](https://sqlite.org/sessionintro.html), Session module extension.
+* [`session`](https://sqlite.org/sessionintro.html), Session module extension. Requires `buildtime_bindgen` feature.
 
 ## Notes on building rusqlite and libsqlite3-sys
 
@@ -165,9 +167,34 @@ enabled if you turn this on, as otherwise you'll need to keep the version of
 SQLite you link with in sync with what rusqlite would have bundled, (usually the
 most recent release of sqlite). Failing to do this will cause a runtime error.
 
+## Contributing
+
+Rusqlite has many features, and many of them impact the build configuration in
+incompatible ways. This is unfortunate, and makes testing changes hard.
+
+To help here: you generally should ensure that you run tests/lint for
+`--features bundled`, and `--features bundled-full session buildtime_bindgen`.
+
+If running bindgen is problematic for you, `--features bundled-full` enables
+bundled and all features which don't require binding generation, and can be used
+instead.
+
+### Checklist
+
+- Run `cargo fmt` to ensure your Rust code is correctly formatted.
+- Ensure `cargo clippy --all-targets --workspace --features bundled` passes without warnings.
+- Ensure `cargo test --all-targets --workspace --features bundled-full session buildtime_bindgen` reports no failures.
+- Ensure `cargo test --all-targets --workspace --features bundled` reports no failures.
+- Ensure `cargo test --all-targets --workspace --features bundled-full session buildtime_bindgen` reports no failures.
+
 ## Author
 
-John Gallagher, johnkgallagher@gmail.com
+Rusqlite is the product of hard work by a number of people. A list is available
+here: https://github.com/rusqlite/rusqlite/graphs/contributors
+
+## Community
+
+Currently there's a gitter channel set up for rusqlite [here](https://gitter.im/rusqlite/community).
 
 ## License
 
