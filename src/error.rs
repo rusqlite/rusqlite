@@ -1,6 +1,5 @@
 use crate::types::FromSqlError;
 use crate::types::Type;
-use crate::util::alloc;
 use crate::{errmsg_to_string, ffi};
 use std::error;
 use std::fmt;
@@ -357,6 +356,7 @@ pub unsafe fn to_sqlite_error(
     e: &Error,
     err_msg: *mut *mut std::os::raw::c_char,
 ) -> std::os::raw::c_int {
+    use crate::util::alloc;
     match e {
         Error::SqliteFailure(err, s) => {
             if let Some(s) = s {
