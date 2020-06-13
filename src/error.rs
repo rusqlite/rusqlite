@@ -348,6 +348,8 @@ macro_rules! check {
 }
 
 /// Transform Rust error to SQLite error (message and code).
+/// # Safety
+/// This function is unsafe because it uses raw pointer
 #[cfg(any(
     feature = "vtab",
     feature = "loadable_extension",
