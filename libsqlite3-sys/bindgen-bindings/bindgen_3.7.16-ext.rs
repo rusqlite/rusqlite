@@ -3618,7 +3618,7 @@ pub struct sqlite3_api_routines {
 fn bindgen_test_layout_sqlite3_api_routines() {
     assert_eq!(
         ::std::mem::size_of::<sqlite3_api_routines>(),
-        1536usize,
+        1520usize,
         concat!("Size of: ", stringify!(sqlite3_api_routines))
     );
     assert_eq!(
