@@ -12,7 +12,6 @@ keywords = ["sqlite", "extension"]
 crate-type = ["cdylib"]
 
 [dependencies]
-lazy_static = "1.0"
 
 [dependencies.rusqlite]
 path = ".."

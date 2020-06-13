@@ -1,8 +1,9 @@
+use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int};
 
 use rusqlite::ffi;
 use rusqlite::vtab::{
-    eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context, IndexInfo, Module, VTab,
+    eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context, IndexInfo, VTab,
     VTabConnection, VTabCursor, Values,
 };
 use rusqlite::{to_sqlite_error, Connection, Result};
@@ -26,18 +27,15 @@ pub extern "C" fn sqlite3_extension_init(
     ffi::SQLITE_OK
 }
 
-lazy_static::lazy_static! {
-    static ref DUMMY_MODULE: Module<DummyTab> = eponymous_only_module::<DummyTab>(1);
-}
 #[repr(C)]
 struct DummyTab {
     /// Base class. Must be first
     base: sqlite3_vtab,
 }
 
-impl VTab for DummyTab {
+unsafe impl<'vtab> VTab<'vtab> for DummyTab {
     type Aux = ();
-    type Cursor = DummyTabCursor;
+    type Cursor = DummyTabCursor<'vtab>;
 
     fn connect(
         _: &mut VTabConnection,
@@ -55,21 +53,22 @@ impl VTab for DummyTab {
         Ok(())
     }
 
-    fn open(&self) -> Result<DummyTabCursor> {
+    fn open(&'vtab self) -> Result<DummyTabCursor<'vtab>> {
         Ok(DummyTabCursor::default())
     }
 }
 
 #[derive(Default)]
 #[repr(C)]
-struct DummyTabCursor {
+struct DummyTabCursor<'vtab> {
     /// Base class. Must be first
     base: sqlite3_vtab_cursor,
     /// The rowid
     row_id: i64,
+    phantom: PhantomData<&'vtab DummyTab>,
 }
 
-impl VTabCursor for DummyTabCursor {
+unsafe impl VTabCursor for DummyTabCursor<'_> {
     fn filter(
         &mut self,
         _idx_num: c_int,
@@ -101,5 +100,5 @@ impl VTabCursor for DummyTabCursor {
 fn dummy_init(db: *mut ffi::sqlite3) -> Result<()> {
     let conn = unsafe { Connection::from_handle(db)? };
 
-    conn.create_module::<DummyTab>("dummy", &DUMMY_MODULE, None)
+    conn.create_module::<DummyTab>("dummy", eponymous_only_module::<DummyTab>(), None)
 }
