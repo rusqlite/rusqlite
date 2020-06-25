@@ -59,6 +59,7 @@ mod build_bundled {
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
 
+    #[allow(clippy::unnecessary_unwrap)]
     pub fn main(out_dir: &str, out_path: &Path) {
         let lib_name = super::lib_name();
 
@@ -151,7 +152,6 @@ mod build_bundled {
                 }
             } else {
                 use_openssl = true;
-                #[allow(clippy::unnecessary_unwrap)]
                 (lib_dir.unwrap(), inc_dir.unwrap())
             };
 
