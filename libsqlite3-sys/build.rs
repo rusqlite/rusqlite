@@ -253,25 +253,7 @@ mod build_bundled {
 
     fn find_openssl_dir(host: &str, target: &str) -> Option<PathBuf> {
         let openssl_dir = env("OPENSSL_DIR");
-
-        match openssl_dir {
-            Some(path) => Some(PathBuf::from(path)),
-            None => {
-                if host.contains("apple-darwin") && target.contains("apple-darwin") {
-                    let homebrew = Path::new("/usr/local/opt/openssl@1.1");
-                    if homebrew.exists() {
-                        return Some(homebrew.to_path_buf());
-                    }
-                    let homebrew = Path::new("/usr/local/opt/openssl");
-                    if homebrew.exists() {
-                        return Some(homebrew.to_path_buf());
-                    }
-                    None
-                } else {
-                    None
-                }
-            }
-        }
+        openssl_dir.map(PathBuf::from)
     }
 }
 
