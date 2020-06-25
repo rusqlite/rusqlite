@@ -115,38 +115,36 @@ mod build_bundled {
                     use_openssl = true;
                     (lib_dir, inc_dir)
                 }
-                (lib_dir, inc_dir) => {
-                    match find_openssl_dir(&host, &target) {
-                        None => {
-                            if is_windows {
-                                panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
-                            } else {
-                                (PathBuf::new(), PathBuf::new())
-                            }
-                        }
-                        Some(openssl_dir) => {
-                            let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
-                            let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
-
-                            if !Path::new(&lib_dir).exists() {
-                                panic!(
-                                    "OpenSSL library directory does not exist: {}",
-                                    lib_dir.to_string_lossy()
-                                );
-                            }
-
-                            if !Path::new(&inc_dir).exists() {
-                                panic!(
-                                    "OpenSSL include directory does not exist: {}",
-                                    inc_dir.to_string_lossy()
-                                )
-                            }
-
-                            use_openssl = true;
-                            (lib_dir, inc_dir)
+                (lib_dir, inc_dir) => match find_openssl_dir(&host, &target) {
+                    None => {
+                        if is_windows {
+                            panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
+                        } else {
+                            (PathBuf::new(), PathBuf::new())
                         }
                     }
-                }
+                    Some(openssl_dir) => {
+                        let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
+                        let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
+
+                        if !Path::new(&lib_dir).exists() {
+                            panic!(
+                                "OpenSSL library directory does not exist: {}",
+                                lib_dir.to_string_lossy()
+                            );
+                        }
+
+                        if !Path::new(&inc_dir).exists() {
+                            panic!(
+                                "OpenSSL include directory does not exist: {}",
+                                inc_dir.to_string_lossy()
+                            )
+                        }
+
+                        use_openssl = true;
+                        (lib_dir, inc_dir)
+                    }
+                },
             };
 
             if cfg!(feature = "bundled-ssl") {
@@ -251,7 +249,7 @@ mod build_bundled {
         }
     }
 
-    fn find_openssl_dir(host: &str, target: &str) -> Option<PathBuf> {
+    fn find_openssl_dir(_host: &str, _target: &str) -> Option<PathBuf> {
         let openssl_dir = env("OPENSSL_DIR");
         openssl_dir.map(PathBuf::from)
     }
