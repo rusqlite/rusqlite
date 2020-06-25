@@ -21,8 +21,9 @@ fn main() {
                 features 'bundled' and 'bundled-windows'. If you want a bundled build of
                 SQLCipher (available for the moment only on Unix), use feature 'bundled-sqlcipher'
                 or 'bundled-ssl' to also bundle OpenSSL crypto."
-            )}
-            build_linked::main(&out_dir, &out_path)
+            )
+        }
+        build_linked::main(&out_dir, &out_path)
     } else {
         // This can't be `cfg!` without always requiring our `mod build_bundled` (and
         // thus `cc`)
@@ -82,8 +83,7 @@ mod build_bundled {
             .warnings(false);
 
         if cfg!(feature = "bundled-sqlcipher") {
-            cfg.flag("-DSQLITE_HAS_CODEC")
-               .flag("-DSQLITE_TEMP_STORE=2");
+            cfg.flag("-DSQLITE_HAS_CODEC").flag("-DSQLITE_TEMP_STORE=2");
 
             let target = env::var("TARGET").unwrap();
             let host = env::var("HOST").unwrap();
@@ -104,7 +104,10 @@ mod build_bundled {
                             // TODO: we default to using MacPorts libraries if installed, perhaps
                             // should provide option to use SecurityFoundation instead?
                             use_openssl = true;
-                            (PathBuf::from("/opt/local/lib"), PathBuf::from("/opt/local/include"))
+                            (
+                                PathBuf::from("/opt/local/lib"),
+                                PathBuf::from("/opt/local/include"),
+                            )
                         } else {
                             (PathBuf::new(), PathBuf::new())
                         }
@@ -149,7 +152,10 @@ mod build_bundled {
             } else if use_openssl {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 println!("cargo:rustc-link-lib=dylib=crypto");
-                println!("cargo:rustc-link-search={}", lib_dir.to_string_lossy().as_ref());
+                println!(
+                    "cargo:rustc-link-search={}",
+                    lib_dir.to_string_lossy().as_ref()
+                );
             } else if is_apple {
                 cfg.flag("-DSQLCIPHER_CRYPTO_CC");
                 cfg.object(
@@ -322,8 +328,11 @@ mod build_linked {
             // on buildtime_bindgen instead, but this is still supported as we
             // have runtime version checks and there are good reasons to not
             // want to run bindgen.
-            std::fs::copy(format!("{}/bindgen_bundled_version.rs", lib_name()), out_path)
-                .expect("Could not copy bindings to output directory");
+            std::fs::copy(
+                format!("{}/bindgen_bundled_version.rs", lib_name()),
+                out_path,
+            )
+            .expect("Could not copy bindings to output directory");
         } else {
             bindings::write_to_out_dir(header, out_path);
         }
