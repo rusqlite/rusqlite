@@ -97,8 +97,10 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
 * `url` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
   `Url` type from the [`url` crate](https://crates.io/crates/url).
-* `bundled` uses a bundled version of sqlite3.  This is a good option for cases where linking to sqlite3 is complicated, such as Windows.
-* `sqlcipher` looks for the SQLCipher library to link against instead of SQLite. This feature is mutually exclusive with `bundled`.
+* `bundled` uses a bundled version of SQLite.  This is a good option for cases where linking to SQLite is complicated, such as Windows.
+* `sqlcipher` looks for the SQLCipher library to link against instead of SQLite. This feature overrides `bundled`.
+* `bundled-sqlcipher` uses a bundled version of SQLCipher (Unix only). This searches for and links against a system-installed crypto library.
+* `bundled-ssl` is like `bundled-sqlcipher`, but additionally uses the bundled OpenSSL library from [`openssl-sys`](https://crates.io/crates/openssl-sys).
 * `hooks` for [Commit, Rollback](http://sqlite.org/c3ref/commit_hook.html) and [Data Change](http://sqlite.org/c3ref/update_hook.html) notification callbacks.
 * `unlock_notify` for [Unlock](https://sqlite.org/unlock_notify.html) notification.
 * `vtab` for [virtual table](https://sqlite.org/vtab.html) support (allows you to write virtual table implementations in Rust). Currently, only read-only virtual tables are supported.
@@ -116,8 +118,8 @@ declarations for SQLite's C API. By default, `libsqlite3-sys` attempts to find a
 
 You can adjust this behavior in a number of ways:
 
-* If you use the `bundled` feature, `libsqlite3-sys` will use the
-  [cc](https://crates.io/crates/cc) crate to compile SQLite from source and
+* If you use the `bundled`, `bundled-sqlcipher`, or `bundled-ssl` features, `libsqlite3-sys` will use the
+  [cc](https://crates.io/crates/cc) crate to compile SQLite or SQLCipher from source and
   link against that. This source is embedded in the `libsqlite3-sys` crate and
   is currently SQLite 3.34.0 (as of `rusqlite` 0.24.1 / `libsqlite3-sys`
   0.21.0).  This is probably the simplest solution to any build problems. You can enable this by adding the following in your `Cargo.toml` file:
@@ -126,14 +128,19 @@ You can adjust this behavior in a number of ways:
   version = "0.24.2"
   features = ["bundled"]
   ```
-* You can set the `SQLITE3_LIB_DIR` to point to directory containing the SQLite
-  library.
+* When using any of the `bundled` features, the build script will honor `SQLITE_MAX_VARIABLE_NUMBER` and `SQLITE_MAX_EXPR_DEPTH` variables. It will also honor a `SQLITE_FLAGS` variable, which can have a format like `"-USQLITE_ALPHA -DSQLITE_BETA SQLITE_GAMMA ..."`. That would disable the `SQLITE_ALPHA` flag, and set the `SQLITE_BETA` and `SQLITE_GAMMA` flags. (The initial `-D` can be omitted, as on the last one.)
+* When using `bundled-sqlcipher` (and not also using `bundled-ssl`), `libsqlite3-sys` will need to
+  link against crypto libraries on the system. If the build script can find a `libcrypto` from OpenSSL or LibreSSL (it will consult `OPENSSL_LIB_DIR`/`OPENSSL_INCLUDE_DIR` and `OPENSSL_DIR` environment variables), it will use that. If building on and for Macs, and none of those variables are set, it will use the system's SecurityFramework instead.
+
+* When linking against a SQLite (or SQLCipher) library already on the system (so *not* using any of the `bundled` features), you can set the `SQLITE3_LIB_DIR` (or `SQLCIPHER_LIB_DIR`) environment variable to point to a directory containing the library. You can also set the `SQLITE3_INCLUDE_DIR` (or `SQLCIPHER_INCLUDE_DIR`) variable to point to the directory containing `sqlite3.h`.
 * Installing the sqlite3 development packages will usually be all that is required, but
   the build helpers for [pkg-config](https://github.com/alexcrichton/pkg-config-rs)
   and [vcpkg](https://github.com/mcgoo/vcpkg-rs) have some additional configuration
   options. The default when using vcpkg is to dynamically link,
   which must be enabled by setting `VCPKGRS_DYNAMIC=1` environment variable before build.
   `vcpkg install sqlite3:x64-windows` will install the required library.
+* When linking against a SQLite (or SQLCipher) library already on the system, you can set the `SQLITE3_STATIC` (or `SQLCIPHER_STATIC`) environment variable to 1 to request that the library be statically instead of dynamically linked.
+
 
 ### Binding generation
 
@@ -160,8 +167,8 @@ pregenerated bindings are chosen:
 * `min_sqlite_version_3_6_23` - SQLite 3.6.23 bindings
 * `min_sqlite_version_3_7_7` - SQLite 3.7.7 bindings
 
-If you use the `bundled` feature, you will get pregenerated bindings for the
-bundled version of SQLite. If you need other specific pregenerated binding
+If you use any of the `bundled` features, you will get pregenerated bindings for the
+bundled version of SQLite/SQLCipher. If you need other specific pregenerated binding
 versions, please file an issue. If you want to run `bindgen` at buildtime to
 produce your own bindings, use the `buildtime_bindgen` Cargo feature.
 
