@@ -123,14 +123,6 @@ mod build_bundled {
                     None => {
                         if is_windows {
                             panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
-                        } else if is_apple && Path::new("/opt/local/lib/libssl.a").exists() {
-                            // TODO: we default to using MacPorts libraries if installed, perhaps
-                            // should provide option to use SecurityFoundation instead?
-                            use_openssl = true;
-                            (
-                                PathBuf::from("/opt/local/lib"),
-                                PathBuf::from("/opt/local/include"),
-                            )
                         } else {
                             (PathBuf::new(), PathBuf::new())
                         }
