@@ -59,7 +59,6 @@ mod build_bundled {
     use std::ffi::OsString;
     use std::path::{Path, PathBuf};
 
-    #[allow(clippy::unnecessary_unwrap)]
     pub fn main(out_dir: &str, out_path: &Path) {
         let lib_name = super::lib_name();
 
@@ -111,48 +110,51 @@ mod build_bundled {
             let inc_dir = env("OPENSSL_INCLUDE_DIR").map(PathBuf::from);
             let mut use_openssl = false;
 
-            let (lib_dir, inc_dir) = if lib_dir.is_none() || inc_dir.is_none() {
-                match find_openssl_dir(&host, &target) {
-                    None => {
-                        if is_windows {
-                            panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
-                        } else if is_apple && Path::new("/opt/local/lib/libssl.a").exists() {
-                            // TODO: we default to using MacPorts libraries if installed, perhaps
-                            // should provide option to use SecurityFoundation instead?
+            let (lib_dir, inc_dir) = match (lib_dir, inc_dir) {
+                (Some(lib_dir), Some(inc_dir)) => {
+                    use_openssl = true;
+                    (lib_dir, inc_dir)
+                }
+                (lib_dir, inc_dir) => {
+                    match find_openssl_dir(&host, &target) {
+                        None => {
+                            if is_windows {
+                                panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
+                            } else if is_apple && Path::new("/opt/local/lib/libssl.a").exists() {
+                                // TODO: we default to using MacPorts libraries if installed, perhaps
+                                // should provide option to use SecurityFoundation instead?
+                                use_openssl = true;
+                                (
+                                    PathBuf::from("/opt/local/lib"),
+                                    PathBuf::from("/opt/local/include"),
+                                )
+                            } else {
+                                (PathBuf::new(), PathBuf::new())
+                            }
+                        }
+                        Some(openssl_dir) => {
+                            let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
+                            let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
+
+                            if !Path::new(&lib_dir).exists() {
+                                panic!(
+                                    "OpenSSL library directory does not exist: {}",
+                                    lib_dir.to_string_lossy()
+                                );
+                            }
+
+                            if !Path::new(&inc_dir).exists() {
+                                panic!(
+                                    "OpenSSL include directory does not exist: {}",
+                                    inc_dir.to_string_lossy()
+                                )
+                            }
+
                             use_openssl = true;
-                            (
-                                PathBuf::from("/opt/local/lib"),
-                                PathBuf::from("/opt/local/include"),
-                            )
-                        } else {
-                            (PathBuf::new(), PathBuf::new())
+                            (lib_dir, inc_dir)
                         }
-                    }
-                    Some(openssl_dir) => {
-                        let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
-                        let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
-
-                        if !Path::new(&lib_dir).exists() {
-                            panic!(
-                                "OpenSSL library directory does not exist: {}",
-                                lib_dir.to_string_lossy()
-                            );
-                        }
-
-                        if !Path::new(&inc_dir).exists() {
-                            panic!(
-                                "OpenSSL include directory does not exist: {}",
-                                inc_dir.to_string_lossy()
-                            )
-                        }
-
-                        use_openssl = true;
-                        (lib_dir, inc_dir)
                     }
                 }
-            } else {
-                use_openssl = true;
-                (lib_dir.unwrap(), inc_dir.unwrap())
             };
 
             if cfg!(feature = "bundled-ssl") {
