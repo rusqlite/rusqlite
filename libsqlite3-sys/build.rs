@@ -11,7 +11,10 @@ fn main() {
             .expect("Could not copy bindings to output directory");
         return;
     }
-    if cfg!(and(feature = "sqlcipher", not(feature = "bundled-sqlcipher"))) {
+    if cfg!(all(
+        feature = "sqlcipher",
+        not(feature = "bundled-sqlcipher")
+    )) {
         if cfg!(any(
             feature = "bundled",
             all(windows, feature = "bundled-windows")
@@ -27,18 +30,30 @@ fn main() {
     } else {
         // This can't be `cfg!` without always requiring our `mod build_bundled` (and
         // thus `cc`)
-        #[cfg(any(feature = "bundled", all(windows, feature = "bundled-windows"), feature = "bundled-sqlcipher"))]
+        #[cfg(any(
+            feature = "bundled",
+            all(windows, feature = "bundled-windows"),
+            feature = "bundled-sqlcipher"
+        ))]
         {
             build_bundled::main(&out_dir, &out_path)
         }
-        #[cfg(not(any(feature = "bundled", all(windows, feature = "bundled-windows"), feature = "bundled-sqlcipher")))]
+        #[cfg(not(any(
+            feature = "bundled",
+            all(windows, feature = "bundled-windows"),
+            feature = "bundled-sqlcipher"
+        )))]
         {
             build_linked::main(&out_dir, &out_path)
         }
     }
 }
 
-#[cfg(any(feature = "bundled", all(windows, feature = "bundled-windows"), feature = "bundled-sqlcipher"))]
+#[cfg(any(
+    feature = "bundled",
+    all(windows, feature = "bundled-windows"),
+    feature = "bundled-sqlcipher"
+))]
 mod build_bundled {
     use std::env;
     use std::ffi::OsString;
