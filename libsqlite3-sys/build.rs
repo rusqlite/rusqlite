@@ -11,7 +11,7 @@ fn main() {
             .expect("Could not copy bindings to output directory");
         return;
     }
-    if cfg!(feature = "sqlcipher") {
+    if cfg!(and(feature = "sqlcipher", not(feature = "bundled-sqlcipher"))) {
         if cfg!(any(
             feature = "bundled",
             all(windows, feature = "bundled-windows")
@@ -27,18 +27,18 @@ fn main() {
     } else {
         // This can't be `cfg!` without always requiring our `mod build_bundled` (and
         // thus `cc`)
-        #[cfg(any(feature = "bundled", all(windows, feature = "bundled-windows")))]
+        #[cfg(any(feature = "bundled", all(windows, feature = "bundled-windows"), feature = "bundled-sqlcipher"))]
         {
             build_bundled::main(&out_dir, &out_path)
         }
-        #[cfg(not(any(feature = "bundled", all(windows, feature = "bundled-windows"))))]
+        #[cfg(not(any(feature = "bundled", all(windows, feature = "bundled-windows"), feature = "bundled-sqlcipher")))]
         {
             build_linked::main(&out_dir, &out_path)
         }
     }
 }
 
-#[cfg(any(feature = "bundled", all(windows, feature = "bundled-windows")))]
+#[cfg(any(feature = "bundled", all(windows, feature = "bundled-windows"), feature = "bundled-sqlcipher"))]
 mod build_bundled {
     use std::env;
     use std::ffi::OsString;
@@ -266,7 +266,7 @@ mod build_bundled {
 }
 
 fn env_prefix() -> &'static str {
-    if cfg!(feature = "sqlcipher") {
+    if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
         "SQLCIPHER"
     } else {
         "SQLITE3"
@@ -274,7 +274,7 @@ fn env_prefix() -> &'static str {
 }
 
 fn lib_name() -> &'static str {
-    if cfg!(feature = "sqlcipher") {
+    if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
         "sqlcipher"
     } else {
         "sqlite3"
@@ -320,6 +320,7 @@ mod build_linked {
         if cfg!(any(
             feature = "bundled_bindings",
             feature = "bundled",
+            feature = "bundled-sqlcipher",
             all(windows, feature = "bundled-windows")
         )) && !cfg!(feature = "buildtime_bindgen")
         {
@@ -489,7 +490,7 @@ mod bindings {
             .parse_callbacks(Box::new(SqliteTypeChooser))
             .rustfmt_bindings(true);
 
-        if cfg!(feature = "bundled-sqlcipher") {
+        if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
             bindings = bindings.clang_arg("-DSQLITE_HAS_CODEC");
         }
         if cfg!(feature = "unlock_notify") {
