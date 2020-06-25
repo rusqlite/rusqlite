@@ -17,10 +17,12 @@ fn main() {
             all(windows, feature = "bundled-windows")
         )) {
             println!(
-                "cargo:warning=Builds with bundled SQLCipher are not supported. Searching for SQLCipher to link against. \
-                 This can lead to issues if your version of SQLCipher is not up to date!");
-        }
-        build_linked::main(&out_dir, &out_path)
+                "cargo:warning=For backwards compatibility, feature 'sqlcipher' overrides
+                features 'bundled' and 'bundled-windows'. If you want a bundled build of
+                SQLCipher (available for the moment only on Unix), use feature 'bundled-sqlcipher'
+                or 'bundled-ssl' to also bundle OpenSSL crypto."
+            )}
+            build_linked::main(&out_dir, &out_path)
     } else {
         // This can't be `cfg!` without always requiring our `mod build_bundled` (and
         // thus `cc`)
@@ -38,29 +40,27 @@ fn main() {
 #[cfg(any(feature = "bundled", all(windows, feature = "bundled-windows")))]
 mod build_bundled {
     use std::env;
-    use std::path::Path;
+    use std::ffi::OsString;
+    use std::path::{Path, PathBuf};
 
     pub fn main(out_dir: &str, out_path: &Path) {
-        if cfg!(feature = "sqlcipher") {
-            // This is just a sanity check, the top level `main` should ensure this.
-            panic!("Builds with bundled SQLCipher are not supported");
-        }
+        let lib_name = super::lib_name();
 
         #[cfg(feature = "buildtime_bindgen")]
         {
             use super::{bindings, HeaderLocation};
-            let header = HeaderLocation::FromPath("sqlite3/sqlite3.h".to_owned());
+            let header = HeaderLocation::FromPath(format!("{}/sqlite3.h", lib_name));
             bindings::write_to_out_dir(header, out_path);
         }
         #[cfg(not(feature = "buildtime_bindgen"))]
         {
             use std::fs;
-            fs::copy("sqlite3/bindgen_bundled_version.rs", out_path)
+            fs::copy(format!("{}/bindgen_bundled_version.rs", lib_name), out_path)
                 .expect("Could not copy bindings to output directory");
         }
 
         let mut cfg = cc::Build::new();
-        cfg.file("sqlite3/sqlite3.c")
+        cfg.file(format!("{}/sqlite3.c", lib_name))
             .flag("-DSQLITE_CORE")
             .flag("-DSQLITE_DEFAULT_FOREIGN_KEYS=1")
             .flag("-DSQLITE_ENABLE_API_ARMOR")
@@ -80,6 +80,85 @@ mod build_bundled {
             .flag("-DSQLITE_USE_URI")
             .flag("-DHAVE_USLEEP=1")
             .warnings(false);
+
+        if cfg!(feature = "bundled-sqlcipher") {
+            cfg.flag("-DSQLITE_HAS_CODEC")
+               .flag("-DSQLITE_TEMP_STORE=2");
+
+            let target = env::var("TARGET").unwrap();
+            let host = env::var("HOST").unwrap();
+
+            let is_windows = host.contains("windows") && target.contains("windows");
+            let is_apple = host.contains("apple") && target.contains("apple");
+
+            let lib_dir = env("OPENSSL_LIB_DIR").map(PathBuf::from);
+            let inc_dir = env("OPENSSL_INCLUDE_DIR").map(PathBuf::from);
+            let mut use_openssl = false;
+
+            let (lib_dir, inc_dir) = if lib_dir.is_none() || inc_dir.is_none() {
+                match find_openssl_dir(&host, &target) {
+                    None => {
+                        if is_windows {
+                            panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
+                        } else if is_apple && Path::new("/opt/local/lib/libssl.a").exists() {
+                            // TODO: we default to using MacPorts libraries if installed, perhaps
+                            // should provide option to use SecurityFoundation instead?
+                            use_openssl = true;
+                            (PathBuf::from("/opt/local/lib"), PathBuf::from("/opt/local/include"))
+                        } else {
+                            (PathBuf::new(), PathBuf::new())
+                        }
+                    }
+                    Some(openssl_dir) => {
+                        let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
+                        let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
+
+                        if !Path::new(&lib_dir).exists() {
+                            panic!(
+                                "OpenSSL library directory does not exist: {}",
+                                lib_dir.to_string_lossy()
+                            );
+                        }
+
+                        if !Path::new(&inc_dir).exists() {
+                            panic!(
+                                "OpenSSL include directory does not exist: {}",
+                                inc_dir.to_string_lossy()
+                            )
+                        }
+
+                        use_openssl = true;
+                        (lib_dir, inc_dir)
+                    }
+                }
+            } else {
+                use_openssl = true;
+                (lib_dir.unwrap(), inc_dir.unwrap())
+            };
+
+            if cfg!(feature = "bundled-ssl") {
+                cfg.include(std::env::var("DEP_OPENSSL_INCLUDE").unwrap());
+                println!("cargo:rustc-link-lib=dylib=crypto"); // cargo will resolve downstream to the static lib in openssl-sys
+            } else if is_windows {
+                cfg.include(inc_dir.to_string_lossy().as_ref());
+                let mut lib = String::new();
+                lib.push_str(lib_dir.to_string_lossy().as_ref());
+                lib.push_str("\\");
+                lib.push_str("libeay32.lib");
+                cfg.flag(&lib);
+            } else if use_openssl {
+                cfg.include(inc_dir.to_string_lossy().as_ref());
+                println!("cargo:rustc-link-lib=dylib=crypto");
+                println!("cargo:rustc-link-search={}", lib_dir.to_string_lossy().as_ref());
+            } else if is_apple {
+                cfg.flag("-DSQLCIPHER_CRYPTO_CC");
+                cfg.object(
+                    "/System/Library/Frameworks/SecurityFoundation.framework/SecurityFoundation",
+                );
+            } else {
+                println!("cargo:rustc-link-lib=dylib=crypto");
+            }
+        }
 
         if cfg!(feature = "with-asan") {
             cfg.flag("-fsanitize=address");
@@ -127,9 +206,56 @@ mod build_bundled {
         }
         println!("cargo:rerun-if-env-changed=SQLITE_MAX_EXPR_DEPTH");
 
-        cfg.compile("libsqlite3.a");
+        if let Ok(extras) = env::var("LIBSQLITE3_FLAGS") {
+            for extra in extras.split_whitespace() {
+                if extra.starts_with("-D") || extra.starts_with("-U") {
+                    cfg.flag(extra);
+                } else if extra.starts_with("SQLITE_") {
+                    cfg.flag(&format!("-D{}", extra));
+                } else {
+                    panic!("Don't understand {} in LIBSQLITE3_FLAGS", extra);
+                }
+            }
+        }
+        println!("cargo:rerun-if-env-changed=LIBSQLITE3_FLAGS");
+
+        cfg.compile(lib_name);
 
         println!("cargo:lib_dir={}", out_dir);
+    }
+
+    fn env(name: &str) -> Option<OsString> {
+        let prefix = env::var("TARGET").unwrap().to_uppercase().replace("-", "_");
+        let prefixed = format!("{}_{}", prefix, name);
+        let var = env::var_os(&prefixed);
+
+        match var {
+            None => env::var_os(name),
+            _ => var,
+        }
+    }
+
+    fn find_openssl_dir(host: &String, target: &String) -> Option<PathBuf> {
+        let openssl_dir = env("OPENSSL_DIR");
+
+        match openssl_dir {
+            Some(path) => Some(PathBuf::from(path)),
+            None => {
+                if host.contains("apple-darwin") && target.contains("apple-darwin") {
+                    let homebrew = Path::new("/usr/local/opt/openssl@1.1");
+                    if homebrew.exists() {
+                        return Some(homebrew.to_path_buf().into());
+                    }
+                    let homebrew = Path::new("/usr/local/opt/openssl");
+                    if homebrew.exists() {
+                        return Some(homebrew.to_path_buf().into());
+                    }
+                    None
+                } else {
+                    None
+                }
+            }
+        }
     }
 }
 
@@ -138,6 +264,14 @@ fn env_prefix() -> &'static str {
         "SQLCIPHER"
     } else {
         "SQLITE3"
+    }
+}
+
+fn lib_name() -> &'static str {
+    if cfg!(feature = "sqlcipher") {
+        "sqlcipher"
+    } else {
+        "sqlite3"
     }
 }
 
@@ -171,7 +305,7 @@ mod build_linked {
     #[cfg(all(feature = "vcpkg", target_env = "msvc"))]
     extern crate vcpkg;
 
-    use super::{bindings, env_prefix, HeaderLocation};
+    use super::{bindings, env_prefix, lib_name, HeaderLocation};
     use std::env;
     use std::path::Path;
 
@@ -183,13 +317,12 @@ mod build_linked {
             all(windows, feature = "bundled-windows")
         )) && !cfg!(feature = "buildtime_bindgen")
         {
-            // Generally means the `bundled_bindings` feature is enabled
-            // (there's also an edge case where we get here involving
-            // sqlcipher). In either case most users are better off with turning
+            // Generally means the `bundled_bindings` feature is enabled.
+            // Most users are better off with turning
             // on buildtime_bindgen instead, but this is still supported as we
             // have runtime version checks and there are good reasons to not
             // want to run bindgen.
-            std::fs::copy("sqlite3/bindgen_bundled_version.rs", out_path)
+            std::fs::copy(format!("{}/bindgen_bundled_version.rs", lib_name()), out_path)
                 .expect("Could not copy bindings to output directory");
         } else {
             bindings::write_to_out_dir(header, out_path);
@@ -206,7 +339,7 @@ mod build_linked {
     }
     // Prints the necessary cargo link commands and returns the path to the header.
     fn find_sqlite() -> HeaderLocation {
-        let link_lib = link_lib();
+        let link_lib = lib_name();
 
         println!("cargo:rerun-if-env-changed={}_INCLUDE_DIR", env_prefix());
         println!("cargo:rerun-if-env-changed={}_LIB_DIR", env_prefix());
@@ -265,7 +398,7 @@ mod build_linked {
     #[cfg(all(feature = "vcpkg", target_env = "msvc"))]
     fn try_vcpkg() -> Option<HeaderLocation> {
         // See if vcpkg can find it.
-        if let Ok(mut lib) = vcpkg::Config::new().probe(link_lib()) {
+        if let Ok(mut lib) = vcpkg::Config::new().probe(lib_name()) {
             if let Some(mut header) = lib.include_paths.pop() {
                 header.push("sqlite3.h");
                 return Some(HeaderLocation::FromPath(header.to_string_lossy().into()));
@@ -278,18 +411,11 @@ mod build_linked {
     fn try_vcpkg() -> Option<HeaderLocation> {
         None
     }
-
-    fn link_lib() -> &'static str {
-        if cfg!(feature = "sqlcipher") {
-            "sqlcipher"
-        } else {
-            "sqlite3"
-        }
-    }
 }
 
 #[cfg(not(feature = "buildtime_bindgen"))]
 mod bindings {
+    #![allow(dead_code)]
     use super::HeaderLocation;
 
     use std::fs;
@@ -349,10 +475,14 @@ mod bindings {
         let header: String = header.into();
         let mut output = Vec::new();
         let mut bindings = bindgen::builder()
+            .trust_clang_mangling(false)
             .header(header.clone())
             .parse_callbacks(Box::new(SqliteTypeChooser))
             .rustfmt_bindings(true);
 
+        if cfg!(feature = "bundled-sqlcipher") {
+            bindings = bindings.clang_arg("-DSQLITE_HAS_CODEC");
+        }
         if cfg!(feature = "unlock_notify") {
             bindings = bindings.clang_arg("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
         }
