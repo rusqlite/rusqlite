@@ -15,6 +15,8 @@ categories = ["external-ffi-bindings"]
 default = ["min_sqlite_version_3_6_8"]
 bundled = ["cc", "bundled_bindings"]
 bundled-windows = ["cc", "bundled_bindings"]
+bundled-sqlcipher = ["cc", "bundled_bindings"]
+bundled-ssl = ["openssl-sys/vendored", "bundled-sqlcipher"]
 buildtime_bindgen = ["bindgen", "pkg-config", "vcpkg"]
 sqlcipher = []
 min_sqlite_version_3_6_8 = ["pkg-config", "vcpkg"]
@@ -32,6 +34,9 @@ preupdate_hook = []
 session = ["preupdate_hook"]
 in_gecko = []
 with-asan = []
+
+[dependencies]
+openssl-sys = { version = "0.9.58", optional = true }
 
 [build-dependencies]
 bindgen = { version = "0.54", optional = true, default-features = false, features = ["runtime"] }
