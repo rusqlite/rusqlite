@@ -59,6 +59,7 @@ in_gecko = ["modern_sqlite", "libsqlite3-sys/in_gecko"]
 bundled-windows = ["libsqlite3-sys/bundled-windows"]
 # Build bundled sqlite with -fsanitize=address
 with-asan = ["libsqlite3-sys/with-asan"]
+deserialize = ["libsqlite3-sys/deserialize"]
 column_decltype = []
 wasm32-wasi-vfs = ["libsqlite3-sys/wasm32-wasi-vfs"]
 winsqlite3 = ["libsqlite3-sys/winsqlite3"]
@@ -76,6 +77,7 @@ bundled-full = [
     "collation",
     "column_decltype",
     "csvtab",
+    "deserialize",
     "extra_check",
     "functions",
     "hooks",
