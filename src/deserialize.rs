@@ -309,9 +309,6 @@ impl MemFile {
     /// Grow or shrink the allocation.
     /// `len` is capped if it would overflow.
     pub fn set_capacity(&mut self, cap: usize) {
-        if self.len > self.cap {
-            self.len = self.cap;
-        }
         if cap == 0 {
             *self = Self::new();
             return;
@@ -330,6 +327,9 @@ impl MemFile {
             self.cap = ffi::sqlite3_msize(self.data.as_ptr() as _) as _;
             debug_assert!(self.cap >= cap);
         };
+        if self.len > self.cap {
+            self.len = self.cap;
+        }
     }
 }
 
@@ -535,7 +535,7 @@ mod test {
     }
 
     #[test]
-    pub fn test_serialized_db() {
+    pub fn test_mem_file() {
         let s = MemFile::default();
         assert!(s.is_empty());
         let mut s = MemFile::new();
@@ -561,11 +561,14 @@ mod test {
         s.extend(iter::repeat(5).take(400));
         s.extend(iter::repeat(5).take(400));
         assert_eq!(s.len(), 800);
+        s.set_capacity(2000);
+        assert!(s.capacity() >= 2000);
+        assert_eq!(s.len(), 800);
+        s.set_capacity(20);
+        assert_eq!(s.len(), s.capacity());
         s.set_capacity(0);
         assert_eq!(0, s.capacity());
-
-        let clone = s.clone();
-        assert_eq!(&s[..], &clone[..]);
+        assert_eq!(0, s.len())
     }
 
     #[test]
