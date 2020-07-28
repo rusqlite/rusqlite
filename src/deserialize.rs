@@ -178,7 +178,8 @@ impl<'a> BorrowingConnection<'a> {
         unsafe { self.deserialize_with_flags(db, data, data.len(), DeserializeFlags::READ_ONLY) }
     }
 
-    /// Disconnect from database and reopen as an in-memory database based on a borrowed vector.
+    /// Disconnect from database and reopen as an in-memory database based on a borrowed vector
+    /// (pass a `Vec<u8>`, `MemFile` or another type that implements `ResizableBytes`).
     /// If the capacity is reached, SQLite can't reallocate, so it throws [`crate::ErrorCode::DiskFull`].
     /// Before the connection drops, the slice length is updated.
     /// If the database was detached, the slice will get length zero.
@@ -233,7 +234,7 @@ impl<'a> BorrowingConnection<'a> {
 
 impl Drop for BorrowingConnection<'_> {
     fn drop(&mut self) {
-        for (_db, on_drop) in self.slice_drop.iter_mut() {
+        for on_drop in self.slice_drop.values() {
             on_drop(&mut self.conn);
         }
     }
@@ -261,12 +262,13 @@ impl fmt::Debug for BorrowingConnection<'_> {
     }
 }
 
-/// Serialized database content (a growable vector of `u8`) owned by SQLite.
+/// Memory file with serialized database content owned by SQLite.
 /// Used for [`Connection::serialize`] and [`Connection::deserialize`].
-/// Memory allocation is handled by `sqlite3_malloc64`, `sqlite3_realloc64`,
+/// This looks like `Vec<u8>` - a growable vector of bytes - but
+/// memory allocation is handled by `sqlite3_malloc64`, `sqlite3_realloc64`,
 /// `sqlite3_msize` and `sqlite3_free`.
 ///
-/// This is named after the private struct `MemFile` in
+/// It is named after the private struct `MemFile` in
 /// [`sqlite/src/memdb.c`](https://www.sqlite.org/src/doc/trunk/src/memdb.c).
 ///
 /// ```
@@ -352,16 +354,17 @@ impl ResizableBytes for MemFile {
 impl iter::Extend<u8> for MemFile {
     fn extend<T: IntoIterator<Item = u8>>(&mut self, iter: T) {
         let iter = iter.into_iter();
-        self.set_capacity(iter.size_hint().0);
-        let mut index = self.len();
+        let hint = self.len + iter.size_hint().0;
+        if hint > self.cap {
+            self.set_capacity(hint);
+        }
         for byte in iter {
-            let next = index + 1;
-            if next > self.cap {
-                self.set_capacity(next * 2);
+            let index = self.len;
+            if index + 1 > self.cap {
+                self.set_capacity(index + 256);
             }
-            unsafe { self.set_len(next) };
+            self.len += 1;
             self[index] = byte;
-            index = next;
         }
     }
 }
@@ -403,13 +406,14 @@ impl fmt::Debug for MemFile {
 
 /// Resizable vector of bytes.
 /// [`BorrowingConnection`] functions use this to borrow memory from arbitrary allocators.
-pub trait ResizableBytes: ops::Deref<Target = [u8]> + fmt::Debug + 'static {
+pub trait ResizableBytes: ops::Deref<Target = [u8]> + fmt::Debug {
     /// Set length of this vector.
     /// # Safety
     /// - `new_len` must be less than or equal to `capacity()`.
     /// - The elements at `old_len..new_len` must be initialized.
     unsafe fn set_len(&mut self, new_len: usize);
-    /// The number of allocated bytes.
+    /// The size of the allocation.
+    /// It must be safe to write this number of bytes at `as_ptr()`.
     fn capacity(&self) -> usize;
 }
 
