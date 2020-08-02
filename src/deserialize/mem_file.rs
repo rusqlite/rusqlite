@@ -146,8 +146,8 @@ impl iter::Extend<u8> for MemFile {
         self.reserve(iter.size_hint().0);
         while let Some(byte) = iter.next() {
             let index = self.len;
+            self.reserve(1 + iter.size_hint().0);
             self.len += 1;
-            self.reserve(iter.size_hint().0);
             self[index] = byte;
         }
     }
