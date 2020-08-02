@@ -70,7 +70,7 @@ impl Connection {
                 .map(|r| {
                     r.map(|(data, len)| {
                         let cap = ffi::sqlite3_msize(data.as_ptr() as _) as _;
-                        MemFile::from_raw(data, len, cap)
+                        MemFile::from_non_null(data, len, cap)
                     })
                 })
         }
@@ -228,7 +228,7 @@ impl<'a> BorrowingConnection<'a> {
             let new_data =
                 if let Ok(Some((p, len))) = c.serialize_with_flags(db, SerializeFlags::NO_COPY) {
                     let cap = ffi::sqlite3_msize(p.as_ptr() as _) as _;
-                    MemFile::from_raw(p, len, cap)
+                    MemFile::from_non_null(p, len, cap)
                 } else {
                     MemFile::new()
                 };
@@ -302,25 +302,78 @@ impl Drop for MemFile {
 }
 
 impl MemFile {
-    /// Create a new, empty `MemFile`. It will not allocate until extended.
+    /// Constructs a new, empty `MemFile`.
+    ///
+    /// The vector will not allocate until elements are pushed onto it.
     pub fn new() -> Self {
-        unsafe { Self::from_raw(NonNull::dangling(), 0, 0) }
+        unsafe { Self::from_non_null(NonNull::dangling(), 0, 0) }
     }
 
-    /// Create a new `MemFile` from a raw pointer, length and capacity.
+    /// Constructs a new, empty `MemFile` with the specified capacity.
+    pub fn with_capacity(capacity: usize) -> Self {
+        let mut file = Self::new();
+        file.reserve(capacity);
+        file
+    }
+
+    /// Creates a `MemFile` directly from the raw components of another vector.
+    ///
     /// # Safety
-    /// The pointer must be allocated by `sqlite3_malloc64()` or `sqlite3_malloc()`
-    /// for `cap` number of bytes.
-    /// # Panics
-    /// Panics if `len` overflows the allocation (`len > cap`).
-    pub unsafe fn from_raw(data: NonNull<u8>, len: usize, cap: usize) -> Self {
-        assert!(len <= cap);
+    ///
+    /// This is highly unsafe, due to the number of invariants that aren't
+    /// checked:
+    ///
+    /// * `ptr` needs to have been previously allocated via `sqlite3_malloc64`
+    /// * `length` needs to be less than or equal to `capacity`.
+    /// * `capacity` needs to be the capacity that the pointer was allocated with.
+    ///
+    /// The ownership of `ptr` is effectively transferred to the
+    /// `MemFile` which may then deallocate, reallocate or change the
+    /// contents of memory pointed to by the pointer at will. Ensure
+    /// that nothing else uses the pointer after calling this
+    /// function.
+    pub unsafe fn from_raw_parts(ptr: *mut u8, length: usize, capacity: usize) -> Self {
+        Self::from_non_null(NonNull::new_unchecked(ptr), length, capacity)
+    }
+
+    unsafe fn from_non_null(data: NonNull<u8>, len: usize, cap: usize) -> Self {
+        debug_assert!(len <= cap);
         MemFile { data, len, cap }
     }
 
-    /// Grow or shrink the allocation.
-    /// `len` is capped if it would overflow.
-    pub fn set_capacity(&mut self, cap: usize) {
+    /// Copies and appends all bytes in a slice to the `MemFile`.
+    pub fn extend_from_slice(&mut self, other: &[u8]) {
+        let len = other.len();
+        self.reserve(len);
+        unsafe { ptr::copy_nonoverlapping(other.as_ptr(), self.data.as_ptr().add(len), len) };
+        self.len += len;
+    }
+
+    /// Reserves capacity for at least `additional` more bytes to be inserted
+    /// in the given `MemFile`. After calling `reserve`, capacity will be
+    /// greater than or equal to `self.len() + additional`. Does nothing if
+    /// capacity is already sufficient.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the new capacity overflows `usize`.
+    pub fn reserve(&mut self, additional: usize) {
+        let new_len = self.len + additional;
+        if new_len > self.cap {
+            self.set_capacity(new_len);
+        }
+    }
+
+    /// Shrinks the capacity of the `MemFile` as much as possible.
+    pub fn shrink_to_fit(&mut self) {
+        self.set_capacity(self.len)
+    }
+
+    /// Resizes the allocation.
+    fn set_capacity(&mut self, cap: usize) {
+        if self.cap == cap {
+            return;
+        }
         if cap == 0 {
             *self = Self::new();
             return;
@@ -339,9 +392,6 @@ impl MemFile {
             self.cap = ffi::sqlite3_msize(self.data.as_ptr() as _) as _;
             debug_assert!(self.cap >= cap);
         };
-        if self.len > self.cap {
-            self.len = self.cap;
-        }
     }
 }
 
@@ -363,17 +413,12 @@ impl ResizableBytes for MemFile {
 
 impl iter::Extend<u8> for MemFile {
     fn extend<T: IntoIterator<Item = u8>>(&mut self, iter: T) {
-        let iter = iter.into_iter();
-        let hint = self.len + iter.size_hint().0;
-        if hint > self.cap {
-            self.set_capacity(hint);
-        }
-        for byte in iter {
+        let mut iter = iter.into_iter();
+        self.reserve(iter.size_hint().0);
+        while let Some(byte) = iter.next() {
             let index = self.len;
-            if index + 1 > self.cap {
-                self.set_capacity(index + 256);
-            }
             self.len += 1;
+            self.reserve(iter.size_hint().0);
             self[index] = byte;
         }
     }
@@ -382,7 +427,7 @@ impl iter::Extend<u8> for MemFile {
 impl Clone for MemFile {
     fn clone(&self) -> Self {
         let mut c = MemFile::new();
-        c.extend(self.iter().cloned());
+        c.extend_from_slice(&self);
         c
     }
 }
@@ -417,7 +462,8 @@ impl fmt::Debug for MemFile {
 /// Resizable vector of bytes.
 /// [`BorrowingConnection`] functions use this to borrow memory from arbitrary allocators.
 pub trait ResizableBytes: ops::Deref<Target = [u8]> + fmt::Debug {
-    /// Set length of this vector.
+    /// Forces the length of the vector to new_len.
+    ///
     /// # Safety
     /// - `new_len` must be less than or equal to `capacity()`.
     /// - The elements at `old_len..new_len` must be initialized.
@@ -554,6 +600,15 @@ mod test {
     pub fn test_mem_file() {
         let s = MemFile::default();
         assert!(s.is_empty());
+        let mut s = MemFile::with_capacity(999);
+        assert!(s.capacity() >= 999);
+        assert!(s.is_empty());
+        let cap = s.capacity();
+        s.extend(iter::repeat(5).take(999));
+        assert_eq!(s.capacity(), cap, "should not grow because capacity was reserved");
+        s.extend(iter::repeat(5).take(200));
+        assert_ne!(s.capacity(), cap, "should grow");
+
         let mut s = MemFile::new();
         assert_eq!(0, s.len());
         assert!(s.is_empty());
@@ -567,7 +622,9 @@ mod test {
             format!("{:?}", &s)
         );
         s[2] = 3;
-        s.extend(vec![4, 5, 6]);
+        s.extend_from_slice(&[4, 5, 6]);
+        s.extend_from_slice(&[]);
+        s.extend([].iter().cloned());
         assert_eq!(&[1u8, 2, 3, 4, 5, 6], &s[..]);
         unsafe { s.set_len(3) };
         assert_eq!(&[1u8, 2, 3], &s[..]);
@@ -577,14 +634,19 @@ mod test {
         s.extend(iter::repeat(5).take(400));
         s.extend(iter::repeat(5).take(400));
         assert_eq!(s.len(), 800);
-        s.set_capacity(2000);
+        s.reserve(2000 - 800);
+        s[20] = 20;
         assert!(s.capacity() >= 2000);
         assert_eq!(s.len(), 800);
-        s.set_capacity(20);
-        assert_eq!(s.len(), s.capacity());
-        s.set_capacity(0);
+        unsafe { s.set_len(0) };
+        s.shrink_to_fit();
         assert_eq!(0, s.capacity());
-        assert_eq!(0, s.len())
+        assert_eq!(0, s.len());
+        assert_eq!(&[] as &[u8], &*s);
+
+        let s2 = s.clone();
+        assert_eq!(s2[..], s[..]);
+        assert_eq!(s2.capacity(), 0);
     }
 
     #[test]
