@@ -527,7 +527,6 @@ mod test {
         let mut serialized1 = db1.serialize(DatabaseName::Main)?.unwrap();
         let initial_cap = serialized1.capacity();
         let initial_len = serialized1.len();
-        let initial_ptr = serialized1.as_ptr();
 
         // create a new db and mutably borrow the serialized data
         let mut db3 = Connection::open_in_memory()?.into_borrowing();
@@ -555,7 +554,7 @@ mod test {
         mem::drop(db3);
         assert_eq!(new_len, serialized1.len());
         assert!(serialized1.capacity() > initial_cap);
-        assert_ne!(initial_ptr, serialized1.as_ptr());
+        // serialized1.as_ptr() may differ, but it could also have grown in place
         let mut serialized2 = serialized1.clone();
 
         // serializing again should work
