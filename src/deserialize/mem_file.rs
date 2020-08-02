@@ -187,3 +187,61 @@ impl fmt::Debug for MemFile {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    pub fn test_mem_file() {
+        let s = MemFile::default();
+        assert!(s.is_empty());
+        let mut s = MemFile::with_capacity(999);
+        assert!(s.capacity() >= 999);
+        assert!(s.is_empty());
+        let cap = s.capacity();
+        s.extend(iter::repeat(5).take(999));
+        assert_eq!(s.capacity(), cap);
+        s.extend(iter::repeat(5).take(200));
+        assert_ne!(s.capacity(), cap, "should grow");
+
+        let mut s = MemFile::new();
+        assert_eq!(0, s.len());
+        assert!(s.is_empty());
+        assert_eq!(0, s.capacity());
+        assert_eq!(&[] as &[u8], &s[..]);
+        s.extend(vec![1u8, 2, 33]);
+        assert_eq!(&[1u8, 2, 33], &s[..]);
+        assert!(!s.is_empty());
+        assert_eq!(
+            format!("MemFile {{ len: 3, cap: {} }}", s.capacity()),
+            format!("{:?}", &s)
+        );
+        s[2] = 3;
+        s.extend_from_slice(&[4, 5, 6, 7, 8]);
+        s.extend_from_slice(&[]);
+        s.extend([].iter().cloned());
+        assert_eq!(&[1u8, 2, 3, 4, 5, 6, 7, 8], &s[..]);
+        unsafe { s.set_len(3) };
+        assert_eq!(&[1u8, 2, 3], &s[..]);
+        unsafe { s.set_len(0) };
+        assert_eq!(&[] as &[u8], &s[..]);
+        assert!((6..300).contains(&s.capacity()));
+        s.extend(iter::repeat(5).take(400));
+        s.extend(iter::repeat(5).take(400));
+        assert_eq!(s.len(), 800);
+        s.reserve(2000 - 800);
+        s[20] = 20;
+        assert!(s.capacity() >= 2000);
+        assert_eq!(s.len(), 800);
+        unsafe { s.set_len(0) };
+        s.shrink_to_fit();
+        assert_eq!(0, s.capacity());
+        assert_eq!(0, s.len());
+        assert_eq!(&[] as &[u8], &*s);
+
+        let s2 = s.clone();
+        assert_eq!(s2[..], s[..]);
+        assert_eq!(s2.capacity(), 0);
+    }
+}
