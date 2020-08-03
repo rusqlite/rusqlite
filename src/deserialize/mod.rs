@@ -166,7 +166,7 @@ impl InnerConnection {
 /// Use [`Connection::into_borrowing`] to obtain one.
 pub struct BorrowingConnection<'a> {
     conn: Connection,
-    slice_drop: HashMap<DatabaseName<'a>, Box<dyn Fn(&mut InnerConnection) + 'a>>,
+    slice_drop: HashMap<DatabaseName<'a>, Box<dyn FnMut(&mut InnerConnection) + 'a + Send>>,
 }
 
 impl<'a> BorrowingConnection<'a> {
@@ -197,9 +197,10 @@ impl<'a> BorrowingConnection<'a> {
     /// If the database was detached, the slice will get length zero.
     pub fn deserialize_mut<T>(&mut self, db: DatabaseName<'a>, data: &'a mut T) -> Result<()>
     where
-        T: ResizableBytes,
+        T: ResizableBytes + Send,
     {
         let data_ptr = data as *mut T;
+        let second_data = unsafe { &mut *data_ptr };
         let on_drop = Box::new(move |c: &mut InnerConnection| unsafe {
             let new_len =
                 if let Ok(Some((_, len))) = c.serialize_with_flags(db, SerializeFlags::NO_COPY) {
@@ -209,10 +210,10 @@ impl<'a> BorrowingConnection<'a> {
                     // This way no uninitialized memory is exposed.
                     0
                 };
-            (*data_ptr).set_len(new_len);
+            second_data.set_len(new_len);
         });
         let mut c = self.conn.db.borrow_mut();
-        if let Some(prev) = self.slice_drop.insert(db, on_drop) {
+        if let Some(mut prev) = self.slice_drop.insert(db, on_drop) {
             prev(&mut *c);
         }
         unsafe { c.deserialize_with_flags(db, data, data.capacity(), DeserializeFlags::empty()) }
@@ -228,6 +229,7 @@ impl<'a> BorrowingConnection<'a> {
         data: &'a mut MemFile,
     ) -> Result<()> {
         let data_ptr = data as *mut MemFile;
+        let second_data = unsafe { &mut *data_ptr };
         let on_drop = Box::new(move |c: &mut InnerConnection| unsafe {
             let new_data =
                 if let Ok(Some((p, len))) = c.serialize_with_flags(db, SerializeFlags::NO_COPY) {
@@ -236,10 +238,10 @@ impl<'a> BorrowingConnection<'a> {
                 } else {
                     MemFile::new()
                 };
-            ptr::write(data_ptr, new_data);
+            ptr::write(second_data as *mut _, new_data);
         });
         let mut c = self.conn.db.borrow_mut();
-        if let Some(prev) = self.slice_drop.insert(db, on_drop) {
+        if let Some(mut prev) = self.slice_drop.insert(db, on_drop) {
             prev(&mut *c);
         }
         unsafe { c.deserialize_with_flags(db, data, data.capacity(), DeserializeFlags::RESIZABLE) }
@@ -248,7 +250,7 @@ impl<'a> BorrowingConnection<'a> {
 
 impl Drop for BorrowingConnection<'_> {
     fn drop(&mut self) {
-        for on_drop in self.slice_drop.values() {
+        for on_drop in self.slice_drop.values_mut() {
             on_drop(&mut *self.conn.db.borrow_mut());
         }
     }

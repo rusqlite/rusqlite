@@ -32,6 +32,8 @@ impl Drop for MemFile {
     }
 }
 
+unsafe impl Send for MemFile {}
+
 impl MemFile {
     /// Constructs a new, empty `MemFile`.
     ///
