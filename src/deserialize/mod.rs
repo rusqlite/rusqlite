@@ -13,7 +13,7 @@
 //! * Borrow the memory from SQLite using [`Connection::serialize_no_copy`].
 //! * Let SQLite immutably borrow a large Rust-allocated vector using
 //!   [`BorrowingConnection::deserialize_read_only`].
-//! * Let SQLite mutably borrow a [`ResizableBytes`] using
+//! * Let SQLite mutably borrow a [`SetLenBytes`] using
 //!   [`BorrowingConnection::deserialize_mut`].
 //! * Let SQlite mutably borrow a SQLite owned memory using
 //!   [`BorrowingConnection::deserialize_resizable`].
@@ -41,12 +41,10 @@
 
 pub use mem_file::MemFile;
 
-use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
-use std::os::raw::c_int;
+use std::os::raw::{c_int, c_void};
 use std::ptr::NonNull;
-use std::sync::Mutex;
 use std::{fmt, mem, ops, panic, ptr, slice};
 
 use crate::ffi;
@@ -173,22 +171,16 @@ impl<'a> BorrowingConnection<'a> {
     }
 
     /// Disconnect from database and reopen as an in-memory database based on a borrowed vector
-    /// (pass a `Vec<u8>`, `MemFile` or another type that implements `ResizableBytes`).
+    /// (pass a `Vec<u8>`, `MemFile` or another type that implements `SetLenBytes`).
     /// If the capacity is reached, SQLite can't reallocate, so it throws [`crate::ErrorCode::DiskFull`].
     /// Before the connection drops, the slice length is updated.
     pub fn deserialize_mut<T>(&mut self, schema: DatabaseName<'a>, data: &'a mut T) -> Result<()>
     where
-        T: ResizableBytes + Send,
+        T: SetLenBytes + Send,
     {
         let mut c = self.conn.db.borrow_mut();
         unsafe { c.deserialize_with_flags(schema, data, data.capacity(), 0) }.map(|_| {
-            set_close_hook(
-                &mut c,
-                &schema,
-                Box::new(move |file: &mut ffi::sqlite3_file| unsafe {
-                    data.set_len(get_file_len(file));
-                }),
-            );
+            hook_file(&mut c, &schema, FileType::SetLen(data));
         })
     }
 
@@ -210,86 +202,186 @@ impl<'a> BorrowingConnection<'a> {
             )
         }
         .map(|_| {
-            set_close_hook(
-                &mut c,
-                &schema,
-                Box::new(move |file: &mut ffi::sqlite3_file| unsafe {
-                    let p = get_file_buf(file);
-                    let cap = ffi::sqlite3_msize(p.as_ptr() as _) as _;
-                    let new_data = MemFile::from_non_null(p, get_file_len(file), cap);
-                    ptr::write(data as *mut _, new_data);
-                }),
-            );
+            hook_file(&mut c, &schema, FileType::Resizable(data));
         })
     }
 }
 
-static mut SQLITE_IO_METHODS: *const ffi::sqlite3_io_methods = ptr::null();
-static mut HOOKED_IO_METHODS: Option<ffi::sqlite3_io_methods> = None;
-
-type OnClose = Box<dyn FnOnce(&mut ffi::sqlite3_file) + Send + Sync>;
-lazy_static::lazy_static! {
-    static ref FILE_BORROW: Mutex<HashMap<usize, OnClose>> = Mutex::new(HashMap::new());
-}
+const HOOKED_IO_METHODS: ffi::sqlite3_io_methods = ffi::sqlite3_io_methods {
+    iVersion: 3,
+    xClose: Some(close),
+    xRead: Some(read),
+    xWrite: Some(write),
+    xTruncate: Some(truncate),
+    xSync: Some(sync),
+    xFileSize: Some(file_size),
+    xLock: Some(lock),
+    xUnlock: Some(unlock),
+    xCheckReservedLock: None,
+    xFileControl: Some(file_control),
+    xSectorSize: None,
+    xDeviceCharacteristics: Some(device_characteristics),
+    xShmMap: None,
+    xShmLock: None,
+    xShmBarrier: None,
+    xShmUnmap: None,
+    xFetch: Some(fetch),
+    xUnfetch: Some(unfetch),
+};
 
 fn hooked_io_methods() -> *const ffi::sqlite3_io_methods {
-    unsafe { HOOKED_IO_METHODS.as_ref().map_or(ptr::null(), |f| f) }
+    &HOOKED_IO_METHODS
+}
+
+lazy_static::lazy_static! {
+    static ref MEM_VFS: (&'static ffi::sqlite3_io_methods, i32) = unsafe {
+        let vfs = &mut *ffi::sqlite3_vfs_find("memdb\0".as_ptr() as _);
+        let file = ffi::sqlite3_malloc(vfs.szOsFile) as *mut ffi::sqlite3_file;
+        assert!(!file.is_null());
+        let mut out_flags = 0;
+        let rc = vfs.xOpen.unwrap()(vfs, ptr::null(), file, ffi::SQLITE_OPEN_MAIN_DB, &mut out_flags);
+        assert_eq!(rc, ffi::SQLITE_OK);
+        let methods = &*(*file).pMethods;
+        ffi::sqlite3_free(file as _);
+        (methods, vfs.szOsFile)
+    };
 }
 
 fn sqlite_io_methods() -> *const ffi::sqlite3_io_methods {
-    unsafe { SQLITE_IO_METHODS }
+    MEM_VFS.0
 }
 
-fn set_close_hook<'a>(
-    c: &mut InnerConnection,
-    schema: &DatabaseName,
-    on_close: Box<dyn FnOnce(&mut ffi::sqlite3_file) + Send + 'a>,
-) {
+fn hook_file(c: &mut InnerConnection, schema: &DatabaseName, data: FileType<'_>) {
     unsafe {
         let schema = schema.to_cstring().unwrap();
-        let file = get_file_ptr(c, &schema).unwrap();
-        // This is thread-safe because memdb_io_methods in memdb.c
-        // is always the same, so it does not matter who wins a
-        // potential data race.
-        if SQLITE_IO_METHODS.is_null() {
-            SQLITE_IO_METHODS = file.pMethods;
-        }
-        if HOOKED_IO_METHODS.is_none() {
-            HOOKED_IO_METHODS = Some(ffi::sqlite3_io_methods {
-                xClose: Some(close_fork),
-                ..*SQLITE_IO_METHODS
-            });
-        }
-        file.pMethods = hooked_io_methods();
-        // TODO: I'm not proud of this HashMap hack fix, maybe we should
-        //       register a wrapper VFS so the &mut MemFile can be
-        //       stored inside a sqlite3_file subclass.
-        // Transmute is needed for the lifetime and Sync differences.
-        FILE_BORROW
-            .lock()
-            .unwrap()
-            .insert(file as *const _ as _, mem::transmute(on_close));
+        let file = get_file_ptr(c, &schema).unwrap() as *mut _;
+        let lower = ffi::sqlite3_malloc(MEM_VFS.1) as *mut ffi::sqlite3_file;
+        ptr::copy_nonoverlapping(file as *const u8, lower as *mut u8, MEM_VFS.1 as _);
+        let borrowing = BorrowingFile {
+            methods: hooked_io_methods(),
+            lower,
+            data,
+        };
+        ptr::write(file as *mut BorrowingFile, borrowing);
     }
 }
 
-unsafe extern "C" fn close_fork(file: *mut ffi::sqlite3_file) -> c_int {
-    // This function is called by C, so panicing would be UB.
-    panic::catch_unwind(|| {
-        FILE_BORROW
-            .lock()
-            .map(|mut l| {
-                debug_assert_eq!((*file).pMethods, hooked_io_methods());
-                l.remove(&(file as usize)).map_or(ffi::SQLITE_ERROR, |f| {
-                    f(&mut *file);
-                    ffi::SQLITE_OK
-                })
-            })
-            .unwrap_or(ffi::SQLITE_ERROR)
-    })
-    .unwrap_or_else(|_e| {
-        // TODO: Don't discard the error message
-        ffi::SQLITE_ERROR
-    })
+#[repr(C)]
+struct BorrowingFile<'a> {
+    methods: *const ffi::sqlite3_io_methods,
+    lower: *mut ffi::sqlite3_file,
+    data: FileType<'a>,
+}
+
+enum FileType<'a> {
+    SetLen(&'a mut dyn SetLenBytes),
+    Resizable(&'a mut MemFile),
+}
+
+unsafe fn lower_file(file: *mut ffi::sqlite3_file) -> &'static mut ffi::sqlite3_file {
+    &mut *(*(file as *mut BorrowingFile)).lower
+}
+unsafe extern "C" fn close(file: *mut ffi::sqlite3_file) -> c_int {
+    let borrowing = &mut *(file as *mut BorrowingFile);
+    let lower = &mut *borrowing.lower;
+    match &mut borrowing.data {
+        FileType::SetLen(d) => {
+            d.set_len(get_file_len(lower));
+        }
+        FileType::Resizable(d) => {
+            let p = get_file_buf(lower);
+            let cap = ffi::sqlite3_msize(p.as_ptr() as _) as _;
+            let new_data = MemFile::from_non_null(p, get_file_len(lower), cap);
+            ptr::write(*d as *mut _, new_data);
+        }
+    }
+    ffi::sqlite3_free(lower as *mut _ as _);
+    ffi::SQLITE_OK
+}
+unsafe extern "C" fn read(
+    file: *mut ffi::sqlite3_file,
+    buf: *mut c_void,
+    amt: c_int,
+    ofst: i64,
+) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xRead
+        .map_or(ffi::SQLITE_ERROR, |f| f(file, buf, amt, ofst))
+}
+unsafe extern "C" fn write(
+    file: *mut ffi::sqlite3_file,
+    buf: *const c_void,
+    amt: c_int,
+    ofst: i64,
+) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xWrite
+        .map_or(ffi::SQLITE_ERROR, |f| f(file, buf, amt, ofst))
+}
+unsafe extern "C" fn truncate(file: *mut ffi::sqlite3_file, size: i64) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xTruncate
+        .map_or(ffi::SQLITE_ERROR, |f| f(file, size))
+}
+unsafe extern "C" fn sync(file: *mut ffi::sqlite3_file, flags: c_int) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xSync
+        .map_or(ffi::SQLITE_ERROR, |f| f(file, flags))
+}
+unsafe extern "C" fn file_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xFileSize
+        .map_or(ffi::SQLITE_ERROR, |f| f(file, size))
+}
+unsafe extern "C" fn lock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xLock
+        .map_or(ffi::SQLITE_ERROR, |f| f(file, lock))
+}
+unsafe extern "C" fn unlock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xUnlock
+        .map_or(ffi::SQLITE_ERROR, |f| f(file, lock))
+}
+unsafe extern "C" fn file_control(
+    file: *mut ffi::sqlite3_file,
+    op: c_int,
+    arg: *mut c_void,
+) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xFileControl
+        .map_or(ffi::SQLITE_ERROR, |f| f(file, op, arg))
+}
+unsafe extern "C" fn device_characteristics(file: *mut ffi::sqlite3_file) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xDeviceCharacteristics
+        .map_or(0, |f| f(file))
+}
+unsafe extern "C" fn fetch(
+    file: *mut ffi::sqlite3_file,
+    ofst: i64,
+    amt: c_int,
+    p: *mut *mut c_void,
+) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xFetch
+        .map_or(ffi::SQLITE_ERROR, |f| f(file, ofst, amt, p))
+}
+unsafe extern "C" fn unfetch(file: *mut ffi::sqlite3_file, ofst: i64, p: *mut c_void) -> c_int {
+    let file = lower_file(file);
+    (*file.pMethods)
+        .xUnfetch
+        .map_or(ffi::SQLITE_ERROR, |f| f(file, ofst, p))
 }
 
 fn get_file_ptr<'a>(
@@ -359,7 +451,7 @@ impl fmt::Debug for BorrowingConnection<'_> {
 
 /// Resizable vector of bytes.
 /// [`BorrowingConnection`] functions use this to borrow memory from arbitrary allocators.
-pub trait ResizableBytes: ops::Deref<Target = [u8]> + fmt::Debug {
+pub trait SetLenBytes: ops::Deref<Target = [u8]> + fmt::Debug {
     /// Forces the length of the vector to new_len.
     ///
     /// # Safety
@@ -370,7 +462,7 @@ pub trait ResizableBytes: ops::Deref<Target = [u8]> + fmt::Debug {
     /// It must be safe to write this number of bytes at `as_ptr()`.
     fn capacity(&self) -> usize;
 }
-impl ResizableBytes for Vec<u8> {
+impl SetLenBytes for Vec<u8> {
     unsafe fn set_len(&mut self, new_len: usize) {
         self.set_len(new_len);
     }
@@ -378,7 +470,7 @@ impl ResizableBytes for Vec<u8> {
         self.capacity()
     }
 }
-impl ResizableBytes for MemFile {
+impl SetLenBytes for MemFile {
     unsafe fn set_len(&mut self, new_len: usize) {
         self.set_len(new_len);
     }
