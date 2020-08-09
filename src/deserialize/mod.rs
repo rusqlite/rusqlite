@@ -65,7 +65,9 @@ impl Connection {
                 ffi::SQLITE_DESERIALIZE_FREEONCLOSE | ffi::SQLITE_DESERIALIZE_RESIZEABLE,
             )
         };
-        mem::forget(data);
+        if result.is_ok() {
+            mem::forget(data);
+        }
         result
     }
 
@@ -90,14 +92,13 @@ impl Connection {
     pub fn serialize_no_copy(&mut self, schema: DatabaseName<'_>) -> Result<Option<&mut [u8]>> {
         let schema = schema.to_cstring()?;
         let c = self.db.borrow();
-        let file = get_file_ptr(&c, &schema)?;
-        if file.pMethods != hooked_io_methods() && file.pMethods != sqlite_io_methods() {
-            return Ok(None);
-        }
-        let data = get_file_buf(file);
-        let len = get_file_len(file);
-        Ok(Some(unsafe {
-            slice::from_raw_parts_mut(data.as_ptr(), len)
+        Ok(get_file_ptr(&c, &schema).and_then(|file| {
+            if file.pMethods != hooked_io_methods() && file.pMethods != sqlite_io_methods() {
+                return None;
+            }
+            let data = get_file_buf(file);
+            let len = get_file_len(file);
+            unsafe { Some(slice::from_raw_parts_mut(data.as_ptr(), len)) }
         }))
     }
 
@@ -180,15 +181,14 @@ impl<'a> BorrowingConnection<'a> {
         T: ResizableBytes + Send,
     {
         let mut c = self.conn.db.borrow_mut();
-        unsafe { c.deserialize_with_flags(schema, data, data.capacity(), 0) }.and_then(|_| {
+        unsafe { c.deserialize_with_flags(schema, data, data.capacity(), 0) }.map(|_| {
             set_close_hook(
                 &mut c,
                 &schema,
                 Box::new(move |file: &mut ffi::sqlite3_file| unsafe {
                     data.set_len(get_file_len(file));
                 }),
-            )?;
-            Ok(())
+            );
         })
     }
 
@@ -209,7 +209,7 @@ impl<'a> BorrowingConnection<'a> {
                 ffi::SQLITE_DESERIALIZE_RESIZEABLE,
             )
         }
-        .and_then(|_| {
+        .map(|_| {
             set_close_hook(
                 &mut c,
                 &schema,
@@ -219,8 +219,7 @@ impl<'a> BorrowingConnection<'a> {
                     let new_data = MemFile::from_non_null(p, get_file_len(file), cap);
                     ptr::write(data as *mut _, new_data);
                 }),
-            )?;
-            Ok(())
+            );
         })
     }
 }
@@ -249,10 +248,10 @@ fn set_close_hook<'a>(
     c: &mut InnerConnection,
     schema: &DatabaseName,
     on_close: Box<dyn FnOnce(&mut ffi::sqlite3_file) + Send + 'a>,
-) -> Result<()> {
+) {
     unsafe {
         let schema = schema.to_cstring().unwrap();
-        let file = get_file_ptr(c, &schema)?;
+        let file = get_file_ptr(c, &schema).unwrap();
         // This is thread-safe because memdb_io_methods in memdb.c
         // is always the same, so it does not matter who wins a
         // potential data race.
@@ -274,7 +273,6 @@ fn set_close_hook<'a>(
             .lock()
             .unwrap()
             .insert(file as *const _ as _, mem::transmute(on_close));
-        Ok(())
     }
 }
 
@@ -304,7 +302,7 @@ unsafe extern "C" fn close_fork(file: *mut ffi::sqlite3_file) -> c_int {
 fn get_file_ptr<'a>(
     c: &'a InnerConnection,
     schema: &crate::util::SmallCString,
-) -> Result<&'a mut ffi::sqlite3_file> {
+) -> Option<&'a mut ffi::sqlite3_file> {
     unsafe {
         let mut file = MaybeUninit::<&mut ffi::sqlite3_file>::zeroed();
         let rc = ffi::sqlite3_file_control(
@@ -313,11 +311,11 @@ fn get_file_ptr<'a>(
             ffi::SQLITE_FCNTL_FILE_POINTER,
             file.as_mut_ptr() as _,
         );
-        if rc != ffi::SQLITE_OK {
-            return Err(crate::error::error_from_sqlite_code(rc, None));
+        if rc != ffi::SQLITE_OK || file.as_ptr().is_null() {
+            None
+        } else {
+            Some(file.assume_init())
         }
-        debug_assert!(!file.as_ptr().is_null());
-        Ok(file.assume_init())
     }
 }
 
@@ -656,6 +654,29 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn test_serialize_non_existing_db_name() {
+        let mut db = Connection::open_in_memory().unwrap();
+        let sql = "BEGIN;
+        CREATE TABLE hello(x INTEGER);
+        INSERT INTO hello VALUES(1);
+        INSERT INTO hello VALUES(2);
+        INSERT INTO hello VALUES(3);
+        END;";
+        db.execute_batch(sql).unwrap();
+        assert!(db
+            .serialize_no_copy(DatabaseName::Attached("does not exist"))
+            .unwrap()
+            .is_none());
+        assert!(db
+            .serialize(DatabaseName::Attached("does not exist"))
+            .unwrap()
+            .is_none());
+        let file = db.serialize(DatabaseName::Main).unwrap().unwrap();
+        db.deserialize(DatabaseName::Attached("does not exist"), file)
+            .unwrap_err();
     }
 
     fn serialize_len(conn: &mut Connection) -> usize {
