@@ -84,15 +84,18 @@ impl Connection {
         }
     }
 
-    /// Borrow the serialization of a database using the flag [`ffi::SQLITE_SERIALIZE_NOCOPY`].
+    /// Borrow the serialization of a database without copying the memory.
     /// This returns `Ok(None)` when [`DatabaseName`] does not exist or no in-memory serialization is present.
     pub fn serialize_no_copy(&mut self, schema: DatabaseName<'_>) -> Result<Option<&mut [u8]>> {
-        unsafe {
-            self.db
-                .borrow_mut()
-                .serialize_with_flags(schema, SerializeFlags::NO_COPY)
-                .map(|r| r.map(|(data, len)| slice::from_raw_parts_mut(data.as_ptr(), len)))
+        let schema = schema.to_cstring()?;
+        let c = self.db.borrow();
+        let file = get_file_ptr(&c, &schema)?;
+        if file.pMethods != hooked_io_methods() && file.pMethods != sqlite_io_methods() {
+            return Ok(None)
         }
+        let data = get_file_buf(file);
+        let len = get_file_len(file);
+        Ok(Some(unsafe { slice::from_raw_parts_mut(data.as_ptr(), len) }))
     }
 
     /// Wraps the `Connection` in `BorrowingConnection` to connect it to borrowed serialized memory
@@ -155,19 +158,6 @@ impl InnerConnection {
         flags: SerializeFlags,
     ) -> Result<Option<(NonNull<u8>, usize)>> {
         let schema = schema.to_cstring()?;
-
-        let mut file_option = None;
-        if let Some(hooked) = &HOOKED_IO_METHODS {
-            if let Ok(file) = get_file_ptr(self, &schema) {
-                if file.pMethods == hooked {
-                    // memdb.c/memdbFromDbSchema checks if file.pMethods==&memdb_io_methods
-                    // so this temporarily reverts the hook.
-                    file.pMethods = SQLITE_IO_METHODS;
-                    file_option = Some(file);
-                }
-            }
-        }
-
         let mut len = 0;
         let data = ffi::sqlite3_serialize(
             self.db(),
@@ -175,9 +165,6 @@ impl InnerConnection {
             &mut len as *mut _ as *mut _,
             flags.bits() as _,
         );
-        if let Some(file) = file_option {
-            file.pMethods = HOOKED_IO_METHODS.as_ref().unwrap();
-        }
         Ok(NonNull::new(data).map(|d| (d, len)))
     }
 }
@@ -251,19 +238,7 @@ impl<'a> BorrowingConnection<'a> {
                 &mut c,
                 &schema,
                 Box::new(move |file: &mut ffi::sqlite3_file| unsafe {
-                    let fetch: *mut u8 = {
-                        // Unfortunately, serialize_no_copy does not work here as the db is already
-                        // detached, but the sqlite3_file is not yet freed. Because the aData field
-                        // is private, this hack is needed to get the buffer.
-                        let mut fetch = MaybeUninit::zeroed();
-                        let rc =
-                            (*file.pMethods).xFetch.unwrap()(file, 0, 0, fetch.as_mut_ptr() as _);
-                        debug_assert_eq!(rc, ffi::SQLITE_OK);
-                        let rc = (*file.pMethods).xUnfetch.unwrap()(file, 0, ptr::null_mut());
-                        debug_assert_eq!(rc, ffi::SQLITE_OK);
-                        fetch.assume_init()
-                    };
-                    let p = NonNull::new(fetch).unwrap();
+                    let p = get_file_buf(file);
                     let cap = ffi::sqlite3_msize(p.as_ptr() as _) as _;
                     let new_data = MemFile::from_non_null(p, get_file_len(file), cap);
                     ptr::write(data as *mut _, new_data);
@@ -279,6 +254,13 @@ static mut HOOKED_IO_METHODS: Option<ffi::sqlite3_io_methods> = None;
 type OnClose = Box<dyn FnOnce(&mut ffi::sqlite3_file) + Send + Sync>;
 lazy_static::lazy_static! {
     static ref FILE_BORROW: Mutex<HashMap<usize, OnClose>> = Mutex::new(HashMap::new());
+}
+
+fn hooked_io_methods() -> *const ffi::sqlite3_io_methods {
+    unsafe { HOOKED_IO_METHODS.as_ref().map_or(ptr::null(), |f| f as *const _) }
+}
+fn sqlite_io_methods() -> *const ffi::sqlite3_io_methods {
+    unsafe { SQLITE_IO_METHODS }
 }
 
 fn set_close_hook<'a>(
@@ -337,15 +319,6 @@ unsafe extern "C" fn close_fork(file: *mut ffi::sqlite3_file) -> c_int {
     })
 }
 
-fn get_file_len(file: &mut ffi::sqlite3_file) -> usize {
-    unsafe {
-        let mut size: i64 = 0;
-        let rc = (*file.pMethods).xFileSize.map(|f| f(file, &mut size));
-        debug_assert_eq!(rc, Some(ffi::SQLITE_OK));
-        size as _
-    }
-}
-
 fn get_file_ptr<'a>(
     c: &'a InnerConnection,
     schema: &crate::util::SmallCString,
@@ -364,6 +337,30 @@ fn get_file_ptr<'a>(
         debug_assert!(!file.as_ptr().is_null());
         Ok(file.assume_init())
     }
+}
+
+fn get_file_len(file: &mut ffi::sqlite3_file) -> usize {
+    unsafe {
+        let mut size: i64 = 0;
+        let rc = (*file.pMethods).xFileSize.map(|f| f(file, &mut size));
+        debug_assert_eq!(rc, Some(ffi::SQLITE_OK));
+        size as _
+    }
+}
+
+fn get_file_buf(file: &mut ffi::sqlite3_file) -> NonNull<u8> {
+    let fetch: *mut u8 = unsafe {
+        // Unfortunately, serialize_no_copy does not work here as the db is already
+        // detached, but the sqlite3_file is not yet freed. Because the aData field
+        // is private, this hack is needed to get the buffer.
+        let mut fetch = MaybeUninit::zeroed();
+        let rc = (*file.pMethods).xFetch.unwrap()(file, 0, 0, fetch.as_mut_ptr() as _);
+        debug_assert_eq!(rc, ffi::SQLITE_OK);
+        let rc = (*file.pMethods).xUnfetch.unwrap()(file, 0, ptr::null_mut());
+        debug_assert_eq!(rc, ffi::SQLITE_OK);
+        fetch.assume_init()
+    };
+    NonNull::new(fetch).unwrap()
 }
 
 impl ops::Deref for BorrowingConnection<'_> {
