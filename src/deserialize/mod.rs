@@ -233,11 +233,7 @@ lazy_static::lazy_static! {
 }
 
 fn hooked_io_methods() -> *const ffi::sqlite3_io_methods {
-    unsafe {
-        HOOKED_IO_METHODS
-            .as_ref()
-            .map_or(ptr::null(), |f| f as *const _)
-    }
+    unsafe { HOOKED_IO_METHODS.as_ref().map_or(ptr::null(), |f| f) }
 }
 
 fn sqlite_io_methods() -> *const ffi::sqlite3_io_methods {
@@ -264,7 +260,7 @@ fn set_close_hook<'a>(
                 ..*SQLITE_IO_METHODS
             });
         }
-        file.pMethods = HOOKED_IO_METHODS.as_ref().unwrap();
+        file.pMethods = hooked_io_methods();
         // TODO: I'm not proud of this HashMap hack fix, maybe we should
         //       register a wrapper VFS so the &mut MemFile can be
         //       stored inside a sqlite3_file subclass.
@@ -282,10 +278,7 @@ unsafe extern "C" fn close_fork(file: *mut ffi::sqlite3_file) -> c_int {
         FILE_BORROW
             .lock()
             .map(|mut l| {
-                debug_assert_eq!(
-                    (*file).pMethods,
-                    HOOKED_IO_METHODS.as_ref().map_or(ptr::null(), |h| h)
-                );
+                debug_assert_eq!((*file).pMethods, hooked_io_methods());
                 l.remove(&(file as usize)).map_or(ffi::SQLITE_ERROR, |f| {
                     f(&mut *file);
                     ffi::SQLITE_OK
