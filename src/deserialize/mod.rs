@@ -218,18 +218,18 @@ impl<'a> BorrowingConnection<'a> {
     where
         T: ResizableBytes + Send,
     {
-        let second_data = unsafe { &mut *(data as *mut T) };
-        // This second mutable borrow is safe because on_close is only called
-        // during close when no other SQLite calls can access the database.
-        let on_close = Box::new(move |file: &mut ffi::sqlite3_file| unsafe {
-            second_data.set_len(get_file_len(file));
-        });
         let mut c = self.conn.db.borrow_mut();
         unsafe {
             c.deserialize_with_flags(schema, data, data.capacity(), DeserializeFlags::empty())
         }
         .and_then(|_| {
-            set_close_hook(&mut c, &schema, on_close)?;
+            set_close_hook(
+                &mut c,
+                &schema,
+                Box::new(move |file: &mut ffi::sqlite3_file| unsafe {
+                    data.set_len(get_file_len(file));
+                }),
+            )?;
             Ok(())
         })
     }
@@ -242,32 +242,33 @@ impl<'a> BorrowingConnection<'a> {
         schema: DatabaseName<'a>,
         data: &'a mut MemFile,
     ) -> Result<()> {
-        let second_data = unsafe { &mut *(data as *mut MemFile) };
-        // This second mutable borrow is safe because on_close is only called
-        // during close when no other SQLite calls can access the database.
-        let on_close = Box::new(move |file: &mut ffi::sqlite3_file| unsafe {
-            let fetch: *mut u8 = {
-                // Unfortunately, serialize_no_copy does not work here as the db is already
-                // detached, but the sqlite3_file is not yet freed. Because the aData field
-                // is private, this hack is needed to get the buffer.
-                let mut fetch = MaybeUninit::zeroed();
-                let rc = (*file.pMethods).xFetch.unwrap()(file, 0, 0, fetch.as_mut_ptr() as _);
-                debug_assert_eq!(rc, ffi::SQLITE_OK);
-                let rc = (*file.pMethods).xUnfetch.unwrap()(file, 0, ptr::null_mut());
-                debug_assert_eq!(rc, ffi::SQLITE_OK);
-                fetch.assume_init()
-            };
-            let p = NonNull::new(fetch).unwrap();
-            let cap = ffi::sqlite3_msize(p.as_ptr() as _) as _;
-            let new_data = MemFile::from_non_null(p, get_file_len(file), cap);
-            ptr::write(second_data as *mut _, new_data);
-        });
         let mut c = self.conn.db.borrow_mut();
         unsafe {
             c.deserialize_with_flags(schema, data, data.capacity(), DeserializeFlags::RESIZABLE)
         }
         .and_then(|_| {
-            set_close_hook(&mut c, &schema, on_close)?;
+            set_close_hook(
+                &mut c,
+                &schema,
+                Box::new(move |file: &mut ffi::sqlite3_file| unsafe {
+                    let fetch: *mut u8 = {
+                        // Unfortunately, serialize_no_copy does not work here as the db is already
+                        // detached, but the sqlite3_file is not yet freed. Because the aData field
+                        // is private, this hack is needed to get the buffer.
+                        let mut fetch = MaybeUninit::zeroed();
+                        let rc =
+                            (*file.pMethods).xFetch.unwrap()(file, 0, 0, fetch.as_mut_ptr() as _);
+                        debug_assert_eq!(rc, ffi::SQLITE_OK);
+                        let rc = (*file.pMethods).xUnfetch.unwrap()(file, 0, ptr::null_mut());
+                        debug_assert_eq!(rc, ffi::SQLITE_OK);
+                        fetch.assume_init()
+                    };
+                    let p = NonNull::new(fetch).unwrap();
+                    let cap = ffi::sqlite3_msize(p.as_ptr() as _) as _;
+                    let new_data = MemFile::from_non_null(p, get_file_len(file), cap);
+                    ptr::write(data as *mut _, new_data);
+                }),
+            )?;
             Ok(())
         })
     }
