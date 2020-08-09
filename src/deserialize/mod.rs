@@ -62,7 +62,7 @@ impl Connection {
                 schema,
                 &data,
                 data.capacity(),
-                DeserializeFlags::FREE_ON_CLOSE | DeserializeFlags::RESIZABLE,
+                ffi::SQLITE_DESERIALIZE_FREEONCLOSE | ffi::SQLITE_DESERIALIZE_RESIZEABLE,
             )
         };
         mem::forget(data);
@@ -70,17 +70,18 @@ impl Connection {
     }
 
     /// Return the serialization of a database, or `None` when [`DatabaseName`] does not exist.
+    /// See the C Interface Specification [Serialize a database](https://www.sqlite.org/c3ref/serialize.html).
     pub fn serialize(&self, schema: DatabaseName<'_>) -> Result<Option<MemFile>> {
         unsafe {
-            self.db
-                .borrow()
-                .serialize_with_flags(schema, SerializeFlags::empty())
-                .map(|r| {
-                    r.map(|(data, len)| {
-                        let cap = ffi::sqlite3_msize(data.as_ptr() as _) as _;
-                        MemFile::from_non_null(data, len, cap)
-                    })
-                })
+            let c = self.db.borrow();
+            let schema = schema.to_cstring()?;
+            let mut len = 0;
+            let data =
+                ffi::sqlite3_serialize(c.db(), schema.as_ptr(), &mut len as *mut _ as *mut _, 0);
+            Ok(NonNull::new(data).map(|data| {
+                let cap = ffi::sqlite3_msize(data.as_ptr() as _) as _;
+                MemFile::from_non_null(data, len, cap)
+            }))
         }
     }
 
@@ -91,11 +92,13 @@ impl Connection {
         let c = self.db.borrow();
         let file = get_file_ptr(&c, &schema)?;
         if file.pMethods != hooked_io_methods() && file.pMethods != sqlite_io_methods() {
-            return Ok(None)
+            return Ok(None);
         }
         let data = get_file_buf(file);
         let len = get_file_len(file);
-        Ok(Some(unsafe { slice::from_raw_parts_mut(data.as_ptr(), len) }))
+        Ok(Some(unsafe {
+            slice::from_raw_parts_mut(data.as_ptr(), len)
+        }))
     }
 
     /// Wraps the `Connection` in `BorrowingConnection` to connect it to borrowed serialized memory
@@ -125,7 +128,7 @@ impl InnerConnection {
         schema: DatabaseName<'_>,
         data: &[u8],
         cap: usize,
-        flags: DeserializeFlags,
+        flags: c_int,
     ) -> Result<()> {
         let schema = schema.to_cstring()?;
         let rc = ffi::sqlite3_deserialize(
@@ -134,38 +137,9 @@ impl InnerConnection {
             data.as_ptr() as *mut _,
             data.len() as _,
             cap as _,
-            flags.bits() as _,
+            flags as _,
         );
         self.decode_result(rc)
-    }
-
-    /// The serialization is the same sequence of bytes which would be written to disk
-    /// if the database where backed up to disk.
-    ///
-    /// Returns `Ok(None)` when [`DatabaseName`] does not exist or malloc/prepare fails.
-    ///
-    /// # Safety
-    ///
-    /// If [`SerializeFlags::NO_COPY`] is set, this returns a pointer to memory that SQLite is currently using
-    /// (or `Ok(None)` if this is not available).
-    /// In that case, the returned `MemFile` mutably borrows `Connection`,
-    /// [`std::mem::forget()`] one of them to prevent double free.
-    ///
-    /// See the C Interface Specification [Serialize a database](https://www.sqlite.org/c3ref/serialize.html).
-    unsafe fn serialize_with_flags(
-        &self,
-        schema: DatabaseName<'_>,
-        flags: SerializeFlags,
-    ) -> Result<Option<(NonNull<u8>, usize)>> {
-        let schema = schema.to_cstring()?;
-        let mut len = 0;
-        let data = ffi::sqlite3_serialize(
-            self.db(),
-            schema.as_ptr(),
-            &mut len as *mut _ as *mut _,
-            flags.bits() as _,
-        );
-        Ok(NonNull::new(data).map(|d| (d, len)))
     }
 }
 
@@ -192,7 +166,7 @@ impl<'a> BorrowingConnection<'a> {
                 schema,
                 data,
                 data.len(),
-                DeserializeFlags::READ_ONLY,
+                ffi::SQLITE_DESERIALIZE_READONLY,
             )
         }
     }
@@ -206,10 +180,7 @@ impl<'a> BorrowingConnection<'a> {
         T: ResizableBytes + Send,
     {
         let mut c = self.conn.db.borrow_mut();
-        unsafe {
-            c.deserialize_with_flags(schema, data, data.capacity(), DeserializeFlags::empty())
-        }
-        .and_then(|_| {
+        unsafe { c.deserialize_with_flags(schema, data, data.capacity(), 0) }.and_then(|_| {
             set_close_hook(
                 &mut c,
                 &schema,
@@ -231,7 +202,12 @@ impl<'a> BorrowingConnection<'a> {
     ) -> Result<()> {
         let mut c = self.conn.db.borrow_mut();
         unsafe {
-            c.deserialize_with_flags(schema, data, data.capacity(), DeserializeFlags::RESIZABLE)
+            c.deserialize_with_flags(
+                schema,
+                data,
+                data.capacity(),
+                ffi::SQLITE_DESERIALIZE_RESIZEABLE,
+            )
         }
         .and_then(|_| {
             set_close_hook(
@@ -251,14 +227,20 @@ impl<'a> BorrowingConnection<'a> {
 
 static mut SQLITE_IO_METHODS: *const ffi::sqlite3_io_methods = ptr::null();
 static mut HOOKED_IO_METHODS: Option<ffi::sqlite3_io_methods> = None;
+
 type OnClose = Box<dyn FnOnce(&mut ffi::sqlite3_file) + Send + Sync>;
 lazy_static::lazy_static! {
     static ref FILE_BORROW: Mutex<HashMap<usize, OnClose>> = Mutex::new(HashMap::new());
 }
 
 fn hooked_io_methods() -> *const ffi::sqlite3_io_methods {
-    unsafe { HOOKED_IO_METHODS.as_ref().map_or(ptr::null(), |f| f as *const _) }
+    unsafe {
+        HOOKED_IO_METHODS
+            .as_ref()
+            .map_or(ptr::null(), |f| f as *const _)
+    }
 }
+
 fn sqlite_io_methods() -> *const ffi::sqlite3_io_methods {
     unsafe { SQLITE_IO_METHODS }
 }
@@ -414,32 +396,6 @@ impl ResizableBytes for MemFile {
     }
 }
 
-bitflags::bitflags! {
-    /// Flags for [`Connection::deserialize_with_flags`].
-    #[repr(C)]
-    struct DeserializeFlags: ::std::os::raw::c_int {
-        /// The deserialized database should be treated as read-only
-        /// [`ffi::SQLITE_DESERIALIZE_READONLY`].
-        const READ_ONLY = ffi::SQLITE_DESERIALIZE_READONLY;
-        /// SQLite should take ownership of this memory and automatically free it when it has finished using it
-        /// [`ffi::SQLITE_DESERIALIZE_FREEONCLOSE`].
-        const FREE_ON_CLOSE = ffi::SQLITE_DESERIALIZE_FREEONCLOSE;
-        /// SQLite is allowed to grow the size of the database using `sqlite3_realloc64()`
-        /// [`ffi::SQLITE_DESERIALIZE_RESIZEABLE].
-        const RESIZABLE = ffi::SQLITE_DESERIALIZE_RESIZEABLE;
-    }
-}
-
-bitflags::bitflags! {
-    /// Flags for [`Connection::serialize_with_flags`].
-    #[repr(C)]
-    struct SerializeFlags: ::std::os::raw::c_int {
-        /// Return a reference to the contiguous in-memory database that the connection
-        /// currently uses instead of making a copy of the database.
-        const NO_COPY = ffi::SQLITE_SERIALIZE_NOCOPY;
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -513,7 +469,7 @@ mod test {
                     DatabaseName::Main,
                     &serialized,
                     serialized.capacity(),
-                    DeserializeFlags::READ_ONLY,
+                    ffi::SQLITE_DESERIALIZE_READONLY,
                 )
                 .unwrap()
         };
