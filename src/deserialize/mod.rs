@@ -48,16 +48,19 @@ use std::ptr::NonNull;
 use std::{fmt, mem, ops, panic, ptr, rc::Rc, slice};
 
 use crate::ffi;
-use crate::{inner_connection::InnerConnection, Connection, DatabaseName, Result};
+use crate::{
+    inner_connection::InnerConnection, util::SmallCString, Connection, DatabaseName, Result,
+};
 
 mod mem_file;
 
 impl Connection {
     /// Disconnect from database and reopen as an in-memory database based on [`MemFile`].
     pub fn deserialize(&self, schema: DatabaseName<'_>, data: MemFile) -> Result<()> {
+        let schema = schema.to_cstring()?;
         let result = unsafe {
             self.db.borrow_mut().deserialize_with_flags(
-                schema,
+                &schema,
                 &data,
                 data.capacity(),
                 ffi::SQLITE_DESERIALIZE_FREEONCLOSE | ffi::SQLITE_DESERIALIZE_RESIZEABLE,
@@ -86,21 +89,6 @@ impl Connection {
         }
     }
 
-    /// Borrow the serialization of a database without copying the memory.
-    /// This returns `Ok(None)` when [`DatabaseName`] does not exist or no in-memory serialization is present.
-    pub fn serialize_no_copy(&mut self, schema: DatabaseName<'_>) -> Result<Option<&mut [u8]>> {
-        let schema = schema.to_cstring()?;
-        let c = self.db.borrow();
-        Ok(file_ptr(&c, &schema).and_then(|file| {
-            if file.pMethods != hooked_io_methods() && file.pMethods != sqlite_io_methods() {
-                return None;
-            }
-            let data = file_buffer(file);
-            let len = file_length(file);
-            unsafe { Some(slice::from_raw_parts_mut(data.as_ptr(), len)) }
-        }))
-    }
-
     /// Wraps the `Connection` in `BorrowingConnection` to connect it to borrowed serialized memory
     /// using [`BorrowingConnection::deserialize_read_only`].
     pub fn into_borrowing(self) -> BorrowingConnection<'static> {
@@ -125,12 +113,11 @@ impl InnerConnection {
     /// See the C Interface Specification [Deserialize a database](https://www.sqlite.org/c3ref/deserialize.html).
     unsafe fn deserialize_with_flags(
         &mut self,
-        schema: DatabaseName<'_>,
+        schema: &SmallCString,
         data: &[u8],
         cap: usize,
         flags: c_int,
     ) -> Result<()> {
-        let schema = schema.to_cstring()?;
         let rc = ffi::sqlite3_deserialize(
             self.db(),
             schema.as_ptr(),
@@ -158,12 +145,30 @@ impl<'a> BorrowingConnection<'a> {
         }
     }
 
+    /// Borrow the serialization of a database without copying the memory.
+    /// This returns `Ok(None)` when [`DatabaseName`] does not exist or no in-memory serialization is present.
+    pub fn serialize_no_copy(&self, schema: DatabaseName<'_>) -> Result<Option<Fetch<'a>>> {
+        let schema = schema.to_cstring()?;
+        let mut c = self.conn.db.borrow_mut();
+        Ok(file_ptr(&c, &schema).and_then(|file| {
+            let hooked = if file.pMethods == sqlite_io_methods() {
+                file_hook(&mut c, &schema, FileType::FreeOnClose)
+            } else if file.pMethods == hooked_io_methods() {
+                unsafe { &mut *(file as *mut _ as *mut _) }
+            } else {
+                return None;
+            };
+            Some(Fetch::new(hooked))
+        }))
+    }
+
     /// Disconnect from database and reopen as an read-only in-memory database based on a borrowed slice
     /// (using the flag [`ffi::SQLITE_DESERIALIZE_READONLY`]).
     pub fn deserialize_read_only(&self, schema: DatabaseName<'a>, data: &'a [u8]) -> Result<()> {
         unsafe {
+            let schema = schema.to_cstring()?;
             self.db.borrow_mut().deserialize_with_flags(
-                schema,
+                &schema,
                 data,
                 data.len(),
                 ffi::SQLITE_DESERIALIZE_READONLY,
@@ -179,8 +184,9 @@ impl<'a> BorrowingConnection<'a> {
     where
         T: SetLenBytes + Send,
     {
+        let schema = schema.to_cstring()?;
         let mut c = self.conn.db.borrow_mut();
-        unsafe { c.deserialize_with_flags(schema, data, data.capacity(), 0) }.map(|_| {
+        unsafe { c.deserialize_with_flags(&schema, data, data.capacity(), 0) }.map(|_| {
             file_hook(&mut c, &schema, FileType::SetLen(data));
         })
     }
@@ -193,10 +199,11 @@ impl<'a> BorrowingConnection<'a> {
         schema: DatabaseName<'a>,
         data: &'a mut MemFile,
     ) -> Result<()> {
+        let schema = schema.to_cstring()?;
         let mut c = self.conn.db.borrow_mut();
         unsafe {
             c.deserialize_with_flags(
-                schema,
+                &schema,
                 data,
                 data.capacity(),
                 ffi::SQLITE_DESERIALIZE_RESIZEABLE,
@@ -229,10 +236,44 @@ impl fmt::Debug for BorrowingConnection<'_> {
     }
 }
 
+/// Reference counted slice of memory file with serialized database content using
+/// [`ffi::sqlite3_io_methods::xFetch`] & [`ffi::sqlite3_io_methods::xUnfetch`]
+pub struct Fetch<'a>(pub &'a [u8], Rc<OwnedFile>);
+
+impl Fetch<'_> {
+    fn new(hooked: &mut HookedFile) -> Self {
+        // FIXME: unsafe exposed &[u8] that is in use by connection
+        unsafe {
+            let file = &mut *hooked.lower.0;
+            let buf = file_fetch(file);
+            let len = file_length(file);
+            let data = slice::from_raw_parts_mut(buf.as_ptr(), len);
+            Fetch(data, Rc::clone(&hooked.lower))
+        }
+    }
+}
+
+impl Drop for Fetch<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            let file = &mut *self.1.as_ref().0;
+            file_unfetch(file);
+        }
+    }
+}
+
+impl ops::Deref for Fetch<'_> {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 /// Pointer that should be updated on close.
 enum FileType<'a> {
     SetLen(&'a mut dyn SetLenBytes),
     Resizable(&'a mut MemFile),
+    FreeOnClose,
 }
 
 /// `sqlite3_file` subclass that delegates all methods except
@@ -249,16 +290,24 @@ struct OwnedFile(*mut ffi::sqlite3_file);
 
 impl Drop for OwnedFile {
     fn drop(&mut self) {
-        unsafe { ffi::sqlite3_free(self.0 as _) }
+        unsafe {
+            let file = &mut *self.0;
+            let rc = (*file.pMethods).xClose.unwrap()(file);
+            assert_eq!(rc, ffi::SQLITE_OK);
+            ffi::sqlite3_free(self.0 as _);
+        }
     }
 }
 
 /// Store `data: FileType` in a new `HookedFile`, after moving
 /// the original file to a new allocation.
-fn file_hook(c: &mut InnerConnection, schema: &DatabaseName, data: FileType<'_>) {
+fn file_hook<'a>(
+    c: &mut InnerConnection,
+    schema: &SmallCString,
+    data: FileType<'a>,
+) -> &'a mut HookedFile<'a> {
     unsafe {
         assert!(mem::size_of::<HookedFile>() <= MEM_VFS.1 as _);
-        let schema = schema.to_cstring().unwrap();
         let file = file_ptr(c, &schema).unwrap() as *mut _;
         let lower = ffi::sqlite3_malloc(MEM_VFS.1) as *mut ffi::sqlite3_file;
         ptr::copy_nonoverlapping(file as *const u8, lower as *mut u8, MEM_VFS.1 as _);
@@ -268,7 +317,9 @@ fn file_hook(c: &mut InnerConnection, schema: &DatabaseName, data: FileType<'_>)
             lower: Rc::new(OwnedFile(lower)),
             data,
         };
-        ptr::write(file as *mut HookedFile, hooked);
+        let file = file as *mut HookedFile;
+        ptr::write(file, hooked);
+        &mut *file
     }
 }
 
@@ -320,7 +371,8 @@ fn sqlite_io_methods() -> *const ffi::sqlite3_io_methods {
 /// when the database gets detached.
 unsafe extern "C" fn close(file: *mut ffi::sqlite3_file) -> c_int {
     panic::catch_unwind(|| {
-        // File should be dropped at the end of scope, so use ptr::read
+        // This ptr::read is used so that the Rc is dropped at the end of scope.
+        // HookedFile::drop invokes xClose and sqlite3_free.
         let mut hooked = ptr::read(file as *mut HookedFile);
         let lower = &mut *hooked.lower.0;
         // Update the data pointer
@@ -334,6 +386,7 @@ unsafe extern "C" fn close(file: *mut ffi::sqlite3_file) -> c_int {
                 let new_data = MemFile::from_non_null(p, file_length(lower), cap);
                 ptr::write(*d as *mut _, new_data);
             }
+            FileType::FreeOnClose => (),
         }
         ffi::SQLITE_OK
     })
@@ -343,10 +396,7 @@ unsafe extern "C" fn close(file: *mut ffi::sqlite3_file) -> c_int {
     })
 }
 
-fn file_ptr<'a>(
-    c: &'a InnerConnection,
-    schema: &crate::util::SmallCString,
-) -> Option<&'a mut ffi::sqlite3_file> {
+fn file_ptr<'a>(c: &InnerConnection, schema: &SmallCString) -> Option<&'a mut ffi::sqlite3_file> {
     unsafe {
         let mut file = MaybeUninit::<&mut ffi::sqlite3_file>::zeroed();
         let rc = ffi::sqlite3_file_control(
@@ -373,18 +423,27 @@ fn file_length(file: &mut ffi::sqlite3_file) -> usize {
 }
 
 fn file_buffer(file: &mut ffi::sqlite3_file) -> NonNull<u8> {
+    // Unfortunately, serialize_no_copy does not work here as the db is already
+    // detached, but the sqlite3_file is not yet freed. Because the aData field
+    // is private, this hack is needed to get the buffer.
+    let r = file_fetch(file);
+    file_unfetch(file);
+    r
+}
+
+fn file_fetch(file: &mut ffi::sqlite3_file) -> NonNull<u8> {
     let fetch: *mut u8 = unsafe {
-        // Unfortunately, serialize_no_copy does not work here as the db is already
-        // detached, but the sqlite3_file is not yet freed. Because the aData field
-        // is private, this hack is needed to get the buffer.
         let mut fetch = MaybeUninit::zeroed();
         let rc = (*file.pMethods).xFetch.unwrap()(file, 0, 0, fetch.as_mut_ptr() as _);
-        debug_assert_eq!(rc, ffi::SQLITE_OK);
-        let rc = (*file.pMethods).xUnfetch.unwrap()(file, 0, ptr::null_mut());
         debug_assert_eq!(rc, ffi::SQLITE_OK);
         fetch.assume_init()
     };
     NonNull::new(fetch).unwrap()
+}
+
+fn file_unfetch(file: &mut ffi::sqlite3_file) {
+    let rc = unsafe { (*file.pMethods).xUnfetch.unwrap()(file, 0, ptr::null_mut()) };
+    debug_assert_eq!(rc, ffi::SQLITE_OK);
 }
 
 unsafe fn file_lower(
@@ -496,7 +555,7 @@ mod test {
 
     #[test]
     pub fn test_serialize() {
-        let mut db = Connection::open_in_memory().unwrap();
+        let db = Connection::open_in_memory().unwrap().into_borrowing();
         let sql = "BEGIN;
             CREATE TABLE foo(x INTEGER);
             INSERT INTO foo VALUES(1);
@@ -507,7 +566,7 @@ mod test {
         let serialized = db.serialize(DatabaseName::Main).unwrap().unwrap();
 
         // create a new db and import the serialized data
-        let mut db2 = Connection::open_in_memory().unwrap();
+        let db2 = Connection::open_in_memory().unwrap().into_borrowing();
         db2.deserialize(DatabaseName::Main, serialized).unwrap();
         let mut query = db2.prepare("SELECT x FROM foo").unwrap();
         let results: Result<Vec<u16>> = query
@@ -538,6 +597,57 @@ mod test {
     }
 
     #[test]
+    pub fn test_serialize_no_copy() {
+        // prepare two distinct files: a & b
+        let db1 = Connection::open_in_memory().unwrap().into_borrowing();
+        db1.execute_batch("CREATE TABLE a(x INTEGER);INSERT INTO a VALUES(1);")
+            .unwrap();
+        let file_a = db1.serialize(DatabaseName::Main).unwrap().unwrap();
+        db1.execute_batch("INSERT INTO a VALUES(2);").unwrap();
+        let file_b = db1.serialize(DatabaseName::Main).unwrap().unwrap();
+
+        let db2 = Connection::open_in_memory().unwrap().into_borrowing();
+        db2.deserialize(DatabaseName::Main, file_a.clone()).unwrap();
+        let file_c = db2.serialize_no_copy(DatabaseName::Main).unwrap().unwrap();
+        db2.execute_batch("INSERT INTO a VALUES(3)").unwrap();
+        let sql = "WITH RECURSIVE cnt(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM cnt WHERE x<100000) INSERT INTO a SELECT x FROM cnt";
+        db2.execute_batch(sql)
+            .expect_err("enlarge should fail while file_c is holding Rc");
+        mem::drop(file_c);
+        db2.execute_batch(sql)
+            .expect("enlarge should succeed when file_c is dropped");
+        assert_eq!(
+            100002,
+            db2.query_row("SELECT COUNT(x) FROM a", NO_PARAMS, |r| r.get::<_, i32>(0))
+                .unwrap()
+        );
+
+        db2.execute_batch("ATTACH DATABASE ':memory:' AS d")
+            .unwrap();
+        let name_d = DatabaseName::Attached("d");
+        db2.deserialize(name_d, file_a.clone()).unwrap();
+        let file_d = db2.serialize_no_copy(name_d).unwrap().unwrap();
+        // detach and attach other db, this should call xClose and decrease reference count
+        assert_eq!(2, Rc::strong_count(&file_d.1));
+        db2.deserialize(name_d, file_b.clone()).unwrap();
+        assert_eq!(1, Rc::strong_count(&file_d.1));
+        // test whether file_d stayed intact
+        db2.deserialize_read_only(DatabaseName::Main, &file_d)
+            .unwrap();
+        assert_eq!(
+            1,
+            db2.query_row("SELECT MAX(x) FROM main.a", NO_PARAMS, |r| r
+                .get::<_, i32>(0))
+                .unwrap()
+        );
+        assert_eq!(
+            2,
+            db2.query_row("SELECT MAX(x) FROM d.a", NO_PARAMS, |r| r.get::<_, i32>(0))
+                .unwrap()
+        );
+    }
+
+    #[test]
     pub fn test_deserialize_with_flags() {
         let db = Connection::open_in_memory().unwrap();
         let sql = "BEGIN;
@@ -559,7 +669,7 @@ mod test {
             db2.db
                 .borrow_mut()
                 .deserialize_with_flags(
-                    DatabaseName::Main,
+                    &DatabaseName::Main.to_cstring().unwrap(),
                     &serialized,
                     serialized.capacity(),
                     ffi::SQLITE_DESERIALIZE_READONLY,
@@ -753,7 +863,7 @@ mod test {
 
     #[test]
     fn test_serialize_non_existing_db_name() {
-        let mut db = Connection::open_in_memory().unwrap();
+        let db = Connection::open_in_memory().unwrap().into_borrowing();
         let sql = "BEGIN;
         CREATE TABLE hello(x INTEGER);
         INSERT INTO hello VALUES(1);
@@ -774,7 +884,7 @@ mod test {
             .unwrap_err();
     }
 
-    fn serialize_len(conn: &mut Connection) -> usize {
+    fn serialize_len(conn: &mut BorrowingConnection) -> usize {
         conn.serialize_no_copy(DatabaseName::Main)
             .unwrap()
             .unwrap()
