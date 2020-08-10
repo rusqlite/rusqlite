@@ -45,7 +45,7 @@ use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::os::raw::{c_int, c_void};
 use std::ptr::NonNull;
-use std::{fmt, mem, ops, panic, ptr, slice, rc::Rc};
+use std::{fmt, mem, ops, panic, ptr, rc::Rc, slice};
 
 use crate::ffi;
 use crate::{inner_connection::InnerConnection, Connection, DatabaseName, Result};
@@ -181,7 +181,7 @@ impl<'a> BorrowingConnection<'a> {
     {
         let mut c = self.conn.db.borrow_mut();
         unsafe { c.deserialize_with_flags(schema, data, data.capacity(), 0) }.map(|_| {
-            borrowing_file_hook(&mut c, &schema, FileType::SetLen(data));
+            file_hook(&mut c, &schema, FileType::SetLen(data));
         })
     }
 
@@ -203,7 +203,7 @@ impl<'a> BorrowingConnection<'a> {
             )
         }
         .map(|_| {
-            borrowing_file_hook(&mut c, &schema, FileType::Resizable(data));
+            file_hook(&mut c, &schema, FileType::Resizable(data));
         })
     }
 }
@@ -239,7 +239,7 @@ enum FileType<'a> {
 /// `xClose` to the original/lower file defined in `memdb.c`.
 /// On close, the `data` pointer gets updated.
 #[repr(C)]
-struct BorrowingFile<'a> {
+struct HookedFile<'a> {
     methods: *const ffi::sqlite3_io_methods,
     lower: Rc<OwnedFile>,
     data: FileType<'a>,
@@ -253,22 +253,22 @@ impl Drop for OwnedFile {
     }
 }
 
-/// Store `data: FileType` in a new `BorrowingFile`, after moving
+/// Store `data: FileType` in a new `HookedFile`, after moving
 /// the original file to a new allocation.
-fn borrowing_file_hook(c: &mut InnerConnection, schema: &DatabaseName, data: FileType<'_>) {
+fn file_hook(c: &mut InnerConnection, schema: &DatabaseName, data: FileType<'_>) {
     unsafe {
-        assert!(mem::size_of::<BorrowingFile>() <= MEM_VFS.1 as _);
+        assert!(mem::size_of::<HookedFile>() <= MEM_VFS.1 as _);
         let schema = schema.to_cstring().unwrap();
         let file = file_ptr(c, &schema).unwrap() as *mut _;
         let lower = ffi::sqlite3_malloc(MEM_VFS.1) as *mut ffi::sqlite3_file;
         ptr::copy_nonoverlapping(file as *const u8, lower as *mut u8, MEM_VFS.1 as _);
         assert_eq!((*lower).pMethods, sqlite_io_methods());
-        let borrowing = BorrowingFile {
+        let hooked = HookedFile {
             methods: hooked_io_methods(),
             lower: Rc::new(OwnedFile(lower)),
             data,
         };
-        ptr::write(file as *mut BorrowingFile, borrowing);
+        ptr::write(file as *mut HookedFile, hooked);
     }
 }
 
@@ -321,10 +321,10 @@ fn sqlite_io_methods() -> *const ffi::sqlite3_io_methods {
 unsafe extern "C" fn close(file: *mut ffi::sqlite3_file) -> c_int {
     panic::catch_unwind(|| {
         // File should be dropped at the end of scope, so use ptr::read
-        let mut borrowing = ptr::read(file as *mut BorrowingFile);
-        let lower = &mut *borrowing.lower.0;
+        let mut hooked = ptr::read(file as *mut HookedFile);
+        let lower = &mut *hooked.lower.0;
         // Update the data pointer
-        match &mut borrowing.data {
+        match &mut hooked.data {
             FileType::SetLen(d) => {
                 d.set_len(file_length(lower));
             }
@@ -390,7 +390,7 @@ fn file_buffer(file: &mut ffi::sqlite3_file) -> NonNull<u8> {
 unsafe fn file_lower(
     file: *mut ffi::sqlite3_file,
 ) -> (&'static ffi::sqlite3_io_methods, *mut ffi::sqlite3_file) {
-    let file = &mut *(*(file as *mut BorrowingFile)).lower.0;
+    let file = &mut *(*(file as *mut HookedFile)).lower.0;
     (&*file.pMethods, file)
 }
 
