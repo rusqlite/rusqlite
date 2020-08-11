@@ -10,16 +10,6 @@ use crate::ffi;
 /// This looks like `Vec<u8>` - a growable vector of bytes - but
 /// memory allocation is handled by `sqlite3_malloc64`, `sqlite3_realloc64`,
 /// `sqlite3_msize` and `sqlite3_free`.
-///
-/// It is named after the private struct `MemFile` in
-/// [`sqlite/src/memdb.c`](https://www.sqlite.org/src/doc/trunk/src/memdb.c).
-///
-/// ```
-/// # use rusqlite::deserialize::MemFile;
-/// let mut serialized = MemFile::new();
-/// serialized.extend(vec![1, 2, 3]);
-/// assert_eq!(serialized[1], 2);
-/// ```
 pub struct MemFile {
     data: NonNull<u8>,
     len: usize,

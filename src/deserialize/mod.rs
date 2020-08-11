@@ -37,15 +37,15 @@
 
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
-use std::os::raw::{c_int, c_void, c_char};
+use std::os::raw::{c_char, c_int, c_void};
 use std::ptr::NonNull;
-use std::{fmt, mem, ops, panic, ptr, rc::Rc, convert::TryInto};
+use std::{convert::TryInto, fmt, mem, ops, panic, ptr, rc::Rc};
 
-use mem_file::MemFile;
 use crate::ffi;
 use crate::{
     inner_connection::InnerConnection, util::SmallCString, Connection, DatabaseName, Result,
 };
+use mem_file::MemFile;
 
 mod mem_file;
 
@@ -53,7 +53,9 @@ impl Connection {
     /// Disconnect from database and reopen as an in-memory database based on [`Vec<u8>`].
     pub fn deserialize(&self, schema: DatabaseName<'_>, data: Vec<u8>) -> Result<()> {
         let schema = schema.to_cstring()?;
-        self.db.borrow_mut().deserialize_hook( &schema, FileType::Owned(data) )
+        self.db
+            .borrow_mut()
+            .deserialize_hook(&schema, FileType::Owned(data))
     }
 
     /// Return the serialization of a database, or `None` when [`DatabaseName`] does not exist.
@@ -118,17 +120,17 @@ impl InnerConnection {
 
     /// Store `data: FileType` in a new `HookedFile`, after moving
     /// the original file to a new allocation.
-    fn deserialize_hook<'a>(
-        &mut self,
-        schema: &SmallCString,
-        data: FileType<'a>,
-    ) -> Result<()> {
+    fn deserialize_hook<'a>(&mut self, schema: &SmallCString, data: FileType<'a>) -> Result<()> {
         unsafe {
             self.deserialize_with_flags(schema, data.as_slice(), data.cap(), 0)?;
             let file = file_ptr(self, &schema).unwrap();
             assert_eq!(file.pMethods, sqlite_io_methods());
-            let mut size_max : ffi::sqlite3_int64 = -1;
-            let rc = (*file.pMethods).xFileControl.unwrap()(file, ffi::SQLITE_FCNTL_SIZE_LIMIT, &mut size_max as *mut _ as _);
+            let mut size_max: ffi::sqlite3_int64 = -1;
+            let rc = (*file.pMethods).xFileControl.unwrap()(
+                file,
+                ffi::SQLITE_FCNTL_SIZE_LIMIT,
+                &mut size_max as *mut _ as _,
+            );
             assert_eq!(rc, ffi::SQLITE_OK);
             let size_max = size_max.try_into().unwrap();
             let hooked = HookedFile {
@@ -178,10 +180,9 @@ impl<'a> BorrowingConnection<'a> {
     /// (using the flag [`ffi::SQLITE_DESERIALIZE_READONLY`]).
     pub fn deserialize_read_only(&self, schema: DatabaseName<'a>, data: &'a [u8]) -> Result<()> {
         let schema = schema.to_cstring()?;
-        self.db.borrow_mut().deserialize_hook(
-            &schema,
-            FileType::ReadOnly(data)
-        )
+        self.db
+            .borrow_mut()
+            .deserialize_hook(&schema, FileType::ReadOnly(data))
     }
 
     /// Disconnect from database and reopen as an in-memory database based on a borrowed vector
@@ -309,8 +310,14 @@ impl FileType<'_> {
 
     fn reserve_additional(&mut self, additional: usize) -> bool {
         match self {
-            FileType::Owned(d) => { d.reserve(additional); true },
-            FileType::Resizable(d) => { d.reserve(additional); true},
+            FileType::Owned(d) => {
+                d.reserve(additional);
+                true
+            }
+            FileType::Resizable(d) => {
+                d.reserve(additional);
+                true
+            }
             FileType::SetLen(_) => false,
             FileType::ReadOnly(_) => false,
         }
@@ -560,9 +567,13 @@ unsafe extern "C" fn c_file_control(
         let data = file.as_ref();
         match op {
             ffi::SQLITE_FCNTL_VFSNAME => {
-                *(arg as *mut *const c_char) = ffi::sqlite3_mprintf("rust_memdb(%p,%llu)".as_ptr() as _, data.as_ptr(), data.len() as ffi::sqlite3_uint64);
+                *(arg as *mut *const c_char) = ffi::sqlite3_mprintf(
+                    "rust_memdb(%p,%llu)".as_ptr() as _,
+                    data.as_ptr(),
+                    data.len() as ffi::sqlite3_uint64,
+                );
                 ffi::SQLITE_OK
-            },
+            }
             ffi::SQLITE_FCNTL_SIZE_LIMIT => {
                 let arg = arg as *mut ffi::sqlite3_int64;
                 let mut limit = *arg;
@@ -576,8 +587,8 @@ unsafe extern "C" fn c_file_control(
                 file.size_max = limit.try_into().expect("overflow size_max");
                 *arg = limit;
                 ffi::SQLITE_OK
-            },
-            _ => ffi::SQLITE_NOTFOUND
+            }
+            _ => ffi::SQLITE_NOTFOUND,
         }
     })
     .unwrap_or_else(|e| {
@@ -587,10 +598,10 @@ unsafe extern "C" fn c_file_control(
 }
 /// Return the device characteristic flags supported.
 unsafe extern "C" fn c_device_characteristics(_file: *mut ffi::sqlite3_file) -> c_int {
-    ffi::SQLITE_IOCAP_ATOMIC | 
-    ffi::SQLITE_IOCAP_POWERSAFE_OVERWRITE |
-    ffi::SQLITE_IOCAP_SAFE_APPEND |
-    ffi::SQLITE_IOCAP_SEQUENTIAL
+    ffi::SQLITE_IOCAP_ATOMIC
+        | ffi::SQLITE_IOCAP_POWERSAFE_OVERWRITE
+        | ffi::SQLITE_IOCAP_SAFE_APPEND
+        | ffi::SQLITE_IOCAP_SEQUENTIAL
 }
 /// Fetch a page of a memory-mapped file.
 unsafe extern "C" fn c_fetch(
@@ -722,10 +733,16 @@ mod test {
         db2.deserialize(DatabaseName::Main, file_a.clone()).unwrap();
         let file_c = db2.serialize_no_copy(DatabaseName::Main).unwrap().unwrap();
         let sql = "INSERT INTO a VALUES(3)";
-        db2.execute_batch(sql).expect_err("should be write protected");
+        db2.execute_batch(sql)
+            .expect_err("should be write protected");
         mem::drop(file_c);
-        db2.execute_batch(sql).expect("should succeed after file_c is dropped");
-        assert_eq!( 2, db2.query_row("SELECT COUNT(x) FROM a", NO_PARAMS, |r| r.get::<_, i32>(0)) .unwrap() );
+        db2.execute_batch(sql)
+            .expect("should succeed after file_c is dropped");
+        assert_eq!(
+            2,
+            db2.query_row("SELECT COUNT(x) FROM a", NO_PARAMS, |r| r.get::<_, i32>(0))
+                .unwrap()
+        );
 
         db2.execute_batch("ATTACH DATABASE ':memory:' AS d")
             .unwrap();
