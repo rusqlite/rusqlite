@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::ptr::NonNull;
 use std::{alloc, fmt, iter, ops, ptr, slice};
 
