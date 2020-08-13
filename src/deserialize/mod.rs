@@ -38,7 +38,7 @@ use crate::{
 impl Connection {
     /// Disconnects from database and reopen as an in-memory database based on [`Vec<u8>`].
     pub fn deserialize(&self, schema: DatabaseName<'_>, data: Vec<u8>) -> Result<()> {
-        self.deserialize_hook(schema, FileType::Owned(data))
+        self.deserialize_hook(schema, MemFile::Owned(data))
     }
 
     /// Copies the serialization of a database to a `Vec<u8>`, or returns `None` when
@@ -84,12 +84,15 @@ impl Connection {
     /// Wraps the `Connection` in [`BorrowingConnection`] to serialize and deserialize within the
     /// lifetime of a connection.
     pub fn into_borrowing(self) -> BorrowingConnection<'static> {
-        BorrowingConnection::new(self)
+        BorrowingConnection {
+            conn: self,
+            phantom: PhantomData,
+        }
     }
 
-    /// Store `data: FileType` in a new `HookedFile`, after moving
+    /// Store `data: MemFile` in a new `HookedFile`, after moving
     /// the original file to a new allocation.
-    fn deserialize_hook<'a>(&self, schema: DatabaseName<'_>, data: FileType<'a>) -> Result<()> {
+    fn deserialize_hook<'a>(&self, schema: DatabaseName<'_>, data: MemFile<'a>) -> Result<()> {
         let schema = schema.to_cstring()?;
         let mut c = self.db.borrow_mut();
         unsafe {
@@ -145,7 +148,7 @@ fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>)
         // At this point, MemFile->aData is null
         let hooked = HookedFile {
             methods: hooked_io_methods(),
-            data: Rc::new(FileType::SetLen(vec)),
+            data: Rc::new(MemFile::SetLen(vec)),
             memory_mapped: 0,
             size_max: 0,
         };
@@ -177,33 +180,25 @@ pub struct BorrowingConnection<'a> {
 }
 
 impl<'a> BorrowingConnection<'a> {
-    fn new(conn: Connection) -> Self {
-        BorrowingConnection {
-            conn,
-            phantom: PhantomData,
-        }
-    }
-
-    /// Obtains a reference counted serialization of a database.
-    /// This returns `Ok(None)` when [`DatabaseName`] does not exist or no in-memory serialization
-    /// is present.
-    pub fn serialize_rc(&self, schema: DatabaseName<'_>) -> Result<Option<Fetch<'a>>> {
+    /// Obtains a reference counted serialization of a database, or returns `Ok(None)` when
+    /// [`DatabaseName`] does not exist or no in-memory file is present.
+    pub fn serialize_rc(&self, schema: DatabaseName<'_>) -> Result<Option<Rc<MemFile<'a>>>> {
         let schema = schema.to_cstring()?;
         let c = self.conn.db.borrow_mut();
         Ok(file_ptr(&c, &schema).and_then(|file| {
             let hooked = if file.pMethods == hooked_io_methods() {
-                unsafe { &mut *(file as *mut _ as *mut _) }
+                unsafe { &mut *(file as *mut _ as *mut HookedFile) }
             } else {
                 return None;
             };
-            Some(Fetch::new(hooked))
+            Some(Rc::clone(&hooked.data))
         }))
     }
 
     /// Disconnect from database and reopen as an read-only in-memory database based on a borrowed slice
     /// (using the flag [`ffi::SQLITE_DESERIALIZE_READONLY`]).
     pub fn deserialize_read_only(&self, schema: DatabaseName<'a>, data: &'a [u8]) -> Result<()> {
-        self.deserialize_hook(schema, FileType::ReadOnly(data))
+        self.deserialize_hook(schema, MemFile::ReadOnly(data))
     }
 
     /// Disconnect from database and reopen as an in-memory database based on a borrowed vector
@@ -214,7 +209,7 @@ impl<'a> BorrowingConnection<'a> {
     where
         T: SetLenBytes + Send,
     {
-        self.deserialize_hook(schema, FileType::SetLen(data))
+        self.deserialize_hook(schema, MemFile::SetLen(data))
     }
 
     /// Disconnect from database and reopen as an in-memory database based on a borrowed vector.
@@ -224,7 +219,7 @@ impl<'a> BorrowingConnection<'a> {
         schema: DatabaseName<'a>,
         data: &'a mut Vec<u8>,
     ) -> Result<()> {
-        self.deserialize_hook(schema, FileType::Resizable(data))
+        self.deserialize_hook(schema, MemFile::Resizable(data))
     }
 }
 
@@ -249,37 +244,25 @@ impl fmt::Debug for BorrowingConnection<'_> {
     }
 }
 
-/// Reference counted slice of memory file with serialized database content
-pub struct Fetch<'a>(pub &'a [u8], Rc<FileType<'a>>);
-
-impl<'a> Fetch<'a> {
-    fn new(hooked: &'a HookedFile<'a>) -> Self {
-        Fetch(hooked.as_ref().as_slice(), Rc::clone(&hooked.data))
-    }
-}
-
-impl ops::Deref for Fetch<'_> {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        &self.0
-    }
-}
-
-/// Pointer that should be updated on close.
-enum FileType<'a> {
+/// Byte array storing an in-memory database file.
+pub enum MemFile<'a> {
+    /// Owned vector.
     Owned(Vec<u8>),
+    /// Mutable borrowed vector that can be resized.
     Resizable(&'a mut Vec<u8>),
+    /// Borrowed vector with fixed capacity.
     SetLen(&'a mut dyn SetLenBytes),
+    /// Immutably borrowed slice for a read-only database.
     ReadOnly(&'a [u8]),
 }
 
-impl FileType<'_> {
+impl MemFile<'_> {
     fn as_slice(&self) -> &[u8] {
         match self {
-            FileType::Owned(d) => d,
-            FileType::Resizable(d) => d,
-            FileType::SetLen(d) => d,
-            FileType::ReadOnly(d) => d,
+            MemFile::Owned(d) => d,
+            MemFile::Resizable(d) => d,
+            MemFile::SetLen(d) => d,
+            MemFile::ReadOnly(d) => d,
         }
     }
 
@@ -289,10 +272,10 @@ impl FileType<'_> {
 
     fn as_mut_slice(&mut self) -> &mut [u8] {
         match self {
-            FileType::Owned(d) => &mut d[..],
-            FileType::Resizable(d) => &mut d[..],
-            FileType::SetLen(d) => &mut d[..],
-            FileType::ReadOnly(_) => panic!("ReadOnly.as_mut_slice"),
+            MemFile::Owned(d) => &mut d[..],
+            MemFile::Resizable(d) => &mut d[..],
+            MemFile::SetLen(d) => &mut d[..],
+            MemFile::ReadOnly(_) => panic!("ReadOnly.as_mut_slice"),
         }
     }
 
@@ -307,46 +290,53 @@ impl FileType<'_> {
     fn set_len(&mut self, new_len: usize) {
         unsafe {
             match self {
-                FileType::Owned(d) => d.set_len(new_len),
-                FileType::Resizable(d) => d.set_len(new_len),
-                FileType::SetLen(d) => d.set_len(new_len),
-                FileType::ReadOnly(_) => panic!("ReadOnly.set_len"),
+                MemFile::Owned(d) => d.set_len(new_len),
+                MemFile::Resizable(d) => d.set_len(new_len),
+                MemFile::SetLen(d) => d.set_len(new_len),
+                MemFile::ReadOnly(_) => panic!("ReadOnly.set_len"),
             }
         }
     }
 
     fn cap(&self) -> usize {
         match self {
-            FileType::Owned(d) => d.capacity(),
-            FileType::Resizable(d) => d.capacity(),
-            FileType::SetLen(d) => d.capacity(),
-            FileType::ReadOnly(d) => d.len(),
+            MemFile::Owned(d) => d.capacity(),
+            MemFile::Resizable(d) => d.capacity(),
+            MemFile::SetLen(d) => d.capacity(),
+            MemFile::ReadOnly(d) => d.len(),
         }
     }
 
     fn reserve_additional(&mut self, additional: usize) -> bool {
         match self {
-            FileType::Owned(d) => {
+            MemFile::Owned(d) => {
                 d.reserve(additional);
                 true
             }
-            FileType::Resizable(d) => {
+            MemFile::Resizable(d) => {
                 d.reserve(additional);
                 true
             }
-            FileType::SetLen(_) => false,
-            FileType::ReadOnly(_) => false,
+            MemFile::SetLen(_) => false,
+            MemFile::ReadOnly(_) => false,
         }
     }
 
     // Write-protected/read-only or not
     fn writable(&self) -> bool {
         match self {
-            FileType::Owned(_) => true,
-            FileType::Resizable(_) => true,
-            FileType::SetLen(_) => true,
-            FileType::ReadOnly(_) => false,
+            MemFile::Owned(_) => true,
+            MemFile::Resizable(_) => true,
+            MemFile::SetLen(_) => true,
+            MemFile::ReadOnly(_) => false,
         }
+    }
+}
+
+impl ops::Deref for MemFile<'_> {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        self.as_slice()
     }
 }
 
@@ -356,13 +346,13 @@ impl FileType<'_> {
 #[repr(C)]
 struct HookedFile<'a> {
     methods: *const ffi::sqlite3_io_methods,
-    data: Rc<FileType<'a>>,
+    data: Rc<MemFile<'a>>,
     size_max: usize,
     memory_mapped: u16,
 }
 
 impl<'a> HookedFile<'a> {
-    fn get_mut(&mut self) -> Option<&mut FileType<'a>> {
+    fn get_mut(&mut self) -> Option<&mut MemFile<'a>> {
         if !self.data.writable() {
             None
         } else {
@@ -370,7 +360,7 @@ impl<'a> HookedFile<'a> {
         }
     }
 
-    fn as_ref(&self) -> &FileType<'a> {
+    fn as_ref(&self) -> &MemFile<'a> {
         Rc::as_ref(&self.data)
     }
 }
@@ -758,9 +748,9 @@ mod test {
         db2.deserialize(name_d, file_a).unwrap();
         let file_d = db2.serialize_rc(name_d).unwrap().unwrap();
         // detach and attach other db, this should call xClose and decrease reference count
-        assert_eq!(2, Rc::strong_count(&file_d.1));
+        assert_eq!(2, Rc::strong_count(&file_d));
         db2.deserialize(name_d, file_b).unwrap();
-        assert_eq!(1, Rc::strong_count(&file_d.1));
+        assert_eq!(1, Rc::strong_count(&file_d));
         // test whether file_d stayed intact
         db2.deserialize_read_only(DatabaseName::Main, &file_d)
             .unwrap();
