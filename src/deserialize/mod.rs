@@ -34,9 +34,6 @@ use crate::{
     error::error_from_handle, inner_connection::InnerConnection, util::SmallCString, Connection,
     DatabaseName, OpenFlags, Result, NO_PARAMS,
 };
-use mem_file::MemFile;
-
-mod mem_file;
 
 impl Connection {
     /// Disconnects from database and reopen as an in-memory database based on [`Vec<u8>`].
@@ -210,7 +207,7 @@ impl<'a> BorrowingConnection<'a> {
     }
 
     /// Disconnect from database and reopen as an in-memory database based on a borrowed vector
-    /// (pass a `Vec<u8>`, `MemFile` or another type that implements `SetLenBytes`).
+    /// (pass a `Vec<u8>` or another type that implements `SetLenBytes`).
     /// If the capacity is reached, SQLite can't reallocate, so it throws [`crate::ErrorCode::DiskFull`].
     /// Before the connection drops, the slice length is updated.
     pub fn deserialize_mut<T>(&mut self, schema: DatabaseName<'a>, data: &'a mut T) -> Result<()>
@@ -220,9 +217,8 @@ impl<'a> BorrowingConnection<'a> {
         self.deserialize_hook(schema, FileType::SetLen(data))
     }
 
-    /// Disconnect from database and reopen as an in-memory database based on a borrowed `MemFile`.
+    /// Disconnect from database and reopen as an in-memory database based on a borrowed vector.
     /// If the capacity is reached, SQLite may reallocate the borrowed memory.
-    /// Before the connection drops, the `&mut MemFile` pointer, length and capacity are updated.
     pub fn deserialize_resizable(
         &mut self,
         schema: DatabaseName<'a>,
@@ -675,14 +671,6 @@ pub trait SetLenBytes: ops::Deref<Target = [u8]> + ops::DerefMut + fmt::Debug {
     fn capacity(&self) -> usize;
 }
 impl SetLenBytes for Vec<u8> {
-    unsafe fn set_len(&mut self, new_len: usize) {
-        self.set_len(new_len);
-    }
-    fn capacity(&self) -> usize {
-        self.capacity()
-    }
-}
-impl SetLenBytes for MemFile {
     unsafe fn set_len(&mut self, new_len: usize) {
         self.set_len(new_len);
     }
