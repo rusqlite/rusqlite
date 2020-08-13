@@ -6,18 +6,7 @@
 //!
 //! For large in-memory database files, you probably don't want to copy or reallocate
 //! because that would temporarily double the required memory.
-//!
-//! * While downloading a `.sqlite` file, write the buffers directly to [`Vec<u8>`]
-//!   and pass that to [`Connection::deserialize`]
-//!   (ownership is tranferred to SQLite without copying).
-//! * Borrow the memory from SQLite using [`Connection::serialize_no_copy`].
-//! * Let SQLite immutably borrow a large Rust-allocated vector using
-//!   [`BorrowingConnection::deserialize_read_only`].
-//! * Let SQLite mutably borrow a [`SetLenBytes`] using
-//!   [`BorrowingConnection::deserialize_mut`].
-//! * Let SQlite mutably borrow a SQLite owned memory using
-//!   [`BorrowingConnection::deserialize_resizable`].
-//! * Obtain a copy of the file using [`Connection::serialize`].
+//! TODO: Finish documentation.
 //!
 //! ```
 //! # use rusqlite::{Result, Connection, DatabaseName, NO_PARAMS};
@@ -68,13 +57,12 @@ impl Connection {
                 let hooked = unsafe { &mut *(file as *mut _ as *mut HookedFile) };
                 return Ok(hooked.as_ref().as_slice().to_vec());
             }
-            // TODO: Optimize sqlite_io_methods
+            // TODO: Optimize for pMethods == sqlite_io_methods
 
             // sqlite3_serialize is not used because it always uses the sqlite3_malloc allocator,
             // and this function returns a Vec<u8>.
 
-            // pragma_query_value is not used because the PRAGMA function should be preferred.
-            // escape_double_quote is only available with feature vtab.
+            // Allocate the database size.
             let schema_str = schema.as_str();
             let escaped = if schema_str.contains('\'') {
                 Cow::Owned(schema_str.replace("'", "''"))
@@ -82,13 +70,13 @@ impl Connection {
                 Cow::Borrowed(schema_str)
             };
             let sql = &format!(
-                "SELECT * FROM '{}'.pragma_page_size JOIN pragma_page_count",
+                "SELECT page_count * page_size FROM '{0}'.pragma_page_count, '{0}'.pragma_page_size",
                 escaped
             );
-            let (page_size, page_count): (i64, i64) =
-                self.query_row(sql, NO_PARAMS, |r| Ok((r.get(0)?, r.get(1)?)))?;
-            let total_size = (page_size * page_count).try_into().unwrap();
-            let mut vec = Vec::with_capacity(total_size);
+            let db_size: i64 = self.query_row(sql, NO_PARAMS, |r| r.get(0))?;
+            let db_size = db_size.try_into().unwrap();
+            let mut vec = Vec::with_capacity(db_size);
+
             // Unfortunately, sqlite3PagerGet and sqlite3PagerGetData are private APIs,
             // so the Backup API is used instead.
             {
@@ -103,7 +91,7 @@ impl Connection {
                         methods: hooked_io_methods(),
                         data: Rc::new(FileType::SetLen(&mut vec)),
                         memory_mapped: 0,
-                        size_max: total_size * 2,
+                        size_max: db_size,
                     };
                     ptr::write(temp_file as *mut _ as _, hooked);
                 };
@@ -127,7 +115,7 @@ impl Connection {
                     More => unreachable!(),
                 }?;
             }
-            assert_eq!(vec.len(), total_size);
+            assert_eq!(vec.len(), db_size);
 
             Ok(vec)
         })
@@ -217,9 +205,10 @@ impl<'a> BorrowingConnection<'a> {
         }
     }
 
-    /// Borrow the serialization of a database without copying the memory.
-    /// This returns `Ok(None)` when [`DatabaseName`] does not exist or no in-memory serialization is present.
-    pub fn serialize_no_copy(&self, schema: DatabaseName<'_>) -> Result<Option<Fetch<'a>>> {
+    /// Obtains a reference counted serialization of a database.
+    /// This returns `Ok(None)` when [`DatabaseName`] does not exist or no in-memory serialization
+    /// is present.
+    pub fn serialize_rc(&self, schema: DatabaseName<'_>) -> Result<Option<Fetch<'a>>> {
         let schema = schema.to_cstring()?;
         let c = self.conn.db.borrow_mut();
         Ok(file_ptr(&c, &schema).and_then(|file| {
@@ -759,8 +748,8 @@ mod test {
         db2.execute_batch(sql).unwrap();
 
         // NO_COPY only works on db2
-        assert!(db.serialize_no_copy(DatabaseName::Main).unwrap().is_none());
-        let borrowed_serialized = db2.serialize_no_copy(DatabaseName::Main).unwrap().unwrap();
+        assert!(db.serialize_rc(DatabaseName::Main).unwrap().is_none());
+        let borrowed_serialized = db2.serialize_rc(DatabaseName::Main).unwrap().unwrap();
         let mut serialized = Vec::new();
         serialized.extend(borrowed_serialized.iter().cloned());
 
@@ -776,7 +765,7 @@ mod test {
     }
 
     #[test]
-    pub fn test_serialize_no_copy() {
+    pub fn test_serialize_rc() {
         // prepare two distinct files: a & b
         let db1 = Connection::open_in_memory().unwrap().into_borrowing();
         db1.execute_batch("CREATE TABLE a(x INTEGER);INSERT INTO a VALUES(1);")
@@ -787,7 +776,7 @@ mod test {
 
         let db2 = Connection::open_in_memory().unwrap().into_borrowing();
         db2.deserialize(DatabaseName::Main, file_a.clone()).unwrap();
-        let file_c = db2.serialize_no_copy(DatabaseName::Main).unwrap().unwrap();
+        let file_c = db2.serialize_rc(DatabaseName::Main).unwrap().unwrap();
         let sql = "INSERT INTO a VALUES(3)";
         db2.execute_batch(sql)
             .expect_err("should be write protected");
@@ -804,7 +793,7 @@ mod test {
             .unwrap();
         let name_d = DatabaseName::Attached("d");
         db2.deserialize(name_d, file_a).unwrap();
-        let file_d = db2.serialize_no_copy(name_d).unwrap().unwrap();
+        let file_d = db2.serialize_rc(name_d).unwrap().unwrap();
         // detach and attach other db, this should call xClose and decrease reference count
         assert_eq!(2, Rc::strong_count(&file_d.1));
         db2.deserialize(name_d, file_b).unwrap();
@@ -1050,7 +1039,7 @@ mod test {
         END;";
         db.execute_batch(sql).unwrap();
         assert!(db
-            .serialize_no_copy(DatabaseName::Attached("does not exist"))
+            .serialize_rc(DatabaseName::Attached("does not exist"))
             .unwrap()
             .is_none());
         assert!(db
@@ -1063,7 +1052,7 @@ mod test {
     }
 
     fn serialize_len(conn: &mut BorrowingConnection) -> usize {
-        conn.serialize_no_copy(DatabaseName::Main)
+        conn.serialize_rc(DatabaseName::Main)
             .unwrap()
             .unwrap()
             .len()
