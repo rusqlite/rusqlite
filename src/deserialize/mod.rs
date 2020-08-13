@@ -5,18 +5,18 @@
 //! a real file system like WebAssembly or Cloud Functions.
 //!
 //! For large in-memory database files, you probably don't want to copy or reallocate
-//! because that would temporarily double the required memory.
-//! TODO: Finish documentation.
+//! because that would temporarily double the required memory. Use the [`BorrowingConnection`]
+//! methods to serialize and deserialize borrowed memory.
 //!
 //! ```
 //! # use rusqlite::{Result, Connection, DatabaseName, NO_PARAMS};
 //! # fn main() -> Result<()> {
 //! let db = Connection::open_in_memory()?;
-//! db.execute_batch("CREATE TABLE foo(x INTEGER);INSERT INTO foo VALUES(44)")?;
-//! let serialized = db.serialize(DatabaseName::Main)?.unwrap();
-//! let mut clone = Connection::open_in_memory()?;
-//! clone.deserialize(DatabaseName::Main, serialized)?;
-//! let row: u16 = clone.query_row("Select x FROM foo", NO_PARAMS, |r| r.get(0))?;
+//! db.execute_batch("CREATE TABLE one(x INTEGER);INSERT INTO one VALUES(44)")?;
+//! let mem_file = db.serialize(DatabaseName::Main)?.unwrap();
+//! let mut db_clone = Connection::open_in_memory()?;
+//! db_clone.deserialize(DatabaseName::Main, mem_file)?;
+//! let row: u16 = db_clone.query_row("SELECT x FROM one", NO_PARAMS, |r| r.get(0))?;
 //! assert_eq!(44, row);
 //! # Ok(())
 //! # }
@@ -90,13 +90,13 @@ impl Connection {
         }
     }
 
-    /// Store `data: MemFile` in a new `HookedFile`, after moving
-    /// the original file to a new allocation.
+    /// Store `MemFile` in a new `HookedFile`.
     fn deserialize_hook<'a>(&self, schema: DatabaseName<'_>, data: MemFile<'a>) -> Result<()> {
         let schema = schema.to_cstring()?;
         let mut c = self.db.borrow_mut();
         unsafe {
-            deserialize_with_flags(&mut c, &schema, data.as_slice(), data.cap(), 0)?;
+            let rc = ffi::sqlite3_deserialize(c.db(), schema.as_ptr(), ptr::null_mut(), 0, 0, 0 );
+            c.decode_result(rc)?;
             let file = file_ptr(&c, &schema).unwrap();
             assert_eq!(file.pMethods, sqlite_io_methods());
             let mut size_max: ffi::sqlite3_int64 = -1;
@@ -118,26 +118,6 @@ impl Connection {
             Ok(())
         }
     }
-}
-
-/// Disconnects from database and reopen as an in-memory database based on a borrowed slice.
-/// See the C Interface Specification [Deserialize a database](https://www.sqlite.org/c3ref/deserialize.html).
-unsafe fn deserialize_with_flags(
-    c: &mut InnerConnection,
-    schema: &SmallCString,
-    data: &[u8],
-    cap: usize,
-    flags: c_int,
-) -> Result<()> {
-    let rc = ffi::sqlite3_deserialize(
-        c.db(),
-        schema.as_ptr(),
-        data.as_ptr() as *mut _,
-        data.len() as _,
-        cap as _,
-        flags as _,
-    );
-    c.decode_result(rc)
 }
 
 fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>) -> Result<()> {
@@ -172,8 +152,8 @@ fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>)
     }
 }
 
-/// Wrap `Connection` with lifetime constraint to borrow from serialized memory.
-/// Use [`Connection::into_borrowing`] to obtain one.
+/// Wrapper around [`Connection`] with lifetime constraint to serialize/deserialize borrowed memory,
+/// returned from [`Connection::into_borrowing`].
 pub struct BorrowingConnection<'a> {
     conn: Connection,
     phantom: PhantomData<&'a [u8]>,
@@ -182,8 +162,9 @@ pub struct BorrowingConnection<'a> {
 impl<'a> BorrowingConnection<'a> {
     /// Obtains a reference counted serialization of a database, or returns `Ok(None)` when
     /// [`DatabaseName`] does not exist or no in-memory file is present.
-    pub fn serialize_rc(&self, schema: DatabaseName<'_>) -> Result<Option<Rc<MemFile<'a>>>> {
-        let schema = schema.to_cstring()?;
+    /// Once the datbase is detached, the reference count held by this connection is released.
+    pub fn serialize_rc(&self, db: DatabaseName<'_>) -> Result<Option<Rc<MemFile<'a>>>> {
+        let schema = db.to_cstring()?;
         let c = self.conn.db.borrow_mut();
         Ok(file_ptr(&c, &schema).and_then(|file| {
             let hooked = if file.pMethods == hooked_io_methods() {
@@ -195,20 +176,14 @@ impl<'a> BorrowingConnection<'a> {
         }))
     }
 
-    /// Disconnect from database and reopen as an read-only in-memory database based on a borrowed slice
-    /// (using the flag [`ffi::SQLITE_DESERIALIZE_READONLY`]).
-    pub fn deserialize_read_only(&self, schema: DatabaseName<'a>, data: &'a [u8]) -> Result<()> {
-        self.deserialize_hook(schema, MemFile::ReadOnly(data))
+    /// Disconnects database and reopens it as an read-only in-memory database based on a slice.
+    pub fn deserialize_read_only(&self, db: DatabaseName, slice: &'a [u8]) -> Result<()> {
+        self.deserialize_hook(db, MemFile::ReadOnly(slice))
     }
 
-    /// Disconnect from database and reopen as an in-memory database based on a borrowed vector.
-    /// If the capacity is reached, SQLite may reallocate the borrowed memory.
-    pub fn deserialize_resizable(
-        &mut self,
-        schema: DatabaseName<'a>,
-        data: &'a mut Vec<u8>,
-    ) -> Result<()> {
-        self.deserialize_hook(schema, MemFile::Resizable(data))
+    /// Disconnects database and reopens it as an in-memory database based on a borrowed vector.
+    pub fn deserialize_resizable( &mut self, db: DatabaseName, vec: &'a mut Vec<u8>) -> Result<()> {
+        self.deserialize_hook(db, MemFile::Resizable(vec))
     }
 }
 
@@ -728,7 +703,7 @@ mod test {
     }
 
     #[test]
-    pub fn test_deserialize_with_flags() {
+    pub fn test_deserialize_read_only_1() {
         let db = Connection::open_in_memory().unwrap();
         let sql = "BEGIN;
             CREATE TABLE foo(x INTEGER);
