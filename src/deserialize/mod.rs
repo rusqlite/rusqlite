@@ -39,16 +39,13 @@ use mem_file::MemFile;
 mod mem_file;
 
 impl Connection {
-    /// Disconnect from database and reopen as an in-memory database based on [`Vec<u8>`].
+    /// Disconnects from database and reopen as an in-memory database based on [`Vec<u8>`].
     pub fn deserialize(&self, schema: DatabaseName<'_>, data: Vec<u8>) -> Result<()> {
-        let schema = schema.to_cstring()?;
-        self.db
-            .borrow_mut()
-            .deserialize_hook(&schema, FileType::Owned(data))
+        self.deserialize_hook(schema, FileType::Owned(data))
     }
 
-    /// Return the serialization of a database, or `None` when [`DatabaseName`] does not exist.
-    /// See the C Interface Specification [Serialize a database](https://www.sqlite.org/c3ref/serialize.html).
+    /// Copies the serialization of a database to a `Vec<u8>`, or returns `None` when
+    /// `DatabaseName` does not exist.
     pub fn serialize(&self, db_name: DatabaseName<'_>) -> Result<Option<Vec<u8>>> {
         let schema = db_name.to_cstring()?;
         let file = file_ptr(&self.db.borrow(), &schema);
@@ -56,13 +53,13 @@ impl Connection {
             if file.pMethods == hooked_io_methods() {
                 let hooked = unsafe { &mut *(file as *mut _ as *mut HookedFile) };
                 return Ok(hooked.as_ref().as_slice().to_vec());
+                // TODO: Optimize for pMethods == sqlite_io_methods
             }
-            // TODO: Optimize for pMethods == sqlite_io_methods
 
             // sqlite3_serialize is not used because it always uses the sqlite3_malloc allocator,
-            // and this function returns a Vec<u8>.
+            // while this function returns a Vec<u8>.
 
-            // Allocate the database size.
+            // Query the database size with pragma to allocate a vector.
             let schema_str = schema.as_str();
             let escaped = if schema_str.contains('\'') {
                 Cow::Owned(schema_str.replace("'", "''"))
@@ -79,95 +76,28 @@ impl Connection {
 
             // Unfortunately, sqlite3PagerGet and sqlite3PagerGetData are private APIs,
             // so the Backup API is used instead.
-            {
-                let mut temp_db =
-                    Connection::open_with_flags_and_vfs("0", OpenFlags::default(), "memdb")?;
-                unsafe {
-                    let temp_file =
-                        file_ptr(&temp_db.db.borrow_mut(), &SmallCString::new("main")?).unwrap();
-                    assert_eq!(temp_file.pMethods, sqlite_io_methods());
-                    // At this point, MemFile->aData is null
-                    let hooked = HookedFile {
-                        methods: hooked_io_methods(),
-                        data: Rc::new(FileType::SetLen(&mut vec)),
-                        memory_mapped: 0,
-                        size_max: db_size,
-                    };
-                    ptr::write(temp_file as *mut _ as _, hooked);
-                };
-
-                use crate::backup::{
-                    Backup,
-                    StepResult::{Busy, Done, Locked, More},
-                };
-                let backup =
-                    Backup::new_with_names(self, db_name, &mut temp_db, DatabaseName::Main)?;
-                let mut r = More;
-                while r == More {
-                    r = backup.step(100)?;
-                }
-                match r {
-                    Done => Ok(()),
-                    Busy => Err(unsafe { error_from_handle(ptr::null_mut(), ffi::SQLITE_BUSY) }),
-                    Locked => {
-                        Err(unsafe { error_from_handle(ptr::null_mut(), ffi::SQLITE_LOCKED) })
-                    }
-                    More => unreachable!(),
-                }?;
-            }
-            assert_eq!(vec.len(), db_size);
+            backup_to_vec(&mut vec, self, db_name)?;
+            assert_eq!(vec.len(), db_size, "serialize backup size mismatch");
 
             Ok(vec)
         })
         .transpose()
     }
 
-    /// Wraps the `Connection` in `BorrowingConnection` to connect it to borrowed serialized memory
-    /// using [`BorrowingConnection::deserialize_read_only`].
+    /// Wraps the `Connection` in [`BorrowingConnection`] to serialize and deserialize within the
+    /// lifetime of a connection.
     pub fn into_borrowing(self) -> BorrowingConnection<'static> {
         BorrowingConnection::new(self)
-    }
-}
-
-impl InnerConnection {
-    /// Disconnect from database and reopen as an in-memory database based on a borrowed slice.
-    /// If the `DatabaseName` does not exist, return
-    /// `SqliteFailure(Error { code: Unknown, extended_code: 1 }, Some("not an error"))`.
-    ///
-    /// # Safety
-    ///
-    /// The reference `data` must last for the lifetime of this connection.
-    /// `cap` must be the size of the allocation, and `cap >= data.len()`.
-    ///
-    /// If the data is not mutably borrowed, set [`DeserializeFlags::READ_ONLY`].
-    /// If SQLite allocated the memory, consider setting [`DeserializeFlags::FREE_ON_CLOSE`]
-    /// and/or [`DeserializeFlags::RESIZABLE`].
-    ///
-    /// See the C Interface Specification [Deserialize a database](https://www.sqlite.org/c3ref/deserialize.html).
-    unsafe fn deserialize_with_flags(
-        &mut self,
-        schema: &SmallCString,
-        data: &[u8],
-        cap: usize,
-        flags: c_int,
-    ) -> Result<()> {
-        let rc = ffi::sqlite3_deserialize(
-            self.db(),
-            schema.as_ptr(),
-            data.as_ptr() as *mut _,
-            data.len() as _,
-            cap as _,
-            flags as _,
-        );
-        self.decode_result(rc)
     }
 
     /// Store `data: FileType` in a new `HookedFile`, after moving
     /// the original file to a new allocation.
-    fn deserialize_hook<'a>(&mut self, schema: &SmallCString, data: FileType<'a>) -> Result<()> {
+    fn deserialize_hook<'a>(&self, schema: DatabaseName<'_>, data: FileType<'a>) -> Result<()> {
+        let schema = schema.to_cstring()?;
+        let mut c = self.db.borrow_mut();
         unsafe {
-            self.deserialize_with_flags(schema, data.as_slice(), data.cap(), 0)?;
-            let file = file_ptr(self, &schema).unwrap();
+            deserialize_with_flags(&mut c, &schema, data.as_slice(), data.cap(), 0)?;
+            let file = file_ptr(&c, &schema).unwrap();
             assert_eq!(file.pMethods, sqlite_io_methods());
             let mut size_max: ffi::sqlite3_int64 = -1;
             let rc = (*file.pMethods).xFileControl.unwrap()(
@@ -187,6 +117,58 @@ impl InnerConnection {
             ptr::write(file, hooked);
             Ok(())
         }
+    }
+}
+
+/// Disconnects from database and reopen as an in-memory database based on a borrowed slice.
+/// See the C Interface Specification [Deserialize a database](https://www.sqlite.org/c3ref/deserialize.html).
+unsafe fn deserialize_with_flags(
+    c: &mut InnerConnection,
+    schema: &SmallCString,
+    data: &[u8],
+    cap: usize,
+    flags: c_int,
+) -> Result<()> {
+    let rc = ffi::sqlite3_deserialize(
+        c.db(),
+        schema.as_ptr(),
+        data.as_ptr() as *mut _,
+        data.len() as _,
+        cap as _,
+        flags as _,
+    );
+    c.decode_result(rc)
+}
+
+fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>) -> Result<()> {
+    let mut temp_db = Connection::open_with_flags_and_vfs("0", OpenFlags::default(), "memdb")?;
+    unsafe {
+        let temp_file = file_ptr(&temp_db.db.borrow_mut(), &SmallCString::new("main")?).unwrap();
+        assert_eq!(temp_file.pMethods, sqlite_io_methods());
+        // At this point, MemFile->aData is null
+        let hooked = HookedFile {
+            methods: hooked_io_methods(),
+            data: Rc::new(FileType::SetLen(vec)),
+            memory_mapped: 0,
+            size_max: 0,
+        };
+        ptr::write(temp_file as *mut _ as _, hooked);
+    };
+
+    use crate::backup::{
+        Backup,
+        StepResult::{Busy, Done, Locked, More},
+    };
+    let backup = Backup::new_with_names(src, db_name, &mut temp_db, DatabaseName::Main)?;
+    let mut r = More;
+    while r == More {
+        r = backup.step(100)?;
+    }
+    match r {
+        Done => Ok(()),
+        Busy => Err(unsafe { error_from_handle(ptr::null_mut(), ffi::SQLITE_BUSY) }),
+        Locked => Err(unsafe { error_from_handle(ptr::null_mut(), ffi::SQLITE_LOCKED) }),
+        More => unreachable!(),
     }
 }
 
@@ -224,10 +206,7 @@ impl<'a> BorrowingConnection<'a> {
     /// Disconnect from database and reopen as an read-only in-memory database based on a borrowed slice
     /// (using the flag [`ffi::SQLITE_DESERIALIZE_READONLY`]).
     pub fn deserialize_read_only(&self, schema: DatabaseName<'a>, data: &'a [u8]) -> Result<()> {
-        let schema = schema.to_cstring()?;
-        self.db
-            .borrow_mut()
-            .deserialize_hook(&schema, FileType::ReadOnly(data))
+        self.deserialize_hook(schema, FileType::ReadOnly(data))
     }
 
     /// Disconnect from database and reopen as an in-memory database based on a borrowed vector
@@ -238,9 +217,7 @@ impl<'a> BorrowingConnection<'a> {
     where
         T: SetLenBytes + Send,
     {
-        let schema = schema.to_cstring()?;
-        let mut c = self.conn.db.borrow_mut();
-        c.deserialize_hook(&schema, FileType::SetLen(data))
+        self.deserialize_hook(schema, FileType::SetLen(data))
     }
 
     /// Disconnect from database and reopen as an in-memory database based on a borrowed `MemFile`.
@@ -251,9 +228,7 @@ impl<'a> BorrowingConnection<'a> {
         schema: DatabaseName<'a>,
         data: &'a mut Vec<u8>,
     ) -> Result<()> {
-        let schema = schema.to_cstring()?;
-        let mut c = self.conn.db.borrow_mut();
-        c.deserialize_hook(&schema, FileType::Resizable(data))
+        self.deserialize_hook(schema, FileType::Resizable(data))
     }
 }
 
@@ -831,18 +806,9 @@ mod test {
         serialized.extend(serialized_vec);
 
         // create a new db and import the serialized data
-        let db2 = Connection::open_in_memory().unwrap();
-        unsafe {
-            db2.db
-                .borrow_mut()
-                .deserialize_with_flags(
-                    &DatabaseName::Main.to_cstring().unwrap(),
-                    &serialized,
-                    serialized.capacity(),
-                    ffi::SQLITE_DESERIALIZE_READONLY,
-                )
-                .unwrap()
-        };
+        let db2 = Connection::open_in_memory().unwrap().into_borrowing();
+        db2.deserialize_read_only(DatabaseName::Main, &serialized)
+            .unwrap();
         let mut query = db2.prepare("SELECT x FROM foo").unwrap();
         let results: Result<Vec<u16>> = query
             .query_map(NO_PARAMS, |row| row.get(0))
