@@ -148,7 +148,7 @@ fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>)
         // At this point, MemFile->aData is null
         let hooked = HookedFile {
             methods: hooked_io_methods(),
-            data: Rc::new(MemFile::SetLen(vec)),
+            data: Rc::new(MemFile::Resizable(vec)),
             memory_mapped: 0,
             size_max: 0,
         };
@@ -201,17 +201,6 @@ impl<'a> BorrowingConnection<'a> {
         self.deserialize_hook(schema, MemFile::ReadOnly(data))
     }
 
-    /// Disconnect from database and reopen as an in-memory database based on a borrowed vector
-    /// (pass a `Vec<u8>` or another type that implements `SetLenBytes`).
-    /// If the capacity is reached, SQLite can't reallocate, so it throws [`crate::ErrorCode::DiskFull`].
-    /// Before the connection drops, the slice length is updated.
-    pub fn deserialize_mut<T>(&mut self, schema: DatabaseName<'a>, data: &'a mut T) -> Result<()>
-    where
-        T: SetLenBytes + Send,
-    {
-        self.deserialize_hook(schema, MemFile::SetLen(data))
-    }
-
     /// Disconnect from database and reopen as an in-memory database based on a borrowed vector.
     /// If the capacity is reached, SQLite may reallocate the borrowed memory.
     pub fn deserialize_resizable(
@@ -245,13 +234,12 @@ impl fmt::Debug for BorrowingConnection<'_> {
 }
 
 /// Byte array storing an in-memory database file.
+#[non_exhaustive]
 pub enum MemFile<'a> {
     /// Owned vector.
     Owned(Vec<u8>),
     /// Mutable borrowed vector that can be resized.
     Resizable(&'a mut Vec<u8>),
-    /// Borrowed vector with fixed capacity.
-    SetLen(&'a mut dyn SetLenBytes),
     /// Immutably borrowed slice for a read-only database.
     ReadOnly(&'a [u8]),
 }
@@ -261,7 +249,6 @@ impl MemFile<'_> {
         match self {
             MemFile::Owned(d) => d,
             MemFile::Resizable(d) => d,
-            MemFile::SetLen(d) => d,
             MemFile::ReadOnly(d) => d,
         }
     }
@@ -274,7 +261,6 @@ impl MemFile<'_> {
         match self {
             MemFile::Owned(d) => &mut d[..],
             MemFile::Resizable(d) => &mut d[..],
-            MemFile::SetLen(d) => &mut d[..],
             MemFile::ReadOnly(_) => panic!("ReadOnly.as_mut_slice"),
         }
     }
@@ -292,7 +278,6 @@ impl MemFile<'_> {
             match self {
                 MemFile::Owned(d) => d.set_len(new_len),
                 MemFile::Resizable(d) => d.set_len(new_len),
-                MemFile::SetLen(d) => d.set_len(new_len),
                 MemFile::ReadOnly(_) => panic!("ReadOnly.set_len"),
             }
         }
@@ -302,7 +287,6 @@ impl MemFile<'_> {
         match self {
             MemFile::Owned(d) => d.capacity(),
             MemFile::Resizable(d) => d.capacity(),
-            MemFile::SetLen(d) => d.capacity(),
             MemFile::ReadOnly(d) => d.len(),
         }
     }
@@ -317,7 +301,6 @@ impl MemFile<'_> {
                 d.reserve(additional);
                 true
             }
-            MemFile::SetLen(_) => false,
             MemFile::ReadOnly(_) => false,
         }
     }
@@ -327,7 +310,6 @@ impl MemFile<'_> {
         match self {
             MemFile::Owned(_) => true,
             MemFile::Resizable(_) => true,
-            MemFile::SetLen(_) => true,
             MemFile::ReadOnly(_) => false,
         }
     }
@@ -647,32 +629,10 @@ unsafe extern "C" fn c_unfetch(file: *mut ffi::sqlite3_file, _ofst: i64, _p: *mu
     })
 }
 
-/// Vector of bytes where the length can be modified.
-/// [`BorrowingConnection`] functions use this to borrow memory from arbitrary allocators.
-pub trait SetLenBytes: ops::Deref<Target = [u8]> + ops::DerefMut + fmt::Debug {
-    /// Forces the length of the vector to new_len.
-    ///
-    /// # Safety
-    /// - `new_len` must be less than or equal to `capacity()`.
-    /// - The elements at `old_len..new_len` must be initialized.
-    unsafe fn set_len(&mut self, new_len: usize);
-    /// The size of the allocation.
-    /// It must be safe to write this number of bytes at `as_ptr()`.
-    fn capacity(&self) -> usize;
-}
-impl SetLenBytes for Vec<u8> {
-    unsafe fn set_len(&mut self, new_len: usize) {
-        self.set_len(new_len);
-    }
-    fn capacity(&self) -> usize {
-        self.capacity()
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Connection, DatabaseName, Error, ErrorCode, Result, NO_PARAMS};
+    use crate::{Connection, DatabaseName, Result, NO_PARAMS};
 
     #[test]
     pub fn test_serialize_deserialize() {
@@ -849,7 +809,7 @@ mod test {
 
         // create a new db and mutably borrow the serialized data
         let mut db3 = Connection::open_in_memory()?.into_borrowing();
-        db3.deserialize_mut(DatabaseName::Main, &mut serialized1)?;
+        db3.deserialize_resizable(DatabaseName::Main, &mut serialized1)?;
         // update should not affect length
         db3.execute_batch("UPDATE hello SET x = 44 WHERE x = 3")?;
         let mut query = db3.prepare("SELECT x FROM hello")?;
@@ -867,22 +827,6 @@ mod test {
             .count();
         assert_eq!(524, count_until_resize);
 
-        // after some time, DiskFull is thrown
-        let sql = "INSERT INTO hello VALUES(55);";
-        for _i in 0..=509 {
-            db3.execute_batch(sql)?;
-        }
-        if let Err(Error::SqliteFailure(
-            ffi::Error {
-                code: ErrorCode::DiskFull,
-                extended_code: _,
-            },
-            _,
-        )) = db3.execute_batch(sql)
-        {
-        } else {
-            panic!("should return SqliteFailure");
-        }
         // connection close should update length of serialized1
         let new_len = serialize_len(&mut db3);
         assert!(new_len > initial_len);
@@ -956,7 +900,7 @@ mod test {
         assert!(serialized1[..] == serialized2[..]);
         let mut db4 = Connection::open_in_memory()?.into_borrowing();
         db4.execute_batch("ATTACH DATABASE ':memory:' AS hello")?;
-        db4.deserialize_mut(DatabaseName::Attached("hello"), &mut serialized2)?;
+        db4.deserialize_resizable(DatabaseName::Attached("hello"), &mut serialized2)?;
         db4.execute_batch("DETACH DATABASE hello")?;
         let debug = format!("{:?}", db4);
         mem::drop(db4);
