@@ -60,9 +60,8 @@ impl Connection {
         let schema = db_name.to_cstring()?;
         let file = file_ptr(&self.db.borrow(), &schema);
         file.map(|file| {
-            if file.pMethods == &VEC_DB_IO_METHODS {
-                let vec_db = unsafe { &mut *(file as *mut _ as *mut VecDbFile) };
-                return Ok(vec_db.as_ref().as_slice().to_vec());
+            if let Some(vec_db) = VecDbFile::try_cast(file) {
+                return Ok(vec_db.data.as_slice().to_vec());
                 // TODO: Optimize for pMethods == sqlite_io_methods
             }
 
@@ -103,7 +102,7 @@ impl Connection {
         }
     }
 
-    /// Deserialize using the `vec_db` Virtual File System.
+    /// Deserialize using a [`VecDbFile`].
     /// # Safety
     /// The caller must make sure that `data` outlives the connection.
     fn deserialize_vec_db(&self, schema: DatabaseName, data: MemFile) -> Result<()> {
@@ -174,14 +173,8 @@ impl<'a> BorrowingConnection<'a> {
     pub fn serialize_rc(&self, db: DatabaseName) -> Result<Option<Rc<MemFile<'a>>>> {
         let schema = db.to_cstring()?;
         let c = self.conn.db.borrow_mut();
-        Ok(file_ptr(&c, &schema).and_then(|file| {
-            let vec_db = if file.pMethods == &VEC_DB_IO_METHODS {
-                unsafe { &mut *(file as *mut _ as *mut VecDbFile) }
-            } else {
-                return None;
-            };
-            Some(Rc::clone(&vec_db.data))
-        }))
+        Ok(file_ptr(&c, &schema)
+            .and_then(|file| VecDbFile::try_cast(file).map(|f| Rc::clone(&f.data))))
     }
 
     /// Disconnects database and reopens it as an read-only in-memory database based on a slice.
@@ -305,7 +298,9 @@ impl ops::Deref for MemFile<'_> {
     }
 }
 
-/// `sqlite3_file` subclass for the `vec_db` Virtual File System.
+/// `sqlite3_file` subclass for the `vec_db` Virtual File System. It's inspired by
+/// the `memdb` VFS but uses the Rust allocator instead of `sqlite3_malloc`.
+/// The database is stored in an owned or borrowed `Vec<u8>`.
 #[repr(C)]
 struct VecDbFile<'a> {
     methods: *const ffi::sqlite3_io_methods,
@@ -324,16 +319,12 @@ impl<'a> VecDbFile<'a> {
         }
     }
 
-    fn get_mut(&mut self) -> Option<&mut MemFile<'a>> {
-        if !self.data.writable() {
-            None
+    fn try_cast(file: &mut ffi::sqlite3_file) -> Option<&mut Self> {
+        if file.pMethods == &VEC_DB_IO_METHODS {
+            unsafe { Some(&mut *(file as *mut _ as *mut VecDbFile)) }
         } else {
-            Rc::get_mut(&mut self.data)
+            None
         }
-    }
-
-    fn as_ref(&self) -> &MemFile<'a> {
-        Rc::as_ref(&self.data)
     }
 }
 
@@ -418,7 +409,7 @@ unsafe extern "C" fn c_read(
 ) -> c_int {
     panic::catch_unwind(|| {
         let file = &mut *(file as *mut VecDbFile);
-        let data = file.as_ref();
+        let data = &file.data;
         let buf = buf as *mut u8;
         let amt: usize = amt.try_into().unwrap();
         let ofst: usize = ofst.try_into().unwrap();
@@ -488,9 +479,9 @@ unsafe extern "C" fn c_write(
 /// the size of a file, never to increase the size.
 unsafe extern "C" fn c_truncate(file: *mut ffi::sqlite3_file, size: i64) -> c_int {
     panic::catch_unwind(|| {
-        if let Some(data) = (&mut *(file as *mut VecDbFile)).get_mut() {
+        if let Some(data) = Rc::get_mut(&mut (*(file as *mut VecDbFile)).data) {
             let size = size.try_into().unwrap();
-            if size > data.len() {
+            if size > data.len() || !data.writable() {
                 ffi::SQLITE_FULL
             } else {
                 data.set_len(size);
@@ -514,7 +505,7 @@ unsafe extern "C" fn c_sync(_file: *mut ffi::sqlite3_file, _flags: c_int) -> c_i
 /// Return the current file-size of a memory file.
 unsafe extern "C" fn c_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_int {
     panic::catch_unwind(|| {
-        let data = (&*(file as *mut VecDbFile)).as_ref();
+        let data = &(*(file as *mut VecDbFile)).data;
         *size = data.len() as _;
         ffi::SQLITE_OK
     })
@@ -526,8 +517,7 @@ unsafe extern "C" fn c_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_i
 
 /// Lock a memory file.
 unsafe extern "C" fn c_lock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
-    let data = (&*(file as *mut VecDbFile)).as_ref();
-    if lock > ffi::SQLITE_LOCK_SHARED && !data.writable() {
+    if lock > ffi::SQLITE_LOCK_SHARED && !(*(file as *mut VecDbFile)).data.writable() {
         ffi::SQLITE_READONLY
     } else {
         // TODO: Why stores memdb.c the lock in the struct but never uses it
@@ -543,7 +533,7 @@ unsafe extern "C" fn c_file_control(
 ) -> c_int {
     panic::catch_unwind(|| {
         let file = &mut *(file as *mut VecDbFile);
-        let data = file.as_ref();
+        let data = &file.data;
         match op {
             ffi::SQLITE_FCNTL_VFSNAME => {
                 *(arg as *mut *const c_char) = ffi::sqlite3_mprintf(
@@ -593,7 +583,7 @@ unsafe extern "C" fn c_fetch(
 ) -> c_int {
     panic::catch_unwind(|| {
         let file = &mut *(file as *mut VecDbFile);
-        let data = file.as_ref();
+        let data = &file.data;
         if ofst + amt as i64 > data.len() as _ {
             *p = ptr::null_mut();
         } else {
