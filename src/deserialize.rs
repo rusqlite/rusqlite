@@ -522,7 +522,7 @@ unsafe extern "C" fn c_file_control(
         match op {
             ffi::SQLITE_FCNTL_VFSNAME => {
                 *(arg as *mut *const c_char) = ffi::sqlite3_mprintf(
-                    "vec_db(%p,%llu)".as_ptr() as _,
+                    "vec_db(%p,%llu)\0".as_ptr() as _,
                     data.as_ptr(),
                     data.len() as ffi::sqlite3_uint64,
                 );
@@ -588,6 +588,7 @@ unsafe extern "C" fn c_unfetch(file: *mut ffi::sqlite3_file, _ofst: i64, _p: *mu
 mod test {
     use super::*;
     use crate::{Connection, DatabaseName, Error, Result, NO_PARAMS};
+    use std::ffi::CStr;
 
     #[test]
     pub fn test_serialize_deserialize() {
@@ -877,5 +878,27 @@ mod test {
             .unwrap()
             .unwrap()
             .len()
+    }
+
+    #[test]
+    fn test_vec_db_vfs_name() {
+        unsafe {
+            let db = Connection::open_in_memory().unwrap();
+            let vec = vec![1, 2, 3];
+            let vec_ptr = vec.as_ptr();
+            db.deserialize(DatabaseName::Main, vec).unwrap();
+            let mut name: *const c_char = ptr::null();
+            let rc = ffi::sqlite3_file_control(
+                db.db.borrow().db(),
+                "main\0".as_ptr() as _,
+                ffi::SQLITE_FCNTL_VFSNAME,
+                &mut name as *mut _ as _,
+            );
+            assert_eq!(ffi::SQLITE_OK, rc);
+            assert!(!name.is_null());
+            let name_str = CStr::from_ptr(name).to_str().unwrap();
+            assert_eq!(name_str, &format!("vec_db({:X},3)", vec_ptr as usize));
+            ffi::sqlite3_free(name as _);
+        }
     }
 }
