@@ -16,7 +16,7 @@
 //! db.execute_batch("CREATE TABLE one(x INTEGER);INSERT INTO one VALUES(44)")?;
 //! let mem_file: Vec<u8> = db.serialize(DatabaseName::Main)?.unwrap();
 //! // This SQLite file could be send over the network and deserialized on the other side
-//! // without touching the file system.  
+//! // without touching the file system.
 //! let mut db_clone = Connection::open_in_memory()?;
 //! db_clone.deserialize(DatabaseName::Main, mem_file)?;
 //! let row: u16 = db_clone.query_row("SELECT x FROM one", NO_PARAMS, |r| r.get(0))?;
@@ -44,7 +44,7 @@ impl Connection {
     /// The vector should contain serialized database content (a main database file).
     /// This returns an error if `DatabaseName` was not attached or other failures occurred.
     pub fn deserialize(&self, db: DatabaseName, data: Vec<u8>) -> Result<()> {
-        self.deserialize_hook(db, MemFile::Owned(data))
+        self.deserialize_vec_db(db, MemFile::Owned(data))
     }
 
     /// Copies the serialization of a database to a `Vec<u8>`, or returns `Ok(None)` when
@@ -60,9 +60,9 @@ impl Connection {
         let schema = db_name.to_cstring()?;
         let file = file_ptr(&self.db.borrow(), &schema);
         file.map(|file| {
-            if file.pMethods == hooked_io_methods() {
-                let hooked = unsafe { &mut *(file as *mut _ as *mut HookedFile) };
-                return Ok(hooked.as_ref().as_slice().to_vec());
+            if file.pMethods == &VEC_DB_IO_METHODS {
+                let vec_db = unsafe { &mut *(file as *mut _ as *mut VecDbFile) };
+                return Ok(vec_db.as_ref().as_slice().to_vec());
                 // TODO: Optimize for pMethods == sqlite_io_methods
             }
 
@@ -103,17 +103,17 @@ impl Connection {
         }
     }
 
-    /// Deserialize `MemFile`.
+    /// Deserialize using the `vec_db` Virtual File System.
     /// # Safety
     /// The caller must make sure that `data` outlives the connection.
-    fn deserialize_hook(&self, schema: DatabaseName, data: MemFile) -> Result<()> {
+    fn deserialize_vec_db(&self, schema: DatabaseName, data: MemFile) -> Result<()> {
         let schema = schema.to_cstring()?;
         let mut c = self.db.borrow_mut();
         unsafe {
             let rc = ffi::sqlite3_deserialize(c.db(), schema.as_ptr(), ptr::null_mut(), 0, 0, 0);
             c.decode_result(rc)?;
             let file = file_ptr(&c, &schema).unwrap();
-            assert_eq!(file.pMethods, sqlite_io_methods());
+            assert_eq!(file.pMethods, MEMDB_VFS.0);
             let mut size_max: ffi::sqlite3_int64 = -1;
             let rc = (*file.pMethods).xFileControl.unwrap()(
                 file,
@@ -122,14 +122,8 @@ impl Connection {
             );
             assert_eq!(rc, ffi::SQLITE_OK);
             let size_max = size_max.try_into().unwrap();
-            let hooked = HookedFile {
-                methods: hooked_io_methods(),
-                data: Rc::new(data),
-                memory_mapped: 0,
-                size_max,
-            };
             let file = file as *mut _ as _;
-            ptr::write(file, hooked);
+            ptr::write(file, VecDbFile::new(data, size_max));
             Ok(())
         }
     }
@@ -139,15 +133,12 @@ fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>)
     let mut temp_db = Connection::open_with_flags_and_vfs("0", OpenFlags::default(), "memdb")?;
     unsafe {
         let temp_file = file_ptr(&temp_db.db.borrow_mut(), &SmallCString::new("main")?).unwrap();
-        assert_eq!(temp_file.pMethods, sqlite_io_methods());
+        assert_eq!(temp_file.pMethods, MEMDB_VFS.0);
         // At this point, MemFile->aData is null
-        let hooked = HookedFile {
-            methods: hooked_io_methods(),
-            data: Rc::new(MemFile::Resizable(vec)),
-            memory_mapped: 0,
-            size_max: 0,
-        };
-        ptr::write(temp_file as *mut _ as _, hooked);
+        ptr::write(
+            temp_file as *mut _ as _,
+            VecDbFile::new(MemFile::Resizable(vec), 0),
+        );
     };
 
     use crate::backup::{
@@ -184,23 +175,23 @@ impl<'a> BorrowingConnection<'a> {
         let schema = db.to_cstring()?;
         let c = self.conn.db.borrow_mut();
         Ok(file_ptr(&c, &schema).and_then(|file| {
-            let hooked = if file.pMethods == hooked_io_methods() {
-                unsafe { &mut *(file as *mut _ as *mut HookedFile) }
+            let vec_db = if file.pMethods == &VEC_DB_IO_METHODS {
+                unsafe { &mut *(file as *mut _ as *mut VecDbFile) }
             } else {
                 return None;
             };
-            Some(Rc::clone(&hooked.data))
+            Some(Rc::clone(&vec_db.data))
         }))
     }
 
     /// Disconnects database and reopens it as an read-only in-memory database based on a slice.
     pub fn deserialize_read_only(&self, db: DatabaseName, slice: &'a [u8]) -> Result<()> {
-        self.deserialize_hook(db, MemFile::ReadOnly(slice))
+        self.deserialize_vec_db(db, MemFile::ReadOnly(slice))
     }
 
     /// Disconnects database and reopens it as an in-memory database based on a borrowed vector.
     pub fn deserialize_resizable(&mut self, db: DatabaseName, vec: &'a mut Vec<u8>) -> Result<()> {
-        self.deserialize_hook(db, MemFile::Resizable(vec))
+        self.deserialize_vec_db(db, MemFile::Resizable(vec))
     }
 }
 
@@ -314,18 +305,25 @@ impl ops::Deref for MemFile<'_> {
     }
 }
 
-/// `sqlite3_file` subclass that delegates most methods
-/// to the original/lower file defined in `memdb.c`.
-/// On close, the `data` pointer gets updated.
+/// `sqlite3_file` subclass for the `vec_db` Virtual File System.
 #[repr(C)]
-struct HookedFile<'a> {
+struct VecDbFile<'a> {
     methods: *const ffi::sqlite3_io_methods,
     data: Rc<MemFile<'a>>,
     size_max: usize,
     memory_mapped: u16,
 }
 
-impl<'a> HookedFile<'a> {
+impl<'a> VecDbFile<'a> {
+    fn new(data: MemFile<'a>, size_max: usize) -> Self {
+        VecDbFile {
+            size_max,
+            data: Rc::new(data),
+            methods: &VEC_DB_IO_METHODS,
+            memory_mapped: 0,
+        }
+    }
+
     fn get_mut(&mut self) -> Option<&mut MemFile<'a>> {
         if !self.data.writable() {
             None
@@ -339,37 +337,36 @@ impl<'a> HookedFile<'a> {
     }
 }
 
-fn hooked_io_methods() -> *const ffi::sqlite3_io_methods {
-    const HOOKED_IO_METHODS: ffi::sqlite3_io_methods = ffi::sqlite3_io_methods {
-        iVersion: 3,
-        xClose: Some(c_close),
-        xRead: Some(c_read),
-        xWrite: Some(c_write),
-        xTruncate: Some(c_truncate),
-        xSync: Some(c_sync),
-        xFileSize: Some(c_size),
-        xLock: Some(c_lock),
-        xUnlock: Some(c_lock),
-        xCheckReservedLock: None,
-        xFileControl: Some(c_file_control),
-        xSectorSize: None,
-        xDeviceCharacteristics: Some(c_device_characteristics),
-        xShmMap: None,
-        xShmLock: None,
-        xShmBarrier: None,
-        xShmUnmap: None,
-        xFetch: Some(c_fetch),
-        xUnfetch: Some(c_unfetch),
-    };
-    &HOOKED_IO_METHODS
-}
+/// IO Methods for the `vec_db` Virtual File System.
+/// This can't be a const because the pointers are compared.
+static VEC_DB_IO_METHODS: ffi::sqlite3_io_methods = ffi::sqlite3_io_methods {
+    iVersion: 3,
+    xClose: Some(c_close),
+    xRead: Some(c_read),
+    xWrite: Some(c_write),
+    xTruncate: Some(c_truncate),
+    xSync: Some(c_sync),
+    xFileSize: Some(c_size),
+    xLock: Some(c_lock),
+    xUnlock: Some(c_lock),
+    xCheckReservedLock: None,
+    xFileControl: Some(c_file_control),
+    xSectorSize: None,
+    xDeviceCharacteristics: Some(c_device_characteristics),
+    xShmMap: None,
+    xShmLock: None,
+    xShmBarrier: None,
+    xShmUnmap: None,
+    xFetch: Some(c_fetch),
+    xUnfetch: Some(c_unfetch),
+};
 
 lazy_static::lazy_static! {
     /// Get `memdb_io_methods` and `szOsFile` for the VFS defined in `memdb.c`
-    static ref MEM_VFS: (&'static ffi::sqlite3_io_methods, i32) = unsafe {
+    static ref MEMDB_VFS: (&'static ffi::sqlite3_io_methods, i32) = unsafe {
         let vfs = &mut *ffi::sqlite3_vfs_find("memdb\0".as_ptr() as _);
         let sz = vfs.szOsFile;
-        assert!(mem::size_of::<HookedFile>() <= sz as _);
+        assert!(mem::size_of::<VecDbFile>() <= sz as _, "VecDbFile doesn't fit in allocation");
         let file = ffi::sqlite3_malloc(sz) as *mut ffi::sqlite3_file;
         assert!(!file.is_null());
         let mut out_flags = 0;
@@ -379,10 +376,6 @@ lazy_static::lazy_static! {
         ffi::sqlite3_free(file as _);
         (methods, sz)
     };
-}
-
-fn sqlite_io_methods() -> *const ffi::sqlite3_io_methods {
-    MEM_VFS.0
 }
 
 fn file_ptr<'a>(c: &InnerConnection, schema: &SmallCString) -> Option<&'a mut ffi::sqlite3_file> {
@@ -406,8 +399,8 @@ fn file_ptr<'a>(c: &InnerConnection, schema: &SmallCString) -> Option<&'a mut ff
 /// when the database gets detached.
 unsafe extern "C" fn c_close(file: *mut ffi::sqlite3_file) -> c_int {
     panic::catch_unwind(|| {
-        // This ptr::read is used so that the HookedFile is dropped at the end of scope.
-        ptr::drop_in_place(file as *mut HookedFile);
+        // This ptr::read is used so that the VecDbFile is dropped at the end of scope.
+        ptr::drop_in_place(file as *mut VecDbFile);
         ffi::SQLITE_OK
     })
     .unwrap_or_else(|e| {
@@ -424,7 +417,7 @@ unsafe extern "C" fn c_read(
     ofst: i64,
 ) -> c_int {
     panic::catch_unwind(|| {
-        let file = &mut *(file as *mut HookedFile);
+        let file = &mut *(file as *mut VecDbFile);
         let data = file.as_ref();
         let buf = buf as *mut u8;
         let amt: usize = amt.try_into().unwrap();
@@ -453,7 +446,7 @@ unsafe extern "C" fn c_write(
     ofst: i64,
 ) -> c_int {
     panic::catch_unwind(|| {
-        let file = &mut *(file as *mut HookedFile);
+        let file = &mut *(file as *mut VecDbFile);
         let data = match Rc::get_mut(&mut file.data) {
             Some(d) => d,
             None => return ffi::SQLITE_READONLY,
@@ -495,7 +488,7 @@ unsafe extern "C" fn c_write(
 /// the size of a file, never to increase the size.
 unsafe extern "C" fn c_truncate(file: *mut ffi::sqlite3_file, size: i64) -> c_int {
     panic::catch_unwind(|| {
-        if let Some(data) = (&mut *(file as *mut HookedFile)).get_mut() {
+        if let Some(data) = (&mut *(file as *mut VecDbFile)).get_mut() {
             let size = size.try_into().unwrap();
             if size > data.len() {
                 ffi::SQLITE_FULL
@@ -521,7 +514,7 @@ unsafe extern "C" fn c_sync(_file: *mut ffi::sqlite3_file, _flags: c_int) -> c_i
 /// Return the current file-size of a memory file.
 unsafe extern "C" fn c_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_int {
     panic::catch_unwind(|| {
-        let data = (&*(file as *mut HookedFile)).as_ref();
+        let data = (&*(file as *mut VecDbFile)).as_ref();
         *size = data.len() as _;
         ffi::SQLITE_OK
     })
@@ -533,7 +526,7 @@ unsafe extern "C" fn c_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_i
 
 /// Lock a memory file.
 unsafe extern "C" fn c_lock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
-    let data = (&*(file as *mut HookedFile)).as_ref();
+    let data = (&*(file as *mut VecDbFile)).as_ref();
     if lock > ffi::SQLITE_LOCK_SHARED && !data.writable() {
         ffi::SQLITE_READONLY
     } else {
@@ -549,12 +542,12 @@ unsafe extern "C" fn c_file_control(
     arg: *mut c_void,
 ) -> c_int {
     panic::catch_unwind(|| {
-        let file = &mut *(file as *mut HookedFile);
+        let file = &mut *(file as *mut VecDbFile);
         let data = file.as_ref();
         match op {
             ffi::SQLITE_FCNTL_VFSNAME => {
                 *(arg as *mut *const c_char) = ffi::sqlite3_mprintf(
-                    "rust_memdb(%p,%llu)".as_ptr() as _,
+                    "vec_db(%p,%llu)".as_ptr() as _,
                     data.as_ptr(),
                     data.len() as ffi::sqlite3_uint64,
                 );
@@ -599,7 +592,7 @@ unsafe extern "C" fn c_fetch(
     p: *mut *mut c_void,
 ) -> c_int {
     panic::catch_unwind(|| {
-        let file = &mut *(file as *mut HookedFile);
+        let file = &mut *(file as *mut VecDbFile);
         let data = file.as_ref();
         if ofst + amt as i64 > data.len() as _ {
             *p = ptr::null_mut();
@@ -620,7 +613,7 @@ unsafe extern "C" fn c_fetch(
 /// Release a memory-mapped page.
 unsafe extern "C" fn c_unfetch(file: *mut ffi::sqlite3_file, _ofst: i64, _p: *mut c_void) -> c_int {
     panic::catch_unwind(|| {
-        let file = &mut *(file as *mut HookedFile);
+        let file = &mut *(file as *mut VecDbFile);
         file.memory_mapped -= 1;
         ffi::SQLITE_OK
     })
