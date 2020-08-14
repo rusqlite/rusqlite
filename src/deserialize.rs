@@ -726,6 +726,7 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::redundant_clone)]
     pub fn test_deserialize_read_only() -> Result<()> {
         let sql = "BEGIN;
             CREATE TABLE hello(x INTEGER);
