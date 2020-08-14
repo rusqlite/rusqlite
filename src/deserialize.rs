@@ -81,6 +81,9 @@ impl Connection {
             );
             let db_size: i64 = self.query_row(sql, NO_PARAMS, |r| r.get(0))?;
             let db_size = db_size.try_into().unwrap();
+            if db_size == 0 {
+                return Ok(Vec::new())
+            }
             let mut vec = Vec::with_capacity(db_size);
 
             // Unfortunately, sqlite3PagerGet and sqlite3PagerGetData are private APIs,
@@ -183,7 +186,7 @@ impl<'a> BorrowingConnection<'a> {
     }
 
     /// Disconnects database and reopens it as an in-memory database based on a borrowed vector.
-    pub fn deserialize_resizable(&mut self, db: DatabaseName, vec: &'a mut Vec<u8>) -> Result<()> {
+    pub fn deserialize_resizable(&self, db: DatabaseName, vec: &'a mut Vec<u8>) -> Result<()> {
         self.deserialize_vec_db(db, MemFile::Resizable(vec))
     }
 }
@@ -263,7 +266,7 @@ impl MemFile<'_> {
         match self {
             MemFile::Owned(d) => d.capacity(),
             MemFile::Resizable(d) => d.capacity(),
-            MemFile::ReadOnly(d) => unreachable!("ReadOnly.cap"),
+            MemFile::ReadOnly(_) => unreachable!("ReadOnly.cap"),
         }
     }
 
@@ -762,6 +765,7 @@ mod test {
         Ok(())
     }
 
+    //noinspection RsAssertEqual
     #[test]
     pub fn test_deserialize_resizable() -> Result<()> {
         let sql = "BEGIN;
@@ -807,7 +811,7 @@ mod test {
 
         // serializing again should work
         db1.execute_batch("ATTACH DATABASE ':memory:' AS three;")?;
-        let mut db1 = db1.into_borrowing();
+        let db1 = db1.into_borrowing();
         db1.deserialize_resizable(DatabaseName::Attached("three"), &mut serialized1)?;
         let count: u16 = db1.query_row("SELECT COUNT(*) FROM hello", NO_PARAMS, |r| r.get(0))?;
         assert_eq!(3, count);
@@ -824,7 +828,7 @@ mod test {
         // test detach error handling for deserialize_mut
         assert_ne!(0, serialized2.capacity());
         assert!(serialized1[..] == serialized2[..]);
-        let mut db4 = Connection::open_in_memory()?.into_borrowing();
+        let db4 = Connection::open_in_memory()?.into_borrowing();
         db4.execute_batch("ATTACH DATABASE ':memory:' AS hello")?;
         db4.deserialize_resizable(DatabaseName::Attached("hello"), &mut serialized2)?;
         db4.execute_batch("DETACH DATABASE hello")?;
@@ -892,5 +896,53 @@ mod test {
             assert_eq!(name_str, &format!("vec_db({:X},3)", vec_ptr as usize));
             ffi::sqlite3_free(name as _);
         }
+    }
+
+    #[test]
+    fn test_serialize_zero_pages() {
+        let db = Connection::open_in_memory().unwrap().into_borrowing();
+        let vec = db.serialize(DatabaseName::Main).unwrap().unwrap();
+        assert_eq!(vec.len(), 0);
+    }
+
+    #[test]
+    fn test_vec_db_fetch() -> Result<()> {
+        let db = Connection::open_in_memory().unwrap().into_borrowing();
+        db.execute_batch("CREATE TABLE a(x INTEGER)")?;
+        let mut vec = db.serialize(DatabaseName::Main)?.unwrap();
+        let size = vec.len();
+        assert_ne!(0, size);
+        db.deserialize_resizable(DatabaseName::Main, &mut vec)?;
+        let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
+        let p = file_fetch(file, 0, size);
+        assert!(!p.is_null());
+        assert_eq!(p, db.serialize_rc(DatabaseName::Main)?.unwrap().as_ptr());
+        // Won't resize unit unfetch
+        let sql = "WITH RECURSIVE cnt(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM cnt WHERE x<100000) INSERT INTO a SELECT x FROM cnt";
+        db.execute_batch(sql).expect_err("enlarge should fail");
+        file_unfetch(file);
+        assert_eq!(size, db.serialize_rc(DatabaseName::Main)?.unwrap().len());
+        db.execute_batch(sql).expect("enlarge should succeed");
+        assert_ne!(size, db.serialize_rc(DatabaseName::Main)?.unwrap().len());
+        Ok(())
+    }
+
+    fn file_fetch(file: &mut ffi::sqlite3_file, ofst: usize, amt: usize) -> *const u8 {
+        unsafe {
+            let mut fetch = MaybeUninit::zeroed();
+            let rc = (*file.pMethods).xFetch.unwrap()(
+                file,
+                ofst as _,
+                amt as _,
+                fetch.as_mut_ptr() as _,
+            );
+            debug_assert_eq!(rc, ffi::SQLITE_OK);
+            fetch.assume_init()
+        }
+    }
+
+    fn file_unfetch(file: &mut ffi::sqlite3_file) {
+        let rc = unsafe { (*file.pMethods).xUnfetch.unwrap()(file, 0, ptr::null_mut()) };
+        debug_assert_eq!(rc, ffi::SQLITE_OK);
     }
 }
