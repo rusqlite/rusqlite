@@ -629,6 +629,7 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::redundant_clone)]
     pub fn test_serialize_rc() {
         // prepare two distinct files: a & b
         let db1 = Connection::open_in_memory().unwrap().into_borrowing();
