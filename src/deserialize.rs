@@ -237,7 +237,7 @@ impl MemFile<'_> {
         match self {
             MemFile::Owned(d) => &mut d[..],
             MemFile::Resizable(d) => &mut d[..],
-            MemFile::ReadOnly(_) => panic!("ReadOnly.as_mut_slice"),
+            MemFile::ReadOnly(_) => unreachable!("ReadOnly.as_mut_slice"),
         }
     }
 
@@ -254,7 +254,7 @@ impl MemFile<'_> {
             match self {
                 MemFile::Owned(d) => d.set_len(new_len),
                 MemFile::Resizable(d) => d.set_len(new_len),
-                MemFile::ReadOnly(_) => panic!("ReadOnly.set_len"),
+                MemFile::ReadOnly(_) => unreachable!("ReadOnly.set_len"),
             }
         }
     }
@@ -263,21 +263,15 @@ impl MemFile<'_> {
         match self {
             MemFile::Owned(d) => d.capacity(),
             MemFile::Resizable(d) => d.capacity(),
-            MemFile::ReadOnly(d) => d.len(),
+            MemFile::ReadOnly(d) => unreachable!("ReadOnly.cap"),
         }
     }
 
-    fn reserve_additional(&mut self, additional: usize) -> bool {
+    fn reserve_additional(&mut self, additional: usize) {
         match self {
-            MemFile::Owned(d) => {
-                d.reserve(additional);
-                true
-            }
-            MemFile::Resizable(d) => {
-                d.reserve(additional);
-                true
-            }
-            MemFile::ReadOnly(_) => false,
+            MemFile::Owned(d) => d.reserve(additional),
+            MemFile::Resizable(d) => d.reserve(additional),
+            MemFile::ReadOnly(_) => unreachable!("ReadOnly.reserve_additional"),
         }
     }
 
@@ -438,8 +432,8 @@ unsafe extern "C" fn c_write(
 ) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
         let data = match Rc::get_mut(&mut file.data) {
-            Some(d) => d,
-            None => return ffi::SQLITE_READONLY,
+            Some(d) if d.writable() => d,
+            _ => return ffi::SQLITE_READONLY,
         };
         let sz = data.len();
         let sz_alloc = data.cap();
@@ -450,9 +444,7 @@ unsafe extern "C" fn c_write(
                 if file.memory_mapped > 0 {
                     return ffi::SQLITE_FULL;
                 }
-                if !data.reserve_additional(ofst + amt - sz_alloc) {
-                    return ffi::SQLITE_FULL;
-                }
+                data.reserve_additional(ofst + amt - sz_alloc);
                 if data.cap() > file.size_max {
                     return ffi::SQLITE_FULL;
                 }
