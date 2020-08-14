@@ -386,17 +386,22 @@ fn file_ptr<'a>(c: &InnerConnection, schema: &SmallCString) -> Option<&'a mut ff
     }
 }
 
+unsafe fn catch_unwind_sqlite_error(
+    file: *mut ffi::sqlite3_file,
+    f: impl FnOnce(&mut VecDbFile) -> c_int + panic::UnwindSafe,
+) -> c_int {
+    panic::catch_unwind(|| f(&mut *(file as *mut VecDbFile))).unwrap_or_else(|e| {
+        dbg!(e);
+        ffi::SQLITE_ERROR
+    })
+}
+
 /// This will be called when dropping the `Connection` or
 /// when the database gets detached.
 unsafe extern "C" fn c_close(file: *mut ffi::sqlite3_file) -> c_int {
-    panic::catch_unwind(|| {
-        // This ptr::read is used so that the VecDbFile is dropped at the end of scope.
-        ptr::drop_in_place(file as *mut VecDbFile);
+    catch_unwind_sqlite_error(file, |file| {
+        ptr::drop_in_place(file);
         ffi::SQLITE_OK
-    })
-    .unwrap_or_else(|e| {
-        dbg!(e); // TODO: Pass error message to caller
-        ffi::SQLITE_ERROR
     })
 }
 
@@ -407,8 +412,7 @@ unsafe extern "C" fn c_read(
     amt: c_int,
     ofst: i64,
 ) -> c_int {
-    panic::catch_unwind(|| {
-        let file = &mut *(file as *mut VecDbFile);
+    catch_unwind_sqlite_error(file, |file| {
         let data = &file.data;
         let buf = buf as *mut u8;
         let amt: usize = amt.try_into().unwrap();
@@ -423,10 +427,6 @@ unsafe extern "C" fn c_read(
         ptr::copy_nonoverlapping(data.as_ptr().add(ofst), buf, amt);
         ffi::SQLITE_OK
     })
-    .unwrap_or_else(|e| {
-        dbg!(e);
-        ffi::SQLITE_ERROR
-    })
 }
 
 /// Write data to a memory file.
@@ -436,8 +436,7 @@ unsafe extern "C" fn c_write(
     amt: c_int,
     ofst: i64,
 ) -> c_int {
-    panic::catch_unwind(|| {
-        let file = &mut *(file as *mut VecDbFile);
+    catch_unwind_sqlite_error(file, |file| {
         let data = match Rc::get_mut(&mut file.data) {
             Some(d) => d,
             None => return ffi::SQLITE_READONLY,
@@ -466,10 +465,6 @@ unsafe extern "C" fn c_write(
         ptr::copy_nonoverlapping(buf, data.as_mut_ptr().add(ofst).cast(), amt);
         ffi::SQLITE_OK
     })
-    .unwrap_or_else(|e| {
-        dbg!(e);
-        ffi::SQLITE_ERROR
-    })
 }
 
 /// Truncate a memory file.
@@ -478,8 +473,8 @@ unsafe extern "C" fn c_write(
 /// support WAL mode) the truncate() method is only used to reduce
 /// the size of a file, never to increase the size.
 unsafe extern "C" fn c_truncate(file: *mut ffi::sqlite3_file, size: i64) -> c_int {
-    panic::catch_unwind(|| {
-        if let Some(data) = Rc::get_mut(&mut (*(file as *mut VecDbFile)).data) {
+    catch_unwind_sqlite_error(file, |file| {
+        if let Some(data) = Rc::get_mut(&mut file.data) {
             let size = size.try_into().unwrap();
             if size > data.len() || !data.writable() {
                 ffi::SQLITE_FULL
@@ -491,10 +486,6 @@ unsafe extern "C" fn c_truncate(file: *mut ffi::sqlite3_file, size: i64) -> c_in
             ffi::SQLITE_FULL
         }
     })
-    .unwrap_or_else(|e| {
-        dbg!(e);
-        ffi::SQLITE_ERROR
-    })
 }
 
 /// Sync a memory file.
@@ -504,14 +495,9 @@ unsafe extern "C" fn c_sync(_file: *mut ffi::sqlite3_file, _flags: c_int) -> c_i
 
 /// Return the current file-size of a memory file.
 unsafe extern "C" fn c_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_int {
-    panic::catch_unwind(|| {
-        let data = &(*(file as *mut VecDbFile)).data;
-        *size = data.len() as _;
+    catch_unwind_sqlite_error(file, |file| {
+        *size = file.data.len() as _;
         ffi::SQLITE_OK
-    })
-    .unwrap_or_else(|e| {
-        dbg!(e);
-        ffi::SQLITE_ERROR
     })
 }
 
@@ -531,8 +517,7 @@ unsafe extern "C" fn c_file_control(
     op: c_int,
     arg: *mut c_void,
 ) -> c_int {
-    panic::catch_unwind(|| {
-        let file = &mut *(file as *mut VecDbFile);
+    catch_unwind_sqlite_error(file, |file| {
         let data = &file.data;
         match op {
             ffi::SQLITE_FCNTL_VFSNAME => {
@@ -560,10 +545,6 @@ unsafe extern "C" fn c_file_control(
             _ => ffi::SQLITE_NOTFOUND,
         }
     })
-    .unwrap_or_else(|e| {
-        dbg!(e);
-        ffi::SQLITE_ERROR
-    })
 }
 
 /// Return the device characteristic flags supported.
@@ -581,8 +562,7 @@ unsafe extern "C" fn c_fetch(
     amt: c_int,
     p: *mut *mut c_void,
 ) -> c_int {
-    panic::catch_unwind(|| {
-        let file = &mut *(file as *mut VecDbFile);
+    catch_unwind_sqlite_error(file, |file| {
         let data = &file.data;
         if ofst + amt as i64 > data.len() as _ {
             *p = ptr::null_mut();
@@ -594,22 +574,13 @@ unsafe extern "C" fn c_fetch(
         }
         ffi::SQLITE_OK
     })
-    .unwrap_or_else(|e| {
-        dbg!(e);
-        ffi::SQLITE_ERROR
-    })
 }
 
 /// Release a memory-mapped page.
 unsafe extern "C" fn c_unfetch(file: *mut ffi::sqlite3_file, _ofst: i64, _p: *mut c_void) -> c_int {
-    panic::catch_unwind(|| {
-        let file = &mut *(file as *mut VecDbFile);
+    catch_unwind_sqlite_error(file, |file| {
         file.memory_mapped -= 1;
         ffi::SQLITE_OK
-    })
-    .unwrap_or_else(|e| {
-        dbg!(e);
-        ffi::SQLITE_ERROR
     })
 }
 
