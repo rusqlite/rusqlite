@@ -559,7 +559,9 @@ unsafe extern "C" fn c_fetch(
 ) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
         let data = &file.data;
-        if ofst + amt as i64 > data.len() as _ {
+        let amt: usize = amt.try_into().unwrap();
+        let ofst: usize = ofst.try_into().unwrap();
+        if ofst + amt > data.len() as _ {
             *p = ptr::null_mut();
         } else {
             // Safety: SQLite uses a read-only memory map <https://www.sqlite.org/mmap.html>,
@@ -960,7 +962,11 @@ mod test {
         assert_ne!(0, size);
         db.deserialize_resizable(DatabaseName::Main, &mut vec)?;
         let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
-        let p = file_fetch(file, 0, size);
+        // fetch returns null on overflow
+        assert!(file_fetch(file, 0, size + 1)?.is_null());
+        assert!(file_fetch(file, 1, size)?.is_null());
+        file_fetch(file, -1, 1).expect_err("should catch panic because of negative offset");
+        let p = file_fetch(file, 0, size)?;
         assert!(!p.is_null());
         assert_eq!(p, db.serialize_rc(DatabaseName::Main)?.unwrap().as_ptr());
         // Won't resize unit unfetch
@@ -973,17 +979,16 @@ mod test {
         Ok(())
     }
 
-    fn file_fetch(file: &mut ffi::sqlite3_file, ofst: usize, amt: usize) -> *const u8 {
+    fn file_fetch(file: &mut ffi::sqlite3_file, ofst: i64, amt: usize) -> Result<*const u8> {
         unsafe {
             let mut fetch = MaybeUninit::zeroed();
-            let rc = (*file.pMethods).xFetch.unwrap()(
-                file,
-                ofst as _,
-                amt as _,
-                fetch.as_mut_ptr() as _,
-            );
-            debug_assert_eq!(rc, ffi::SQLITE_OK);
-            fetch.assume_init()
+            let rc =
+                (*file.pMethods).xFetch.unwrap()(file, ofst, amt as _, fetch.as_mut_ptr() as _);
+            if rc != ffi::SQLITE_OK {
+                Err(error_from_handle(ptr::null_mut(), ffi::SQLITE_LOCKED))
+            } else {
+                Ok(fetch.assume_init())
+            }
         }
     }
 
