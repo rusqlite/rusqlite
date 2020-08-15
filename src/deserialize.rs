@@ -76,7 +76,7 @@ impl Connection {
                 Cow::Borrowed(schema_str)
             };
             let sql = &format!(
-                "SELECT page_count * page_size FROM '{0}'.pragma_page_count, '{0}'.pragma_page_size",
+                "SELECT page_count * page_size FROM pragma_page_count('{0}'), pragma_page_size('{0}')",
                 escaped
             );
             let db_size: i64 = self.query_row(sql, NO_PARAMS, |r| r.get(0))?;
@@ -905,6 +905,50 @@ mod test {
         let db = Connection::open_in_memory().unwrap().into_borrowing();
         let vec = db.serialize(DatabaseName::Main).unwrap().unwrap();
         assert_eq!(vec.len(), 0);
+    }
+
+    #[test]
+    fn test_serialize_vec_db() -> Result<()> {
+        let db = Connection::open_in_memory().unwrap().into_borrowing();
+        db.execute_batch("CREATE TABLE a(x INTEGER); ATTACH DATABASE ':memory:' AS a")?;
+        let vec = db.serialize(DatabaseName::Main)?.unwrap();
+        let name_a = DatabaseName::Attached("a");
+        db.deserialize_read_only(name_a, &vec)?;
+        // code coverage reports shows this uses the optimized path
+        let copy = db.serialize(name_a)?.unwrap();
+        assert_eq!(vec, copy);
+        Ok(())
+    }
+
+    #[test]
+    fn test_serialize_quoted() -> Result<()> {
+        let db = Connection::open_in_memory().unwrap().into_borrowing();
+        db.execute_batch(
+            r#"ATTACH DATABASE ':memory:' AS "q'u""o'te";
+            CREATE TABLE "q'u""o'te".a(x INTEGER);
+            INSERT INTO "q'u""o'te".a VALUES (1);"#,
+        )?;
+        let name_a = DatabaseName::Attached(r#"q'u"o'te"#);
+        let count: i64 = db.pragma_query_value(Some(name_a), "page_count", |r| r.get(0))?;
+        assert_eq!(count, 2);
+        let count: i64 = db.query_row(
+            r#"SELECT page_count FROM pragma_page_count("q'u""o'te")"#,
+            NO_PARAMS,
+            |r| r.get(0),
+        )?;
+        assert_eq!(count, 2);
+        let vec = db.serialize(name_a)?.unwrap();
+        assert_eq!(vec.len(), 8192);
+        Ok(())
+    }
+
+    #[test]
+    fn test_serialize_page_size() -> Result<()> {
+        let db = Connection::open_in_memory().unwrap().into_borrowing();
+        db.execute_batch(r#"PRAGMA page_size = 512;CREATE TABLE a(x INTEGER);"#)?;
+        let vec = db.serialize(DatabaseName::Main)?.unwrap();
+        assert_eq!(vec.len(), 512 * 2);
+        Ok(())
     }
 
     #[test]
