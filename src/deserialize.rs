@@ -994,6 +994,107 @@ mod test {
 
     fn file_unfetch(file: &mut ffi::sqlite3_file) {
         let rc = unsafe { (*file.pMethods).xUnfetch.unwrap()(file, 0, ptr::null_mut()) };
-        debug_assert_eq!(rc, ffi::SQLITE_OK);
+        assert_eq!(rc, ffi::SQLITE_OK);
+    }
+
+    #[test]
+    fn test_vec_db_read_short() -> Result<()> {
+        let db = Connection::open_in_memory().unwrap().into_borrowing();
+        db.execute_batch("CREATE TABLE a(x INTEGER)")?;
+        db.deserialize(
+            DatabaseName::Main,
+            db.serialize(DatabaseName::Main)?.unwrap(),
+        )?;
+        let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
+
+        // when reading past end, the buffer should be filled with zeros
+        let mut buf = [1; 16];
+        let end = file_len(file);
+        let rc = file_read(file, &mut buf, end);
+        assert_eq!(rc, ffi::SQLITE_IOERR_SHORT_READ);
+        assert_eq!(&buf, &[0; 16]);
+
+        // when reading partly past the end, the buffer should be filled with content
+        let vec_db = VecDbFile::try_cast(file).unwrap();
+        Rc::get_mut(&mut vec_db.data).unwrap().as_mut_slice()[end as usize - 1] = 0xab;
+        let mut buf = [1; 16];
+        let rc = file_read(file, &mut buf, end - 8);
+        assert_eq!(rc, ffi::SQLITE_IOERR_SHORT_READ);
+        assert_eq!(&buf, b"\0\0\0\0\0\0\0\xab\0\0\0\0\0\0\0\0");
+        Ok(())
+    }
+
+    fn file_read(file: &mut ffi::sqlite3_file, buf: &mut [u8], ofst: i64) -> c_int {
+        unsafe {
+            (*file.pMethods).xRead.unwrap()(file, buf.as_mut_ptr() as _, buf.len() as _, ofst)
+        }
+    }
+
+    fn file_len(file: &mut ffi::sqlite3_file) -> i64 {
+        unsafe {
+            let mut size = 0;
+            let rc = (*file.pMethods).xFileSize.unwrap()(file, &mut size);
+            assert_eq!(rc, ffi::SQLITE_OK);
+            size
+        }
+    }
+
+    #[test]
+    fn test_vec_db_size_max() -> Result<()> {
+        let db = Connection::open_in_memory().unwrap().into_borrowing();
+        db.execute_batch("CREATE TABLE a(x INTEGER)")?;
+        let mut vec = db.serialize(DatabaseName::Main)?.unwrap();
+        let size = vec.len() as i64;
+        assert_ne!(0, size);
+        db.deserialize_resizable(DatabaseName::Main, &mut vec)?;
+        let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
+        let cap = file_cap(file, -1);
+        assert_eq!(cap, 1073741824, "default SQLITE_CONFIG_MEMDB_MAXSIZE");
+        assert_eq!(size, file_cap(file, 200));
+        assert_eq!(size, file_cap(file, -1));
+
+        // trigger enlarge
+        let sql = "WITH RECURSIVE cnt(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM cnt WHERE x<500) INSERT INTO a SELECT x FROM cnt";
+        db.execute_batch(sql).expect_err("enlarge should fail");
+
+        let new_cap = size * 2;
+        assert_eq!(new_cap, file_cap(file, new_cap));
+        assert_eq!(new_cap, file_cap(file, -1));
+        db.execute_batch(sql).expect("enlarge should succeed");
+
+        // truncate
+        assert_eq!(new_cap, file_len(file));
+        db.execute_batch("DELETE FROM a; VACUUM;")?;
+        assert_eq!(size, file_len(file));
+        assert_eq!(new_cap, file_cap(file, -1));
+        db.execute_batch("DROP TABLE a; VACUUM;")?;
+        assert_eq!(4096, file_len(file));
+
+        Ok(())
+    }
+
+    fn file_cap(file: &mut ffi::sqlite3_file, mut size_max: i64) -> i64 {
+        unsafe {
+            let rc = (*file.pMethods).xFileControl.unwrap()(
+                file,
+                ffi::SQLITE_FCNTL_SIZE_LIMIT,
+                &mut size_max as *mut _ as _,
+            );
+            assert_eq!(rc, ffi::SQLITE_OK);
+            size_max
+        }
+    }
+
+    #[test]
+    fn test_vec_db_write_zero_past_len() -> Result<()> {
+        unsafe {
+            let mut vec_db = VecDbFile::new(MemFile::Owned(Vec::new()), usize::MAX);
+            let file = &mut vec_db as *mut _ as *mut ffi::sqlite3_file;
+            let write = (*vec_db.methods).xWrite.unwrap();
+            let buf = &[11u8, 22, 33];
+            write(file, buf.as_ptr() as *const _, buf.len() as _, 4);
+            assert_eq!(vec_db.data.as_slice(), &[0, 0, 0, 0, 11, 22, 33]);
+        }
+        Ok(())
     }
 }
