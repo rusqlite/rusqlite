@@ -140,7 +140,7 @@ fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>)
         // At this point, MemFile->aData is null
         ptr::write(
             temp_file as *mut _ as _,
-            VecDbFile::new(MemFile::Resizable(vec), 0),
+            VecDbFile::new(MemFile::Writable(vec), 0),
         );
     };
 
@@ -187,8 +187,8 @@ impl<'a> BorrowingConnection<'a> {
     }
 
     /// Disconnects database and reopens it as an in-memory database based on a borrowed vector.
-    pub fn deserialize_resizable(&self, db: DatabaseName, vec: &'a mut Vec<u8>) -> Result<()> {
-        self.deserialize_vec_db(db, MemFile::Resizable(vec))
+    pub fn deserialize_writable(&self, db: DatabaseName, vec: &'a mut Vec<u8>) -> Result<()> {
+        self.deserialize_vec_db(db, MemFile::Writable(vec))
     }
 }
 
@@ -218,8 +218,8 @@ impl fmt::Debug for BorrowingConnection<'_> {
 pub enum MemFile<'a> {
     /// Owned vector.
     Owned(Vec<u8>),
-    /// Mutable borrowed vector that can be resized.
-    Resizable(&'a mut Vec<u8>),
+    /// Mutably borrowed vector that can be written and resized.
+    Writable(&'a mut Vec<u8>),
     /// Immutably borrowed slice for a read-only database.
     ReadOnly(&'a [u8]),
 }
@@ -228,7 +228,7 @@ impl MemFile<'_> {
     fn as_slice(&self) -> &[u8] {
         match self {
             MemFile::Owned(d) => d,
-            MemFile::Resizable(d) => d,
+            MemFile::Writable(d) => d,
             MemFile::ReadOnly(d) => d,
         }
     }
@@ -240,7 +240,7 @@ impl MemFile<'_> {
     fn as_mut_slice(&mut self) -> &mut [u8] {
         match self {
             MemFile::Owned(d) => &mut d[..],
-            MemFile::Resizable(d) => &mut d[..],
+            MemFile::Writable(d) => &mut d[..],
             MemFile::ReadOnly(_) => unreachable!("ReadOnly.as_mut_slice"),
         }
     }
@@ -257,7 +257,7 @@ impl MemFile<'_> {
         unsafe {
             match self {
                 MemFile::Owned(d) => d.set_len(new_len),
-                MemFile::Resizable(d) => d.set_len(new_len),
+                MemFile::Writable(d) => d.set_len(new_len),
                 MemFile::ReadOnly(_) => unreachable!("ReadOnly.set_len"),
             }
         }
@@ -266,7 +266,7 @@ impl MemFile<'_> {
     fn cap(&self) -> usize {
         match self {
             MemFile::Owned(d) => d.capacity(),
-            MemFile::Resizable(d) => d.capacity(),
+            MemFile::Writable(d) => d.capacity(),
             MemFile::ReadOnly(_) => unreachable!("ReadOnly.cap"),
         }
     }
@@ -274,7 +274,7 @@ impl MemFile<'_> {
     fn reserve_additional(&mut self, additional: usize) {
         match self {
             MemFile::Owned(d) => d.reserve(additional),
-            MemFile::Resizable(d) => d.reserve(additional),
+            MemFile::Writable(d) => d.reserve(additional),
             MemFile::ReadOnly(_) => unreachable!("ReadOnly.reserve_additional"),
         }
     }
@@ -283,7 +283,7 @@ impl MemFile<'_> {
     fn writable(&self) -> bool {
         match self {
             MemFile::Owned(_) => true,
-            MemFile::Resizable(_) => true,
+            MemFile::Writable(_) => true,
             MemFile::ReadOnly(_) => false,
         }
     }
@@ -772,7 +772,7 @@ mod test {
 
     //noinspection RsAssertEqual
     #[test]
-    pub fn test_deserialize_resizable() -> Result<()> {
+    pub fn test_deserialize_writable() -> Result<()> {
         let sql = "BEGIN;
             CREATE TABLE hello(x INTEGER);
             INSERT INTO hello VALUES(1);
@@ -787,7 +787,7 @@ mod test {
 
         // create a new db and mutably borrow the serialized data
         let mut db3 = Connection::open_in_memory()?.into_borrowing();
-        db3.deserialize_resizable(DatabaseName::Main, &mut serialized1)?;
+        db3.deserialize_writable(DatabaseName::Main, &mut serialized1)?;
         // update should not affect length
         db3.execute_batch("UPDATE hello SET x = 44 WHERE x = 3")?;
         let mut query = db3.prepare("SELECT x FROM hello")?;
@@ -817,14 +817,14 @@ mod test {
         // serializing again should work
         db1.execute_batch("ATTACH DATABASE ':memory:' AS three;")?;
         let db1 = db1.into_borrowing();
-        db1.deserialize_resizable(DatabaseName::Attached("three"), &mut serialized1)?;
+        db1.deserialize_writable(DatabaseName::Attached("three"), &mut serialized1)?;
         let count: u16 = db1.query_row("SELECT COUNT(*) FROM hello", NO_PARAMS, |r| r.get(0))?;
         assert_eq!(3, count);
         let count: u16 =
             db1.query_row("SELECT COUNT(*) FROM three.hello", NO_PARAMS, |r| r.get(0))?;
         assert_eq!(528, count);
 
-        // test detach error handling for deserialize_resizable
+        // test detach error handling for deserialize_writable
         db1.execute_batch("DETACH DATABASE three")?;
         mem::drop(db1);
         assert_ne!(0, serialized1.capacity());
@@ -835,7 +835,7 @@ mod test {
         assert!(serialized1[..] == serialized2[..]);
         let db4 = Connection::open_in_memory()?.into_borrowing();
         db4.execute_batch("ATTACH DATABASE ':memory:' AS hello")?;
-        db4.deserialize_resizable(DatabaseName::Attached("hello"), &mut serialized2)?;
+        db4.deserialize_writable(DatabaseName::Attached("hello"), &mut serialized2)?;
         db4.execute_batch("DETACH DATABASE hello")?;
         let debug = format!("{:?}", db4);
         mem::drop(db4);
@@ -961,7 +961,7 @@ mod test {
         let mut vec = db.serialize(DatabaseName::Main)?.unwrap();
         let size = vec.len();
         assert_ne!(0, size);
-        db.deserialize_resizable(DatabaseName::Main, &mut vec)?;
+        db.deserialize_writable(DatabaseName::Main, &mut vec)?;
         let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
         // fetch returns null on overflow
         assert!(file_fetch(file, 0, size + 1)?.is_null());
@@ -1047,7 +1047,7 @@ mod test {
         let mut vec = db.serialize(DatabaseName::Main)?.unwrap();
         let size = vec.len() as i64;
         assert_ne!(0, size);
-        db.deserialize_resizable(DatabaseName::Main, &mut vec)?;
+        db.deserialize_writable(DatabaseName::Main, &mut vec)?;
         let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
         let cap = file_cap(file, -1);
         assert_eq!(cap, 1073741824, "default SQLITE_CONFIG_MEMDB_MAXSIZE");
