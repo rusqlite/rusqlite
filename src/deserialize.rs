@@ -1,4 +1,5 @@
-//! `feature = "deserialize"` Serialize and deserialize interfaces.
+//! `feature = "deserialize"` Serialize and deserialize interfaces, to use a `Vec<u8>`
+//! as in-memory database file.
 //!
 //! This API is only available when SQLite is compiled with `SQLITE_ENABLE_DESERIALIZE`.
 //! These functions create and read a serialized file in-memory, useful on platforms without
