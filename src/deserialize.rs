@@ -6,6 +6,9 @@
 //! a real file system like WebAssembly or Cloud Functions. Another use case would be to encrypt
 //! and decrypt databases in-memory.
 //!
+//! These methods are added to `Connection`:
+//! [`Connection::serialize`], [`Connection::deserialize`], [`Connection::serialize_get_mut`].
+//!
 //! For large in-memory database files, you probably don't want to copy or reallocate
 //! because that would temporarily double the required memory. Use the [`BorrowingConnection`]
 //! methods to serialize and deserialize borrowed memory.
@@ -26,7 +29,7 @@
 //! # }
 //! ```
 //!
-//! Alternatively, consider using the [Backup API](./backup/)
+//! Alternatively, consider using the [Backup API](../backup/)
 //! or the [`VACUUM INTO`](https://www.sqlite.org/lang_vacuum.html) command.
 
 use std::marker::PhantomData;
@@ -45,6 +48,19 @@ impl Connection {
     /// Disconnects from database and reopen as an in-memory database based on `Vec<u8>`.
     /// The vector should contain serialized database content (a main database file).
     /// This returns an error if `DatabaseName` was not attached or other failures occurred.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rusqlite::*;
+    /// # fn main() -> Result<()> {
+    /// # let db = Connection::open_in_memory()?;
+    /// db.execute_batch("CREATE TABLE numbers(x INTEGER); ATTACH ':memory:' AS foo")?;
+    /// db.deserialize(DatabaseName::Attached("foo"), db.serialize(DatabaseName::Main)?)?;
+    /// db.execute_batch("INSERT INTO foo.numbers VALUES(74)")?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn deserialize(&self, db: DatabaseName, data: Vec<u8>) -> Result<()> {
         self.deserialize_vec_db(db, MemFile::Owned(data))
     }
@@ -58,6 +74,21 @@ impl Connection {
     ///
     /// If the database was created by one of the deserialize functions, consider
     /// [`BorrowingConnection::serialize_rc`] to read the serialization without copying.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rusqlite::{Connection, DatabaseName};
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let path = "serialize-test.db";
+    /// let db = Connection::open(path)?;
+    /// db.execute_batch("CREATE TABLE foo(x INTEGER);")?;
+    /// let mem_file: Vec<u8> = db.serialize(DatabaseName::Main)?;
+    /// assert_eq!(mem_file, std::fs::read(path)?);
+    /// # std::fs::remove_file(path)?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn serialize(&self, db_name: DatabaseName) -> Result<Vec<u8>> {
         let schema = db_name.to_cstring()?;
         let file = file_ptr(&self.db.borrow(), &schema).ok_or_else(|| {
@@ -98,8 +129,23 @@ impl Connection {
     }
 
     /// Returns a mutable reference into the `MemFile` attached as `DatabaseName`,
-    /// or returns `None` if no such database exist or if there are `Rc` or `Weak`
-    /// pointers to the same in-memory file.
+    /// or returns `None` if no in-memory file is present or if there are other
+    /// `Rc` or `Weak` pointers to the same in-memory file.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rusqlite::{*, deserialize::MemFile};
+    /// # fn main() -> Result<()> {
+    /// let mut db = Connection::open_in_memory()?;
+    /// db.deserialize(DatabaseName::Main, db.serialize(DatabaseName::Main)?)?;
+    /// match db.serialize_get_mut(DatabaseName::Main).unwrap() {
+    ///     MemFile::Owned(vec) => vec.shrink_to_fit(),
+    ///     _ => unreachable!(),
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn serialize_get_mut(&mut self, db: DatabaseName) -> Option<&mut MemFile> {
         let c = self.db.borrow_mut();
         let file = file_ptr(&c, &db.to_cstring().ok()?)?;
@@ -107,8 +153,8 @@ impl Connection {
         Rc::get_mut(&mut vec_db.data)
     }
 
-    /// Wraps the `Connection` in [`BorrowingConnection`] to serialize and deserialize within the
-    /// lifetime of a connection.
+    /// Wraps the `Connection` in [`BorrowingConnection`] to serialize and
+    /// deserialize within the lifetime of a connection.
     pub fn into_borrowing<'a>(self) -> BorrowingConnection<'a> {
         BorrowingConnection {
             conn: self,
@@ -171,8 +217,8 @@ fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>)
     }
 }
 
-/// Wrapper around [`Connection`] with lifetime constraint to serialize/deserialize borrowed memory,
-/// returned from [`Connection::into_borrowing`].
+/// Wrapper around [`Connection`] with lifetime constraint to serialize/deserialize
+/// borrowed memory, returned from [`Connection::into_borrowing`].
 pub struct BorrowingConnection<'a> {
     conn: Connection,
     // This RefCell phantom protects against user-after-frees.
@@ -184,18 +230,66 @@ impl<'a> BorrowingConnection<'a> {
     /// [`DatabaseName`] does not exist or no in-memory file is present. The database is
     /// read-only while there are `Rc` or `Weak` pointers. Once the database is detached
     /// or closed, the strong reference count held by this connection is released.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use {std::rc::Rc, rusqlite::{*, deserialize::MemFile}};
+    /// # fn main() -> Result<()> {
+    /// let mut db = Connection::open_in_memory()?.into_borrowing();
+    /// let name = DatabaseName::Attached("bar");
+    /// db.execute_batch("ATTACH ':memory:' AS bar; CREATE TABLE foo(x INTEGER);")?;
+    /// db.deserialize(name, db.serialize(DatabaseName::Main)?)?;
+    /// let mem_file: Rc<MemFile> = db.serialize_rc(name).unwrap();
+    /// assert!(mem_file.starts_with(b"SQLite format 3\0"));
+    /// assert_eq!(Rc::strong_count(&mem_file), 2);
+    /// db.execute_batch("DETACH DATABASE bar")?;
+    /// assert_eq!(Rc::strong_count(&mem_file), 1);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn serialize_rc(&self, db: DatabaseName) -> Option<Rc<MemFile<'a>>> {
         let c = self.conn.db.borrow_mut();
         let file = file_ptr(&c, &db.to_cstring().ok()?)?;
         VecDbFile::try_cast(file).map(|v| Rc::clone(&v.data))
     }
 
-    /// Disconnects database and reopens it as an read-only in-memory database based on a slice.
+    /// Disconnects database and reopens it as an read-only in-memory database
+    /// based on a slice. Errors when the `DatabaseName` is not attached.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rusqlite::*;
+    /// # fn main() -> Result<()> {
+    /// # let mut db = Connection::open_in_memory()?.into_borrowing();
+    /// db.execute_batch("CREATE TABLE foo(x INTEGER); INSERT INTO foo VALUES(1)")?;
+    /// let vec: Vec<u8> = db.serialize(DatabaseName::Main)?;
+    /// db.deserialize_read_only(DatabaseName::Main, &vec)?;
+    /// let count: u32 = db.query_row("SELECT COUNT(*) FROM foo", NO_PARAMS, |r| r.get(0))?;
+    /// assert!(count > 0);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn deserialize_read_only(&self, db: DatabaseName, slice: &'a [u8]) -> Result<()> {
         self.deserialize_vec_db(db, MemFile::ReadOnly(slice))
     }
 
-    /// Disconnects database and reopens it as an in-memory database based on a borrowed vector.
+    /// Disconnects database and reopens it as an in-memory database based
+    /// on a borrowed vector. Errors when the `DatabaseName` is not attached.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rusqlite::*;
+    /// # fn main() -> Result<()> {
+    /// # let mut db = Connection::open_in_memory()?.into_borrowing();
+    /// let mut vec: Vec<u8> = db.serialize(DatabaseName::Main)?;
+    /// db.deserialize_writable(DatabaseName::Main, &mut vec)?;
+    /// db.execute_batch("CREATE TABLE foo(x INTEGER);")?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn deserialize_writable(&self, db: DatabaseName, vec: &'a mut Vec<u8>) -> Result<()> {
         self.deserialize_vec_db(db, MemFile::Writable(vec))
     }
@@ -222,7 +316,10 @@ impl fmt::Debug for BorrowingConnection<'_> {
     }
 }
 
-/// Byte array storing an in-memory database file.
+/// Byte array storing an in-memory database file, implementing `Deref<Target=[u8]>`.
+///
+/// The vector grows as needed, but is not automatically shrunk when the
+/// database file is reduced in size.
 #[non_exhaustive]
 pub enum MemFile<'a> {
     /// Owned vector.
