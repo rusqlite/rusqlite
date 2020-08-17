@@ -97,6 +97,17 @@ impl Connection {
         .transpose()
     }
 
+    /// Returns a mutable reference into the `MemFile` attached as `DatabaseName`,
+    /// or returns `Ok(None)` if no such database exist or if there are `Rc` or `Weak`
+    /// pointers to the same in-memory file. If `DatabaseName` contains nul bytes,
+    /// [`crate::Error::NulError`] is thrown.
+    pub fn serialize_get_mut(&mut self, db: DatabaseName) -> Result<Option<&mut MemFile>> {
+        let c = self.db.borrow_mut();
+        Ok(file_ptr(&c, &db.to_cstring()?)
+            .and_then(|file| VecDbFile::try_cast(file))
+            .and_then(|f| Rc::get_mut(&mut f.data)))
+    }
+
     /// Wraps the `Connection` in [`BorrowingConnection`] to serialize and deserialize within the
     /// lifetime of a connection.
     pub fn into_borrowing<'a>(self) -> BorrowingConnection<'a> {
@@ -171,14 +182,15 @@ pub struct BorrowingConnection<'a> {
 
 impl<'a> BorrowingConnection<'a> {
     /// Obtains a reference counted serialization of a database, or returns `Ok(None)` when
-    /// [`DatabaseName`] does not exist or no in-memory file is present.
-    /// The database is read-only while there are `Rc` or `Weak` pointers.
-    /// Once the database is detached, the reference count held by this connection is released.
+    /// [`DatabaseName`] does not exist or no in-memory file is present. If `DatabaseName`
+    /// contains nul bytes, [`crate::Error::NulError`] is thrown. The database is
+    /// read-only while there are `Rc` or `Weak` pointers. Once the database is detached
+    /// or closed, the strong reference count held by this connection is released.
     pub fn serialize_rc(&self, db: DatabaseName) -> Result<Option<Rc<MemFile<'a>>>> {
-        let schema = db.to_cstring()?;
         let c = self.conn.db.borrow_mut();
-        Ok(file_ptr(&c, &schema)
-            .and_then(|file| VecDbFile::try_cast(file).map(|f| Rc::clone(&f.data))))
+        Ok(file_ptr(&c, &db.to_cstring()?)
+            .and_then(|file| VecDbFile::try_cast(file))
+            .map(|f| Rc::clone(&f.data)))
     }
 
     /// Disconnects database and reopens it as an read-only in-memory database based on a slice.
@@ -674,11 +686,15 @@ mod test {
         db2.execute_batch("ATTACH DATABASE ':memory:' AS d")
             .unwrap();
         db2.deserialize(name_d, file_a.clone()).unwrap();
-        let file_d = db2.serialize_rc(name_d).unwrap().unwrap();
+        let mut file_d = db2.serialize_rc(name_d).unwrap().unwrap();
         // detach and attach other db, this should call xClose and decrease reference count
         assert_eq!(2, Rc::strong_count(&file_d));
         db2.deserialize(name_d, file_b).unwrap();
         assert_eq!(1, Rc::strong_count(&file_d));
+        match Rc::get_mut(&mut file_d).unwrap() {
+            MemFile::Owned(v) => v.shrink_to_fit(),
+            _ => panic!(),
+        };
         // test whether file_d stayed intact
         db2.deserialize_read_only(DatabaseName::Main, &file_d)
             .unwrap();
@@ -696,6 +712,22 @@ mod test {
         mem::drop(db2);
         // mem::drop(file_a); // uncommenting this line should not compile
         file_d.len();
+    }
+
+    #[test]
+    pub fn test_serialize_rc_get_mut() -> Result<()> {
+        let mut db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE a(x INTEGER);INSERT INTO a VALUES(1);")?;
+        let mem_file = db.serialize(DatabaseName::Main)?.unwrap();
+        db.deserialize(DatabaseName::Main, mem_file)?;
+        match db.serialize_get_mut(DatabaseName::Main)?.unwrap() {
+            MemFile::Owned(f) => {
+                f.reserve_exact(4096);
+            }
+            _ => unreachable!(),
+        }
+        db.execute_batch("INSERT INTO a VALUES (1);")?;
+        Ok(())
     }
 
     #[test]
