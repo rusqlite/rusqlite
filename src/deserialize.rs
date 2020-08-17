@@ -15,7 +15,7 @@
 //! # fn main() -> Result<()> {
 //! let db = Connection::open_in_memory()?;
 //! db.execute_batch("CREATE TABLE one(x INTEGER);INSERT INTO one VALUES(44)")?;
-//! let mem_file: Vec<u8> = db.serialize(DatabaseName::Main)?.unwrap();
+//! let mem_file: Vec<u8> = db.serialize(DatabaseName::Main)?;
 //! // This SQLite file could be send over the network and deserialized on the other side
 //! // without touching the file system.
 //! let mut db_clone = Connection::open_in_memory()?;
@@ -34,6 +34,7 @@ use std::mem::MaybeUninit;
 use std::os::raw::{c_char, c_int, c_void};
 use std::{borrow::Cow, convert::TryInto, fmt, mem, ops, panic, ptr, rc::Rc};
 
+use crate::error::error_from_sqlite_code;
 use crate::ffi;
 use crate::{
     error::error_from_handle, inner_connection::InnerConnection, util::SmallCString, Connection,
@@ -48,64 +49,62 @@ impl Connection {
         self.deserialize_vec_db(db, MemFile::Owned(data))
     }
 
-    /// Copies the serialization of a database to a `Vec<u8>`, or returns `Ok(None)` when
-    /// `DatabaseName` does not exist.
+    /// Copies the serialization of a database to a `Vec<u8>`. Errors when
+    /// `DatabaseName` does not exist or SQLite fails to read from the db.
     ///
     /// For an ordinary on-disk database file, the serialization is just a copy of the disk file.
-    /// For an in-memory database or a "TEMP" database, the serialization is the same sequence of
+    /// For an in-memory database or a `TEMP` database, the serialization is the same sequence of
     /// bytes which would be written to disk if that database where backed up to disk.
     ///
     /// If the database was created by one of the deserialize functions, consider
     /// [`BorrowingConnection::serialize_rc`] to read the serialization without copying.
-    pub fn serialize(&self, db_name: DatabaseName) -> Result<Option<Vec<u8>>> {
+    pub fn serialize(&self, db_name: DatabaseName) -> Result<Vec<u8>> {
         let schema = db_name.to_cstring()?;
-        let file = file_ptr(&self.db.borrow(), &schema);
-        file.map(|file| {
-            if let Some(vec_db) = VecDbFile::try_cast(file) {
-                return Ok(vec_db.data.as_slice().to_vec());
-                // TODO: Optimize for pMethods == sqlite_io_methods
-            }
+        let file = file_ptr(&self.db.borrow(), &schema).ok_or_else(|| {
+            error_from_sqlite_code(1, Some(format!("database {:?} not found", db_name)))
+        })?;
+        if let Some(vec_db) = VecDbFile::try_cast(file) {
+            return Ok(vec_db.data.as_slice().to_vec());
+            // TODO: Optimize for pMethods == sqlite_io_methods
+        }
 
-            // sqlite3_serialize is not used because it always uses the sqlite3_malloc allocator,
-            // while this function returns a Vec<u8>.
+        // sqlite3_serialize is not used because it always uses the sqlite3_malloc allocator,
+        // while this function returns a Vec<u8>.
 
-            // Query the database size with pragma to allocate a vector.
-            let schema_str = schema.as_str();
-            let escaped = if schema_str.contains('\'') {
-                Cow::Owned(schema_str.replace("'", "''"))
-            } else {
-                Cow::Borrowed(schema_str)
-            };
-            let sql = &format!(
-                "SELECT page_count * page_size FROM pragma_page_count('{0}'), pragma_page_size('{0}')",
-                escaped
-            );
-            let db_size: i64 = self.query_row(sql, NO_PARAMS, |r| r.get(0))?;
-            let db_size = db_size.try_into().unwrap();
-            if db_size == 0 {
-                return Ok(Vec::new())
-            }
-            let mut vec = Vec::with_capacity(db_size);
+        // Query the database size with pragma to allocate a vector.
+        let schema_str = schema.as_str();
+        let escaped = if schema_str.contains('\'') {
+            Cow::Owned(schema_str.replace("'", "''"))
+        } else {
+            Cow::Borrowed(schema_str)
+        };
+        let sql = &format!(
+            "SELECT page_count * page_size FROM pragma_page_count('{0}'), pragma_page_size('{0}')",
+            escaped
+        );
+        let db_size: i64 = self.query_row(sql, NO_PARAMS, |r| r.get(0))?;
+        let db_size = db_size.try_into().unwrap();
+        if db_size == 0 {
+            return Ok(Vec::new());
+        }
+        let mut vec = Vec::with_capacity(db_size);
 
-            // Unfortunately, sqlite3PagerGet and sqlite3PagerGetData are private APIs,
-            // so the Backup API is used instead.
-            backup_to_vec(&mut vec, self, db_name)?;
-            assert_eq!(vec.len(), db_size, "serialize backup size mismatch");
+        // Unfortunately, sqlite3PagerGet and sqlite3PagerGetData are private APIs,
+        // so the Backup API is used instead.
+        backup_to_vec(&mut vec, self, db_name)?;
+        assert_eq!(vec.len(), db_size, "serialize backup size mismatch");
 
-            Ok(vec)
-        })
-        .transpose()
+        Ok(vec)
     }
 
     /// Returns a mutable reference into the `MemFile` attached as `DatabaseName`,
-    /// or returns `Ok(None)` if no such database exist or if there are `Rc` or `Weak`
-    /// pointers to the same in-memory file. If `DatabaseName` contains nul bytes,
-    /// [`crate::Error::NulError`] is thrown.
-    pub fn serialize_get_mut(&mut self, db: DatabaseName) -> Result<Option<&mut MemFile>> {
+    /// or returns `None` if no such database exist or if there are `Rc` or `Weak`
+    /// pointers to the same in-memory file.
+    pub fn serialize_get_mut(&mut self, db: DatabaseName) -> Option<&mut MemFile> {
         let c = self.db.borrow_mut();
-        Ok(file_ptr(&c, &db.to_cstring()?)
-            .and_then(|file| VecDbFile::try_cast(file))
-            .and_then(|f| Rc::get_mut(&mut f.data)))
+        let file = file_ptr(&c, &db.to_cstring().ok()?)?;
+        let vec_db = VecDbFile::try_cast(file)?;
+        Rc::get_mut(&mut vec_db.data)
     }
 
     /// Wraps the `Connection` in [`BorrowingConnection`] to serialize and deserialize within the
@@ -181,16 +180,14 @@ pub struct BorrowingConnection<'a> {
 }
 
 impl<'a> BorrowingConnection<'a> {
-    /// Obtains a reference counted serialization of a database, or returns `Ok(None)` when
-    /// [`DatabaseName`] does not exist or no in-memory file is present. If `DatabaseName`
-    /// contains nul bytes, [`crate::Error::NulError`] is thrown. The database is
+    /// Obtains a reference counted serialization of a database, or returns `None` when
+    /// [`DatabaseName`] does not exist or no in-memory file is present. The database is
     /// read-only while there are `Rc` or `Weak` pointers. Once the database is detached
     /// or closed, the strong reference count held by this connection is released.
-    pub fn serialize_rc(&self, db: DatabaseName) -> Result<Option<Rc<MemFile<'a>>>> {
+    pub fn serialize_rc(&self, db: DatabaseName) -> Option<Rc<MemFile<'a>>> {
         let c = self.conn.db.borrow_mut();
-        Ok(file_ptr(&c, &db.to_cstring()?)
-            .and_then(|file| VecDbFile::try_cast(file))
-            .map(|f| Rc::clone(&f.data)))
+        let file = file_ptr(&c, &db.to_cstring().ok()?)?;
+        VecDbFile::try_cast(file).map(|v| Rc::clone(&v.data))
     }
 
     /// Disconnects database and reopens it as an read-only in-memory database based on a slice.
@@ -610,7 +607,7 @@ mod test {
             INSERT INTO foo VALUES(3);
             END;";
         db.execute_batch(sql).unwrap();
-        let serialized = db.serialize(DatabaseName::Main).unwrap().unwrap();
+        let serialized = db.serialize(DatabaseName::Main).unwrap();
 
         // create a new db and import the serialized data
         let db2 = Connection::open_in_memory().unwrap().into_borrowing();
@@ -627,8 +624,8 @@ mod test {
         db2.execute_batch(sql).unwrap();
 
         // NO_COPY only works on db2
-        assert!(db.serialize_rc(DatabaseName::Main).unwrap().is_none());
-        let borrowed_serialized = db2.serialize_rc(DatabaseName::Main).unwrap().unwrap();
+        assert!(db.serialize_rc(DatabaseName::Main).is_none());
+        let borrowed_serialized = db2.serialize_rc(DatabaseName::Main).unwrap();
         let mut serialized = Vec::new();
         serialized.extend(borrowed_serialized.iter().cloned());
 
@@ -650,13 +647,13 @@ mod test {
         let db1 = Connection::open_in_memory().unwrap().into_borrowing();
         db1.execute_batch("CREATE TABLE a(x INTEGER);INSERT INTO a VALUES(1);")
             .unwrap();
-        let file_a = db1.serialize(DatabaseName::Main).unwrap().unwrap();
+        let file_a = db1.serialize(DatabaseName::Main).unwrap();
         db1.execute_batch("INSERT INTO a VALUES(2);").unwrap();
-        let file_b = db1.serialize(DatabaseName::Main).unwrap().unwrap();
+        let file_b = db1.serialize(DatabaseName::Main).unwrap();
 
         let db2 = Connection::open_in_memory().unwrap().into_borrowing();
         db2.deserialize(DatabaseName::Main, file_a.clone()).unwrap();
-        let file_c = db2.serialize_rc(DatabaseName::Main).unwrap().unwrap();
+        let file_c = db2.serialize_rc(DatabaseName::Main).unwrap();
         let sql = "INSERT INTO a VALUES(3)";
         db2.execute_batch(sql)
             .expect_err("should be write protected");
@@ -686,7 +683,7 @@ mod test {
         db2.execute_batch("ATTACH DATABASE ':memory:' AS d")
             .unwrap();
         db2.deserialize(name_d, file_a.clone()).unwrap();
-        let mut file_d = db2.serialize_rc(name_d).unwrap().unwrap();
+        let mut file_d = db2.serialize_rc(name_d).unwrap();
         // detach and attach other db, this should call xClose and decrease reference count
         assert_eq!(2, Rc::strong_count(&file_d));
         db2.deserialize(name_d, file_b).unwrap();
@@ -718,9 +715,9 @@ mod test {
     pub fn test_serialize_rc_get_mut() -> Result<()> {
         let mut db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE a(x INTEGER);INSERT INTO a VALUES(1);")?;
-        let mem_file = db.serialize(DatabaseName::Main)?.unwrap();
+        let mem_file = db.serialize(DatabaseName::Main)?;
         db.deserialize(DatabaseName::Main, mem_file)?;
-        match db.serialize_get_mut(DatabaseName::Main)?.unwrap() {
+        match db.serialize_get_mut(DatabaseName::Main).unwrap() {
             MemFile::Owned(f) => {
                 f.reserve_exact(4096);
             }
@@ -740,7 +737,7 @@ mod test {
             INSERT INTO foo VALUES(3);
             END;";
         db.execute_batch(sql).unwrap();
-        let serialized = db.serialize(DatabaseName::Main).unwrap().unwrap();
+        let serialized = db.serialize(DatabaseName::Main).unwrap();
         // copy to Vec and create new Vec
         let serialized_vec = Vec::from(&serialized[..]);
         let mut serialized = Vec::new();
@@ -774,11 +771,11 @@ mod test {
         // prepare two named databases
         let one = Connection::open_in_memory()?;
         one.execute_batch(sql)?;
-        let serialized_one = one.serialize(DatabaseName::Main)?.unwrap();
+        let serialized_one = one.serialize(DatabaseName::Main)?;
 
         let two = Connection::open_in_memory()?;
         two.execute_batch(sql)?;
-        let serialized_two = two.serialize(DatabaseName::Main)?.unwrap();
+        let serialized_two = two.serialize(DatabaseName::Main)?;
 
         // create a new db and import the serialized data
         let db = Connection::open_in_memory()?.into_borrowing();
@@ -813,7 +810,7 @@ mod test {
             END;";
         let db1 = Connection::open_in_memory()?;
         db1.execute_batch(sql)?;
-        let mut serialized1 = db1.serialize(DatabaseName::Main)?.unwrap();
+        let mut serialized1 = db1.serialize(DatabaseName::Main)?;
         let initial_cap = serialized1.capacity();
         let initial_len = serialized1.len();
 
@@ -895,22 +892,27 @@ mod test {
         db.execute_batch(sql).unwrap();
         assert!(db
             .serialize_rc(DatabaseName::Attached("does not exist"))
-            .unwrap()
             .is_none());
-        assert!(db
+        let err = db
             .serialize(DatabaseName::Attached("does not exist"))
-            .unwrap()
-            .is_none());
-        let file = db.serialize(DatabaseName::Main).unwrap().unwrap();
+            .unwrap_err();
+        assert_eq!(
+            err,
+            Error::SqliteFailure(
+                ffi::Error {
+                    code: ffi::ErrorCode::Unknown,
+                    extended_code: 1
+                },
+                Some(r#"database Attached("does not exist") not found"#.to_string())
+            )
+        );
+        let file = db.serialize(DatabaseName::Main).unwrap();
         db.deserialize(DatabaseName::Attached("does not exist"), file)
             .unwrap_err();
     }
 
     fn serialize_len(conn: &mut BorrowingConnection) -> usize {
-        conn.serialize_rc(DatabaseName::Main)
-            .unwrap()
-            .unwrap()
-            .len()
+        conn.serialize_rc(DatabaseName::Main).unwrap().len()
     }
 
     #[test]
@@ -938,7 +940,7 @@ mod test {
     #[test]
     fn test_serialize_zero_pages() {
         let db = Connection::open_in_memory().unwrap().into_borrowing();
-        let vec = db.serialize(DatabaseName::Main).unwrap().unwrap();
+        let vec = db.serialize(DatabaseName::Main).unwrap();
         assert_eq!(vec.len(), 0);
     }
 
@@ -946,11 +948,11 @@ mod test {
     fn test_serialize_vec_db() -> Result<()> {
         let db = Connection::open_in_memory().unwrap().into_borrowing();
         db.execute_batch("CREATE TABLE a(x INTEGER); ATTACH DATABASE ':memory:' AS a")?;
-        let vec = db.serialize(DatabaseName::Main)?.unwrap();
+        let vec = db.serialize(DatabaseName::Main)?;
         let name_a = DatabaseName::Attached("a");
         db.deserialize_read_only(name_a, &vec)?;
         // code coverage reports shows this uses the optimized path
-        let copy = db.serialize(name_a)?.unwrap();
+        let copy = db.serialize(name_a)?;
         assert_eq!(vec, copy);
         Ok(())
     }
@@ -972,7 +974,7 @@ mod test {
             |r| r.get(0),
         )?;
         assert_eq!(count, 2);
-        let vec = db.serialize(name_a)?.unwrap();
+        let vec = db.serialize(name_a)?;
         assert_eq!(vec.len(), 8192);
         Ok(())
     }
@@ -981,7 +983,7 @@ mod test {
     fn test_serialize_page_size() -> Result<()> {
         let db = Connection::open_in_memory().unwrap().into_borrowing();
         db.execute_batch(r#"PRAGMA page_size = 512;CREATE TABLE a(x INTEGER);"#)?;
-        let vec = db.serialize(DatabaseName::Main)?.unwrap();
+        let vec = db.serialize(DatabaseName::Main)?;
         assert_eq!(vec.len(), 512 * 2);
         Ok(())
     }
@@ -990,7 +992,7 @@ mod test {
     fn test_vec_db_fetch() -> Result<()> {
         let db = Connection::open_in_memory().unwrap().into_borrowing();
         db.execute_batch("CREATE TABLE a(x INTEGER)")?;
-        let mut vec = db.serialize(DatabaseName::Main)?.unwrap();
+        let mut vec = db.serialize(DatabaseName::Main)?;
         let size = vec.len();
         assert_ne!(0, size);
         db.deserialize_writable(DatabaseName::Main, &mut vec)?;
@@ -1001,14 +1003,14 @@ mod test {
         file_fetch(file, -1, 1).expect_err("should catch panic because of negative offset");
         let p = file_fetch(file, 0, size)?;
         assert!(!p.is_null());
-        assert_eq!(p, db.serialize_rc(DatabaseName::Main)?.unwrap().as_ptr());
+        assert_eq!(p, db.serialize_rc(DatabaseName::Main).unwrap().as_ptr());
         // Won't resize unit unfetch
         let sql = "WITH RECURSIVE cnt(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM cnt WHERE x<100000) INSERT INTO a SELECT x FROM cnt";
         db.execute_batch(sql).expect_err("enlarge should fail");
         file_unfetch(file);
-        assert_eq!(size, db.serialize_rc(DatabaseName::Main)?.unwrap().len());
+        assert_eq!(size, db.serialize_rc(DatabaseName::Main).unwrap().len());
         db.execute_batch(sql).expect("enlarge should succeed");
-        assert_ne!(size, db.serialize_rc(DatabaseName::Main)?.unwrap().len());
+        assert_ne!(size, db.serialize_rc(DatabaseName::Main).unwrap().len());
         Ok(())
     }
 
@@ -1034,10 +1036,7 @@ mod test {
     fn test_vec_db_read_short() -> Result<()> {
         let db = Connection::open_in_memory().unwrap().into_borrowing();
         db.execute_batch("CREATE TABLE a(x INTEGER)")?;
-        db.deserialize(
-            DatabaseName::Main,
-            db.serialize(DatabaseName::Main)?.unwrap(),
-        )?;
+        db.deserialize(DatabaseName::Main, db.serialize(DatabaseName::Main)?)?;
         let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
 
         // when reading past end, the buffer should be filled with zeros
@@ -1076,7 +1075,7 @@ mod test {
     fn test_vec_db_size_max() -> Result<()> {
         let db = Connection::open_in_memory().unwrap().into_borrowing();
         db.execute_batch("CREATE TABLE a(x INTEGER)")?;
-        let mut vec = db.serialize(DatabaseName::Main)?.unwrap();
+        let mut vec = db.serialize(DatabaseName::Main)?;
         let size = vec.len() as i64;
         assert_ne!(0, size);
         db.deserialize_writable(DatabaseName::Main, &mut vec)?;
