@@ -237,14 +237,23 @@ impl<'a> BorrowingConnection<'a> {
     /// # use {std::rc::Rc, rusqlite::{*, deserialize::MemFile}};
     /// # fn main() -> Result<()> {
     /// let mut db = Connection::open_in_memory()?.into_borrowing();
-    /// let name = DatabaseName::Attached("bar");
-    /// db.execute_batch("ATTACH ':memory:' AS bar; CREATE TABLE foo(x INTEGER);")?;
+    /// let name = DatabaseName::Attached("foo");
+    /// db.execute_batch("ATTACH ':memory:' AS foo")?;
     /// db.deserialize(name, db.serialize(DatabaseName::Main)?)?;
-    /// let mem_file: Rc<MemFile> = db.serialize_rc(name).unwrap();
-    /// assert!(mem_file.starts_with(b"SQLite format 3\0"));
+    /// let sql = "CREATE TABLE foo.bar(x INTEGER)";
+    /// {
+    ///     let mem_file: Rc<MemFile> = db.serialize_rc(name).unwrap();
+    ///     db.execute_batch(sql).expect_err("locked by Rc");
+    /// }
+    /// db.execute_batch(sql)?;
+    /// let mem_file = db.serialize_rc(name).unwrap();
+    /// assert!(mem_file.starts_with(b"SQLite format 3\0")); // Deref coercion to &[u8]
     /// assert_eq!(Rc::strong_count(&mem_file), 2);
-    /// db.execute_batch("DETACH DATABASE bar")?;
-    /// assert_eq!(Rc::strong_count(&mem_file), 1);
+    /// db.execute_batch("DETACH DATABASE foo")?;
+    /// let _: Vec<u8> = match Rc::try_unwrap(mem_file) {
+    ///     Ok(MemFile::Owned(v)) => v,
+    ///     _ => panic!(),
+    /// };
     /// # Ok(())
     /// # }
     /// ```
@@ -321,6 +330,7 @@ impl fmt::Debug for BorrowingConnection<'_> {
 /// The vector grows as needed, but is not automatically shrunk when the
 /// database file is reduced in size.
 #[non_exhaustive]
+#[derive(Debug, PartialEq)]
 pub enum MemFile<'a> {
     /// Owned vector.
     Owned(Vec<u8>),
@@ -752,6 +762,11 @@ mod test {
         let db2 = Connection::open_in_memory().unwrap().into_borrowing();
         db2.deserialize(DatabaseName::Main, file_a.clone()).unwrap();
         let file_c = db2.serialize_rc(DatabaseName::Main).unwrap();
+        let file_c_clone: MemFile = match &*file_c {
+            MemFile::Owned(v) => MemFile::Owned(v.clone()),
+            _ => panic!(),
+        };
+        assert_eq!(*file_c, file_c_clone);
         let sql = "INSERT INTO a VALUES(3)";
         db2.execute_batch(sql)
             .expect_err("should be write protected");
@@ -784,12 +799,15 @@ mod test {
         let mut file_d = db2.serialize_rc(name_d).unwrap();
         // detach and attach other db, this should call xClose and decrease reference count
         assert_eq!(2, Rc::strong_count(&file_d));
+        assert_eq!(0, Rc::weak_count(&file_d));
         db2.deserialize(name_d, file_b).unwrap();
         assert_eq!(1, Rc::strong_count(&file_d));
+        assert_eq!(0, Rc::weak_count(&file_d));
         match Rc::get_mut(&mut file_d).unwrap() {
             MemFile::Owned(v) => v.shrink_to_fit(),
             _ => panic!(),
         };
+        let file_d = Rc::try_unwrap(file_d).unwrap();
         // test whether file_d stayed intact
         db2.deserialize_read_only(DatabaseName::Main, &file_d)
             .unwrap();
