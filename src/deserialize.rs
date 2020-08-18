@@ -146,7 +146,11 @@ impl Connection {
         let c = self.db.borrow_mut();
         let file = file_ptr(&c, &db.to_cstring().ok()?)?;
         let vec_db = VecDbFile::try_cast(file)?;
-        Rc::get_mut(&mut vec_db.data)
+        if vec_db.memory_mapped == 0 {
+            Rc::get_mut(&mut vec_db.data)
+        } else {
+            None
+        }
     }
 
     /// Wraps the `Connection` in [`BorrowingConnection`] to serialize and
