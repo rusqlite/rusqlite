@@ -36,12 +36,9 @@ use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int, c_void};
 use std::{borrow::Cow, convert::TryInto, fmt, mem, ops, panic, ptr, rc::Rc};
 
-use crate::error::error_from_sqlite_code;
-use crate::ffi;
-use crate::{
-    error::error_from_handle, inner_connection::InnerConnection, util::SmallCString, Connection,
-    DatabaseName, OpenFlags, Result, NO_PARAMS,
-};
+use crate::inner_connection::InnerConnection;
+use crate::util::SmallCString;
+use crate::{error, ffi, Connection, DatabaseName, OpenFlags, Result, NO_PARAMS};
 
 impl Connection {
     /// Disconnects from database and reopen as an in-memory database based on `Vec<u8>`.
@@ -91,7 +88,7 @@ impl Connection {
     pub fn serialize(&self, db_name: DatabaseName) -> Result<Vec<u8>> {
         let schema = db_name.to_cstring()?;
         let file = file_ptr(&self.db.borrow(), &schema).ok_or_else(|| {
-            error_from_sqlite_code(1, Some(format!("database {:?} not found", db_name)))
+            error::error_from_sqlite_code(1, Some(format!("database {:?} not found", db_name)))
         })?;
         if let Some(vec_db) = VecDbFile::try_cast(file) {
             return Ok(vec_db.data.as_slice().to_vec());
@@ -210,8 +207,8 @@ fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>)
     }
     match r {
         Done => Ok(()),
-        Busy => Err(unsafe { error_from_handle(ptr::null_mut(), ffi::SQLITE_BUSY) }),
-        Locked => Err(unsafe { error_from_handle(ptr::null_mut(), ffi::SQLITE_LOCKED) }),
+        Busy => Err(unsafe { error::error_from_handle(ptr::null_mut(), ffi::SQLITE_BUSY) }),
+        Locked => Err(unsafe { error::error_from_handle(ptr::null_mut(), ffi::SQLITE_LOCKED) }),
         More => unreachable!(),
     }
 }
@@ -1117,7 +1114,7 @@ mod test {
             let rc =
                 (*file.pMethods).xFetch.unwrap()(file, ofst, amt as _, fetch.as_mut_ptr() as _);
             if rc != ffi::SQLITE_OK {
-                Err(error_from_handle(ptr::null_mut(), ffi::SQLITE_LOCKED))
+                Err(error::error_from_sqlite_code(ffi::SQLITE_LOCKED, None))
             } else {
                 Ok(fetch.assume_init())
             }
