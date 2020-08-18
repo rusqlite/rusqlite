@@ -146,7 +146,7 @@ impl Connection {
         let c = self.db.borrow_mut();
         let file = file_ptr(&c, &db.to_cstring().ok()?)?;
         let vec_db = VecDbFile::try_cast(file)?;
-        if vec_db.memory_mapped == 0 {
+        if vec_db.memory_mapped == 0 && vec_db.lock == 0 {
             Rc::get_mut(&mut vec_db.data)
         } else {
             None
@@ -421,15 +421,17 @@ struct VecDbFile<'a> {
     data: Rc<MemFile<'a>>,
     size_max: usize,
     memory_mapped: u16,
+    lock: u8,
 }
 
 impl<'a> VecDbFile<'a> {
     fn new(data: MemFile<'a>, size_max: usize) -> Self {
         VecDbFile {
-            size_max,
-            data: Rc::new(data),
             methods: &VEC_DB_IO_METHODS,
+            data: Rc::new(data),
+            size_max,
             memory_mapped: 0,
+            lock: 0,
         }
     }
 
@@ -453,7 +455,7 @@ static VEC_DB_IO_METHODS: ffi::sqlite3_io_methods = ffi::sqlite3_io_methods {
     xSync: Some(c_sync),
     xFileSize: Some(c_size),
     xLock: Some(c_lock),
-    xUnlock: Some(c_lock),
+    xUnlock: Some(c_unlock),
     xCheckReservedLock: None,
     xFileControl: Some(c_file_control),
     xSectorSize: None,
@@ -561,7 +563,7 @@ unsafe extern "C" fn c_write(
         let ofst = ofst as usize;
         if ofst + amt > sz {
             if ofst + amt > sz_alloc {
-                if file.memory_mapped > 0 {
+                if file.memory_mapped != 0 {
                     return ffi::SQLITE_FULL;
                 }
                 data.reserve_additional(ofst + amt - sz_alloc);
@@ -615,12 +617,33 @@ unsafe extern "C" fn c_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_i
 
 /// Lock a memory file.
 unsafe extern "C" fn c_lock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
-    if lock > ffi::SQLITE_LOCK_SHARED && !(*(file as *mut VecDbFile)).data.writable() {
-        ffi::SQLITE_READONLY
-    } else {
-        // TODO: Why stores memdb.c the lock in the struct but never uses it
+    catch_unwind_sqlite_error(file, |file| {
+        let lock = lock_cast(lock);
+        debug_assert!(lock > file.lock);
+        debug_assert_eq!(ffi::SQLITE_LOCK_SHARED, 1);
+        if lock > 1 && !Rc::get_mut(&mut file.data).map_or(false, |f| f.writable()) {
+            ffi::SQLITE_READONLY
+        } else {
+            file.lock = lock;
+            ffi::SQLITE_OK
+        }
+    })
+}
+
+/// Unlock a memory file.
+unsafe extern "C" fn c_unlock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
+    catch_unwind_sqlite_error(file, |file| {
+        let lock = lock_cast(lock);
+        debug_assert!(lock < file.lock || lock == 0);
+        file.lock = lock;
         ffi::SQLITE_OK
-    }
+    })
+}
+
+fn lock_cast(lock: c_int) -> u8 {
+    debug_assert_eq!(ffi::SQLITE_LOCK_EXCLUSIVE, 4);
+    assert!(lock <= 4);
+    lock as u8
 }
 
 /// File control method.
@@ -684,6 +707,7 @@ unsafe extern "C" fn c_fetch(
             // Safety: SQLite uses a read-only memory map <https://www.sqlite.org/mmap.html>,
             // so it is safe to cast this *const to *mut.
             *p = data.as_ptr() as *mut u8 as _;
+            assert_ne!(file.memory_mapped, u16::MAX);
             file.memory_mapped += 1;
         }
         ffi::SQLITE_OK
@@ -693,6 +717,7 @@ unsafe extern "C" fn c_fetch(
 /// Release a memory-mapped page.
 unsafe extern "C" fn c_unfetch(file: *mut ffi::sqlite3_file, _ofst: i64, _p: *mut c_void) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
+        assert_ne!(file.memory_mapped, 0);
         file.memory_mapped -= 1;
         ffi::SQLITE_OK
     })
@@ -1123,7 +1148,7 @@ mod test {
         // Won't resize unit unfetch
         let sql = "WITH RECURSIVE cnt(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM cnt WHERE x<100000) INSERT INTO a SELECT x FROM cnt";
         db.execute_batch(sql).expect_err("enlarge should fail");
-        file_unfetch(file);
+        file_unfetch(file, p, 0);
         assert_eq!(size, db.serialize_rc(DatabaseName::Main).unwrap().len());
         db.execute_batch(sql).expect("enlarge should succeed");
         assert_ne!(size, db.serialize_rc(DatabaseName::Main).unwrap().len());
@@ -1143,8 +1168,8 @@ mod test {
         }
     }
 
-    fn file_unfetch(file: &mut ffi::sqlite3_file) {
-        let rc = unsafe { (*file.pMethods).xUnfetch.unwrap()(file, 0, ptr::null_mut()) };
+    fn file_unfetch(file: &mut ffi::sqlite3_file, p: *const u8, ofst: i64) {
+        let rc = unsafe { (*file.pMethods).xUnfetch.unwrap()(file, ofst, p as *mut u8 as _) };
         assert_eq!(rc, ffi::SQLITE_OK);
     }
 
