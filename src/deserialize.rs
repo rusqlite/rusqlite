@@ -33,7 +33,6 @@
 //! or the [`VACUUM INTO`](https://www.sqlite.org/lang_vacuum.html) command.
 
 use std::marker::PhantomData;
-use std::mem::MaybeUninit;
 use std::os::raw::{c_char, c_int, c_void};
 use std::{borrow::Cow, convert::TryInto, fmt, mem, ops, panic, ptr, rc::Rc};
 
@@ -475,17 +474,17 @@ lazy_static::lazy_static! {
 
 fn file_ptr<'a>(c: &InnerConnection, schema: &SmallCString) -> Option<&'a mut ffi::sqlite3_file> {
     unsafe {
-        let mut file = MaybeUninit::<&mut ffi::sqlite3_file>::zeroed();
+        let mut file = ptr::null_mut::<ffi::sqlite3_file>();
         let rc = ffi::sqlite3_file_control(
             c.db(),
             schema.as_ptr(),
             ffi::SQLITE_FCNTL_FILE_POINTER,
-            file.as_mut_ptr() as _,
+            &mut file as *mut _ as _,
         );
-        if rc != ffi::SQLITE_OK || file.as_ptr().is_null() {
+        if rc != ffi::SQLITE_OK || file.is_null() {
             None
         } else {
-            Some(file.assume_init())
+            Some(&mut *file)
         }
     }
 }
@@ -693,6 +692,7 @@ mod test {
     use super::*;
     use crate::{Connection, DatabaseName, Error, Result, NO_PARAMS};
     use std::ffi::CStr;
+    use std::mem::MaybeUninit;
 
     #[test]
     pub fn test_serialize_deserialize() {
