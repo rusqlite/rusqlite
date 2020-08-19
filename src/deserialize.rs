@@ -172,7 +172,7 @@ impl Connection {
             let rc = ffi::sqlite3_deserialize(c.db(), schema.as_ptr(), ptr::null_mut(), 0, 0, 0);
             c.decode_result(rc)?;
             let file = file_ptr(&c, &schema).unwrap();
-            assert_eq!(file.pMethods, MEMDB_VFS.0);
+            assert_eq!(file.pMethods, *MEMDB_IO_METHODS);
             let mut size_max: ffi::sqlite3_int64 = -1;
             let rc = (*file.pMethods).xFileControl.unwrap()(
                 file,
@@ -192,7 +192,7 @@ fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>)
     let mut temp_db = Connection::open_with_flags_and_vfs("0", OpenFlags::default(), "memdb")?;
     unsafe {
         let temp_file = file_ptr(&temp_db.db.borrow_mut(), &SmallCString::new("main")?).unwrap();
-        assert_eq!(temp_file.pMethods, MEMDB_VFS.0);
+        assert_eq!(temp_file.pMethods, *MEMDB_IO_METHODS);
         // At this point, MemFile->aData is null
         ptr::write(
             temp_file as *mut _ as _,
@@ -470,18 +470,17 @@ static VEC_DB_IO_METHODS: ffi::sqlite3_io_methods = ffi::sqlite3_io_methods {
 
 lazy_static::lazy_static! {
     /// Get `memdb_io_methods` and `szOsFile` for the VFS defined in `memdb.c`
-    static ref MEMDB_VFS: (&'static ffi::sqlite3_io_methods, i32) = unsafe {
+    static ref MEMDB_IO_METHODS: &'static ffi::sqlite3_io_methods = unsafe {
         let vfs = &mut *ffi::sqlite3_vfs_find("memdb\0".as_ptr() as _);
-        let sz = vfs.szOsFile;
-        assert!(mem::size_of::<VecDbFile>() <= sz as _, "VecDbFile doesn't fit in allocation");
-        let file = ffi::sqlite3_malloc(sz) as *mut ffi::sqlite3_file;
-        assert!(!file.is_null());
-        let mut out_flags = 0;
-        let rc = vfs.xOpen.unwrap()(vfs, ptr::null(), file, ffi::SQLITE_OPEN_MAIN_DB, &mut out_flags);
+        let sz = vfs.szOsFile as usize;
+        assert!(mem::size_of::<VecDbFile>() <= sz, "VecDbFile doesn't fit in allocation");
+        let mut file_vec = Vec::with_capacity(sz);
+        let file = file_vec.as_mut_ptr() as *mut ffi::sqlite3_file;
+        let rc = vfs.xOpen.unwrap()(vfs, ptr::null(), file, ffi::SQLITE_OPEN_MAIN_DB, &mut 0);
         assert_eq!(rc, ffi::SQLITE_OK);
-        let methods = &*(*file).pMethods;
-        ffi::sqlite3_free(file as _);
-        (methods, sz)
+        let methods = (*file).pMethods;
+        assert!(!methods.is_null());
+        &*methods
     };
 }
 
