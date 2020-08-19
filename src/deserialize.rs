@@ -302,6 +302,23 @@ impl<'a> BorrowingConnection<'a> {
     pub fn deserialize_writable(&self, db: DatabaseName, vec: &'a mut Vec<u8>) -> Result<()> {
         self.deserialize_vec_db(db, MemFile::Writable(vec))
     }
+
+    /// Returns the wrapped connection.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rusqlite::*;
+    /// # fn main() -> Result<()> {
+    /// let mut db = Connection::open_in_memory()?.into_borrowing();
+    /// let db: Connection = db.deref_move();
+    /// db.close().unwrap();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn deref_move(self) -> Connection {
+        self.conn
+    }
 }
 
 impl ops::Deref for BorrowingConnection<'_> {
