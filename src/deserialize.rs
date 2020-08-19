@@ -349,58 +349,11 @@ impl MemFile<'_> {
         }
     }
 
-    fn as_ptr(&self) -> *const u8 {
-        self.as_slice().as_ptr()
-    }
-
-    fn as_mut_slice(&mut self) -> &mut [u8] {
-        match self {
-            MemFile::Owned(d) => &mut d[..],
-            MemFile::Writable(d) => &mut d[..],
-            MemFile::ReadOnly(_) => unreachable!("ReadOnly.as_mut_slice"),
-        }
-    }
-
-    fn as_mut_ptr(&mut self) -> *mut u8 {
-        self.as_mut_slice().as_mut_ptr()
-    }
-
-    fn len(&self) -> usize {
-        self.as_slice().len()
-    }
-
-    fn set_len(&mut self, new_len: usize) {
-        unsafe {
-            match self {
-                MemFile::Owned(d) => d.set_len(new_len),
-                MemFile::Writable(d) => d.set_len(new_len),
-                MemFile::ReadOnly(_) => unreachable!("ReadOnly.set_len"),
-            }
-        }
-    }
-
-    fn cap(&self) -> usize {
-        match self {
-            MemFile::Owned(d) => d.capacity(),
-            MemFile::Writable(d) => d.capacity(),
-            MemFile::ReadOnly(_) => unreachable!("ReadOnly.cap"),
-        }
-    }
-
-    fn reserve_additional(&mut self, additional: usize) {
-        match self {
-            MemFile::Owned(d) => d.reserve(additional),
-            MemFile::Writable(d) => d.reserve(additional),
-            MemFile::ReadOnly(_) => unreachable!("ReadOnly.reserve_additional"),
-        }
-    }
-
-    // Write-protected/read-only or not
-    fn writable(&self) -> bool {
-        match self {
-            MemFile::Owned(_) => true,
-            MemFile::Writable(_) => true,
-            MemFile::ReadOnly(_) => false,
+    fn get_mut_vec(this: &mut Rc<Self>) -> Option<&mut Vec<u8>> {
+        match Rc::get_mut(this)? {
+            MemFile::Owned(d) => Some(d),
+            MemFile::Writable(d) => Some(*d),
+            MemFile::ReadOnly(_) => None,
         }
     }
 }
@@ -552,12 +505,12 @@ unsafe extern "C" fn c_write(
     ofst: i64,
 ) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
-        let data = match Rc::get_mut(&mut file.data) {
-            Some(d) if d.writable() => d,
+        let data = match MemFile::get_mut_vec(&mut file.data) {
+            Some(d) => d,
             _ => return ffi::SQLITE_READONLY,
         };
         let sz = data.len();
-        let sz_alloc = data.cap();
+        let sz_alloc = data.capacity();
         let amt = amt as usize;
         let ofst = ofst as usize;
         if ofst + amt > sz {
@@ -565,8 +518,8 @@ unsafe extern "C" fn c_write(
                 if file.memory_mapped != 0 {
                     return ffi::SQLITE_FULL;
                 }
-                data.reserve_additional(ofst + amt - sz_alloc);
-                if data.cap() > file.size_max {
+                data.reserve(ofst + amt - sz_alloc);
+                if data.capacity() > file.size_max {
                     return ffi::SQLITE_FULL;
                 }
             }
@@ -587,9 +540,9 @@ unsafe extern "C" fn c_write(
 /// the size of a file, never to increase the size.
 unsafe extern "C" fn c_truncate(file: *mut ffi::sqlite3_file, size: i64) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
-        if let Some(data) = Rc::get_mut(&mut file.data) {
+        if let Some(data) = MemFile::get_mut_vec(&mut file.data) {
             let size = size.try_into().unwrap();
-            if size > data.len() || !data.writable() {
+            if size > data.len() {
                 ffi::SQLITE_FULL
             } else {
                 data.set_len(size);
@@ -620,7 +573,7 @@ unsafe extern "C" fn c_lock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int 
         let lock = lock_cast(lock);
         debug_assert!(lock > file.lock);
         debug_assert_eq!(ffi::SQLITE_LOCK_SHARED, 1);
-        if lock > 1 && !Rc::get_mut(&mut file.data).map_or(false, |f| f.writable()) {
+        if lock > 1 && MemFile::get_mut_vec(&mut file.data).is_none() {
             ffi::SQLITE_READONLY
         } else {
             file.lock = lock;
@@ -1188,7 +1141,7 @@ mod test {
 
         // when reading partly past the end, the buffer should be filled with content
         let vec_db = VecDbFile::try_cast(file).unwrap();
-        Rc::get_mut(&mut vec_db.data).unwrap().as_mut_slice()[end as usize - 1] = 0xab;
+        MemFile::get_mut_vec(&mut vec_db.data).unwrap()[end as usize - 1] = 0xab;
         let mut buf = [1; 16];
         let rc = file_read(file, &mut buf, end - 8);
         assert_eq!(rc, ffi::SQLITE_IOERR_SHORT_READ);
