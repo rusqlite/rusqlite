@@ -475,10 +475,7 @@ unsafe fn catch_unwind_sqlite_error(
     file: *mut ffi::sqlite3_file,
     f: impl FnOnce(&mut VecDbFile) -> c_int + panic::UnwindSafe,
 ) -> c_int {
-    panic::catch_unwind(|| f(&mut *(file as *mut VecDbFile))).unwrap_or_else(|e| {
-        dbg!(e);
-        ffi::SQLITE_ERROR
-    })
+    panic::catch_unwind(|| f(&mut *(file as *mut VecDbFile))).unwrap_or_else(|_| ffi::SQLITE_ERROR)
 }
 
 /// This will be called when dropping the `Connection` or
