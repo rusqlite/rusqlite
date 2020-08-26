@@ -92,7 +92,6 @@ impl Connection {
         })?;
         if let Some(vec_db) = VecDbFile::try_cast(file) {
             return Ok(vec_db.data.as_slice().to_vec());
-            // TODO: Optimize for pMethods == sqlite_io_methods
         }
 
         // sqlite3_serialize is not used because it always uses the sqlite3_malloc allocator,
