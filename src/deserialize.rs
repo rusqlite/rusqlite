@@ -417,24 +417,24 @@ impl<'a> VecDbFile<'a> {
 /// This can't be a const because the pointers are compared.
 static VEC_DB_IO_METHODS: ffi::sqlite3_io_methods = ffi::sqlite3_io_methods {
     iVersion: 3,
-    xClose: Some(c_close),
-    xRead: Some(c_read),
-    xWrite: Some(c_write),
-    xTruncate: Some(c_truncate),
-    xSync: Some(c_sync),
-    xFileSize: Some(c_size),
-    xLock: Some(c_lock),
-    xUnlock: Some(c_unlock),
+    xClose: Some(x_close),
+    xRead: Some(x_read),
+    xWrite: Some(x_write),
+    xTruncate: Some(x_truncate),
+    xSync: Some(x_sync),
+    xFileSize: Some(x_size),
+    xLock: Some(x_lock),
+    xUnlock: Some(x_unlock),
     xCheckReservedLock: None,
-    xFileControl: Some(c_file_control),
+    xFileControl: Some(x_file_control),
     xSectorSize: None,
-    xDeviceCharacteristics: Some(c_device_characteristics),
+    xDeviceCharacteristics: Some(x_device_characteristics),
     xShmMap: None,
     xShmLock: None,
     xShmBarrier: None,
     xShmUnmap: None,
-    xFetch: Some(c_fetch),
-    xUnfetch: Some(c_unfetch),
+    xFetch: Some(x_fetch),
+    xUnfetch: Some(x_unfetch),
 };
 
 lazy_static::lazy_static! {
@@ -479,7 +479,7 @@ unsafe fn catch_unwind_sqlite_error(
 
 /// This will be called when dropping the `Connection` or
 /// when the database gets detached.
-unsafe extern "C" fn c_close(file: *mut ffi::sqlite3_file) -> c_int {
+unsafe extern "C" fn x_close(file: *mut ffi::sqlite3_file) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
         ptr::drop_in_place(file);
         ffi::SQLITE_OK
@@ -487,7 +487,7 @@ unsafe extern "C" fn c_close(file: *mut ffi::sqlite3_file) -> c_int {
 }
 
 /// Read data from a memory file.
-unsafe extern "C" fn c_read(
+unsafe extern "C" fn x_read(
     file: *mut ffi::sqlite3_file,
     buf: *mut c_void,
     amt: c_int,
@@ -511,7 +511,7 @@ unsafe extern "C" fn c_read(
 }
 
 /// Write data to a memory file.
-unsafe extern "C" fn c_write(
+unsafe extern "C" fn x_write(
     file: *mut ffi::sqlite3_file,
     buf: *const c_void,
     amt: c_int,
@@ -551,7 +551,7 @@ unsafe extern "C" fn c_write(
 /// In rollback mode (which is always the case for memdb, as it does not
 /// support WAL mode) the truncate() method is only used to reduce
 /// the size of a file, never to increase the size.
-unsafe extern "C" fn c_truncate(file: *mut ffi::sqlite3_file, size: i64) -> c_int {
+unsafe extern "C" fn x_truncate(file: *mut ffi::sqlite3_file, size: i64) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
         if let Some(data) = MemFile::get_mut_vec(&mut file.data) {
             let size = size.try_into().unwrap();
@@ -568,12 +568,12 @@ unsafe extern "C" fn c_truncate(file: *mut ffi::sqlite3_file, size: i64) -> c_in
 }
 
 /// Sync a memory file.
-unsafe extern "C" fn c_sync(_file: *mut ffi::sqlite3_file, _flags: c_int) -> c_int {
+unsafe extern "C" fn x_sync(_file: *mut ffi::sqlite3_file, _flags: c_int) -> c_int {
     ffi::SQLITE_OK
 }
 
 /// Return the current file-size of a memory file.
-unsafe extern "C" fn c_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_int {
+unsafe extern "C" fn x_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
         *size = file.data.len() as _;
         ffi::SQLITE_OK
@@ -581,7 +581,7 @@ unsafe extern "C" fn c_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_i
 }
 
 /// Lock a memory file.
-unsafe extern "C" fn c_lock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
+unsafe extern "C" fn x_lock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
         let lock = lock_cast(lock);
         debug_assert!(lock > file.lock);
@@ -596,7 +596,7 @@ unsafe extern "C" fn c_lock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int 
 }
 
 /// Unlock a memory file.
-unsafe extern "C" fn c_unlock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
+unsafe extern "C" fn x_unlock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
         let lock = lock_cast(lock);
         debug_assert!(lock < file.lock || lock == 0);
@@ -612,7 +612,7 @@ fn lock_cast(lock: c_int) -> u8 {
 }
 
 /// File control method.
-unsafe extern "C" fn c_file_control(
+unsafe extern "C" fn x_file_control(
     file: *mut ffi::sqlite3_file,
     op: c_int,
     arg: *mut c_void,
@@ -648,7 +648,7 @@ unsafe extern "C" fn c_file_control(
 }
 
 /// Return the device characteristic flags supported.
-unsafe extern "C" fn c_device_characteristics(_file: *mut ffi::sqlite3_file) -> c_int {
+unsafe extern "C" fn x_device_characteristics(_file: *mut ffi::sqlite3_file) -> c_int {
     ffi::SQLITE_IOCAP_ATOMIC
         | ffi::SQLITE_IOCAP_POWERSAFE_OVERWRITE
         | ffi::SQLITE_IOCAP_SAFE_APPEND
@@ -656,7 +656,7 @@ unsafe extern "C" fn c_device_characteristics(_file: *mut ffi::sqlite3_file) -> 
 }
 
 /// Fetch a page of a memory-mapped file.
-unsafe extern "C" fn c_fetch(
+unsafe extern "C" fn x_fetch(
     file: *mut ffi::sqlite3_file,
     ofst: i64,
     amt: c_int,
@@ -680,7 +680,7 @@ unsafe extern "C" fn c_fetch(
 }
 
 /// Release a memory-mapped page.
-unsafe extern "C" fn c_unfetch(file: *mut ffi::sqlite3_file, _ofst: i64, _p: *mut c_void) -> c_int {
+unsafe extern "C" fn x_unfetch(file: *mut ffi::sqlite3_file, _ofst: i64, _p: *mut c_void) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
         assert_ne!(file.memory_mapped, 0);
         file.memory_mapped -= 1;
