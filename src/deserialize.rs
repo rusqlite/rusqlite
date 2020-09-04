@@ -34,7 +34,7 @@
 
 use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int, c_void};
-use std::{borrow::Cow, convert::TryInto, fmt, mem, ops, panic, ptr, rc::Rc};
+use std::{alloc, borrow::Cow, convert::TryInto, fmt, mem, ops, panic, ptr, rc::Rc};
 
 use crate::inner_connection::InnerConnection;
 use crate::util::SmallCString;
@@ -443,12 +443,14 @@ lazy_static::lazy_static! {
         let vfs = &mut *ffi::sqlite3_vfs_find("memdb\0".as_ptr() as _);
         let sz = vfs.szOsFile as usize;
         assert!(mem::size_of::<VecDbFile>() <= sz, "VecDbFile doesn't fit in allocation");
-        let mut file_vec = Vec::with_capacity(sz);
-        let file = file_vec.as_mut_ptr() as *mut ffi::sqlite3_file;
+        let layout = alloc::Layout::from_size_align(sz, mem::align_of::<ffi::sqlite3_file>()).unwrap();
+        #[allow(clippy::cast_ptr_alignment)]
+        let file = alloc::alloc(layout) as *mut ffi::sqlite3_file;
         let rc = vfs.xOpen.unwrap()(vfs, ptr::null(), file, ffi::SQLITE_OPEN_MAIN_DB, &mut 0);
         assert_eq!(rc, ffi::SQLITE_OK);
         let methods = (*file).pMethods;
         assert!(!methods.is_null());
+        alloc::dealloc(file as _, layout);
         &*methods
     };
 }
