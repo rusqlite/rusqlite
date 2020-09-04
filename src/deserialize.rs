@@ -385,6 +385,7 @@ impl ops::Deref for MemFile<'_> {
 /// the `memdb` VFS but uses the Rust allocator instead of `sqlite3_malloc`.
 /// The database is stored in an owned or borrowed `Vec<u8>`.
 #[repr(C)]
+#[derive(Debug)]
 struct VecDbFile<'a> {
     methods: *const ffi::sqlite3_io_methods,
     data: Rc<MemFile<'a>>,
@@ -601,33 +602,30 @@ unsafe extern "C" fn x_file_control(
     op: c_int,
     arg: *mut c_void,
 ) -> c_int {
-    catch_unwind_sqlite_error(file, |file| {
-        let data = &file.data;
-        match op {
-            ffi::SQLITE_FCNTL_VFSNAME => {
-                *(arg as *mut *const c_char) = ffi::sqlite3_mprintf(
-                    "vec_db(%p,%llu)\0".as_ptr() as _,
-                    data.as_ptr(),
-                    data.len() as ffi::sqlite3_uint64,
-                );
-                ffi::SQLITE_OK
-            }
-            ffi::SQLITE_FCNTL_SIZE_LIMIT => {
-                let arg = arg as *mut ffi::sqlite3_int64;
-                let mut limit = *arg;
-                if limit < data.len() as _ {
-                    if limit < 0 {
-                        limit = file.size_max as _;
-                    } else {
-                        limit = data.len() as _;
-                    }
-                }
-                file.size_max = limit.try_into().expect("overflow size_max");
-                *arg = limit;
-                ffi::SQLITE_OK
-            }
-            _ => ffi::SQLITE_NOTFOUND,
+    catch_unwind_sqlite_error(file, |file| match op {
+        // This operation is intended for diagnostic use only.
+        ffi::SQLITE_FCNTL_VFSNAME => {
+            *(arg as *mut *const c_char) =
+                crate::util::SqliteMallocString::from_str(&format!("{:?}", file)).into_raw();
+            ffi::SQLITE_OK
         }
+        // Set an upper bound on the size of the in-memory database.
+        ffi::SQLITE_FCNTL_SIZE_LIMIT => {
+            let arg = arg as *mut ffi::sqlite3_int64;
+            let mut limit = *arg;
+            let len = file.data.len() as _;
+            if limit < len {
+                if limit < 0 {
+                    limit = file.size_max as _;
+                } else {
+                    limit = len;
+                }
+            }
+            file.size_max = limit.try_into().expect("overflow size_max");
+            *arg = limit;
+            ffi::SQLITE_OK
+        }
+        _ => ffi::SQLITE_NOTFOUND,
     })
 }
 
@@ -1010,7 +1008,6 @@ mod test {
         unsafe {
             let db = Connection::open_in_memory().unwrap();
             let vec = vec![1, 2, 3];
-            let vec_ptr = vec.as_ptr();
             db.deserialize(DatabaseName::Main, vec).unwrap();
             let mut name: *const c_char = ptr::null();
             let rc = ffi::sqlite3_file_control(
@@ -1022,7 +1019,7 @@ mod test {
             assert_eq!(ffi::SQLITE_OK, rc);
             assert!(!name.is_null());
             let name_str = CStr::from_ptr(name).to_str().unwrap();
-            assert_eq!(name_str, &format!("vec_db({:X},3)", vec_ptr as usize));
+            assert_eq!(name_str, &format!("VecDbFile {{ methods: {:p}, data: Owned([1, 2, 3]), size_max: 1073741824, memory_mapped: 0, lock: 0 }}", &VEC_DB_IO_METHODS));
             ffi::sqlite3_free(name as _);
         }
     }
