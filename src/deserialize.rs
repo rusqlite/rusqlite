@@ -310,12 +310,12 @@ impl<'a> BorrowingConnection<'a> {
     /// # use rusqlite::*;
     /// # fn main() -> Result<()> {
     /// let mut db = Connection::open_in_memory()?.into_borrowing();
-    /// let db: Connection = db.deref_move();
+    /// let db: Connection = db.into_inner();
     /// db.close().unwrap();
     /// # Ok(())
     /// # }
     /// ```
-    pub fn deref_move(self) -> Connection {
+    pub fn into_inner(self) -> Connection {
         self.conn
     }
 }
