@@ -424,7 +424,7 @@ static VEC_DB_IO_METHODS: ffi::sqlite3_io_methods = ffi::sqlite3_io_methods {
     xSync: Some(x_sync),
     xFileSize: Some(x_size),
     xLock: Some(x_lock),
-    xUnlock: Some(x_unlock),
+    xUnlock: Some(x_lock),
     xCheckReservedLock: None,
     xFileControl: Some(x_file_control),
     xSectorSize: None,
@@ -585,9 +585,7 @@ unsafe extern "C" fn x_size(file: *mut ffi::sqlite3_file, size: *mut i64) -> c_i
 /// Lock a memory file.
 unsafe extern "C" fn x_lock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
     catch_unwind_sqlite_error(file, |file| {
-        let lock = lock_cast(lock);
-        debug_assert!(lock > file.lock);
-        debug_assert_eq!(ffi::SQLITE_LOCK_SHARED, 1);
+        let lock = lock as u8;
         if lock > 1 && MemFile::get_mut_vec(&mut file.data).is_none() {
             ffi::SQLITE_READONLY
         } else {
@@ -595,22 +593,6 @@ unsafe extern "C" fn x_lock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int 
             ffi::SQLITE_OK
         }
     })
-}
-
-/// Unlock a memory file.
-unsafe extern "C" fn x_unlock(file: *mut ffi::sqlite3_file, lock: c_int) -> c_int {
-    catch_unwind_sqlite_error(file, |file| {
-        let lock = lock_cast(lock);
-        debug_assert!(lock < file.lock || lock == 0);
-        file.lock = lock;
-        ffi::SQLITE_OK
-    })
-}
-
-fn lock_cast(lock: c_int) -> u8 {
-    debug_assert_eq!(ffi::SQLITE_LOCK_EXCLUSIVE, 4);
-    assert!(lock <= 4);
-    lock as u8
 }
 
 /// File control method.
