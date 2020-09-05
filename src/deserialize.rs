@@ -1268,7 +1268,7 @@ mod test {
         let new_cap = size * 2;
         assert_eq!(
             new_cap,
-            db.serialize_set_size_limit(DatabaseName::Main, new_cap as _)? as _
+            db.serialize_set_size_limit(DatabaseName::Main, new_cap as _)? as i64
         );
         assert_eq!(new_cap, db.serialize_size_limit(DatabaseName::Main)? as _);
         db.execute_batch(sql).expect("enlarge should succeed");
