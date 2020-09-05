@@ -346,7 +346,7 @@ impl fmt::Debug for BorrowingConnection<'_> {
 /// The vector grows as needed, but is not automatically shrunk when the
 /// database file is reduced in size.
 #[non_exhaustive]
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub enum MemFile<'a> {
     /// Owned vector.
     Owned(Vec<u8>),
@@ -378,6 +378,32 @@ impl ops::Deref for MemFile<'_> {
     type Target = [u8];
     fn deref(&self) -> &[u8] {
         self.as_slice()
+    }
+}
+
+/// Print the fields of the vector/slice instead of the elements
+/// because in-memory database are so large.
+impl fmt::Debug for MemFile<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Owned(v) => f
+                .debug_struct("Owned")
+                .field("ptr", &v.as_ptr())
+                .field("length", &v.len())
+                .field("capacity", &v.capacity())
+                .finish(),
+            Self::Writable(v) => f
+                .debug_struct("Writable")
+                .field("ptr", &v.as_ptr())
+                .field("length", &v.len())
+                .field("capacity", &v.capacity())
+                .finish(),
+            Self::ReadOnly(v) => f
+                .debug_struct("ReadOnly")
+                .field("ptr", &v.as_ptr())
+                .field("length", &v.len())
+                .finish(),
+        }
     }
 }
 
@@ -1008,6 +1034,7 @@ mod test {
         unsafe {
             let db = Connection::open_in_memory().unwrap();
             let vec = vec![1, 2, 3];
+            let vec_buf = vec.as_ptr();
             db.deserialize(DatabaseName::Main, vec).unwrap();
             let mut name: *const c_char = ptr::null();
             let rc = ffi::sqlite3_file_control(
@@ -1019,7 +1046,7 @@ mod test {
             assert_eq!(ffi::SQLITE_OK, rc);
             assert!(!name.is_null());
             let name_str = CStr::from_ptr(name).to_str().unwrap();
-            assert_eq!(name_str, &format!("VecDbFile {{ methods: {:p}, data: Owned([1, 2, 3]), size_max: 1073741824, memory_mapped: 0, lock: 0 }}", &VEC_DB_IO_METHODS));
+            assert_eq!(name_str, &format!("VecDbFile {{ methods: {:p}, data: Owned {{ ptr: {:p}, length: 3, capacity: 3 }}, size_max: 1073741824, memory_mapped: 0, lock: 0 }}", &VEC_DB_IO_METHODS, vec_buf));
             ffi::sqlite3_free(name as _);
         }
     }
