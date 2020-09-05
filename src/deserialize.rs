@@ -81,15 +81,14 @@ impl Connection {
     /// db.execute_batch("CREATE TABLE foo(x INTEGER);")?;
     /// let mem_file: Vec<u8> = db.serialize(DatabaseName::Main)?;
     /// assert_eq!(mem_file, std::fs::read(path)?);
+    /// # db.close().unwrap();
     /// # std::fs::remove_file(path)?;
     /// # Ok(())
     /// # }
     /// ```
     pub fn serialize(&self, db_name: DatabaseName) -> Result<Vec<u8>> {
         let schema = db_name.to_cstring()?;
-        let file = file_ptr(&self.db.borrow(), &schema).ok_or_else(|| {
-            error::error_from_sqlite_code(1, Some(format!("database {:?} not found", db_name)))
-        })?;
+        let file = file_ptr(&self.db.borrow(), &schema).ok_or_else(|| err_not_found(&schema))?;
         if let Some(vec_db) = VecDbFile::try_cast(file) {
             return Ok(vec_db.data.as_slice().to_vec());
         }
@@ -152,6 +151,53 @@ impl Connection {
         }
     }
 
+    /// Gets the size limit of an attached in-memory database.
+    /// This upper bound is initially set to the `SQLITE_MEMDB_DEFAULT_MAXSIZE`
+    /// compile-time option (default 1073741824).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rusqlite::{*, deserialize::MemFile};
+    /// # fn main() -> Result<()> {
+    /// let mut db = Connection::open_in_memory()?;
+    /// db.deserialize(DatabaseName::Main, db.serialize(DatabaseName::Main)?)?;
+    /// assert_eq!(db.serialize_size_limit(DatabaseName::Main)?, 1_073_741_824);
+    /// assert_eq!(db.serialize_set_size_limit(DatabaseName::Main, 2_000_000)?, 2_000_000);
+    /// assert_eq!(db.serialize_size_limit(DatabaseName::Main)?, 2_000_000);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn serialize_size_limit(&self, db: DatabaseName) -> Result<usize> {
+        let schema = &db.to_cstring()?;
+        let file = file_ptr(&self.db.borrow(), schema).ok_or_else(|| err_not_found(schema))?;
+        file_size_limit(file, -1).map(|s| s.try_into().unwrap())
+    }
+
+    /// Sets the size limit of an attached in-memory database to the larger of the argument
+    /// and the current size. Returns the new size limit.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use rusqlite::{*, deserialize::MemFile};
+    /// # fn main() -> Result<()> {
+    /// let mut db = Connection::open_in_memory()?;
+    /// db.deserialize(DatabaseName::Main, db.serialize(DatabaseName::Main)?)?;
+    /// assert_eq!(db.serialize_set_size_limit(DatabaseName::Main, 0)?, 0);
+    /// let sql = "CREATE TABLE foo(x INTEGER)";
+    /// db.execute_batch(sql).unwrap_err();
+    /// assert_eq!(db.serialize_set_size_limit(DatabaseName::Main, 144_000)?, 144_000);
+    /// db.execute_batch(sql).unwrap();
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn serialize_set_size_limit(&self, db: DatabaseName, size_max: usize) -> Result<usize> {
+        let schema = &db.to_cstring()?;
+        let file = file_ptr(&self.db.borrow(), schema).ok_or_else(|| err_not_found(schema))?;
+        file_size_limit(file, size_max.try_into().unwrap()).map(|s| s.try_into().unwrap())
+    }
+
     /// Wraps the `Connection` in [`BorrowingConnection`] to serialize and
     /// deserialize within the lifetime of a connection.
     pub fn into_borrowing<'a>(self) -> BorrowingConnection<'a> {
@@ -172,19 +218,19 @@ impl Connection {
             c.decode_result(rc)?;
             let file = file_ptr(&c, &schema).unwrap();
             assert_eq!(file.pMethods, *MEMDB_IO_METHODS);
-            let mut size_max: ffi::sqlite3_int64 = -1;
-            let rc = (*file.pMethods).xFileControl.unwrap()(
-                file,
-                ffi::SQLITE_FCNTL_SIZE_LIMIT,
-                &mut size_max as *mut _ as _,
-            );
-            assert_eq!(rc, ffi::SQLITE_OK);
-            let size_max = size_max.try_into().unwrap();
+            let size_max = file_size_limit(file, -1)?.try_into().unwrap();
             let file = file as *mut _ as _;
             ptr::write(file, VecDbFile::new(data, size_max));
             Ok(())
         }
     }
+}
+
+fn err_not_found(db_name: &SmallCString) -> error::Error {
+    error::error_from_sqlite_code(
+        1,
+        Some(format!("database {:?} not found", db_name.as_str())),
+    )
 }
 
 fn backup_to_vec(vec: &mut Vec<u8>, src: &Connection, db_name: DatabaseName<'_>) -> Result<()> {
@@ -495,6 +541,22 @@ fn file_ptr<'a>(c: &InnerConnection, schema: &SmallCString) -> Option<&'a mut ff
             None
         } else {
             Some(&mut *file)
+        }
+    }
+}
+
+fn file_size_limit(file: &mut ffi::sqlite3_file, mut size_max: i64) -> Result<i64> {
+    unsafe {
+        let rc = (*file.pMethods).xFileControl.unwrap()(
+            file,
+            ffi::SQLITE_FCNTL_SIZE_LIMIT,
+            &mut size_max as *mut _ as _,
+        );
+        if rc == ffi::SQLITE_OK {
+            Ok(size_max)
+        } else {
+            let message = Some("SQLITE_FCNTL_SIZE_LIMIT failed".to_string());
+            Err(error::error_from_sqlite_code(rc, message))
         }
     }
 }
@@ -1017,7 +1079,7 @@ mod test {
                     code: ffi::ErrorCode::Unknown,
                     extended_code: 1
                 },
-                Some(r#"database Attached("does not exist") not found"#.to_string())
+                Some(r#"database "does not exist" not found"#.to_string())
             )
         );
         let file = db.serialize(DatabaseName::Main).unwrap();
@@ -1194,41 +1256,32 @@ mod test {
         assert_ne!(0, size);
         db.deserialize_writable(DatabaseName::Main, &mut vec)?;
         let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
-        let cap = file_cap(file, -1);
+        let cap = file_size_limit(file, -1)?;
         assert_eq!(cap, 1073741824, "default SQLITE_CONFIG_MEMDB_MAXSIZE");
-        assert_eq!(size, file_cap(file, 200));
-        assert_eq!(size, file_cap(file, -1));
+        assert_eq!(size, file_size_limit(file, 200)?);
+        assert_eq!(size, file_size_limit(file, -1)?);
 
         // trigger enlarge
         let sql = "WITH RECURSIVE cnt(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM cnt WHERE x<500) INSERT INTO a SELECT x FROM cnt";
         db.execute_batch(sql).expect_err("enlarge should fail");
 
         let new_cap = size * 2;
-        assert_eq!(new_cap, file_cap(file, new_cap));
-        assert_eq!(new_cap, file_cap(file, -1));
+        assert_eq!(
+            new_cap,
+            db.serialize_set_size_limit(DatabaseName::Main, new_cap as _)? as _
+        );
+        assert_eq!(new_cap, db.serialize_size_limit(DatabaseName::Main)? as _);
         db.execute_batch(sql).expect("enlarge should succeed");
 
         // truncate
         assert_eq!(new_cap, file_len(file));
         db.execute_batch("DELETE FROM a; VACUUM;")?;
         assert_eq!(size, file_len(file));
-        assert_eq!(new_cap, file_cap(file, -1));
+        assert_eq!(new_cap, file_size_limit(file, -1)?);
         db.execute_batch("DROP TABLE a; VACUUM;")?;
         assert_eq!(4096, file_len(file));
 
         Ok(())
-    }
-
-    fn file_cap(file: &mut ffi::sqlite3_file, mut size_max: i64) -> i64 {
-        unsafe {
-            let rc = (*file.pMethods).xFileControl.unwrap()(
-                file,
-                ffi::SQLITE_FCNTL_SIZE_LIMIT,
-                &mut size_max as *mut _ as _,
-            );
-            assert_eq!(rc, ffi::SQLITE_OK);
-            size_max
-        }
     }
 
     #[test]
