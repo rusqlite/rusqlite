@@ -622,7 +622,7 @@ unsafe extern "C" fn x_write(
                 if file.memory_mapped != 0 {
                     return ffi::SQLITE_FULL;
                 }
-                data.reserve(ofst + amt - sz_alloc);
+                data.reserve(ofst + amt - sz);
                 if data.capacity() > file.size_max {
                     return ffi::SQLITE_FULL;
                 }
