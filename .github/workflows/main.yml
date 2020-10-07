@@ -38,7 +38,7 @@ jobs:
 
       - name: Setup LIBCLANG_PATH for windows
         if: matrix.os == 'windows-latest'
-        run: echo "LIBCLANG_PATH=C:\msys64\mingw64\bin" >> $GITHUB_ENV
+        run: echo "CLANG_PATH=C:\msys64\mingw64\bin\clang.exe" >> $GITHUB_ENV
 
       - run: cargo build --features bundled --workspace --all-targets --verbose
       - run: cargo test --features bundled --workspace --all-targets --verbose
