@@ -40,9 +40,18 @@ jobs:
       - run: cargo test --features bundled --workspace --all-targets --verbose
       - run: cargo test --features bundled --workspace --doc --verbose
 
+      - name: Setup clang path for windows
+        if: matrix.os == 'windows-latest'
+        run:
+          echo "LIBCLANG_PATH=C:\msys64\mingw64\lib" >> $GITHUB_ENV
+          echo "DEBUG lib:"
+          ls C:\msys64\mingw64\lib
+          echo "DEBUG bin:"
+          ls C:\msys64\mingw64\bin
+
       - name: Test Features
         # TODO: clang is installed on these -- but `bindgen` can't find it...
-        if: matrix.os != 'windows-latest'
+        # if: matrix.os != 'windows-latest'
         run: |
           cargo test --features 'bundled-full session buildtime_bindgen time' --all-targets --workspace --verbose
           cargo test --features 'bundled-full session buildtime_bindgen time' --doc --workspace --verbose
