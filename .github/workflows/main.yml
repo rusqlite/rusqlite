@@ -39,7 +39,8 @@ jobs:
 
       - name: Setup libclang path for windows
         if: matrix.os == 'windows-latest'
-        run: echo "LLVM_CONFIG_PATH=C:\msys64\mingw64\bin\llvm-config.exe" >> $GITHUB_ENV
+        run: |
+          echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
       # HACK just skip these til I figure this out
       # - run: cargo build --features bundled --workspace --all-targets --verbose
       # - run: cargo test --features bundled --workspace --all-targets --verbose
