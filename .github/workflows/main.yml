@@ -29,6 +29,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+
       # This has a matcher for test panics, so we use it even though elsewhere
       # we use actions-rs/toolchain.
       - uses: hecrj/setup-rust-action@v1
@@ -38,7 +39,7 @@ jobs:
 
       - name: Setup libclang path for windows
         if: matrix.os == 'windows-latest'
-        run: echo "LIBCLANG_STATIC_PATH=C:\msys64\mingw64\lib" >> $GITHUB_ENV
+        run: echo "LLVM_CONFIG_PATH=C:\msys64\mingw64\bin\llvm-config.exe" >> $GITHUB_ENV
       # HACK just skip these til I figure this out
       # - run: cargo build --features bundled --workspace --all-targets --verbose
       # - run: cargo test --features bundled --workspace --all-targets --verbose
