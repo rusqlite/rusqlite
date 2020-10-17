@@ -34,7 +34,7 @@
 
 use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int, c_void};
-use std::{alloc, borrow::Cow, convert::TryInto, fmt, mem, ops, panic, ptr, rc::Rc};
+use std::{alloc, borrow::Cow, convert::TryInto, fmt, mem, ops, panic, ptr, sync::Arc};
 
 use crate::inner_connection::InnerConnection;
 use crate::util::SmallCString;
@@ -124,7 +124,7 @@ impl Connection {
 
     /// Returns a mutable reference into the `MemFile` attached as `DatabaseName`,
     /// or returns `None` if no in-memory file is present or if there are other
-    /// `Rc` or `Weak` pointers to the same in-memory file.
+    /// `Arc` or `Weak` pointers to the same in-memory file.
     ///
     /// # Examples
     ///
@@ -145,7 +145,7 @@ impl Connection {
         let file = file_ptr(&c, &db.to_cstring().ok()?)?;
         let vec_db = VecDbFile::try_cast(file)?;
         if vec_db.memory_mapped == 0 && vec_db.lock == 0 {
-            Rc::get_mut(&mut vec_db.data)
+            Arc::get_mut(&mut vec_db.data)
         } else {
             None
         }
@@ -273,13 +273,13 @@ pub struct BorrowingConnection<'a> {
 impl<'a> BorrowingConnection<'a> {
     /// Obtains a reference counted serialization of a database, or returns `None` when
     /// [`DatabaseName`] does not exist or no in-memory file is present. The database is
-    /// read-only while there are `Rc` or `Weak` pointers. Once the database is detached
+    /// read-only while there are `Arc` or `Weak` pointers. Once the database is detached
     /// or closed, the strong reference count held by this connection is released.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use {std::rc::Rc, rusqlite::{*, deserialize::MemFile}};
+    /// # use {std::sync::Arc, rusqlite::{*, deserialize::MemFile}};
     /// # fn main() -> Result<()> {
     /// let mut db = Connection::open_in_memory()?.into_borrowing();
     /// let name = DatabaseName::Attached("foo");
@@ -287,25 +287,25 @@ impl<'a> BorrowingConnection<'a> {
     /// db.deserialize(name, db.serialize(DatabaseName::Main)?)?;
     /// let sql = "CREATE TABLE foo.bar(x INTEGER)";
     /// {
-    ///     let mem_file: Rc<MemFile> = db.serialize_rc(name).unwrap();
-    ///     db.execute_batch(sql).expect_err("locked by Rc");
+    ///     let mem_file: Arc<MemFile> = db.serialize_rc(name).unwrap();
+    ///     db.execute_batch(sql).expect_err("locked by Arc");
     /// }
     /// db.execute_batch(sql)?;
     /// let mem_file = db.serialize_rc(name).unwrap();
     /// assert!(mem_file.starts_with(b"SQLite format 3\0")); // Deref coercion to &[u8]
-    /// assert_eq!(Rc::strong_count(&mem_file), 2);
+    /// assert_eq!(Arc::strong_count(&mem_file), 2);
     /// db.execute_batch("DETACH DATABASE foo")?;
-    /// let _: Vec<u8> = match Rc::try_unwrap(mem_file) {
+    /// let _: Vec<u8> = match Arc::try_unwrap(mem_file) {
     ///     Ok(MemFile::Owned(v)) => v,
     ///     _ => panic!(),
     /// };
     /// # Ok(())
     /// # }
     /// ```
-    pub fn serialize_rc(&self, db: DatabaseName) -> Option<Rc<MemFile<'a>>> {
+    pub fn serialize_rc(&self, db: DatabaseName) -> Option<Arc<MemFile<'a>>> {
         let c = self.conn.db.borrow_mut();
         let file = file_ptr(&c, &db.to_cstring().ok()?)?;
-        VecDbFile::try_cast(file).map(|v| Rc::clone(&v.data))
+        VecDbFile::try_cast(file).map(|v| Arc::clone(&v.data))
     }
 
     /// Disconnects database and reopens it as an read-only in-memory database
@@ -411,8 +411,8 @@ impl MemFile<'_> {
         }
     }
 
-    fn get_mut_vec(this: &mut Rc<Self>) -> Option<&mut Vec<u8>> {
-        match Rc::get_mut(this)? {
+    fn get_mut_vec(this: &mut Arc<Self>) -> Option<&mut Vec<u8>> {
+        match Arc::get_mut(this)? {
             MemFile::Owned(d) => Some(d),
             MemFile::Writable(d) => Some(*d),
             MemFile::ReadOnly(_) => None,
@@ -460,7 +460,7 @@ impl fmt::Debug for MemFile<'_> {
 #[derive(Debug)]
 struct VecDbFile<'a> {
     methods: *const ffi::sqlite3_io_methods,
-    data: Rc<MemFile<'a>>,
+    data: Arc<MemFile<'a>>,
     size_max: usize,
     memory_mapped: u16,
     lock: u8,
@@ -470,7 +470,7 @@ impl<'a> VecDbFile<'a> {
     fn new(data: MemFile<'a>, size_max: usize) -> Self {
         VecDbFile {
             methods: &VEC_DB_IO_METHODS,
-            data: Rc::new(data),
+            data: Arc::new(data),
             size_max,
             memory_mapped: 0,
             lock: 0,
@@ -858,16 +858,16 @@ mod test {
         db2.deserialize(name_d, file_a.clone()).unwrap();
         let mut file_d = db2.serialize_rc(name_d).unwrap();
         // detach and attach other db, this should call xClose and decrease reference count
-        assert_eq!(2, Rc::strong_count(&file_d));
-        assert_eq!(0, Rc::weak_count(&file_d));
+        assert_eq!(2, Arc::strong_count(&file_d));
+        assert_eq!(0, Arc::weak_count(&file_d));
         db2.deserialize(name_d, file_b).unwrap();
-        assert_eq!(1, Rc::strong_count(&file_d));
-        assert_eq!(0, Rc::weak_count(&file_d));
-        match Rc::get_mut(&mut file_d).unwrap() {
+        assert_eq!(1, Arc::strong_count(&file_d));
+        assert_eq!(0, Arc::weak_count(&file_d));
+        match Arc::get_mut(&mut file_d).unwrap() {
             MemFile::Owned(v) => v.shrink_to_fit(),
             _ => panic!(),
         };
-        let file_d = Rc::try_unwrap(file_d).unwrap();
+        let file_d = Arc::try_unwrap(file_d).unwrap();
         // test whether file_d stayed intact
         db2.deserialize_read_only(DatabaseName::Main, &file_d)
             .unwrap();
