@@ -312,7 +312,7 @@ impl<'stmt> Row<'stmt> {
     ///
     /// Returns an `Error::InvalidColumnName` if `idx` is not a valid column
     /// name for this row.
-    pub fn get_raw_checked<I: RowIndex>(&self, idx: I) -> Result<ValueRef<'_>> {
+    pub fn try_get_raw<I: RowIndex>(&self, idx: I) -> Result<ValueRef<'_>> {
         let idx = idx.idx(self.stmt)?;
         // Narrowing from `ValueRef<'stmt>` (which `self.stmt.value_ref(idx)`
         // returns) to `ValueRef<'a>` is needed because it's only valid until
@@ -331,13 +331,13 @@ impl<'stmt> Row<'stmt> {
     ///
     /// ## Failure
     ///
-    /// Panics if calling `row.get_raw_checked(idx)` would return an error,
+    /// Panics if calling `row.try_get_raw(idx)` would return an error,
     /// including:
     ///
     /// * If `idx` is outside the range of columns in the returned query.
     /// * If `idx` is not a valid column name for this row.
     pub fn get_raw<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
-        self.get_raw_checked(idx).unwrap()
+        self.try_get_raw(idx).unwrap()
     }
 }
 
