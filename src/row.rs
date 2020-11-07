@@ -303,7 +303,7 @@ impl<'stmt> Row<'stmt> {
     /// This `ValueRef` is valid only as long as this Row, which is enforced by
     /// it's lifetime. This means that while this method is completely safe,
     /// it can be somewhat difficult to use, and most callers will be better
-    /// served by `get` or `get`.
+    /// served by `get` or `get_unwrap`.
     ///
     /// ## Failure
     ///
@@ -312,7 +312,7 @@ impl<'stmt> Row<'stmt> {
     ///
     /// Returns an `Error::InvalidColumnName` if `idx` is not a valid column
     /// name for this row.
-    pub fn try_get_raw<I: RowIndex>(&self, idx: I) -> Result<ValueRef<'_>> {
+    pub fn get_raw<I: RowIndex>(&self, idx: I) -> Result<ValueRef<'_>> {
         let idx = idx.idx(self.stmt)?;
         // Narrowing from `ValueRef<'stmt>` (which `self.stmt.value_ref(idx)`
         // returns) to `ValueRef<'a>` is needed because it's only valid until
@@ -327,17 +327,17 @@ impl<'stmt> Row<'stmt> {
     /// This `ValueRef` is valid only as long as this Row, which is enforced by
     /// it's lifetime. This means that while this method is completely safe,
     /// it can be difficult to use, and most callers will be better served by
-    /// `get` or `get`.
+    /// `get` or `get_unwrap`.
     ///
     /// ## Failure
     ///
-    /// Panics if calling `row.try_get_raw(idx)` would return an error,
+    /// Panics if calling `row.get_raw(idx)` would return an error,
     /// including:
     ///
     /// * If `idx` is outside the range of columns in the returned query.
     /// * If `idx` is not a valid column name for this row.
-    pub fn get_raw<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
-        self.try_get_raw(idx).unwrap()
+    pub fn get_raw_unwrap<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
+        self.get_raw(idx).unwrap()
     }
 }
 
