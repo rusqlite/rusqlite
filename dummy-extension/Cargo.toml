@@ -16,5 +16,5 @@ crate-type = ["cdylib"]
 [dependencies.rusqlite]
 path = ".."
 default-features = false
-features = ["loadable_extension", "vtab"]
+features = ["loadable_extension", "vtab", "functions", "bundled"]
 version = "0.24.2"

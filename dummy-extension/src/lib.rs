@@ -1,10 +1,14 @@
 use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int};
 
-use rusqlite::ffi;
 use rusqlite::vtab::{
     eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context, IndexInfo, VTab,
     VTabConnection, VTabCursor, Values,
+};
+use rusqlite::{
+    ffi,
+    functions::FunctionFlags,
+    types::{ToSqlOutput, Value},
 };
 use rusqlite::{to_sqlite_error, Connection, Result};
 
@@ -99,6 +103,16 @@ unsafe impl VTabCursor for DummyTabCursor<'_> {
 
 fn dummy_init(db: *mut ffi::sqlite3) -> Result<()> {
     let conn = unsafe { Connection::from_handle(db)? };
-    println!("initied dummy module");
+    println!("initied dummy module {:?}", db);
+    conn.create_scalar_function(
+        "dummy_test_function",
+        0,
+        FunctionFlags::SQLITE_DETERMINISTIC,
+        |ctx| {
+            Ok(ToSqlOutput::Owned(Value::Text(
+                "Loaded correctly!".to_string(),
+            )))
+        },
+    )?;
     conn.create_module::<DummyTab>("dummy", eponymous_only_module::<DummyTab>(), None)
 }
