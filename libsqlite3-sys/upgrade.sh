@@ -1,6 +1,7 @@
 #!/bin/bash
 
 SCRIPT_DIR=$(cd "$(dirname "$_")" && pwd)
+TARGET_DIR="$SCRIPT_DIR/../target" # ensure target dir is deterministic
 echo "$SCRIPT_DIR"
 cd "$SCRIPT_DIR" || { echo "fatal error"; exit 1; }
 export SQLITE3_LIB_DIR=$SCRIPT_DIR/sqlite3
@@ -23,9 +24,9 @@ function generate_bindgen_binding() {
 
   rm -f "$target_file"
   # Just to make sure there is only one bindgen.rs file in target dir
-  find "$SCRIPT_DIR/../target" -type f -name bindgen.rs -exec rm {} \;
-  env LIBSQLITE3_SYS_BUNDLING=1 cargo build --features "$features" --no-default-features
-  find "$SCRIPT_DIR/../target" -type f -name bindgen.rs -exec cp {} "$target_file" \;
+  find "$TARGET_DIR" -type f -name bindgen.rs -exec rm {} \;
+  env LIBSQLITE3_SYS_BUNDLING=1 cargo build --target-dir "$TARGET_DIR" --features "$features" --no-default-features
+  find "$TARGET_DIR" -type f -name bindgen.rs -exec cp {} "$target_file" \;
   # rerun rustfmt after (possibly) adding wrappers
   rustfmt $target_file
 }

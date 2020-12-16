@@ -523,6 +523,7 @@ mod bindings {
 
         // Note that when generating the bundled file, we're essentially always
         // cross compiling.
+        #[cfg(not(feature = "loadable_extension"))]
         if generating_bundled_bindings() || is_cross_compiling {
             // Get rid of va_list, as it's not
             bindings = bindings

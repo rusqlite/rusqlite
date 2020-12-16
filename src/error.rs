@@ -345,11 +345,12 @@ pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     error_from_sqlite_code(code, message)
 }
 
+
 /// Check SQLite method call.
-/// ```rust,no_run
+/// ```rust,ignore
 /// # use rusqlite::{self, ffi, Result};
-///
 /// fn xyz() -> Result<()> {
+///     
 ///     unsafe {
 ///        // returns an Error if sqlite3_initialize fails
 ///        rusqlite::check!(ffi::sqlite3_initialize());

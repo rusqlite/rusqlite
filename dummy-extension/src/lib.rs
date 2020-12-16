@@ -99,6 +99,6 @@ unsafe impl VTabCursor for DummyTabCursor<'_> {
 
 fn dummy_init(db: *mut ffi::sqlite3) -> Result<()> {
     let conn = unsafe { Connection::from_handle(db)? };
-
+    println!("initied dummy module");
     conn.create_module::<DummyTab>("dummy", eponymous_only_module::<DummyTab>(), None)
 }
