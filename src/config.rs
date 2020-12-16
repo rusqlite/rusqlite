@@ -74,6 +74,7 @@ impl Connection {
     ///   whether the QPSG is disabled or enabled
     /// - SQLITE_DBCONFIG_TRIGGER_EQP: return `false` to indicate
     ///   output-for-trigger are not disabled or `true` if it is
+    #[inline]
     pub fn db_config(&self, config: DbConfig) -> Result<bool> {
         let c = self.db.borrow();
         unsafe {
@@ -102,6 +103,7 @@ impl Connection {
     ///   enable QPSG
     /// - SQLITE_DBCONFIG_TRIGGER_EQP: `false` to disable output for trigger
     ///   programs, `true` to enable it
+    #[inline]
     pub fn set_db_config(&self, config: DbConfig, new_val: bool) -> Result<bool> {
         let c = self.db.borrow_mut();
         unsafe {
@@ -120,13 +122,13 @@ impl Connection {
 #[cfg(test)]
 mod test {
     use super::DbConfig;
-    use crate::Connection;
+    use crate::{Connection, Result};
 
     #[test]
-    fn test_db_config() {
-        let db = Connection::open_in_memory().unwrap();
+    fn test_db_config() -> Result<()> {
+        let db = Connection::open_in_memory()?;
 
-        let opposite = !db.db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY).unwrap();
+        let opposite = !db.db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY)?;
         assert_eq!(
             db.set_db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_FKEY, opposite),
             Ok(opposite)
@@ -136,9 +138,7 @@ mod test {
             Ok(opposite)
         );
 
-        let opposite = !db
-            .db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER)
-            .unwrap();
+        let opposite = !db.db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER)?;
         assert_eq!(
             db.set_db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER, opposite),
             Ok(opposite)
@@ -147,5 +147,6 @@ mod test {
             db.db_config(DbConfig::SQLITE_DBCONFIG_ENABLE_TRIGGER),
             Ok(opposite)
         );
+        Ok(())
     }
 }

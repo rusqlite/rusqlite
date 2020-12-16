@@ -7,8 +7,8 @@ export SQLITE3_LIB_DIR=$SCRIPT_DIR/sqlite3
 export SQLITE3_INCLUDE_DIR=$SQLITE3_LIB_DIR
 
 # Download and extract amalgamation
-SQLITE=sqlite-amalgamation-3320200
-curl -sSf -O https://sqlite.org/2020/$SQLITE.zip
+SQLITE=sqlite-amalgamation-3340000
+curl -O https://sqlite.org/2020/$SQLITE.zip
 unzip -p "$SQLITE.zip" "$SQLITE/sqlite3.c" > "$SQLITE3_LIB_DIR/sqlite3.c"
 unzip -p "$SQLITE.zip" "$SQLITE/sqlite3.h" > "$SQLITE3_LIB_DIR/sqlite3.h"
 unzip -p "$SQLITE.zip" "$SQLITE/sqlite3ext.h" > "$SQLITE3_LIB_DIR/sqlite3ext.h"

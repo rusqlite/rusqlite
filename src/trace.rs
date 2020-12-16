@@ -40,14 +40,11 @@ pub unsafe fn config_log(callback: Option<fn(std::os::raw::c_int, &str)>) -> cra
     }
 
     let rc = match callback {
-        Some(f) => {
-            let p_arg: *mut c_void = mem::transmute(f);
-            ffi::sqlite3_config(
-                ffi::SQLITE_CONFIG_LOG,
-                log_callback as extern "C" fn(_, _, _),
-                p_arg,
-            )
-        }
+        Some(f) => ffi::sqlite3_config(
+            ffi::SQLITE_CONFIG_LOG,
+            log_callback as extern "C" fn(_, _, _),
+            f as *mut c_void,
+        ),
         None => {
             let nullptr: *mut c_void = ptr::null_mut();
             ffi::sqlite3_config(ffi::SQLITE_CONFIG_LOG, nullptr, nullptr)
@@ -67,6 +64,7 @@ pub unsafe fn config_log(callback: Option<fn(std::os::raw::c_int, &str)>) -> cra
     feature = "loadable_extension",
     feature = "loadable_extension_embedded"
 )))]
+#[inline]
 pub fn log(err_code: std::os::raw::c_int, msg: &str) {
     use std::ffi::CString;
     let msg = CString::new(msg).expect("SQLite log messages cannot contain embedded zeroes");
@@ -93,7 +91,7 @@ impl Connection {
         let c = self.db.borrow_mut();
         match trace_fn {
             Some(f) => unsafe {
-                ffi::sqlite3_trace(c.db(), Some(trace_callback), mem::transmute(f));
+                ffi::sqlite3_trace(c.db(), Some(trace_callback), f as *mut c_void);
             },
             None => unsafe {
                 ffi::sqlite3_trace(c.db(), None, ptr::null_mut());
@@ -127,7 +125,7 @@ impl Connection {
         let c = self.db.borrow_mut();
         match profile_fn {
             Some(f) => unsafe {
-                ffi::sqlite3_profile(c.db(), Some(profile_callback), mem::transmute(f))
+                ffi::sqlite3_profile(c.db(), Some(profile_callback), f as *mut c_void)
             },
             None => unsafe { ffi::sqlite3_profile(c.db(), None, ptr::null_mut()) },
         };
@@ -140,10 +138,10 @@ mod test {
     use std::sync::Mutex;
     use std::time::Duration;
 
-    use crate::Connection;
+    use crate::{Connection, Result};
 
     #[test]
-    fn test_trace() {
+    fn test_trace() -> Result<()> {
         lazy_static! {
             static ref TRACED_STMTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
         }
@@ -152,26 +150,27 @@ mod test {
             traced_stmts.push(s.to_owned());
         }
 
-        let mut db = Connection::open_in_memory().unwrap();
+        let mut db = Connection::open_in_memory()?;
         db.trace(Some(tracer));
         {
-            let _ = db.query_row("SELECT ?", &[1i32], |_| Ok(()));
+            let _ = db.query_row("SELECT ?", &[&1i32], |_| Ok(()));
             let _ = db.query_row("SELECT ?", &["hello"], |_| Ok(()));
         }
         db.trace(None);
         {
-            let _ = db.query_row("SELECT ?", &[2i32], |_| Ok(()));
-            let _ = db.query_row("SELECT ?", &["goodbye"], |_| Ok(()));
+            let _ = db.query_row("SELECT ?", [2i32], |_| Ok(()));
+            let _ = db.query_row("SELECT ?", ["goodbye"], |_| Ok(()));
         }
 
         let traced_stmts = TRACED_STMTS.lock().unwrap();
         assert_eq!(traced_stmts.len(), 2);
         assert_eq!(traced_stmts[0], "SELECT 1");
         assert_eq!(traced_stmts[1], "SELECT 'hello'");
+        Ok(())
     }
 
     #[test]
-    fn test_profile() {
+    fn test_profile() -> Result<()> {
         lazy_static! {
             static ref PROFILED: Mutex<Vec<(String, Duration)>> = Mutex::new(Vec::new());
         }
@@ -180,14 +179,15 @@ mod test {
             profiled.push((s.to_owned(), d));
         }
 
-        let mut db = Connection::open_in_memory().unwrap();
+        let mut db = Connection::open_in_memory()?;
         db.profile(Some(profiler));
-        db.execute_batch("PRAGMA application_id = 1").unwrap();
+        db.execute_batch("PRAGMA application_id = 1")?;
         db.profile(None);
-        db.execute_batch("PRAGMA application_id = 2").unwrap();
+        db.execute_batch("PRAGMA application_id = 2")?;
 
         let profiled = PROFILED.lock().unwrap();
         assert_eq!(profiled.len(), 1);
         assert_eq!(profiled[0].0, "PRAGMA application_id = 1");
+        Ok(())
     }
 }

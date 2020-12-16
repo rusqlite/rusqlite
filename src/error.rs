@@ -43,11 +43,11 @@ pub enum Error {
     /// Error converting a file path to a string.
     InvalidPath(PathBuf),
 
-    /// Error returned when an `execute` call returns rows.
+    /// Error returned when an [`execute`](crate::Connection::execute) call returns rows.
     ExecuteReturnedResults,
 
     /// Error when a query that was expected to return at least one row (e.g.,
-    /// for `query_row`) did not return any.
+    /// for [`query_row`](crate::Connection::query_row)) did not return any.
     QueryReturnedNoRows,
 
     /// Error when the value of a particular column is requested, but the index
@@ -67,29 +67,29 @@ pub enum Error {
     /// any or insert many.
     StatementChangedRows(usize),
 
-    /// Error returned by `functions::Context::get` when the function argument
+    /// Error returned by [`functions::Context::get`](crate::functions::Context::get) when the function argument
     /// cannot be converted to the requested type.
     #[cfg(feature = "functions")]
     InvalidFunctionParameterType(usize, Type),
-    /// Error returned by `vtab::Values::get` when the filter argument cannot
+    /// Error returned by [`vtab::Values::get`](crate::vtab::Values::get) when the filter argument cannot
     /// be converted to the requested type.
     #[cfg(feature = "vtab")]
     InvalidFilterParameterType(usize, Type),
 
     /// An error case available for implementors of custom user functions (e.g.,
-    /// `create_scalar_function`).
+    /// [`create_scalar_function`](crate::Connection::create_scalar_function)).
     #[cfg(feature = "functions")]
     #[allow(dead_code)]
     UserFunctionError(Box<dyn error::Error + Send + Sync + 'static>),
 
-    /// Error available for the implementors of the `ToSql` trait.
+    /// Error available for the implementors of the [`ToSql`](crate::types::ToSql) trait.
     ToSqlConversionFailure(Box<dyn error::Error + Send + Sync + 'static>),
 
     /// Error when the SQL is not a `SELECT`, is not read-only.
     InvalidQuery,
 
     /// An error case available for implementors of custom modules (e.g.,
-    /// `create_module`).
+    /// [`create_module`](crate::Connection::create_module)).
     #[cfg(feature = "vtab")]
     #[allow(dead_code)]
     ModuleError(String),
@@ -98,8 +98,8 @@ pub enum Error {
     #[cfg(feature = "functions")]
     UnwindingPanic,
 
-    /// An error returned when `Context::get_aux` attempts to retrieve data
-    /// of a different type than what had been stored using `Context::set_aux`.
+    /// An error returned when [`Context::get_aux`](crate::functions::Context::get_aux) attempts to retrieve data
+    /// of a different type than what had been stored using [`Context::set_aux`](crate::functions::Context::set_aux).
     #[cfg(feature = "functions")]
     GetAuxWrongType,
 
@@ -109,6 +109,13 @@ pub enum Error {
     /// parameters in the query. The first `usize` is how many parameters were
     /// given, the 2nd is how many were expected.
     InvalidParameterCount(usize, usize),
+
+    /// Returned from various functions in the Blob IO positional API. For
+    /// example,
+    /// [`Blob::raw_read_at_exact`](crate::blob::Blob::raw_read_at_exact) will
+    /// return it if the blob has insufficient data.
+    #[cfg(feature = "blob")]
+    BlobSizeError,
 }
 
 impl PartialEq for Error {
@@ -151,18 +158,22 @@ impl PartialEq for Error {
             (Error::InvalidParameterCount(i1, n1), Error::InvalidParameterCount(i2, n2)) => {
                 i1 == i2 && n1 == n2
             }
+            #[cfg(feature = "blob")]
+            (Error::BlobSizeError, Error::BlobSizeError) => true,
             (..) => false,
         }
     }
 }
 
 impl From<str::Utf8Error> for Error {
+    #[cold]
     fn from(err: str::Utf8Error) -> Error {
         Error::Utf8Error(err)
     }
 }
 
 impl From<::std::ffi::NulError> for Error {
+    #[cold]
     fn from(err: ::std::ffi::NulError) -> Error {
         Error::NulError(err)
     }
@@ -173,6 +184,7 @@ const UNKNOWN_COLUMN: usize = std::usize::MAX;
 /// The conversion isn't precise, but it's convenient to have it
 /// to allow use of `get_raw(…).as_…()?` in callbacks that take `Error`.
 impl From<FromSqlError> for Error {
+    #[cold]
     fn from(err: FromSqlError) -> Error {
         // The error type requires index and type fields, but they aren't known in this
         // context.
@@ -262,6 +274,9 @@ impl fmt::Display for Error {
             #[cfg(feature = "functions")]
             Error::GetAuxWrongType => write!(f, "get_aux called with wrong type"),
             Error::MultipleStatement => write!(f, "Multiple statements provided"),
+
+            #[cfg(feature = "blob")]
+            Error::BlobSizeError => "Blob size is insufficient".fmt(f),
         }
     }
 }
@@ -306,16 +321,21 @@ impl error::Error for Error {
 
             #[cfg(feature = "functions")]
             Error::GetAuxWrongType => None,
+
+            #[cfg(feature = "blob")]
+            Error::BlobSizeError => None,
         }
     }
 }
 
 // These are public but not re-exported by lib.rs, so only visible within crate.
 
+#[cold]
 pub fn error_from_sqlite_code(code: c_int, message: Option<String>) -> Error {
     Error::SqliteFailure(ffi::Error::new(code), message)
 }
 
+#[cold]
 pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     let message = if db.is_null() {
         None

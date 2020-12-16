@@ -11,11 +11,13 @@ pub struct Column<'stmt> {
 
 impl Column<'_> {
     /// Returns the name of the column.
+    #[inline]
     pub fn name(&self) -> &str {
         self.name
     }
 
     /// Returns the type of the column (`None` for expression).
+    #[inline]
     pub fn decl_type(&self) -> Option<&str> {
         self.decl_type
     }
@@ -35,10 +37,12 @@ impl Statement<'_> {
 
     /// Return the number of columns in the result set returned by the prepared
     /// statement.
+    #[inline]
     pub fn column_count(&self) -> usize {
         self.stmt.column_count()
     }
 
+    #[inline]
     pub(super) fn column_name_unwrap(&self, col: usize) -> &str {
         // Just panic if the bounds are wrong for now, we never call this
         // without checking first.
@@ -54,6 +58,7 @@ impl Statement<'_> {
     /// column range for this row.
     ///
     /// Panics when column name is not valid UTF-8.
+    #[inline]
     pub fn column_name(&self, col: usize) -> Result<&str> {
         self.stmt
             .column_name(col)
@@ -72,6 +77,7 @@ impl Statement<'_> {
     ///
     /// Will return an `Error::InvalidColumnName` when there is no column with
     /// the specified `name`.
+    #[inline]
     pub fn column_index(&self, name: &str) -> Result<usize> {
         let bytes = name.as_bytes();
         let n = self.column_count();
@@ -104,26 +110,31 @@ impl Statement<'_> {
 
 impl<'stmt> Rows<'stmt> {
     /// Get all the column names.
+    #[inline]
     pub fn column_names(&self) -> Option<Vec<&str>> {
         self.stmt.map(Statement::column_names)
     }
 
     /// Return the number of columns.
+    #[inline]
     pub fn column_count(&self) -> Option<usize> {
         self.stmt.map(Statement::column_count)
     }
 
     /// Return the name of the column.
+    #[inline]
     pub fn column_name(&self, col: usize) -> Option<Result<&str>> {
         self.stmt.map(|stmt| stmt.column_name(col))
     }
 
     /// Return the index of the column.
+    #[inline]
     pub fn column_index(&self, name: &str) -> Option<Result<usize>> {
         self.stmt.map(|stmt| stmt.column_index(name))
     }
 
     /// Returns a slice describing the columns of the Rows.
+    #[inline]
     #[cfg(feature = "column_decltype")]
     pub fn columns(&self) -> Option<Vec<Column>> {
         self.stmt.map(Statement::columns)
@@ -132,26 +143,31 @@ impl<'stmt> Rows<'stmt> {
 
 impl<'stmt> Row<'stmt> {
     /// Get all the column names of the Row.
+    #[inline]
     pub fn column_names(&self) -> Vec<&str> {
         self.stmt.column_names()
     }
 
     /// Return the number of columns in the current row.
+    #[inline]
     pub fn column_count(&self) -> usize {
         self.stmt.column_count()
     }
 
     /// Return the name of the column.
+    #[inline]
     pub fn column_name(&self, col: usize) -> Result<&str> {
         self.stmt.column_name(col)
     }
 
     /// Return the index of the column.
+    #[inline]
     pub fn column_index(&self, name: &str) -> Result<usize> {
         self.stmt.column_index(name)
     }
 
     /// Returns a slice describing the columns of the Row.
+    #[inline]
     #[cfg(feature = "column_decltype")]
     pub fn columns(&self) -> Vec<Column> {
         self.stmt.columns()
@@ -160,15 +176,15 @@ impl<'stmt> Row<'stmt> {
 
 #[cfg(test)]
 mod test {
-    use crate::Connection;
+    use crate::{Connection, Result};
 
     #[test]
     #[cfg(feature = "column_decltype")]
-    fn test_columns() {
+    fn test_columns() -> Result<()> {
         use super::Column;
 
-        let db = Connection::open_in_memory().unwrap();
-        let query = db.prepare("SELECT * FROM sqlite_master").unwrap();
+        let db = Connection::open_in_memory()?;
+        let query = db.prepare("SELECT * FROM sqlite_master")?;
         let columns = query.columns();
         let column_names: Vec<&str> = columns.iter().map(Column::name).collect();
         assert_eq!(
@@ -180,22 +196,22 @@ mod test {
             &column_types[..3],
             &[Some("text"), Some("text"), Some("text"),]
         );
+        Ok(())
     }
 
     #[test]
-    fn test_column_name_in_error() {
+    fn test_column_name_in_error() -> Result<()> {
         use crate::{types::Type, Error};
-        let db = Connection::open_in_memory().unwrap();
+        let db = Connection::open_in_memory()?;
         db.execute_batch(
             "BEGIN;
              CREATE TABLE foo(x INTEGER, y TEXT);
              INSERT INTO foo VALUES(4, NULL);
              END;",
-        )
-        .unwrap();
-        let mut stmt = db.prepare("SELECT x as renamed, y FROM foo").unwrap();
-        let mut rows = stmt.query(crate::NO_PARAMS).unwrap();
-        let row = rows.next().unwrap().unwrap();
+        )?;
+        let mut stmt = db.prepare("SELECT x as renamed, y FROM foo")?;
+        let mut rows = stmt.query([])?;
+        let row = rows.next()?.unwrap();
         match row.get::<_, String>(0).unwrap_err() {
             Error::InvalidColumnType(idx, name, ty) => {
                 assert_eq!(idx, 0);
@@ -216,5 +232,6 @@ mod test {
                 panic!("Unexpected error type: {:?}", e);
             }
         }
+        Ok(())
     }
 }
