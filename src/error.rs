@@ -345,7 +345,6 @@ pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     error_from_sqlite_code(code, message)
 }
 
-
 /// Check SQLite method call.
 /// ```rust,ignore
 /// # use rusqlite::{self, ffi, Result};

@@ -2,7 +2,12 @@
 // used in each feature. Avoid having to track this for each function. We will
 // still warn for anything that's not used by either, though.
 #![cfg_attr(
-    not(all(feature = "vtab", feature = "loadable_extension", feature = "loadable_extension_embedded", feature = "modern-sqlite")),
+    not(all(
+        feature = "vtab",
+        feature = "loadable_extension",
+        feature = "loadable_extension_embedded",
+        feature = "modern-sqlite"
+    )),
     allow(dead_code)
 )]
 use crate::ffi;
