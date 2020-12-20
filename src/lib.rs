@@ -1615,15 +1615,15 @@ mod test {
         let mut rows = query.query([])?;
 
         while let Some(row) = rows.next()? {
-            let i = row.get_raw(0)?.as_i64()?;
+            let i = row.get_ref(0)?.as_i64()?;
             let expect = vals[i as usize];
-            let x = row.get_raw("x")?.as_str()?;
+            let x = row.get_ref("x")?.as_str()?;
             assert_eq!(x, expect);
         }
 
         let mut query = db.prepare("SELECT x FROM foo")?;
         let rows = query.query_map([], |row| {
-            let x = row.get_raw(0)?.as_str()?; // check From<FromSqlError> for Error
+            let x = row.get_ref(0)?.as_str()?; // check From<FromSqlError> for Error
             Ok(x[..].to_owned())
         })?;
 
