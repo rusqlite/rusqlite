@@ -350,8 +350,8 @@ impl<'stmt> Row<'stmt> {
     /// Renamed to [`get_ref_unwrap`](Row::get_ref_unwrap).
     #[deprecated = "Use [`get_ref_unwrap`](Row::get_ref_unwrap) instead."]
     #[inline]
-    pub fn get_raw<I: RowIndex>(&self, idx: I) -> Result<ValueRef<'_>> {
-        self.get_ref(idx)
+    pub fn get_raw<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
+        self.get_ref_unwrap(idx)
     }
 }
 
