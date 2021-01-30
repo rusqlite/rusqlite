@@ -77,6 +77,11 @@ impl<'stmt> Rows<'stmt> {
     {
         AndThenRows { rows: self, map: f }
     }
+
+    /// Give access to the underlying statement
+    pub fn as_ref(&self) -> Option<&Statement<'stmt>> {
+        self.stmt
+    }
 }
 
 impl<'stmt> Rows<'stmt> {
@@ -352,6 +357,12 @@ impl<'stmt> Row<'stmt> {
     #[inline]
     pub fn get_raw<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
         self.get_ref_unwrap(idx)
+    }
+}
+
+impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> {
+    fn as_ref(&self) -> &Statement<'stmt> {
+        self.stmt
     }
 }
 
