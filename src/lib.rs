@@ -48,6 +48,8 @@
 //! }
 //! ```
 #![warn(missing_docs)]
+// Some of these are only allowed on some platforms
+#![allow(clippy::unnecessary_wraps)]
 
 pub use libsqlite3_sys as ffi;
 

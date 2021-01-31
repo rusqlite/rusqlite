@@ -133,7 +133,7 @@ impl InnerConnection {
                 callback(&conn, collation_name)
             });
             if res.is_err() {
-                return; // FIXME How ?
+                // FIXME How ?
             }
         }
 
