@@ -284,7 +284,7 @@ impl InnerConnection {
     {
         unsafe extern "C" fn call_boxed_closure<F>(
             p_arg: *mut c_void,
-            sqlite: *mut ffi::sqlite3,
+            _sqlite: *mut ffi::sqlite3,
             action_code: c_int,
             db_str: *const c_char,
             tbl_str: *const c_char,
