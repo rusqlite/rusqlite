@@ -14,7 +14,7 @@
 //! methods to serialize and deserialize borrowed memory.
 //!
 //! ```
-//! # use rusqlite::{Result, Connection, DatabaseName, NO_PARAMS};
+//! # use rusqlite::{Result, Connection, DatabaseName};
 //! # fn main() -> Result<()> {
 //! let db = Connection::open_in_memory()?;
 //! db.execute_batch("CREATE TABLE one(x INTEGER);INSERT INTO one VALUES(44)")?;
@@ -23,7 +23,7 @@
 //! // without touching the file system.
 //! let mut db_clone = Connection::open_in_memory()?;
 //! db_clone.deserialize(DatabaseName::Main, mem_file)?;
-//! let row: u16 = db_clone.query_row("SELECT x FROM one", NO_PARAMS, |r| r.get(0))?;
+//! let row: u16 = db_clone.query_row("SELECT x FROM one", [], |r| r.get(0))?;
 //! assert_eq!(44, row);
 //! # Ok(())
 //! # }
@@ -38,7 +38,7 @@ use std::{alloc, borrow::Cow, convert::TryInto, fmt, mem, ops, panic, ptr, sync:
 
 use crate::inner_connection::InnerConnection;
 use crate::util::SmallCString;
-use crate::{error, ffi, Connection, DatabaseName, OpenFlags, Result, NO_PARAMS};
+use crate::{error, ffi, Connection, DatabaseName, OpenFlags, Result};
 
 impl Connection {
     /// Disconnects from database and reopen as an in-memory database based on `Vec<u8>`.
@@ -107,7 +107,7 @@ impl Connection {
             "SELECT page_count * page_size FROM pragma_page_count('{0}'), pragma_page_size('{0}')",
             escaped
         );
-        let db_size: i64 = self.query_row(sql, NO_PARAMS, |r| r.get(0))?;
+        let db_size: i64 = self.query_row(sql, [], |r| r.get(0))?;
         let db_size = db_size.try_into().unwrap();
         if db_size == 0 {
             return Ok(Vec::new());
@@ -320,7 +320,7 @@ impl<'a> BorrowingConnection<'a> {
     /// db.execute_batch("CREATE TABLE foo(x INTEGER); INSERT INTO foo VALUES(1)")?;
     /// let vec: Vec<u8> = db.serialize(DatabaseName::Main)?;
     /// db.deserialize_read_only(DatabaseName::Main, &vec)?;
-    /// let count: u32 = db.query_row("SELECT COUNT(*) FROM foo", NO_PARAMS, |r| r.get(0))?;
+    /// let count: u32 = db.query_row("SELECT COUNT(*) FROM foo", [], |r| r.get(0))?;
     /// assert!(count > 0);
     /// # Ok(())
     /// # }
@@ -761,7 +761,7 @@ unsafe extern "C" fn x_unfetch(file: *mut ffi::sqlite3_file, _ofst: i64, _p: *mu
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Connection, DatabaseName, Error, Result, NO_PARAMS};
+    use crate::{Connection, DatabaseName, Error, Result};
     use std::ffi::CStr;
     use std::mem::MaybeUninit;
 
@@ -781,10 +781,7 @@ mod test {
         let db2 = Connection::open_in_memory().unwrap().into_borrowing();
         db2.deserialize(DatabaseName::Main, serialized).unwrap();
         let mut query = db2.prepare("SELECT x FROM foo").unwrap();
-        let results: Result<Vec<u16>> = query
-            .query_map(NO_PARAMS, |row| row.get(0))
-            .unwrap()
-            .collect();
+        let results: Result<Vec<u16>> = query.query_map([], |row| row.get(0)).unwrap().collect();
         std::mem::drop(query);
         assert_eq!(vec![1, 2, 3], results.unwrap());
         // should not be read-only
@@ -801,10 +798,7 @@ mod test {
         let db3 = Connection::open_in_memory().unwrap();
         db3.deserialize(DatabaseName::Main, serialized).unwrap();
         let mut query = db3.prepare("SELECT x FROM foo").unwrap();
-        let results: Result<Vec<u16>> = query
-            .query_map(NO_PARAMS, |row| row.get(0))
-            .unwrap()
-            .collect();
+        let results: Result<Vec<u16>> = query.query_map([], |row| row.get(0)).unwrap().collect();
         assert_eq!(vec![1, 2, 3, 4], results.unwrap());
     }
 
@@ -835,7 +829,7 @@ mod test {
             .expect("should succeed after file_c is dropped");
         assert_eq!(
             2,
-            db2.query_row("SELECT COUNT(x) FROM a", NO_PARAMS, |r| r.get::<_, i32>(0))
+            db2.query_row("SELECT COUNT(x) FROM a", [], |r| r.get::<_, i32>(0))
                 .unwrap()
         );
 
@@ -873,13 +867,12 @@ mod test {
             .unwrap();
         assert_eq!(
             1,
-            db2.query_row("SELECT MAX(x) FROM main.a", NO_PARAMS, |r| r
-                .get::<_, i32>(0))
+            db2.query_row("SELECT MAX(x) FROM main.a", [], |r| r.get::<_, i32>(0))
                 .unwrap()
         );
         assert_eq!(
             2,
-            db2.query_row("SELECT MAX(x) FROM d.a", NO_PARAMS, |r| r.get::<_, i32>(0))
+            db2.query_row("SELECT MAX(x) FROM d.a", [], |r| r.get::<_, i32>(0))
                 .unwrap()
         );
         mem::drop(db2);
@@ -924,10 +917,7 @@ mod test {
         db2.deserialize_read_only(DatabaseName::Main, &serialized)
             .unwrap();
         let mut query = db2.prepare("SELECT x FROM foo").unwrap();
-        let results: Result<Vec<u16>> = query
-            .query_map(NO_PARAMS, |row| row.get(0))
-            .unwrap()
-            .collect();
+        let results: Result<Vec<u16>> = query.query_map([], |row| row.get(0)).unwrap().collect();
         assert_eq!(vec![1, 2, 3], results.unwrap());
         // should be read-only
         let sql = "INSERT INTO foo VALUES(4)";
@@ -964,10 +954,10 @@ mod test {
         }
         // mem::drop(serialized_three); // uncommenting this should not compile
         let mut query = db.prepare("SELECT x FROM foo.hello")?;
-        let results: Result<Vec<u16>> = query.query_map(NO_PARAMS, |row| row.get(0))?.collect();
+        let results: Result<Vec<u16>> = query.query_map([], |row| row.get(0))?.collect();
         assert_eq!(vec![1, 2, 3], results?);
         let mut query = db.prepare("SELECT x FROM bar.hello")?;
-        let results: Result<Vec<u16>> = query.query_map(NO_PARAMS, |row| row.get(0))?.collect();
+        let results: Result<Vec<u16>> = query.query_map([], |row| row.get(0))?.collect();
         assert_eq!(vec![1, 2, 3], results?);
         // should be read-only
         let sql = "INSERT INTO foo VALUES(4)";
@@ -996,7 +986,7 @@ mod test {
         // update should not affect length
         db3.execute_batch("UPDATE hello SET x = 44 WHERE x = 3")?;
         let mut query = db3.prepare("SELECT x FROM hello")?;
-        let results: Result<Vec<u16>> = query.query_map(NO_PARAMS, |row| row.get(0))?.collect();
+        let results: Result<Vec<u16>> = query.query_map([], |row| row.get(0))?.collect();
         assert_eq!(vec![1, 2, 44], results?);
         mem::drop(query);
         assert_eq!(initial_len, serialize_len(&mut db3));
@@ -1023,10 +1013,9 @@ mod test {
         db1.execute_batch("ATTACH DATABASE ':memory:' AS three;")?;
         let db1 = db1.into_borrowing();
         db1.deserialize_writable(DatabaseName::Attached("three"), &mut serialized1)?;
-        let count: u16 = db1.query_row("SELECT COUNT(*) FROM hello", NO_PARAMS, |r| r.get(0))?;
+        let count: u16 = db1.query_row("SELECT COUNT(*) FROM hello", [], |r| r.get(0))?;
         assert_eq!(3, count);
-        let count: u16 =
-            db1.query_row("SELECT COUNT(*) FROM three.hello", NO_PARAMS, |r| r.get(0))?;
+        let count: u16 = db1.query_row("SELECT COUNT(*) FROM three.hello", [], |r| r.get(0))?;
         assert_eq!(528, count);
 
         // test detach error handling for deserialize_writable
@@ -1146,7 +1135,7 @@ mod test {
         assert_eq!(count, 2);
         let count: i64 = db.query_row(
             r#"SELECT page_count FROM pragma_page_count("q'u""o'te")"#,
-            NO_PARAMS,
+            [],
             |r| r.get(0),
         )?;
         assert_eq!(count, 2);
