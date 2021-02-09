@@ -4,7 +4,7 @@
 //! define.
 //!
 //! Port of [carray](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/carray.c)
-//! C extension: https://www.sqlite.org/carray.html
+//! C extension: `https://www.sqlite.org/carray.html`
 //!
 //! # Example
 //!
@@ -18,7 +18,7 @@
 //!     // Note: A `Rc<Vec<Value>>` must be used as the parameter.
 //!     let values = Rc::new(v.iter().copied().map(Value::from).collect::<Vec<Value>>());
 //!     let mut stmt = db.prepare("SELECT value from rarray(?);")?;
-//!     let rows = stmt.query_map(params![values], |row| row.get::<_, i64>(0))?;
+//!     let rows = stmt.query_map([values], |row| row.get::<_, i64>(0))?;
 //!     for value in rows {
 //!         println!("{}", value?);
 //!     }
@@ -51,6 +51,7 @@ pub(crate) unsafe extern "C" fn free_array(p: *mut c_void) {
 pub type Array = Rc<Vec<Value>>;
 
 impl ToSql for Array {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Array(self.clone()))
     }
@@ -156,7 +157,7 @@ impl ArrayTabCursor<'_> {
 unsafe impl VTabCursor for ArrayTabCursor<'_> {
     fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
         if idx_num > 0 {
-            self.ptr = args.get_array(0)?;
+            self.ptr = args.get_array(0);
         } else {
             self.ptr = None;
         }
@@ -196,29 +197,30 @@ unsafe impl VTabCursor for ArrayTabCursor<'_> {
 mod test {
     use crate::types::Value;
     use crate::vtab::array;
-    use crate::Connection;
+    use crate::{Connection, Result};
     use std::rc::Rc;
 
     #[test]
-    fn test_array_module() {
-        let db = Connection::open_in_memory().unwrap();
-        array::load_module(&db).unwrap();
+    fn test_array_module() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        array::load_module(&db)?;
 
         let v = vec![1i64, 2, 3, 4];
         let values: Vec<Value> = v.into_iter().map(Value::from).collect();
         let ptr = Rc::new(values);
         {
-            let mut stmt = db.prepare("SELECT value from rarray(?);").unwrap();
+            let mut stmt = db.prepare("SELECT value from rarray(?);")?;
 
-            let rows = stmt.query_map(&[&ptr], |row| row.get::<_, i64>(0)).unwrap();
+            let rows = stmt.query_map(&[&ptr], |row| row.get::<_, i64>(0))?;
             assert_eq!(2, Rc::strong_count(&ptr));
             let mut count = 0;
             for (i, value) in rows.enumerate() {
-                assert_eq!(i as i64, value.unwrap() - 1);
+                assert_eq!(i as i64, value? - 1);
                 count += 1;
             }
             assert_eq!(4, count);
         }
         assert_eq!(1, Rc::strong_count(&ptr));
+        Ok(())
     }
 }

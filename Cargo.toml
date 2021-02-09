@@ -1,6 +1,6 @@
 [package]
 name = "rusqlite"
-version = "0.24.1"
+version = "0.24.2"
 authors = ["The rusqlite developers"]
 edition = "2018"
 description = "Ergonomic wrapper for SQLite"
@@ -12,7 +12,6 @@ license = "MIT"
 categories = ["database"]
 
 [badges]
-travis-ci = { repository = "rusqlite/rusqlite" }
 appveyor = { repository = "rusqlite/rusqlite" }
 codecov = { repository = "rusqlite/rusqlite" }
 maintenance = { status = "actively-developed" }
@@ -64,10 +63,10 @@ column_decltype = []
 wasm32-wasi-vfs = ["libsqlite3-sys/wasm32-wasi-vfs"]
 winsqlite3 = ["libsqlite3-sys/winsqlite3"]
 
-# Helper feature for enabling both `bundled` and most non-build-related optional
-# features or dependencies. This is useful for running tests / clippy / etc. New
-# features and optional dependencies that don't conflict with anything else
-# should be added here.
+# Helper feature for enabling both `bundled` and most non-build-related
+# optional features or dependencies (except `session`). This is useful for
+# running tests / clippy / etc. New features and optional dependencies that
+# don't conflict with anything else should be added here.
 bundled-full = [
     "array",
     "backup",
@@ -98,7 +97,7 @@ bundled-full = [
 ]
 
 [dependencies]
-time = { version = "0.2", optional = true }
+time = { version = "0.2.23", optional = true }
 bitflags = "1.2"
 hashlink = "0.6"
 chrono = { version = "0.4", optional = true }
@@ -111,7 +110,7 @@ fallible-iterator = "0.2"
 fallible-streaming-iterator = "0.1"
 memchr = "2.3"
 uuid = { version = "0.8", optional = true }
-smallvec = "1.4"
+smallvec = "1.0"
 
 [dev-dependencies]
 doc-comment = "0.3"
@@ -126,7 +125,7 @@ bencher = "0.1"
 
 [dependencies.libsqlite3-sys]
 path = "libsqlite3-sys"
-version = "0.20.1"
+version = "0.21.0"
 
 [[test]]
 name = "config_log"

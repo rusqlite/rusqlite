@@ -15,9 +15,10 @@ unsafe extern "C" fn free_boxed_value<T>(p: *mut c_void) {
 
 impl Connection {
     /// `feature = "collation"` Add or modify a collation.
-    pub fn create_collation<C>(&self, collation_name: &str, x_compare: C) -> Result<()>
+    #[inline]
+    pub fn create_collation<'c, C>(&'c self, collation_name: &str, x_compare: C) -> Result<()>
     where
-        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'static,
+        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'c,
     {
         self.db
             .borrow_mut()
@@ -25,6 +26,7 @@ impl Connection {
     }
 
     /// `feature = "collation"` Collation needed callback
+    #[inline]
     pub fn collation_needed(
         &self,
         x_coll_needed: fn(&Connection, &str) -> Result<()>,
@@ -33,15 +35,16 @@ impl Connection {
     }
 
     /// `feature = "collation"` Remove collation.
+    #[inline]
     pub fn remove_collation(&self, collation_name: &str) -> Result<()> {
         self.db.borrow_mut().remove_collation(collation_name)
     }
 }
 
 impl InnerConnection {
-    fn create_collation<C>(&mut self, collation_name: &str, x_compare: C) -> Result<()>
+    fn create_collation<'c, C>(&'c mut self, collation_name: &str, x_compare: C) -> Result<()>
     where
-        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'static,
+        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'c,
     {
         unsafe extern "C" fn call_boxed_closure<C>(
             arg1: *mut c_void,
@@ -93,7 +96,12 @@ impl InnerConnection {
                 Some(free_boxed_value::<C>),
             )
         };
-        self.decode_result(r)
+        let res = self.decode_result(r);
+        // The xDestroy callback is not called if the sqlite3_create_collation_v2() function fails.
+        if res.is_err() {
+            drop(unsafe { Box::from_raw(boxed_f) });
+        }
+        res
     }
 
     fn collation_needed(
@@ -139,6 +147,7 @@ impl InnerConnection {
         self.decode_result(r)
     }
 
+    #[inline]
     fn remove_collation(&mut self, collation_name: &str) -> Result<()> {
         let c_name = str_to_cstring(collation_name)?;
         let r = unsafe {
@@ -157,7 +166,7 @@ impl InnerConnection {
 
 #[cfg(test)]
 mod test {
-    use crate::{Connection, Result, NO_PARAMS};
+    use crate::{Connection, Result};
     use fallible_streaming_iterator::FallibleStreamingIterator;
     use std::cmp::Ordering;
     use unicase::UniCase;
@@ -167,26 +176,24 @@ mod test {
     }
 
     #[test]
-    fn test_unicase() {
-        let db = Connection::open_in_memory().unwrap();
+    fn test_unicase() -> Result<()> {
+        let db = Connection::open_in_memory()?;
 
-        db.create_collation("unicase", unicase_compare).unwrap();
+        db.create_collation("unicase", unicase_compare)?;
 
-        collate(db);
+        collate(db)
     }
 
-    fn collate(db: Connection) {
+    fn collate(db: Connection) -> Result<()> {
         db.execute_batch(
             "CREATE TABLE foo (bar);
              INSERT INTO foo (bar) VALUES ('Maße');
              INSERT INTO foo (bar) VALUES ('MASSE');",
-        )
-        .unwrap();
-        let mut stmt = db
-            .prepare("SELECT DISTINCT bar COLLATE unicase FROM foo ORDER BY 1")
-            .unwrap();
-        let rows = stmt.query(NO_PARAMS).unwrap();
-        assert_eq!(rows.count().unwrap(), 1);
+        )?;
+        let mut stmt = db.prepare("SELECT DISTINCT bar COLLATE unicase FROM foo ORDER BY 1")?;
+        let rows = stmt.query([])?;
+        assert_eq!(rows.count()?, 1);
+        Ok(())
     }
 
     fn collation_needed(db: &Connection, collation_name: &str) -> Result<()> {
@@ -198,9 +205,9 @@ mod test {
     }
 
     #[test]
-    fn test_collation_needed() {
-        let db = Connection::open_in_memory().unwrap();
-        db.collation_needed(collation_needed).unwrap();
-        collate(db);
+    fn test_collation_needed() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.collation_needed(collation_needed)?;
+        collate(db)
     }
 }

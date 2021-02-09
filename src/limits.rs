@@ -9,6 +9,7 @@ use crate::Connection;
 
 impl Connection {
     /// `feature = "limits"` Returns the current value of a limit.
+    #[inline]
     pub fn limit(&self, limit: Limit) -> i32 {
         let c = self.db.borrow();
         unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, -1) }
@@ -16,6 +17,7 @@ impl Connection {
 
     /// `feature = "limits"` Changes the limit to `new_val`, returning the prior
     /// value of the limit.
+    #[inline]
     pub fn set_limit(&self, limit: Limit, new_val: i32) -> i32 {
         let c = self.db.borrow_mut();
         unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, new_val) }
@@ -25,11 +27,11 @@ impl Connection {
 #[cfg(test)]
 mod test {
     use crate::ffi::Limit;
-    use crate::Connection;
+    use crate::{Connection, Result};
 
     #[test]
-    fn test_limit() {
-        let db = Connection::open_in_memory().unwrap();
+    fn test_limit() -> Result<()> {
+        let db = Connection::open_in_memory()?;
         db.set_limit(Limit::SQLITE_LIMIT_LENGTH, 1024);
         assert_eq!(1024, db.limit(Limit::SQLITE_LIMIT_LENGTH));
 
@@ -68,5 +70,6 @@ mod test {
             db.set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, 2);
             assert_eq!(2, db.limit(Limit::SQLITE_LIMIT_WORKER_THREADS));
         }
+        Ok(())
     }
 }

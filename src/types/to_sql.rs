@@ -1,11 +1,12 @@
 use super::{Null, Value, ValueRef};
 #[cfg(feature = "array")]
 use crate::vtab::array::Array;
-use crate::Result;
+use crate::{Error, Result};
 use std::borrow::Cow;
+use std::convert::TryFrom;
 
-/// `ToSqlOutput` represents the possible output types for implementors of the
-/// `ToSql` trait.
+/// `ToSqlOutput` represents the possible output types for implementers of the
+/// [`ToSql`] trait.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum ToSqlOutput<'a> {
@@ -31,6 +32,7 @@ impl<'a, T: ?Sized> From<&'a T> for ToSqlOutput<'a>
 where
     &'a T: Into<ValueRef<'a>>,
 {
+    #[inline]
     fn from(t: &'a T) -> Self {
         ToSqlOutput::Borrowed(t.into())
     }
@@ -44,6 +46,7 @@ where
 macro_rules! from_value(
     ($t:ty) => (
         impl From<$t> for ToSqlOutput<'_> {
+            #[inline]
             fn from(t: $t) -> Self { ToSqlOutput::Owned(t.into())}
         }
     )
@@ -59,6 +62,7 @@ from_value!(isize);
 from_value!(u8);
 from_value!(u16);
 from_value!(u32);
+from_value!(f32);
 from_value!(f64);
 from_value!(Vec<u8>);
 
@@ -72,6 +76,7 @@ from_value!(i128);
 from_value!(uuid::Uuid);
 
 impl ToSql for ToSqlOutput<'_> {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(match *self {
             ToSqlOutput::Borrowed(v) => ToSqlOutput::Borrowed(v),
@@ -85,31 +90,36 @@ impl ToSql for ToSqlOutput<'_> {
     }
 }
 
-/// A trait for types that can be converted into SQLite values.
+/// A trait for types that can be converted into SQLite values. Returns
+/// [`Error::ToSqlConversionFailure`] if the conversion fails.
 pub trait ToSql {
     /// Converts Rust value to SQLite value
     fn to_sql(&self) -> Result<ToSqlOutput<'_>>;
 }
 
 impl<T: ToSql + ToOwned + ?Sized> ToSql for Cow<'_, T> {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         self.as_ref().to_sql()
     }
 }
 
 impl<T: ToSql + ?Sized> ToSql for Box<T> {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         self.as_ref().to_sql()
     }
 }
 
 impl<T: ToSql + ?Sized> ToSql for std::rc::Rc<T> {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         self.as_ref().to_sql()
     }
 }
 
 impl<T: ToSql + ?Sized> ToSql for std::sync::Arc<T> {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         self.as_ref().to_sql()
     }
@@ -130,6 +140,7 @@ impl<T: ToSql + ?Sized> ToSql for std::sync::Arc<T> {
 macro_rules! to_sql_self(
     ($t:ty) => (
         impl ToSql for $t {
+            #[inline]
             fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
                 Ok(ToSqlOutput::from(*self))
             }
@@ -147,6 +158,7 @@ to_sql_self!(isize);
 to_sql_self!(u8);
 to_sql_self!(u16);
 to_sql_self!(u32);
+to_sql_self!(f32);
 to_sql_self!(f64);
 
 #[cfg(feature = "i128_blob")]
@@ -155,46 +167,73 @@ to_sql_self!(i128);
 #[cfg(feature = "uuid")]
 to_sql_self!(uuid::Uuid);
 
+macro_rules! to_sql_self_fallible(
+    ($t:ty) => (
+        impl ToSql for $t {
+            #[inline]
+            fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                Ok(ToSqlOutput::Owned(Value::Integer(
+                    i64::try_from(*self).map_err(
+                        // TODO: Include the values in the error message.
+                        |err| Error::ToSqlConversionFailure(err.into())
+                    )?
+                )))
+            }
+        }
+    )
+);
+
+// Special implementations for usize and u64 because these conversions can fail.
+to_sql_self_fallible!(u64);
+to_sql_self_fallible!(usize);
+
 impl<T: ?Sized> ToSql for &'_ T
 where
     T: ToSql,
 {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         (*self).to_sql()
     }
 }
 
 impl ToSql for String {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::from(self.as_str()))
     }
 }
 
 impl ToSql for str {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::from(self))
     }
 }
 
 impl ToSql for Vec<u8> {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::from(self.as_slice()))
     }
 }
 
 impl ToSql for [u8] {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::from(self))
     }
 }
 
 impl ToSql for Value {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::from(self))
     }
 }
 
 impl<T: ToSql> ToSql for Option<T> {
+    #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         match *self {
             None => Ok(ToSqlOutput::from(Null)),
@@ -300,12 +339,11 @@ mod test {
 
     #[cfg(feature = "i128_blob")]
     #[test]
-    fn test_i128() {
-        use crate::{Connection, NO_PARAMS};
+    fn test_i128() -> crate::Result<()> {
+        use crate::Connection;
         use std::i128;
-        let db = Connection::open_in_memory().unwrap();
-        db.execute_batch("CREATE TABLE foo (i128 BLOB, desc TEXT)")
-            .unwrap();
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE foo (i128 BLOB, desc TEXT)")?;
         db.execute(
             "
             INSERT INTO foo(i128, desc) VALUES
@@ -313,21 +351,16 @@ mod test {
                 (?, 'neg one'), (?, 'neg two'),
                 (?, 'pos one'), (?, 'pos two'),
                 (?, 'min'), (?, 'max')",
-            &[0i128, -1i128, -2i128, 1i128, 2i128, i128::MIN, i128::MAX],
-        )
-        .unwrap();
+            [0i128, -1i128, -2i128, 1i128, 2i128, i128::MIN, i128::MAX],
+        )?;
 
-        let mut stmt = db
-            .prepare("SELECT i128, desc FROM foo ORDER BY i128 ASC")
-            .unwrap();
+        let mut stmt = db.prepare("SELECT i128, desc FROM foo ORDER BY i128 ASC")?;
 
         let res = stmt
-            .query_map(NO_PARAMS, |row| {
+            .query_map([], |row| {
                 Ok((row.get::<_, i128>(0)?, row.get::<_, String>(1)?))
-            })
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
 
         assert_eq!(
             res,
@@ -341,37 +374,35 @@ mod test {
                 (i128::MAX, "max".to_owned()),
             ]
         );
+        Ok(())
     }
 
     #[cfg(feature = "uuid")]
     #[test]
-    fn test_uuid() {
+    fn test_uuid() -> crate::Result<()> {
         use crate::{params, Connection};
         use uuid::Uuid;
 
-        let db = Connection::open_in_memory().unwrap();
-        db.execute_batch("CREATE TABLE foo (id BLOB CHECK(length(id) = 16), label TEXT);")
-            .unwrap();
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE foo (id BLOB CHECK(length(id) = 16), label TEXT);")?;
 
         let id = Uuid::new_v4();
 
         db.execute(
             "INSERT INTO foo (id, label) VALUES (?, ?)",
             params![id, "target"],
-        )
-        .unwrap();
+        )?;
 
-        let mut stmt = db
-            .prepare("SELECT id, label FROM foo WHERE id = ?")
-            .unwrap();
+        let mut stmt = db.prepare("SELECT id, label FROM foo WHERE id = ?")?;
 
-        let mut rows = stmt.query(params![id]).unwrap();
-        let row = rows.next().unwrap().unwrap();
+        let mut rows = stmt.query(params![id])?;
+        let row = rows.next()?.unwrap();
 
         let found_id: Uuid = row.get_unwrap(0);
         let found_label: String = row.get_unwrap(1);
 
         assert_eq!(found_id, id);
         assert_eq!(found_label, "target");
+        Ok(())
     }
 }
