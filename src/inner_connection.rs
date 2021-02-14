@@ -432,10 +432,10 @@ To fix this, either:
   rusqlite::bypass_sqlite_initialization() prior to your first connection attempt.";
 
                 if ffi::sqlite3_config(ffi::SQLITE_CONFIG_MULTITHREAD) != ffi::SQLITE_OK {
-                    panic!(msg);
+                    std::panic::panic_any(msg);
                 }
                 if ffi::sqlite3_initialize() != ffi::SQLITE_OK {
-                    panic!(msg);
+                    std::panic::panic_any(msg);
                 }
             }
         });
