@@ -48,27 +48,71 @@ mod preupdate_hook {
     use crate::types::ValueRef;
     use crate::{Connection, InnerConnection};
 
-    // TODO: how to allow user access to these functions, since they should be only accessible in
-    // the scope of a preupdate_hook callback.
-    pub struct PreUpdateHookFunctions {
+    pub enum PreUpdateCase {
+        Insert(PreUpdateInsert),
+        Delete(PreUpdateDelete),
+        Update(PreUpdateUpdate),
+    }
+
+    pub struct PreUpdateInsert {
         db: *mut ffi::sqlite3,
     }
 
-    impl PreUpdateHookFunctions {
-        pub unsafe fn get_count(&self) -> i32 {
-            ffi::sqlite3_preupdate_count(self.db)
+    impl PreUpdateInsert {
+        pub fn get_count(&self) -> i32 {
+            unsafe { ffi::sqlite3_preupdate_count(self.db) }
         }
 
-        pub unsafe fn get_old(&self, i: i32) -> ValueRef {
+        pub fn get_new<'a>(&'a self, i: i32) -> ValueRef<'a> {
             let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
-            ffi::sqlite3_preupdate_old(self.db, i, &mut p_value);
-            ValueRef::from_value(p_value)
+            unsafe {
+                ffi::sqlite3_preupdate_new(self.db, i, &mut p_value);
+                ValueRef::from_value(p_value)
+            }
+        }
+    }
+
+    pub struct PreUpdateDelete {
+        db: *mut ffi::sqlite3,
+    }
+
+    impl PreUpdateDelete {
+        pub fn get_count(&self) -> i32 {
+            unsafe { ffi::sqlite3_preupdate_count(self.db) }
         }
 
-        pub unsafe fn get_new(&self, i: i32) -> ValueRef {
+        pub fn get_old<'a>(&'a self, i: i32) -> ValueRef<'a> {
             let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
-            ffi::sqlite3_preupdate_new(self.db, i, &mut p_value);
-            ValueRef::from_value(p_value)
+            unsafe {
+                ffi::sqlite3_preupdate_old(self.db, i, &mut p_value);
+                ValueRef::from_value(p_value)
+            }
+        }
+    }
+
+    pub struct PreUpdateUpdate {
+        db: *mut ffi::sqlite3,
+    }
+
+    impl PreUpdateUpdate {
+        pub fn get_count(&self) -> i32 {
+            unsafe { ffi::sqlite3_preupdate_count(self.db) }
+        }
+
+        pub fn get_old<'a>(&'a self, i: i32) -> ValueRef<'a> {
+            let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
+            unsafe {
+                ffi::sqlite3_preupdate_old(self.db, i, &mut p_value);
+                ValueRef::from_value(p_value)
+            }
+        }
+
+        pub fn get_new<'a>(&'a self, i: i32) -> ValueRef<'a> {
+            let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
+            unsafe {
+                ffi::sqlite3_preupdate_new(self.db, i, &mut p_value);
+                ValueRef::from_value(p_value)
+            }
         }
     }
 
@@ -88,7 +132,7 @@ mod preupdate_hook {
         #[inline]
         pub fn preupdate_hook<'c, F>(&'c self, hook: Option<F>)
         where
-            F: FnMut(Action, &str, &str, i64, i64, &PreUpdateHookFunctions) + Send + 'c,
+            F: FnMut(Action, &str, &str, i64, i64, &PreUpdateCase) + Send + 'c,
         {
             self.db.borrow_mut().preupdate_hook(hook);
         }
@@ -97,12 +141,12 @@ mod preupdate_hook {
     impl InnerConnection {
         #[inline]
         pub fn remove_preupdate_hook(&mut self) {
-            self.preupdate_hook(None::<fn(Action, &str, &str, i64, i64, &PreUpdateHookFunctions)>);
+            self.preupdate_hook(None::<fn(Action, &str, &str, i64, i64, &PreUpdateCase)>);
         }
 
         fn preupdate_hook<'c, F>(&'c mut self, hook: Option<F>)
         where
-            F: FnMut(Action, &str, &str, i64, i64, &PreUpdateHookFunctions) + Send + 'c,
+            F: FnMut(Action, &str, &str, i64, i64, &PreUpdateCase) + Send + 'c,
         {
             unsafe extern "C" fn call_boxed_closure<F>(
                 p_arg: *mut c_void,
@@ -113,7 +157,7 @@ mod preupdate_hook {
                 row_id: i64,
                 new_row_id: i64,
             ) where
-                F: FnMut(Action, &str, &str, i64, i64, &PreUpdateHookFunctions),
+                F: FnMut(Action, &str, &str, i64, i64, &PreUpdateCase),
             {
                 use std::ffi::CStr;
                 use std::str;
@@ -128,12 +172,12 @@ mod preupdate_hook {
                     str::from_utf8(c_slice)
                 };
 
-                // TODO: how to properly allow a user to use the functions
-                // (sqlite3_preupdate_old,...) that are only in scope
-                // during the callback?
-                // Also how to pass in the rowids, because they can be undefined based on the
-                // action.
-                let preupdate_hook_functions = PreUpdateHookFunctions { db: sqlite };
+                let preupdate_hook_functions = match action {
+                    Action::SQLITE_INSERT => PreUpdateCase::Insert(PreUpdateInsert { db: sqlite }),
+                    Action::SQLITE_DELETE => PreUpdateCase::Delete(PreUpdateDelete { db: sqlite }),
+                    Action::SQLITE_UPDATE => PreUpdateCase::Update(PreUpdateUpdate { db: sqlite }),
+                    _ => todo!(),
+                };
 
                 let _ = catch_unwind(|| {
                     let boxed_hook: *mut F = p_arg as *mut F;
@@ -179,7 +223,7 @@ mod preupdate_hook {
     #[cfg(test)]
     mod test {
         use super::super::Action;
-        use super::PreUpdateHookFunctions;
+        use super::PreUpdateCase;
         use crate::{Connection, Result};
 
         #[test]
@@ -188,12 +232,7 @@ mod preupdate_hook {
 
             let mut called = false;
             db.preupdate_hook(Some(
-                |action,
-                 db: &str,
-                 tbl: &str,
-                 row_id,
-                 new_row_id,
-                 _func: &PreUpdateHookFunctions| {
+                |action, db: &str, tbl: &str, row_id, new_row_id, _func: &PreUpdateCase| {
                     assert_eq!(Action::SQLITE_INSERT, action);
                     assert_eq!("main", db);
                     assert_eq!("foo", tbl);
