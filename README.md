@@ -13,7 +13,7 @@ Rusqlite is an ergonomic wrapper for using SQLite from Rust. It attempts to expo
 an interface similar to [rust-postgres](https://github.com/sfackler/rust-postgres).
 
 ```rust
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection, Result, NO_PARAMS};
 
 #[derive(Debug)]
 struct Person {
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
                   name            TEXT NOT NULL,
                   data            BLOB
                   )",
-        [],
+        params!(),
     )?;
     let me = Person {
         id: 0,
@@ -44,7 +44,7 @@ fn main() -> Result<()> {
     )?;
 
     let mut stmt = conn.prepare("SELECT id, name, data FROM person")?;
-    let person_iter = stmt.query_map([], |row| {
+    let person_iter = stmt.query_map(NO_PARAMS, |row| {
         Ok(Person {
             id: row.get(0)?,
             name: row.get(1)?,
