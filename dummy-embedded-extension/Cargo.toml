@@ -1,10 +1,10 @@
 [package]
-name = "dummy-extension"
+name = "dummy-embedded-extension"
 version = "0.0.1"
 authors = ["The rusqlite developers"]
 edition = "2018"
 repository = "https://github.com/rusqlite/rusqlite"
-description = "Dummy extension to demonstrate and test rusqlite feature loadable_extension"
+description = "Dummy embedded extension to demonstrate and test rusqlite feature loadable_extension_embedded"
 license = "MIT"
 keywords = ["sqlite", "extension"]
 
@@ -16,8 +16,11 @@ crate-type = ["cdylib"]
 [dependencies.rusqlite]
 path = ".."
 default-features = false
-features = ["loadable_extension", "vtab", "functions", "bundled"]
+features = ["loadable_extension_embedded", "vtab", "functions", "bundled"]
 version = "0.24.2"
+
+[build-dependencies]
+cbindgen = "0.18.0"
 
 [workspace]
 members = []

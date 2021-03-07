@@ -12,18 +12,27 @@ use rusqlite::{
 };
 use rusqlite::{to_sqlite_error, Connection, Result};
 
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
+/// dummy_embedded_extension_init is the entry point for this library.
+///
+/// This crate produces a cdylib that is intended to be embedded within
+/// (i.e. linked into) another library that implements the sqlite loadable
+/// extension entrypoint.
+///
+/// In the case of this example code, refer to the `dummy-c-host-extension`
+/// C code to find where this entry point is invoked.
+///
+/// Note that this interface is private between the host extension and this
+/// library - it can have any signature as long as it passes the *sqlite3 db
+/// pointer so we can use it to initialize our rusqlite::Connection.
+///
+/// It does *not* have to return sqlite status codes (such as SQLITE_OK), we
+/// just do that here to keep the C extension simple.
 #[no_mangle]
-pub extern "C" fn sqlite3_extension_init(
+pub extern "C" fn dummy_embedded_extension_init(
     db: *mut ffi::sqlite3,
     pz_err_msg: *mut *mut c_char,
-    p_api: *mut ffi::sqlite3_api_routines,
 ) -> c_int {
-    // SQLITE_EXTENSION_INIT2 equivalent
-    unsafe {
-        ffi::sqlite3_api = p_api;
-    }
-    let res = dummy_init(db);
+    let res = dummy_embedded_init(db);
     if let Err(err) = res {
         return unsafe { to_sqlite_error(&err, pz_err_msg) };
     }
@@ -32,24 +41,24 @@ pub extern "C" fn sqlite3_extension_init(
 }
 
 #[repr(C)]
-struct DummyTab {
+struct DummyEmbeddedTab {
     /// Base class. Must be first
     base: sqlite3_vtab,
 }
 
-unsafe impl<'vtab> VTab<'vtab> for DummyTab {
+unsafe impl<'vtab> VTab<'vtab> for DummyEmbeddedTab {
     type Aux = ();
-    type Cursor = DummyTabCursor<'vtab>;
+    type Cursor = DummyEmbeddedTabCursor<'vtab>;
 
     fn connect(
         _: &mut VTabConnection,
         _aux: Option<&()>,
         _args: &[&[u8]],
-    ) -> Result<(String, DummyTab)> {
-        let vtab = DummyTab {
+    ) -> Result<(String, DummyEmbeddedTab)> {
+        let vtab = DummyEmbeddedTab {
             base: sqlite3_vtab::default(),
         };
-        Ok(("CREATE TABLE x(value)".to_owned(), vtab))
+        Ok(("CREATE TABLE x(value TEXT)".to_owned(), vtab))
     }
 
     fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
@@ -57,22 +66,22 @@ unsafe impl<'vtab> VTab<'vtab> for DummyTab {
         Ok(())
     }
 
-    fn open(&'vtab self) -> Result<DummyTabCursor<'vtab>> {
-        Ok(DummyTabCursor::default())
+    fn open(&'vtab self) -> Result<DummyEmbeddedTabCursor<'vtab>> {
+        Ok(DummyEmbeddedTabCursor::default())
     }
 }
 
 #[derive(Default)]
 #[repr(C)]
-struct DummyTabCursor<'vtab> {
+struct DummyEmbeddedTabCursor<'vtab> {
     /// Base class. Must be first
     base: sqlite3_vtab_cursor,
     /// The rowid
     row_id: i64,
-    phantom: PhantomData<&'vtab DummyTab>,
+    phantom: PhantomData<&'vtab DummyEmbeddedTab>,
 }
 
-unsafe impl VTabCursor for DummyTabCursor<'_> {
+unsafe impl VTabCursor for DummyEmbeddedTabCursor<'_> {
     fn filter(
         &mut self,
         _idx_num: c_int,
@@ -93,7 +102,7 @@ unsafe impl VTabCursor for DummyTabCursor<'_> {
     }
 
     fn column(&self, ctx: &mut Context, _: c_int) -> Result<()> {
-        ctx.set_result(&self.row_id)
+        ctx.set_result(&"dummy_embedded_test_value".to_string())
     }
 
     fn rowid(&self) -> Result<i64> {
@@ -101,18 +110,18 @@ unsafe impl VTabCursor for DummyTabCursor<'_> {
     }
 }
 
-fn dummy_init(db: *mut ffi::sqlite3) -> Result<()> {
+fn dummy_embedded_init(db: *mut ffi::sqlite3) -> Result<()> {
     let conn = unsafe { Connection::from_handle(db)? };
-    eprintln!("inited dummy module {:?}", db);
+    eprintln!("inited dummy embedded extension module {:?}", db);
     conn.create_scalar_function(
-        "dummy_test_function",
+        "dummy_embedded_test_function",
         0,
         FunctionFlags::SQLITE_DETERMINISTIC,
         |_ctx| {
             Ok(ToSqlOutput::Owned(Value::Text(
-                "Dummy extension loaded correctly!".to_string(),
+                "Dummy embedded extension loaded correctly!".to_string(),
             )))
         },
     )?;
-    conn.create_module::<DummyTab>("dummy", eponymous_only_module::<DummyTab>(), None)
+    conn.create_module::<DummyEmbeddedTab>("dummy_embedded", eponymous_only_module::<DummyEmbeddedTab>(), None)
 }
