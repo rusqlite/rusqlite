@@ -16,6 +16,8 @@ sqlite3 amalgamation source links
 ---------------------------------
 The location of the amalgamation sources used to build these are:
   - [3.7.16](https://sqlite.org/2013/sqlite-amalgamation-3071600.zip)
+  - [3.7.7](https://sqlite.org/sqlite-amalgamation-3070700.zip)
+  - [3.6.23](https://sqlite.org/sqlite-amalgamation-3_6_23.zip)
   - [3.6.8](https://sqlite.org/sqlite-amalgamation-3_6_8.zip)
 
 

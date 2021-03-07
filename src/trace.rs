@@ -2,6 +2,8 @@
 
 use std::ffi::CStr;
 use std::mem;
+#[cfg(not(feature = "loadable_extension"))]
+use std::os::raw::c_int;
 use std::os::raw::{c_char, c_void};
 use std::panic::catch_unwind;
 use std::ptr;
@@ -24,13 +26,9 @@ use crate::Connection;
 ///     * It must be threadsafe if SQLite is used in a multithreaded way.
 ///
 /// cf [The Error And Warning Log](http://sqlite.org/errlog.html).
-#[cfg(not(any(
-    feature = "loadable_extension",
-    feature = "loadable_extension_embedded"
-)))]
-pub unsafe fn config_log(callback: Option<fn(std::os::raw::c_int, &str)>) -> crate::Result<()> {
+#[cfg(not(feature = "loadable_extension"))]
+pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> crate::Result<()> {
     use crate::error::error_from_sqlite_code;
-    use std::os::raw::c_int;
     extern "C" fn log_callback(p_arg: *mut c_void, err: c_int, msg: *const c_char) {
         let c_slice = unsafe { CStr::from_ptr(msg).to_bytes() };
         let callback: fn(c_int, &str) = unsafe { mem::transmute(p_arg) };
@@ -60,14 +58,11 @@ pub unsafe fn config_log(callback: Option<fn(std::os::raw::c_int, &str)>) -> cra
 
 /// `feature = "trace"` Write a message into the error log established by
 /// `config_log`.
-#[cfg(not(any(
-    feature = "loadable_extension",
-    feature = "loadable_extension_embedded"
-)))]
 #[inline]
-pub fn log(err_code: std::os::raw::c_int, msg: &str) {
-    use std::ffi::CString;
-    let msg = CString::new(msg).expect("SQLite log messages cannot contain embedded zeroes");
+#[cfg(not(feature = "loadable_extension"))]
+pub fn log(err_code: c_int, msg: &str) {
+    let msg =
+        std::ffi::CString::new(msg).expect("SQLite log messages cannot contain embedded zeroes");
     unsafe {
         ffi::sqlite3_log(err_code, b"%s\0" as *const _ as *const c_char, msg.as_ptr());
     }
@@ -153,8 +148,8 @@ mod test {
         let mut db = Connection::open_in_memory()?;
         db.trace(Some(tracer));
         {
-            let _ = db.query_row("SELECT ?", &[&1i32], |_| Ok(()));
-            let _ = db.query_row("SELECT ?", &["hello"], |_| Ok(()));
+            let _ = db.query_row("SELECT ?", [1i32], |_| Ok(()));
+            let _ = db.query_row("SELECT ?", ["hello"], |_| Ok(()));
         }
         db.trace(None);
         {

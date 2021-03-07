@@ -1,10 +1,7 @@
 //! Ensure we reject connections when SQLite is in single-threaded mode, as it
 //! would violate safety if multiple Rust threads tried to use connections.
 
-#[cfg(not(any(
-    feature = "loadable_extension",
-    feature = "loadable_extension_embedded"
-)))]
+#[cfg(not(feature = "loadable_extension"))]
 #[test]
 #[should_panic]
 fn test_error_when_singlethread_mode() {

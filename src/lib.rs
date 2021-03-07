@@ -71,10 +71,6 @@ use crate::types::ValueRef;
 
 pub use crate::cache::CachedStatement;
 pub use crate::column::Column;
-#[cfg(any(
-    feature = "loadable_extension",
-    feature = "loadable_extension_embedded"
-))]
 pub use crate::error::to_sqlite_error;
 pub use crate::error::Error;
 pub use crate::ffi::ErrorCode;
@@ -101,10 +97,6 @@ mod cache;
 #[cfg(feature = "collation")]
 mod collation;
 mod column;
-#[cfg(not(any(
-    feature = "loadable_extension",
-    feature = "loadable_extension_embedded"
-)))]
 pub mod config;
 #[cfg(any(feature = "functions", feature = "vtab"))]
 mod context;
@@ -531,7 +523,7 @@ impl Connection {
     /// fn insert(conn: &Connection) -> Result<usize> {
     ///     conn.execute(
     ///         "INSERT INTO test (name) VALUES (:name)",
-    ///         rusqlite::named_params!{ ":name": "one" },
+    ///         &[(":name", "one")],
     ///     )
     /// }
     /// ```
@@ -682,8 +674,8 @@ impl Connection {
     /// # use rusqlite::{Connection, Result};
     /// fn insert_new_people(conn: &Connection) -> Result<()> {
     ///     let mut stmt = conn.prepare("INSERT INTO People (name) VALUES (?)")?;
-    ///     stmt.execute(&["Joe Smith"])?;
-    ///     stmt.execute(&["Bob Jones"])?;
+    ///     stmt.execute(["Joe Smith"])?;
+    ///     stmt.execute(["Bob Jones"])?;
     ///     Ok(())
     /// }
     /// ```
@@ -1018,10 +1010,8 @@ impl InterruptHandle {
     pub fn interrupt(&self) {
         let db_handle = self.db_lock.lock().unwrap();
         if !db_handle.is_null() {
-            #[cfg(not(any(
-                feature = "loadable_extension",
-                feature = "loadable_extension_embedded"
-            )))] // no sqlite3_interrupt in a loadable extension
+            #[cfg(not(feature = "loadable_extension"))]
+            // no sqlite3_interrupt in a loadable extension
             unsafe {
                 ffi::sqlite3_interrupt(*db_handle)
             }
@@ -1099,7 +1089,7 @@ mod test {
             tx1.query_row("SELECT x FROM foo LIMIT 1", [], |_| Ok(()))?;
             tx2.query_row("SELECT x FROM foo LIMIT 1", [], |_| Ok(()))?;
 
-            tx1.execute("INSERT INTO foo VALUES(?1)", &[&1])?;
+            tx1.execute("INSERT INTO foo VALUES(?1)", [1])?;
             let _ = tx2.execute("INSERT INTO foo VALUES(?1)", [2]);
 
             let _ = tx1.commit();
@@ -1332,8 +1322,8 @@ mod test {
         assert_eq!(insert_stmt.execute([2i32])?, 1);
         assert_eq!(insert_stmt.execute([3i32])?, 1);
 
-        assert_eq!(insert_stmt.execute(["hello".to_string()])?, 1);
-        assert_eq!(insert_stmt.execute(["goodbye".to_string()])?, 1);
+        assert_eq!(insert_stmt.execute(["hello"])?, 1);
+        assert_eq!(insert_stmt.execute(["goodbye"])?, 1);
         assert_eq!(insert_stmt.execute([types::Null])?, 1);
 
         let mut update_stmt = db.prepare("UPDATE foo SET x=? WHERE x<?")?;

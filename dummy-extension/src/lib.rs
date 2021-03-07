@@ -103,12 +103,12 @@ unsafe impl VTabCursor for DummyTabCursor<'_> {
 
 fn dummy_init(db: *mut ffi::sqlite3) -> Result<()> {
     let conn = unsafe { Connection::from_handle(db)? };
-    println!("initied dummy module {:?}", db);
+    eprintln!("inited dummy module {:?}", db);
     conn.create_scalar_function(
         "dummy_test_function",
         0,
         FunctionFlags::SQLITE_DETERMINISTIC,
-        |ctx| {
+        |_ctx| {
             Ok(ToSqlOutput::Owned(Value::Text(
                 "Loaded correctly!".to_string(),
             )))

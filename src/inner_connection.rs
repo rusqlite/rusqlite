@@ -368,11 +368,7 @@ rusqlite was built against SQLite {} but the runtime SQLite version is {}. To fi
     });
 }
 
-#[cfg(not(any(
-    target_arch = "wasm32",
-    feature = "loadable_extension",
-    feature = "loadable_extension_embedded",
-)))]
+#[cfg(not(any(target_arch = "wasm32", feature = "loadable_extension",)))]
 static SQLITE_INIT: std::sync::Once = std::sync::Once::new();
 
 pub static BYPASS_SQLITE_INIT: AtomicBool = AtomicBool::new(false);
@@ -380,23 +376,16 @@ pub static BYPASS_SQLITE_INIT: AtomicBool = AtomicBool::new(false);
 // threading mode checks are not necessary (and do not work) on target
 // platforms that do not have threading (such as webassembly)
 //
-// threading mode checks are not possible when built as a loadable extension
-// since the sqlite3_threadsafe, sqlite3_config, and sqlite3_initialize
-// API calls are not available via the sqlite3_api_routines struct.
-#[cfg(any(
-    target_arch = "wasm32",
-    feature = "loadable_extension",
-    feature = "loadable_extension_embedded",
-))]
+// threading mode checks are also not possible when built as a loadable extension
+// since the sqlite3_threadsafe, sqlite3_config, and sqlite3_initialize API calls
+// are not available via the sqlite3_api_routines struct.
+#[cfg(any(target_arch = "wasm32", feature = "loadable_extension",))]
+#[allow(clippy::unnecessary_wraps)]
 fn ensure_safe_sqlite_threading_mode() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(any(
-    target_arch = "wasm32",
-    feature = "loadable_extension",
-    feature = "loadable_extension_embedded",
-)))]
+#[cfg(not(any(target_arch = "wasm32", feature = "loadable_extension",)))]
 fn ensure_safe_sqlite_threading_mode() -> Result<()> {
     use crate::version::version_number;
     use std::sync::atomic::Ordering;
@@ -443,18 +432,14 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
             }
 
             unsafe {
-                let msg = "\
-Could not ensure safe initialization of SQLite.
-To fix this, either:
-* Upgrade SQLite to at least version 3.7.0
-* Ensure that SQLite has been initialized in Multi-thread or Serialized mode and call
-  rusqlite::bypass_sqlite_initialization() prior to your first connection attempt.";
-
-                if ffi::sqlite3_config(ffi::SQLITE_CONFIG_MULTITHREAD) != ffi::SQLITE_OK {
-                    panic!(msg);
-                }
-                if ffi::sqlite3_initialize() != ffi::SQLITE_OK {
-                    panic!(msg);
+                if ffi::sqlite3_config(ffi::SQLITE_CONFIG_MULTITHREAD) != ffi::SQLITE_OK || ffi::sqlite3_initialize() != ffi::SQLITE_OK {
+                    panic!(
+                        "Could not ensure safe initialization of SQLite.\n\
+                         To fix this, either:\n\
+                         * Upgrade SQLite to at least version 3.7.0\n\
+                         * Ensure that SQLite has been initialized in Multi-thread or Serialized mode and call\n\
+                           rusqlite::bypass_sqlite_initialization() prior to your first connection attempt."
+                    );
                 }
             }
         });

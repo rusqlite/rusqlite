@@ -12,7 +12,6 @@ license = "MIT"
 categories = ["database"]
 
 [badges]
-travis-ci = { repository = "rusqlite/rusqlite" }
 appveyor = { repository = "rusqlite/rusqlite" }
 codecov = { repository = "rusqlite/rusqlite" }
 maintenance = { status = "actively-developed" }
@@ -21,38 +20,38 @@ maintenance = { status = "actively-developed" }
 name = "rusqlite"
 
 [workspace]
-members = ["libsqlite3-sys", "dummy-extension"]
+members = ["libsqlite3-sys"]
 
 [features]
 load_extension = []
 # hot-backup interface: 3.6.11 (2009-02-18)
-backup = ["libsqlite3-sys/min_sqlite_version_3_7_16"]
+backup = ["libsqlite3-sys/min_sqlite_version_3_6_23"]
 # sqlite3_blob_reopen: 3.7.4
-blob = ["libsqlite3-sys/min_sqlite_version_3_7_16"]
+blob = ["libsqlite3-sys/min_sqlite_version_3_7_7"]
 collation = []
 # sqlite3_create_function_v2: 3.7.3 (2010-10-08)
-functions = ["libsqlite3-sys/min_sqlite_version_3_7_16"]
+# functions requires ffi::SQLITE_DETERMINISTIC: 3.8.3 (2014-02-03)
+functions = ["modern_sqlite"]
 # sqlite3_log: 3.6.23 (2010-03-09)
-trace = ["libsqlite3-sys/min_sqlite_version_3_7_16"]
+trace = ["libsqlite3-sys/min_sqlite_version_3_6_23"]
 bundled = ["libsqlite3-sys/bundled", "modern_sqlite"]
 buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
 loadable_extension = ["libsqlite3-sys/loadable_extension"]
-loadable_extension_embedded = ["libsqlite3-sys/loadable_extension_embedded"]
+loadable_extension_embedded = ["loadable_extension", "libsqlite3-sys/loadable_extension_embedded"]
 limits = []
 hooks = []
 i128_blob = ["byteorder"]
-# when `sqlcipher` is used, `bundled` and `loadable_extension` are ignored
 sqlcipher = ["libsqlite3-sys/sqlcipher"]
 unlock_notify = ["libsqlite3-sys/unlock_notify"]
 # xSavepoint, xRelease and xRollbackTo: 3.7.7 (2011-06-23)
-vtab = ["libsqlite3-sys/min_sqlite_version_3_7_16", "lazy_static"]
+vtab = ["libsqlite3-sys/min_sqlite_version_3_7_7", "lazy_static"]
 csvtab = ["csv", "vtab"]
 # pointer passing interfaces: 3.20.0
-array = ["vtab"]
+array = ["modern_sqlite", "vtab"]
 # session extension: 3.13.0
-session = ["libsqlite3-sys/session", "hooks"]
+session = ["modern_sqlite", "libsqlite3-sys/session", "hooks"]
 # window functions: 3.25.0
-window = ["functions"]
+window = ["modern_sqlite", "functions"]
 # 3.9.0
 series = ["vtab"]
 # check for invalid query.

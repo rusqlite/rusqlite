@@ -345,19 +345,6 @@ pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     error_from_sqlite_code(code, message)
 }
 
-/// Check SQLite method call.
-/// ```rust,ignore
-/// # use rusqlite::{self, ffi, Result};
-/// fn xyz() -> Result<()> {
-///     
-///     unsafe {
-///        // returns an Error if sqlite3_initialize fails
-///        rusqlite::check!(ffi::sqlite3_initialize());
-///     }
-///     Ok(())
-/// }
-/// ```
-#[macro_export]
 macro_rules! check {
     ($funcall:expr) => {{
         let rc = $funcall;
@@ -370,25 +357,19 @@ macro_rules! check {
 /// Transform Rust error to SQLite error (message and code).
 /// # Safety
 /// This function is unsafe because it uses raw pointer
-#[cfg(any(
-    feature = "vtab",
-    feature = "loadable_extension",
-    feature = "loadable_extension_embedded"
-))]
 pub unsafe fn to_sqlite_error(
     e: &Error,
     err_msg: *mut *mut std::os::raw::c_char,
 ) -> std::os::raw::c_int {
-    use crate::util::alloc;
     match e {
         Error::SqliteFailure(err, s) => {
             if let Some(s) = s {
-                *err_msg = alloc(&s);
+                *err_msg = crate::util::SqliteMallocString::from_str(&s).into_raw();
             }
             err.extended_code
         }
         err => {
-            *err_msg = alloc(&err.to_string());
+            *err_msg = crate::util::SqliteMallocString::from_str(&err.to_string()).into_raw();
             ffi::SQLITE_ERROR
         }
     }

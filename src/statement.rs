@@ -82,7 +82,7 @@ impl Statement<'_> {
     /// underlying SQLite call fails.
     #[inline]
     pub fn execute<P: Params>(&mut self, params: P) -> Result<usize> {
-        params.bind_in(self)?;
+        params.__bind_in(self)?;
         self.execute_with_bound_parameters()
     }
 
@@ -178,7 +178,7 @@ impl Statement<'_> {
     /// # use rusqlite::{Connection, Result};
     /// fn query(conn: &Connection, name: &str) -> Result<()> {
     ///     let mut stmt = conn.prepare("SELECT * FROM test where name = ?")?;
-    ///     let mut rows = stmt.query(&[name])?;
+    ///     let mut rows = stmt.query([name])?;
     ///     while let Some(row) = rows.next()? {
     ///         // ...
     ///     }
@@ -192,7 +192,7 @@ impl Statement<'_> {
     /// # use rusqlite::{Connection, Result};
     /// fn query(conn: &Connection) -> Result<()> {
     ///     let mut stmt = conn.prepare("SELECT * FROM test where name = :name")?;
-    ///     let mut rows = stmt.query(&[(":name", &"one")])?;
+    ///     let mut rows = stmt.query(&[(":name", "one")])?;
     ///     while let Some(row) = rows.next()? {
     ///         // ...
     ///     }
@@ -220,8 +220,7 @@ impl Statement<'_> {
     /// Will return `Err` if binding parameters fails.
     #[inline]
     pub fn query<P: Params>(&mut self, params: P) -> Result<Rows<'_>> {
-        self.check_readonly()?;
-        params.bind_in(self)?;
+        params.__bind_in(self)?;
         Ok(Rows::new(self))
     }
 
@@ -352,7 +351,7 @@ impl Statement<'_> {
     /// fn get_names(conn: &Connection) -> Result<Vec<Person>> {
     ///     let mut stmt = conn.prepare("SELECT name FROM people WHERE id = :id")?;
     ///     let rows =
-    ///         stmt.query_and_then(&[(":id", &"one")], |row| name_to_person(row.get(0)?))?;
+    ///         stmt.query_and_then(&[(":id", "one")], |row| name_to_person(row.get(0)?))?;
     ///
     ///     let mut persons = Vec::new();
     ///     for person_result in rows {
@@ -369,7 +368,7 @@ impl Statement<'_> {
     /// # use rusqlite::{Connection, Result};
     /// fn get_names(conn: &Connection) -> Result<Vec<String>> {
     ///     let mut stmt = conn.prepare("SELECT name FROM people WHERE id = ?")?;
-    ///     let rows = stmt.query_and_then(&["one"], |row| row.get::<_, String>(0))?;
+    ///     let rows = stmt.query_and_then(["one"], |row| row.get::<_, String>(0))?;
     ///
     ///     let mut persons = Vec::new();
     ///     for person_result in rows {
@@ -718,21 +717,6 @@ impl Statement<'_> {
         self.conn.decode_result(stmt.finalize())
     }
 
-    #[cfg(not(feature = "modern_sqlite"))]
-    #[inline]
-    fn check_readonly(&self) -> Result<()> {
-        Ok(())
-    }
-
-    #[cfg(feature = "modern_sqlite")]
-    #[inline]
-    fn check_readonly(&self) -> Result<()> {
-        /*if !self.stmt.readonly() { does not work for PRAGMA
-            return Err(Error::InvalidQuery);
-        }*/
-        Ok(())
-    }
-
     #[cfg(all(feature = "modern_sqlite", feature = "extra_check"))]
     #[inline]
     fn check_update(&self) -> Result<()> {
@@ -755,6 +739,7 @@ impl Statement<'_> {
 
     #[cfg(not(feature = "extra_check"))]
     #[inline]
+    #[allow(clippy::unnecessary_wraps)]
     fn check_update(&self) -> Result<()> {
         Ok(())
     }
@@ -770,10 +755,6 @@ impl Statement<'_> {
 
     /// Get the value for one of the status counters for this statement.
     #[inline]
-    #[cfg(not(any(
-        feature = "loadable_extension",
-        feature = "loadable_extension_embedded"
-    )))]
     pub fn get_status(&self, status: StatementStatus) -> i32 {
         self.stmt.get_status(status, false)
     }
@@ -781,10 +762,6 @@ impl Statement<'_> {
     /// Reset the value of one of the status counters for this statement,
     #[inline]
     /// returning the value it had before resetting.
-    #[cfg(not(any(
-        feature = "loadable_extension",
-        feature = "loadable_extension_embedded"
-    )))]
     pub fn reset_status(&self, status: StatementStatus) -> i32 {
         self.stmt.get_status(status, true)
     }
@@ -801,6 +778,7 @@ impl Statement<'_> {
 
     #[cfg(not(feature = "extra_check"))]
     #[inline]
+    #[allow(clippy::unnecessary_wraps)]
     pub(crate) fn check_no_tail(&self) -> Result<()> {
         Ok(())
     }
@@ -1007,7 +985,7 @@ mod test {
         );
         assert_eq!(
             1i32,
-            stmt.query_row::<i32, _, _>(&[(":name", &"one")], |r| r.get(0))?
+            stmt.query_row::<i32, _, _>(&[(":name", "one")], |r| r.get(0))?
         );
         Ok(())
     }
@@ -1032,7 +1010,7 @@ mod test {
 
         // plain api
         {
-            let mut rows = stmt.query(&[(":name", &"one")])?;
+            let mut rows = stmt.query(&[(":name", "one")])?;
             let id: Result<i32> = rows.next()?.unwrap().get(0);
             assert_eq!(Ok(1), id);
         }
@@ -1062,7 +1040,7 @@ mod test {
         }
         // plain api
         {
-            let mut rows = stmt.query_map(&[(":name", &"one")], |row| {
+            let mut rows = stmt.query_map(&[(":name", "one")], |row| {
                 let id: Result<i32> = row.get(0);
                 id.map(|i| 2 * i)
             })?;
@@ -1119,7 +1097,7 @@ mod test {
         db.execute_batch(sql)?;
 
         let mut stmt = db.prepare("SELECT id FROM test where name = :name ORDER BY id ASC")?;
-        let mut rows = stmt.query_and_then(&[(":name", &"one")], |row| {
+        let mut rows = stmt.query_and_then(&[(":name", "one")], |row| {
             let id: i32 = row.get(0)?;
             if id == 1 {
                 Ok(id)
@@ -1196,8 +1174,8 @@ mod test {
         db.execute_batch(sql)?;
 
         let mut stmt = db.prepare("INSERT INTO test (x, y) VALUES (:x, :y)")?;
-        stmt.execute(&[(":x", &"one")])?;
-        stmt.execute(&[(":y", &"two")])?;
+        stmt.execute(&[(":x", "one")])?;
+        stmt.execute(&[(":y", "two")])?;
 
         let result: String =
             db.query_row("SELECT x FROM test WHERE y = 'two'", [], |row| row.get(0))?;
@@ -1210,9 +1188,9 @@ mod test {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER UNIQUE)")?;
         let mut stmt = db.prepare("INSERT OR IGNORE INTO foo (x) VALUES (?)")?;
-        assert_eq!(stmt.insert(&[&1i32])?, 1);
-        assert_eq!(stmt.insert(&[&2i32])?, 2);
-        match stmt.insert(&[&1i32]).unwrap_err() {
+        assert_eq!(stmt.insert([1i32])?, 1);
+        assert_eq!(stmt.insert([2i32])?, 2);
+        match stmt.insert([1i32]).unwrap_err() {
             Error::StatementChangedRows(0) => (),
             err => panic!("Unexpected error {}", err),
         }
@@ -1251,8 +1229,8 @@ mod test {
         db.execute_batch(sql)?;
         let mut stmt = db.prepare("SELECT 1 FROM foo WHERE x = ?")?;
         assert!(stmt.exists([1i32])?);
-        assert!(stmt.exists(&[&2i32])?);
-        assert!(!stmt.exists([&0i32])?);
+        assert!(stmt.exists([2i32])?);
+        assert!(!stmt.exists([0i32])?);
         Ok(())
     }
 

@@ -55,7 +55,6 @@ pub enum Limit {
 // define sqlite3_api as an extern since this code will be embedded
 // within a loadable extension that defines and exports this itself
 extern "C" {
-    #[no_mangle]
     pub static mut sqlite3_api: *mut sqlite3_api_routines;
 }
 
