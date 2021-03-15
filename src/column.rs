@@ -42,6 +42,38 @@ impl Statement<'_> {
         self.stmt.column_count()
     }
 
+    /// Check that column name reference lifetime is limited:
+    /// https://www.sqlite.org/c3ref/column_name.html
+    /// > The returned string pointer is valid...
+    ///
+    /// ```compile_fail
+    /// use rusqlite::{Connection, Result};
+    /// fn main() -> Result<()> {
+    ///     let db = Connection::open_in_memory()?;
+    ///     let mut stmt = db.prepare("SELECT 1 as x")?;
+    ///     let column_name = stmt.column_name(0)?;
+    ///     let x = stmt.query_row([], |r| r.get::<_, i64>(0))?; // E0502
+    ///     assert_eq!(1, x);
+    ///     assert_eq!("x", column_name);
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// ```
+    /// use rusqlite::{Connection, Result};
+    /// fn main() -> Result<()> {
+    ///     let db = Connection::open_in_memory()?;
+    ///     db.execute_batch("CREATE TABLE y (x);")?;
+    ///     let mut stmt = db.prepare("SELECT x FROM y;")?;
+    ///     let column_name = stmt.column_name(0)?;
+    ///     assert_eq!("x", column_name);
+    ///     db.execute_batch("ALTER TABLE y RENAME COLUMN x TO z;")?;
+    ///     // column name is not refreshed until statement is re-prepared
+    ///     let same_column_name = stmt.column_name(0)?;
+    ///     assert_eq!(same_column_name, column_name);
+    ///     Ok(())
+    /// }
+    /// ```
     #[inline]
     pub(super) fn column_name_unwrap(&self, col: usize) -> &str {
         // Just panic if the bounds are wrong for now, we never call this
