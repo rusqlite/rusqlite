@@ -137,8 +137,8 @@ impl Statement<'_> {
     ///
     /// Due to lifetime restricts, the rows handle returned by `query` does not
     /// implement the `Iterator` trait. Consider using
-    /// [`query_map`](Statement::query_map) or [`query_and_then`](Statement:
-    /// :query_and_then) instead, which do.
+    /// [`query_map`](Statement::query_map) or [`query_and_then`](Statement::query_and_then)
+    /// instead, which do.
     ///
     /// ## Example
     ///
