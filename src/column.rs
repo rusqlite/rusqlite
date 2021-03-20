@@ -46,6 +46,9 @@ impl Statement<'_> {
     /// https://www.sqlite.org/c3ref/column_name.html
     /// > The returned string pointer is valid...
     ///
+    /// `column_name` reference can become invalid if `stmt` is reprepared
+    /// (because of schema change) when `query_row` is called. So we assert
+    /// that a compilation error happens if this reference is kept alive:
     /// ```compile_fail
     /// use rusqlite::{Connection, Result};
     /// fn main() -> Result<()> {
@@ -55,22 +58,6 @@ impl Statement<'_> {
     ///     let x = stmt.query_row([], |r| r.get::<_, i64>(0))?; // E0502
     ///     assert_eq!(1, x);
     ///     assert_eq!("x", column_name);
-    ///     Ok(())
-    /// }
-    /// ```
-    ///
-    /// ```
-    /// use rusqlite::{Connection, Result};
-    /// fn main() -> Result<()> {
-    ///     let db = Connection::open_in_memory()?;
-    ///     db.execute_batch("CREATE TABLE y (x);")?;
-    ///     let mut stmt = db.prepare("SELECT x FROM y;")?;
-    ///     let column_name = stmt.column_name(0)?;
-    ///     assert_eq!("x", column_name);
-    ///     db.execute_batch("ALTER TABLE y RENAME COLUMN x TO z;")?;
-    ///     // column name is not refreshed until statement is re-prepared
-    ///     let same_column_name = stmt.column_name(0)?;
-    ///     assert_eq!(same_column_name, column_name);
     ///     Ok(())
     /// }
     /// ```
@@ -264,6 +251,25 @@ mod test {
                 panic!("Unexpected error type: {:?}", e);
             }
         }
+        Ok(())
+    }
+
+    /// `column_name` reference should stay valid until `stmt` is reprepared (or
+    /// reset) even if DB schema is altered (SQLite documentation is
+    /// ambiguous here because it says reference "is valid until (...) the next
+    /// call to sqlite3_column_name() or sqlite3_column_name16() on the same
+    /// column.". We assume that reference is valid if only `sqlite3_column_name()` is used):
+    #[test]
+    fn test_column_name_reference() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE y (x);")?;
+        let stmt = db.prepare("SELECT x FROM y;")?;
+        let column_name = stmt.column_name(0)?;
+        assert_eq!("x", column_name);
+        db.execute_batch("ALTER TABLE y RENAME COLUMN x TO z;")?;
+        // column name is not refreshed until statement is re-prepared
+        let same_column_name = stmt.column_name(0)?;
+        assert_eq!(same_column_name, column_name);
         Ok(())
     }
 }
