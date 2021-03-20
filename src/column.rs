@@ -25,6 +25,10 @@ impl Column<'_> {
 
 impl Statement<'_> {
     /// Get all the column names in the result set of the prepared statement.
+    ///
+    /// If associated DB schema can be altered concurrently, you should make
+    /// sure that current statement has already been stepped once before
+    /// calling this method.
     pub fn column_names(&self) -> Vec<&str> {
         let n = self.column_count();
         let mut cols = Vec::with_capacity(n as usize);
@@ -37,6 +41,10 @@ impl Statement<'_> {
 
     /// Return the number of columns in the result set returned by the prepared
     /// statement.
+    ///
+    /// If associated DB schema can be altered concurrently, you should make
+    /// sure that current statement has already been stepped once before
+    /// calling this method.
     #[inline]
     pub fn column_count(&self) -> usize {
         self.stmt.column_count()
@@ -71,6 +79,10 @@ impl Statement<'_> {
     /// Returns the name assigned to a particular column in the result set
     /// returned by the prepared statement.
     ///
+    /// If associated DB schema can be altered concurrently, you should make
+    /// sure that current statement has already been stepped once before
+    /// calling this method.
+    ///
     /// ## Failure
     ///
     /// Returns an `Error::InvalidColumnIndex` if `idx` is outside the valid
@@ -92,6 +104,10 @@ impl Statement<'_> {
     /// If there is no AS clause then the name of the column is unspecified and
     /// may change from one release of SQLite to the next.
     ///
+    /// If associated DB schema can be altered concurrently, you should make
+    /// sure that current statement has already been stepped once before
+    /// calling this method.
+    ///
     /// # Failure
     ///
     /// Will return an `Error::InvalidColumnName` when there is no column with
@@ -111,6 +127,10 @@ impl Statement<'_> {
     }
 
     /// Returns a slice describing the columns of the result of the query.
+    ///
+    /// If associated DB schema can be altered concurrently, you should make
+    /// sure that current statement has already been stepped once before
+    /// calling this method.
     #[cfg(feature = "column_decltype")]
     pub fn columns(&self) -> Vec<Column> {
         let n = self.column_count();
