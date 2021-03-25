@@ -667,6 +667,7 @@ impl Connection {
 #[repr(i32)]
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
+#[allow(clippy::upper_case_acronyms)]
 pub enum ConflictType {
     UNKNOWN = -1,
     SQLITE_CHANGESET_DATA = ffi::SQLITE_CHANGESET_DATA,
