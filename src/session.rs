@@ -695,6 +695,7 @@ impl From<i32> for ConflictType {
 #[repr(i32)]
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
+#[allow(clippy::upper_case_acronyms)]
 pub enum ConflictAction {
     SQLITE_CHANGESET_OMIT = ffi::SQLITE_CHANGESET_OMIT,
     SQLITE_CHANGESET_REPLACE = ffi::SQLITE_CHANGESET_REPLACE,
