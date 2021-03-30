@@ -236,6 +236,9 @@ mod build_linked {
     }
     // Prints the necessary cargo link commands and returns the path to the header.
     fn find_sqlite() -> HeaderLocation {
+        if find_link_mode() == "static" {
+            std::env::set_var("SQLCIPHER_STATIC" , "1");
+        }
         let link_lib = link_lib();
 
         println!("cargo:rerun-if-env-changed={}_INCLUDE_DIR", env_prefix());
