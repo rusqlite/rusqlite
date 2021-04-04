@@ -1927,9 +1927,10 @@ mod test {
     fn test_returning() -> Result<()> {
         let db = checked_memory_handle();
         db.execute_batch("CREATE TABLE foo(x INTEGER PRIMARY KEY)")?;
-        let row_id = db.query_row::<i64, _, _>("INSERT INTO foo DEFAULT VALUES RETURNING ROWID", [], |r| {
-            r.get(0)
-        })?;
+        let row_id =
+            db.query_row::<i64, _, _>("INSERT INTO foo DEFAULT VALUES RETURNING ROWID", [], |r| {
+                r.get(0)
+            })?;
         assert_eq!(row_id, 1);
         Ok(())
     }
