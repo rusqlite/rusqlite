@@ -4,7 +4,7 @@ use std::os::raw::{c_char, c_int};
 use std::path::Path;
 use std::ptr;
 use std::str;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use super::ffi;
@@ -14,7 +14,11 @@ use crate::error::{error_from_handle, error_from_sqlite_code, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
 use crate::unlock_notify;
+
+#[cfg(not(any(target_arch = "wasm32", feature = "os-other")))]
 use crate::version::version_number;
+#[cfg(not(any(target_arch = "wasm32", feature = "os-other")))]
+use std::sync::atomic::Ordering;
 
 pub struct InnerConnection {
     pub db: *mut ffi::sqlite3,
@@ -368,19 +372,19 @@ rusqlite was built against SQLite {} but the runtime SQLite version is {}. To fi
     });
 }
 
-#[cfg(not(any(target_arch = "wasm32")))]
+#[cfg(not(any(target_arch = "wasm32", feature = "os-other")))]
 static SQLITE_INIT: std::sync::Once = std::sync::Once::new();
 
 pub static BYPASS_SQLITE_INIT: AtomicBool = AtomicBool::new(false);
 
 // threading mode checks are not necessary (and do not work) on target
 // platforms that do not have threading (such as webassembly)
-#[cfg(any(target_arch = "wasm32"))]
+#[cfg(any(target_arch = "wasm32", feature = "os-other"))]
 fn ensure_safe_sqlite_threading_mode() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(any(target_arch = "wasm32")))]
+#[cfg(not(any(target_arch = "wasm32", feature = "os-other")))]
 fn ensure_safe_sqlite_threading_mode() -> Result<()> {
     // Ensure SQLite was compiled in thredsafe mode.
     if unsafe { ffi::sqlite3_threadsafe() == 0 } {
