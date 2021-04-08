@@ -114,11 +114,11 @@ impl Statement<'_> {
     ///
     /// # Note
     ///
-    /// This function is a convenience wrapper around [`execute()`](Statement::execute) intended for
-    /// queries that insert a single item. It is possible to misuse this
-    /// function in a way that it cannot detect, such as by calling it on a
-    /// statement which _updates_ a single
-    /// item rather than inserting one. Please don't do that.
+    /// This function is a convenience wrapper around
+    /// [`execute()`](Statement::execute) intended for queries that insert a
+    /// single item. It is possible to misuse this function in a way that it
+    /// cannot detect, such as by calling it on a statement which _updates_
+    /// a single item rather than inserting one. Please don't do that.
     ///
     /// # Failure
     ///
@@ -136,8 +136,9 @@ impl Statement<'_> {
     /// rows.
     ///
     /// Due to lifetime restricts, the rows handle returned by `query` does not
-    /// implement the `Iterator` trait. Consider using [`query_map`](Statement::query_map) or
-    /// [`query_and_then`](Statement::query_and_then) instead, which do.
+    /// implement the `Iterator` trait. Consider using
+    /// [`query_map`](Statement::query_map) or [`query_and_then`](Statement::query_and_then)
+    /// instead, which do.
     ///
     /// ## Example
     ///
@@ -220,7 +221,6 @@ impl Statement<'_> {
     /// Will return `Err` if binding parameters fails.
     #[inline]
     pub fn query<P: Params>(&mut self, params: P) -> Result<Rows<'_>> {
-        self.check_readonly()?;
         params.__bind_in(self)?;
         Ok(Rows::new(self))
     }
@@ -397,8 +397,9 @@ impl Statement<'_> {
     /// iterator over the result of calling the mapping function over the
     /// query's rows.
     ///
-    /// Note: This function is deprecated in favor of [`Statement::query_and_then`],
-    /// which can now take named parameters directly.
+    /// Note: This function is deprecated in favor of
+    /// [`Statement::query_and_then`], which can now take named parameters
+    /// directly.
     ///
     /// If any parameters that were in the prepared statement are not included
     /// in `params`, they will continue to use the most-recently bound value
@@ -437,9 +438,10 @@ impl Statement<'_> {
     /// ignored.
     ///
     /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
-    /// query truly is optional, you can call [`.optional()`](crate::OptionalExtension::optional) on the result of
-    /// this to get a `Result<Option<T>>` (requires that the trait `rusqlite::OptionalExtension`
-    /// is imported).
+    /// query truly is optional, you can call
+    /// [`.optional()`](crate::OptionalExtension::optional) on the result of
+    /// this to get a `Result<Option<T>>` (requires that the trait
+    /// `rusqlite::OptionalExtension` is imported).
     ///
     /// # Failure
     ///
@@ -457,16 +459,18 @@ impl Statement<'_> {
     /// Convenience method to execute a query with named parameter(s) that is
     /// expected to return a single row.
     ///
-    /// Note: This function is deprecated in favor of [`Statement::query_and_then`],
-    /// which can now take named parameters directly.
+    /// Note: This function is deprecated in favor of
+    /// [`Statement::query_and_then`], which can now take named parameters
+    /// directly.
     ///
     /// If the query returns more than one row, all rows except the first are
     /// ignored.
     ///
     /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
-    /// query truly is optional, you can call [`.optional()`](crate::OptionalExtension::optional) on the result of
-    /// this to get a `Result<Option<T>>` (requires that the trait `rusqlite::OptionalExtension`
-    /// is imported).
+    /// query truly is optional, you can call
+    /// [`.optional()`](crate::OptionalExtension::optional) on the result of
+    /// this to get a `Result<Option<T>>` (requires that the trait
+    /// `rusqlite::OptionalExtension` is imported).
     ///
     /// # Failure
     ///
@@ -718,21 +722,6 @@ impl Statement<'_> {
         self.conn.decode_result(stmt.finalize())
     }
 
-    #[cfg(not(feature = "modern_sqlite"))]
-    #[inline]
-    fn check_readonly(&self) -> Result<()> {
-        Ok(())
-    }
-
-    #[cfg(feature = "modern_sqlite")]
-    #[inline]
-    fn check_readonly(&self) -> Result<()> {
-        /*if !self.stmt.readonly() { does not work for PRAGMA
-            return Err(Error::InvalidQuery);
-        }*/
-        Ok(())
-    }
-
     #[cfg(all(feature = "modern_sqlite", feature = "extra_check"))]
     #[inline]
     fn check_update(&self) -> Result<()> {
@@ -755,6 +744,7 @@ impl Statement<'_> {
 
     #[cfg(not(feature = "extra_check"))]
     #[inline]
+    #[allow(clippy::unnecessary_wraps)]
     fn check_update(&self) -> Result<()> {
         Ok(())
     }
@@ -793,6 +783,7 @@ impl Statement<'_> {
 
     #[cfg(not(feature = "extra_check"))]
     #[inline]
+    #[allow(clippy::unnecessary_wraps)]
     pub(crate) fn check_no_tail(&self) -> Result<()> {
         Ok(())
     }
