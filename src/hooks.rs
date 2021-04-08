@@ -64,7 +64,7 @@ mod preupdate_hook {
             unsafe { ffi::sqlite3_preupdate_count(self.db) }
         }
 
-        pub fn get_new<'a>(&'a self, i: i32) -> ValueRef<'a> {
+        pub fn get_new(&self, i: i32) -> ValueRef {
             let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
             unsafe {
                 ffi::sqlite3_preupdate_new(self.db, i, &mut p_value);
@@ -82,7 +82,7 @@ mod preupdate_hook {
             unsafe { ffi::sqlite3_preupdate_count(self.db) }
         }
 
-        pub fn get_old<'a>(&'a self, i: i32) -> ValueRef<'a> {
+        pub fn get_old(&self, i: i32) -> ValueRef {
             let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
             unsafe {
                 ffi::sqlite3_preupdate_old(self.db, i, &mut p_value);
@@ -100,7 +100,7 @@ mod preupdate_hook {
             unsafe { ffi::sqlite3_preupdate_count(self.db) }
         }
 
-        pub fn get_old<'a>(&'a self, i: i32) -> ValueRef<'a> {
+        pub fn get_old(&self, i: i32) -> ValueRef {
             let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
             unsafe {
                 ffi::sqlite3_preupdate_old(self.db, i, &mut p_value);
@@ -108,7 +108,7 @@ mod preupdate_hook {
             }
         }
 
-        pub fn get_new<'a>(&'a self, i: i32) -> ValueRef<'a> {
+        pub fn get_new(&self, i: i32) -> ValueRef {
             let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
             unsafe {
                 ffi::sqlite3_preupdate_new(self.db, i, &mut p_value);
