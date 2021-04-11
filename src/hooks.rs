@@ -49,66 +49,82 @@ mod preupdate_hook {
     use crate::types::ValueRef;
     use crate::{Connection, InnerConnection};
 
+    /// `feature = "preupdate_hook"`
+    /// The possible cases for when a PreUpdateHook gets triggered. Allows access to the relevant
+    /// functions for each case through the contained values.
     pub enum PreUpdateCase {
-        Insert(PreUpdateInsert),
-        Delete(PreUpdateDelete),
-        Update(PreUpdateUpdate),
+        Insert(PreUpdateNewValueAccessor),
+        Delete(PreUpdateOldValueAccessor),
+        Update {
+            old_value_accessor: PreUpdateOldValueAccessor,
+            new_value_accessor: PreUpdateNewValueAccessor,
+        },
     }
 
-    pub struct PreUpdateInsert {
-        db: *mut ffi::sqlite3,
-    }
-
-    impl PreUpdateInsert {
-        pub fn get_count(&self) -> i32 {
-            unsafe { ffi::sqlite3_preupdate_count(self.db) }
-        }
-
-        pub fn get_new(&self, i: i32) -> ValueRef {
-            let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
-            unsafe {
-                ffi::sqlite3_preupdate_new(self.db, i, &mut p_value);
-                ValueRef::from_value(p_value)
+    impl From<PreUpdateCase> for Action {
+        fn from(puc: PreUpdateCase) -> Action {
+            match puc {
+                PreUpdateCase::Insert(_) => Action::SQLITE_INSERT,
+                PreUpdateCase::Delete(_) => Action::SQLITE_DELETE,
+                PreUpdateCase::Update { .. } => Action::SQLITE_UPDATE,
             }
         }
     }
 
-    pub struct PreUpdateDelete {
+    /// `feature = "preupdate_hook"`
+    /// An accessor to access the old values of the row being deleted/updated during the preupdate callback.
+    pub struct PreUpdateOldValueAccessor {
         db: *mut ffi::sqlite3,
+        old_row_id: i64,
     }
 
-    impl PreUpdateDelete {
-        pub fn get_count(&self) -> i32 {
+    impl PreUpdateOldValueAccessor {
+        /// Get the amount of columns in the row being
+        /// deleted/updated.
+        pub fn get_column_count(&self) -> i32 {
             unsafe { ffi::sqlite3_preupdate_count(self.db) }
         }
 
-        pub fn get_old(&self, i: i32) -> ValueRef {
-            let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
-            unsafe {
-                ffi::sqlite3_preupdate_old(self.db, i, &mut p_value);
-                ValueRef::from_value(p_value)
-            }
-        }
-    }
-
-    pub struct PreUpdateUpdate {
-        db: *mut ffi::sqlite3,
-    }
-
-    impl PreUpdateUpdate {
-        pub fn get_count(&self) -> i32 {
-            unsafe { ffi::sqlite3_preupdate_count(self.db) }
+        pub fn get_query_depth(&self) -> i32 {
+            unsafe { ffi::sqlite3_preupdate_depth(self.db) }
         }
 
-        pub fn get_old(&self, i: i32) -> ValueRef {
+        pub fn get_old_row_id(&self) -> i64 {
+            self.old_row_id
+        }
+
+        pub fn get_old_column_value(&self, i: i32) -> ValueRef {
             let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
             unsafe {
                 ffi::sqlite3_preupdate_old(self.db, i, &mut p_value);
                 ValueRef::from_value(p_value)
             }
         }
+    }
 
-        pub fn get_new(&self, i: i32) -> ValueRef {
+    /// `feature = "preupdate_hook"`
+    /// An accessor to access the new values of the row being inserted/updated during the preupdate callback.
+    pub struct PreUpdateNewValueAccessor {
+        db: *mut ffi::sqlite3,
+        new_row_id: i64,
+    }
+
+    impl PreUpdateNewValueAccessor {
+        /// Get the amount of columns in the row being
+        /// inserted/updated.
+        pub fn get_column_count(&self) -> i32 {
+            unsafe { ffi::sqlite3_preupdate_count(self.db) }
+        }
+
+        pub fn get_query_depth(&self) -> i32 {
+            unsafe { ffi::sqlite3_preupdate_depth(self.db) }
+        }
+
+        pub fn get_new_row_id(&self) -> i64 {
+            self.new_row_id
+        }
+
+        pub fn get_new_column_value(&self, i: i32) -> ValueRef {
             let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
             unsafe {
                 ffi::sqlite3_preupdate_new(self.db, i, &mut p_value);
@@ -124,16 +140,14 @@ mod preupdate_hook {
         ///
         /// The callback parameters are:
         ///
-        /// - the type of database update (SQLITE_INSERT, SQLITE_UPDATE or
-        /// SQLITE_DELETE),
         /// - the name of the database ("main", "temp", ...),
         /// - the name of the table that is updated,
-        /// - for an update or delete, the initial ROWID of the row that is going to be updated/deleted. It is undefined for inserts.
-        /// - for an update or insert, the final ROWID of the row that is going to be updated/inserted. It is undefined for deletes.
+        /// - a variant of the PreUpdateCase enum which allows access to extra functions depending
+        /// on whether it's an update, delete or insert.
         #[inline]
         pub fn preupdate_hook<'c, F>(&'c self, hook: Option<F>)
         where
-            F: FnMut(Action, &str, &str, i64, i64, &PreUpdateCase) + Send + 'c,
+            F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'c,
         {
             self.db.borrow_mut().preupdate_hook(hook);
         }
@@ -142,12 +156,12 @@ mod preupdate_hook {
     impl InnerConnection {
         #[inline]
         pub fn remove_preupdate_hook(&mut self) {
-            self.preupdate_hook(None::<fn(Action, &str, &str, i64, i64, &PreUpdateCase)>);
+            self.preupdate_hook(None::<fn(Action, &str, &str, &PreUpdateCase)>);
         }
 
         fn preupdate_hook<'c, F>(&'c mut self, hook: Option<F>)
         where
-            F: FnMut(Action, &str, &str, i64, i64, &PreUpdateCase) + Send + 'c,
+            F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'c,
         {
             unsafe extern "C" fn call_boxed_closure<F>(
                 p_arg: *mut c_void,
@@ -155,10 +169,10 @@ mod preupdate_hook {
                 action_code: c_int,
                 db_str: *const c_char,
                 tbl_str: *const c_char,
-                row_id: i64,
+                old_row_id: i64,
                 new_row_id: i64,
             ) where
-                F: FnMut(Action, &str, &str, i64, i64, &PreUpdateCase),
+                F: FnMut(Action, &str, &str, &PreUpdateCase),
             {
                 use std::ffi::CStr;
                 use std::str;
@@ -174,9 +188,24 @@ mod preupdate_hook {
                 };
 
                 let preupdate_hook_functions = match action {
-                    Action::SQLITE_INSERT => PreUpdateCase::Insert(PreUpdateInsert { db: sqlite }),
-                    Action::SQLITE_DELETE => PreUpdateCase::Delete(PreUpdateDelete { db: sqlite }),
-                    Action::SQLITE_UPDATE => PreUpdateCase::Update(PreUpdateUpdate { db: sqlite }),
+                    Action::SQLITE_INSERT => PreUpdateCase::Insert(PreUpdateNewValueAccessor {
+                        db: sqlite,
+                        new_row_id,
+                    }),
+                    Action::SQLITE_DELETE => PreUpdateCase::Delete(PreUpdateOldValueAccessor {
+                        db: sqlite,
+                        old_row_id,
+                    }),
+                    Action::SQLITE_UPDATE => PreUpdateCase::Update {
+                        old_value_accessor: PreUpdateOldValueAccessor {
+                            db: sqlite,
+                            old_row_id,
+                        },
+                        new_value_accessor: PreUpdateNewValueAccessor {
+                            db: sqlite,
+                            new_row_id,
+                        },
+                    },
                     _ => todo!(),
                 };
 
@@ -186,8 +215,6 @@ mod preupdate_hook {
                         action,
                         db_name.expect("illegal db name"),
                         tbl_name.expect("illegal table name"),
-                        row_id,
-                        new_row_id,
                         &preupdate_hook_functions,
                     );
                 });
