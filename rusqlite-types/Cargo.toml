@@ -1,0 +1,24 @@
+[package]
+name = "rusqlite-types"
+version = "0.1.0"
+authors = ["The rusqlite developers"]
+edition = "2018"
+description = "Ergonomic conversion between Rust and SQLite types"
+repository = "https://github.com/rusqlite/rusqlite"
+documentation = "http://docs.rs/rusqlite-types/"
+readme = "../README.md"
+keywords = ["sqlite", "database"]
+license = "MIT"
+categories = ["database"]
+
+[dependencies]
+chrono = { version = "0.4", optional = true }
+time = { version = "0.2.23", optional = true }
+serde_json = { version = "1.0", optional = true }
+url = { version = "2.1", optional = true }
+uuid = { version = "0.8", optional = true }
+
+[dev-dependencies.rusqlite]
+path = "../"
+version = "0.25.1"
+features = ["bundled"]

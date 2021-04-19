@@ -225,7 +225,7 @@ impl FromSql for Value {
 #[cfg(test)]
 mod test {
     use super::FromSql;
-    use crate::{Connection, Error, Result};
+    use rusqlite::{Connection, Error, Result};
 
     #[test]
     fn test_integral_ranges() -> Result<()> {

@@ -1,9 +1,45 @@
 use super::{Null, Value, ValueRef};
 #[cfg(feature = "array")]
 use crate::vtab::array::Array;
-use crate::{Error, Result};
 use std::borrow::Cow;
 use std::convert::TryFrom;
+use std::{error, fmt, ops::Deref, result};
+
+#[derive(Debug)]
+pub struct ToSqlError {
+    inner: Box<dyn error::Error + Send + Sync + 'static>,
+}
+
+impl ToSqlError {
+    pub fn new<E>(error: E) -> Self
+    where
+        E: Into<Box<dyn error::Error + Send + Sync + 'static>>,
+    {
+        Self {
+            inner: error.into(),
+        }
+    }
+}
+
+impl Deref for ToSqlError {
+    type Target = Box<dyn error::Error + Send + Sync + 'static>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl fmt::Display for ToSqlError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.inner.fmt(f)
+    }
+}
+
+impl error::Error for ToSqlError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        Some(&*self.inner)
+    }
+}
 
 /// `ToSqlOutput` represents the possible output types for implementers of the
 /// [`ToSql`] trait.
@@ -37,6 +73,8 @@ where
         ToSqlOutput::Borrowed(t.into())
     }
 }
+
+pub type ToSqlResult<'a> = result::Result<ToSqlOutput<'a>, ToSqlError>;
 
 // We cannot also generically allow any type that can be converted
 // into a Value to be converted into a ToSqlOutput because of
@@ -77,7 +115,7 @@ from_value!(uuid::Uuid);
 
 impl ToSql for ToSqlOutput<'_> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         Ok(match *self {
             ToSqlOutput::Borrowed(v) => ToSqlOutput::Borrowed(v),
             ToSqlOutput::Owned(ref v) => ToSqlOutput::Borrowed(ValueRef::from(v)),
@@ -94,33 +132,33 @@ impl ToSql for ToSqlOutput<'_> {
 /// [`Error::ToSqlConversionFailure`] if the conversion fails.
 pub trait ToSql {
     /// Converts Rust value to SQLite value
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>>;
+    fn to_sql(&self) -> ToSqlResult;
 }
 
 impl<T: ToSql + ToOwned + ?Sized> ToSql for Cow<'_, T> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         self.as_ref().to_sql()
     }
 }
 
 impl<T: ToSql + ?Sized> ToSql for Box<T> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         self.as_ref().to_sql()
     }
 }
 
 impl<T: ToSql + ?Sized> ToSql for std::rc::Rc<T> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         self.as_ref().to_sql()
     }
 }
 
 impl<T: ToSql + ?Sized> ToSql for std::sync::Arc<T> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         self.as_ref().to_sql()
     }
 }
@@ -128,7 +166,7 @@ impl<T: ToSql + ?Sized> ToSql for std::sync::Arc<T> {
 // We should be able to use a generic impl like this:
 //
 // impl<T: Copy> ToSql for T where T: Into<Value> {
-//     fn to_sql(&self) -> Result<ToSqlOutput> {
+//     fn to_sql(&self) -> ToSqlResult {
 //         Ok(ToSqlOutput::from((*self).into()))
 //     }
 // }
@@ -141,7 +179,7 @@ macro_rules! to_sql_self(
     ($t:ty) => (
         impl ToSql for $t {
             #[inline]
-            fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+            fn to_sql(&self) -> ToSqlResult {
                 Ok(ToSqlOutput::from(*self))
             }
         }
@@ -171,11 +209,11 @@ macro_rules! to_sql_self_fallible(
     ($t:ty) => (
         impl ToSql for $t {
             #[inline]
-            fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+            fn to_sql(&self) -> ToSqlResult {
                 Ok(ToSqlOutput::Owned(Value::Integer(
                     i64::try_from(*self).map_err(
                         // TODO: Include the values in the error message.
-                        |err| Error::ToSqlConversionFailure(err.into())
+                        ToSqlError::new
                     )?
                 )))
             }
@@ -192,49 +230,49 @@ where
     T: ToSql,
 {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         (*self).to_sql()
     }
 }
 
 impl ToSql for String {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         Ok(ToSqlOutput::from(self.as_str()))
     }
 }
 
 impl ToSql for str {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         Ok(ToSqlOutput::from(self))
     }
 }
 
 impl ToSql for Vec<u8> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         Ok(ToSqlOutput::from(self.as_slice()))
     }
 }
 
 impl ToSql for [u8] {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         Ok(ToSqlOutput::from(self))
     }
 }
 
 impl ToSql for Value {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         Ok(ToSqlOutput::from(self))
     }
 }
 
 impl<T: ToSql> ToSql for Option<T> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn to_sql(&self) -> ToSqlResult {
         match *self {
             None => Ok(ToSqlOutput::from(Null)),
             Some(ref t) => t.to_sql(),
@@ -339,8 +377,8 @@ mod test {
 
     #[cfg(feature = "i128_blob")]
     #[test]
-    fn test_i128() -> crate::Result<()> {
-        use crate::Connection;
+    fn test_i128() -> rusqlite::Result<()> {
+        use rusqlite::Connection;
         use std::i128;
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo (i128 BLOB, desc TEXT)")?;
@@ -379,8 +417,8 @@ mod test {
 
     #[cfg(feature = "uuid")]
     #[test]
-    fn test_uuid() -> crate::Result<()> {
-        use crate::{params, Connection};
+    fn test_uuid() -> rusqlite::Result<()> {
+        use rusqlite::{params, Connection};
         use uuid::Uuid;
 
         let db = Connection::open_in_memory()?;

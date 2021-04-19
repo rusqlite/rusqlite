@@ -83,6 +83,7 @@ pub use crate::statement::{Statement, StatementStatus};
 pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
 pub use crate::types::ToSql;
 pub use crate::version::*;
+pub use rusqlite_types::params;
 
 #[macro_use]
 mod error;
@@ -136,37 +137,6 @@ const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
 /// This is deprecated in favor of using an empty array literal.
 #[deprecated = "Use an empty array instead; `stmt.execute(NO_PARAMS)` => `stmt.execute([])`"]
 pub const NO_PARAMS: &[&dyn ToSql] = &[];
-
-/// A macro making it more convenient to pass heterogeneous or long lists of
-/// parameters as a `&[&dyn ToSql]`.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// # use rusqlite::{Result, Connection, params};
-///
-/// struct Person {
-///     name: String,
-///     age_in_years: u8,
-///     data: Option<Vec<u8>>,
-/// }
-///
-/// fn add_person(conn: &Connection, person: &Person) -> Result<()> {
-///     conn.execute("INSERT INTO person (name, age_in_years, data)
-///                   VALUES (?1, ?2, ?3)",
-///                  params![person.name, person.age_in_years, person.data])?;
-///     Ok(())
-/// }
-/// ```
-#[macro_export]
-macro_rules! params {
-    () => {
-        &[] as &[&dyn $crate::ToSql]
-    };
-    ($($param:expr),+ $(,)?) => {
-        &[$(&$param as &dyn $crate::ToSql),+] as &[&dyn $crate::ToSql]
-    };
-}
 
 /// A macro making it more convenient to pass lists of named parameters
 /// as a `&[(&str, &dyn ToSql)]`.

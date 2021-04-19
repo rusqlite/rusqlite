@@ -1,3 +1,5 @@
+use rusqlite_types::ToSqlError;
+
 use crate::types::FromSqlError;
 use crate::types::Type;
 use crate::{errmsg_to_string, ffi};
@@ -86,7 +88,7 @@ pub enum Error {
 
     /// Error available for the implementors of the
     /// [`ToSql`](crate::types::ToSql) trait.
-    ToSqlConversionFailure(Box<dyn error::Error + Send + Sync + 'static>),
+    ToSqlConversionFailure(ToSqlError),
 
     /// Error when the SQL is not a `SELECT`, is not read-only.
     InvalidQuery,
@@ -211,6 +213,12 @@ impl From<FromSqlError> for Error {
     }
 }
 
+impl From<ToSqlError> for Error {
+    fn from(err: ToSqlError) -> Error {
+        Error::ToSqlConversionFailure(err)
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
@@ -315,8 +323,8 @@ impl error::Error for Error {
             #[cfg(feature = "functions")]
             Error::UserFunctionError(ref err) => Some(&**err),
 
-            Error::FromSqlConversionFailure(_, _, ref err)
-            | Error::ToSqlConversionFailure(ref err) => Some(&**err),
+            Error::FromSqlConversionFailure(_, _, ref err) => Some(&**err),
+            Error::ToSqlConversionFailure(ref err) => err.source(),
 
             #[cfg(feature = "vtab")]
             Error::ModuleError(_) => None,

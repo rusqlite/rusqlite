@@ -68,7 +68,7 @@ impl ToSql for DateTimeSql {
 //! a value was NULL (which gets translated to `None`).
 
 pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
-pub use self::to_sql::{ToSql, ToSqlOutput};
+pub use self::to_sql::{ToSql, ToSqlError, ToSqlOutput, ToSqlResult};
 pub use self::value::Value;
 pub use self::value_ref::ValueRef;
 
@@ -87,6 +87,36 @@ mod url;
 mod value;
 mod value_ref;
 
+/// A macro making it more convenient to pass heterogeneous or long lists of
+/// parameters as a `&[&dyn ToSql]`.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # use rusqlite::{Result, Connection, params};
+///
+/// struct Person {
+///     name: String,
+///     age_in_years: u8,
+///     data: Option<Vec<u8>>,
+/// }
+///
+/// fn add_person(conn: &Connection, person: &Person) -> Result<()> {
+///     conn.execute("INSERT INTO person (name, age_in_years, data)
+///                   VALUES (?1, ?2, ?3)",
+///                  params![person.name, person.age_in_years, person.data])?;
+///     Ok(())
+/// }
+/// ```
+#[macro_export]
+macro_rules! params {
+    () => {
+        &[] as &[&dyn $crate::ToSql]
+    };
+    ($($param:expr),+ $(,)?) => {
+        &[$(&$param as &dyn $crate::ToSql),+] as &[&dyn $crate::ToSql]
+    };
+}
 /// Empty struct that can be used to fill in a query parameter as `NULL`.
 ///
 /// ## Example
@@ -132,8 +162,8 @@ impl fmt::Display for Type {
 
 #[cfg(test)]
 mod test {
-    use super::Value;
-    use crate::{params, Connection, Error, Result, Statement};
+    use super::{params, Value};
+    use rusqlite::{Connection, Error, Result, Statement};
     use std::f64::EPSILON;
     use std::os::raw::{c_double, c_int};
 
