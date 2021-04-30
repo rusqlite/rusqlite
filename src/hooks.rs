@@ -395,7 +395,7 @@ impl Connection {
     /// `feature = "hooks"` Register an authorizer callback that's invoked
     /// as a statement is being prepared.
     #[inline]
-    pub fn authorizer<'c, F>(&self, hook: Option<F>) -> crate::Result<()>
+    pub fn authorizer<'c, F>(&self, hook: Option<F>)
     where
         F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + RefUnwindSafe + 'static,
     {
@@ -410,6 +410,7 @@ impl InnerConnection {
         self.commit_hook(None::<fn() -> bool>);
         self.rollback_hook(None::<fn()>);
         self.progress_handler(0, None::<fn() -> bool>);
+        self.authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
     }
 
     fn commit_hook<'c, F>(&'c mut self, hook: Option<F>)
@@ -605,7 +606,7 @@ impl InnerConnection {
         };
     }
 
-    pub fn authorizer<'c, F>(&'c mut self, authorizer: Option<F>) -> crate::Result<()>
+    pub fn authorizer<'c, F>(&'c mut self, authorizer: Option<F>)
     where
         F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + RefUnwindSafe + 'static,
     {
@@ -669,9 +670,17 @@ impl InnerConnection {
         } {
             ffi::SQLITE_OK => {
                 self.authorizer = boxed_authorizer.map(|ba| ba as BoxedAuthorizer);
-                Ok(())
             }
-            err_code => Err(unsafe { crate::error::error_from_handle(self.db(), err_code) }),
+            err_code => {
+                // The only error that `sqlite3_set_authorizer` returns is `SQLITE_MISUSE`
+                // when compiled with `ENABLE_API_ARMOR` and the db pointer is invalid.
+                // This library does not allow constructing a null db ptr, so if this branch
+                // is hit, something very bad has happened. Panicking instead of returning
+                // `Result` hooks keeps this hook's API consistent with the others.
+                panic!("unexpectedly failed to set_authorizer: {}", unsafe {
+                    crate::error::error_from_handle(self.db(), err_code)
+                });
+            }
         }
     }
 }
@@ -789,10 +798,11 @@ mod test {
                 Authorization::Ignore
             }
             AuthAction::DropTable { .. } => Authorization::Deny,
+            AuthAction::Pragma { .. } => panic!("shouldn't be called"),
             _ => Authorization::Allow,
         };
 
-        db.authorizer(Some(authorizer)).unwrap();
+        db.authorizer(Some(authorizer));
         db.execute_batch(
             "BEGIN TRANSACTION; INSERT INTO foo VALUES ('pub txt', 'priv txt'); COMMIT;",
         )
@@ -804,6 +814,9 @@ mod test {
         })
         .unwrap();
         db.execute_batch("DROP TABLE foo").unwrap_err();
+
+        db.authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
+        db.execute_batch("PRAGMA user_version=1").unwrap(); // Disallowed by first authorizer, but it's now removed.
 
         Ok(())
     }
