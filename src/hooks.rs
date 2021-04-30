@@ -37,6 +37,303 @@ impl From<i32> for Action {
     }
 }
 
+/// `feature = "hooks"` The context recieved by an authorizer hook.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AuthContext<'c> {
+    // The action to be authorized.
+    pub action: AuthAction<'c>,
+
+    /// The database name, if applicable.
+    pub database_name: Option<&'c str>,
+
+    // The inner-most trigger or view responsible for the access attempt.
+    pub accessor: Option<&'c str>,
+}
+
+/// `feature = "hooks"` Actions and arguments
+/// found within a statement during preparation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+#[allow(missing_docs)] // This is self-documenting.
+pub enum AuthAction<'c> {
+    /// This variant is not normally produced by SQLite. You may encounter it
+    // if you're using a different version than what's supported by this library.
+    Unknown {
+        /// The unknown authorization action code.
+        code: i32,
+        /// The third arg to the authorizer callback.
+        arg1: Option<&'c str>,
+        /// The fourth arg to the authorizer callback.
+        arg2: Option<&'c str>,
+    },
+    CreateIndex {
+        index_name: &'c str,
+        table_name: &'c str,
+    },
+    CreateTable {
+        table_name: &'c str,
+    },
+    CreateTempIndex {
+        index_name: &'c str,
+        table_name: &'c str,
+    },
+    CreateTempTable {
+        table_name: &'c str,
+    },
+    CreateTempTrigger {
+        trigger_name: &'c str,
+        table_name: &'c str,
+    },
+    CreateTempView {
+        view_name: &'c str,
+    },
+    CreateTrigger {
+        trigger_name: &'c str,
+        table_name: &'c str,
+    },
+    CreateView {
+        view_name: &'c str,
+    },
+    Delete {
+        table_name: &'c str,
+    },
+    DropIndex {
+        index_name: &'c str,
+        table_name: &'c str,
+    },
+    DropTable {
+        table_name: &'c str,
+    },
+    DropTempIndex {
+        index_name: &'c str,
+        table_name: &'c str,
+    },
+    DropTempTable {
+        table_name: &'c str,
+    },
+    DropTempTrigger {
+        trigger_name: &'c str,
+        table_name: &'c str,
+    },
+    DropTempView {
+        view_name: &'c str,
+    },
+    DropTrigger {
+        trigger_name: &'c str,
+        table_name: &'c str,
+    },
+    DropView {
+        view_name: &'c str,
+    },
+    Insert {
+        table_name: &'c str,
+    },
+    Pragma {
+        pragma_name: &'c str,
+        /// The pragma value, if present (e.g., `PRAGMA name = value;`).
+        pragma_value: Option<&'c str>,
+    },
+    Read {
+        table_name: &'c str,
+        column_name: &'c str,
+    },
+    Select,
+    Transaction {
+        operation: TransactionOperation,
+    },
+    Update {
+        table_name: &'c str,
+        column_name: &'c str,
+    },
+    Attach {
+        filename: &'c std::path::Path,
+    },
+    Detach {
+        database_name: &'c str,
+    },
+    AlterTable {
+        database_name: &'c str,
+        table_name: &'c str,
+    },
+    Reindex {
+        index_name: &'c str,
+    },
+    Analyze {
+        table_name: &'c str,
+    },
+    CreateVtable {
+        table_name: &'c str,
+        module_name: &'c str,
+    },
+    DropVtable {
+        table_name: &'c str,
+        module_name: &'c str,
+    },
+    Function {
+        function_name: &'c str,
+    },
+    Savepoint {
+        operation: TransactionOperation,
+        savepoint_name: &'c str,
+    },
+    #[cfg(feature = "modern_sqlite")]
+    Recursive,
+}
+
+impl<'c> AuthAction<'c> {
+    fn from_raw(code: i32, arg1: Option<&'c str>, arg2: Option<&'c str>) -> Self {
+        match (code, arg1, arg2) {
+            (ffi::SQLITE_CREATE_INDEX, Some(index_name), Some(table_name)) => Self::CreateIndex {
+                index_name,
+                table_name,
+            },
+            (ffi::SQLITE_CREATE_TABLE, Some(table_name), _) => Self::CreateTable { table_name },
+            (ffi::SQLITE_CREATE_TEMP_INDEX, Some(index_name), Some(table_name)) => {
+                Self::CreateTempIndex {
+                    index_name,
+                    table_name,
+                }
+            }
+            (ffi::SQLITE_CREATE_TEMP_TABLE, Some(table_name), _) => {
+                Self::CreateTempTable { table_name }
+            }
+            (ffi::SQLITE_CREATE_TEMP_TRIGGER, Some(trigger_name), Some(table_name)) => {
+                Self::CreateTempTrigger {
+                    trigger_name,
+                    table_name,
+                }
+            }
+            (ffi::SQLITE_CREATE_TEMP_VIEW, Some(view_name), _) => {
+                Self::CreateTempView { view_name }
+            }
+            (ffi::SQLITE_CREATE_TRIGGER, Some(trigger_name), Some(table_name)) => {
+                Self::CreateTrigger {
+                    trigger_name,
+                    table_name,
+                }
+            }
+            (ffi::SQLITE_CREATE_VIEW, Some(view_name), _) => Self::CreateView { view_name },
+            (ffi::SQLITE_DELETE, Some(table_name), None) => Self::Delete { table_name },
+            (ffi::SQLITE_DROP_INDEX, Some(index_name), Some(table_name)) => Self::DropIndex {
+                index_name,
+                table_name,
+            },
+            (ffi::SQLITE_DROP_TABLE, Some(table_name), _) => Self::DropTable { table_name },
+            (ffi::SQLITE_DROP_TEMP_INDEX, Some(index_name), Some(table_name)) => {
+                Self::DropTempIndex {
+                    index_name,
+                    table_name,
+                }
+            }
+            (ffi::SQLITE_DROP_TEMP_TABLE, Some(table_name), _) => {
+                Self::DropTempTable { table_name }
+            }
+            (ffi::SQLITE_DROP_TEMP_TRIGGER, Some(trigger_name), Some(table_name)) => {
+                Self::DropTempTrigger {
+                    trigger_name,
+                    table_name,
+                }
+            }
+            (ffi::SQLITE_DROP_TEMP_VIEW, Some(view_name), _) => Self::DropTempView { view_name },
+            (ffi::SQLITE_DROP_TRIGGER, Some(trigger_name), Some(table_name)) => Self::DropTrigger {
+                trigger_name,
+                table_name,
+            },
+            (ffi::SQLITE_DROP_VIEW, Some(view_name), _) => Self::DropView { view_name },
+            (ffi::SQLITE_INSERT, Some(table_name), _) => Self::Insert { table_name },
+            (ffi::SQLITE_PRAGMA, Some(pragma_name), pragma_value) => Self::Pragma {
+                pragma_name,
+                pragma_value,
+            },
+            (ffi::SQLITE_READ, Some(table_name), Some(column_name)) => Self::Read {
+                table_name,
+                column_name,
+            },
+            (ffi::SQLITE_SELECT, _, _) => Self::Select,
+            (ffi::SQLITE_TRANSACTION, Some(operation_str), _) => Self::Transaction {
+                operation: TransactionOperation::from_str(operation_str),
+            },
+            (ffi::SQLITE_UPDATE, Some(table_name), Some(column_name)) => Self::Update {
+                table_name,
+                column_name,
+            },
+            (ffi::SQLITE_ATTACH, Some(filename_str), _) => Self::Attach {
+                filename: std::path::Path::new(filename_str),
+            },
+            (ffi::SQLITE_DETACH, Some(database_name), _) => Self::Detach { database_name },
+            (ffi::SQLITE_ALTER_TABLE, Some(database_name), Some(table_name)) => Self::AlterTable {
+                database_name,
+                table_name,
+            },
+            (ffi::SQLITE_REINDEX, Some(index_name), _) => Self::Reindex { index_name },
+            (ffi::SQLITE_ANALYZE, Some(table_name), _) => Self::Analyze { table_name },
+            (ffi::SQLITE_CREATE_VTABLE, Some(table_name), Some(module_name)) => {
+                Self::CreateVtable {
+                    table_name,
+                    module_name,
+                }
+            }
+            (ffi::SQLITE_DROP_VTABLE, Some(table_name), Some(module_name)) => Self::DropVtable {
+                table_name,
+                module_name,
+            },
+            (ffi::SQLITE_FUNCTION, _, Some(function_name)) => Self::Function { function_name },
+            (ffi::SQLITE_SAVEPOINT, Some(operation_str), Some(savepoint_name)) => Self::Savepoint {
+                operation: TransactionOperation::from_str(operation_str),
+                savepoint_name,
+            },
+            #[cfg(feature = "modern_sqlite")]
+            (ffi::SQLITE_RECURSIVE, _, _) => Self::Recursive,
+            (code, arg1, arg2) => Self::Unknown { code, arg1, arg2 },
+        }
+    }
+}
+
+pub(crate) type BoxedAuthorizer =
+    Box<dyn for<'c> FnMut(AuthContext<'c>) -> Authorization + Send + 'static>;
+
+/// `feature = "hooks"` A transaction operation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum TransactionOperation {
+    Unknown,
+    Begin,
+    Release,
+    Rollback,
+}
+
+impl TransactionOperation {
+    fn from_str(op_str: &str) -> Self {
+        match op_str {
+            "BEGIN" => Self::Begin,
+            "RELEASE" => Self::Release,
+            "ROLLBACK" => Self::Rollback,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum Authorization {
+    /// Authorize the action.
+    Allow,
+    /// Don't allow access, but don't trigger an error either.
+    Ignore,
+    /// Trigger an error.
+    Deny,
+}
+
+impl Authorization {
+    fn into_raw(self) -> c_int {
+        match self {
+            Self::Allow => ffi::SQLITE_OK,
+            Self::Ignore => ffi::SQLITE_IGNORE,
+            Self::Deny => ffi::SQLITE_DENY,
+        }
+    }
+}
+
 impl Connection {
     /// `feature = "hooks"` Register a callback function to be invoked whenever
     /// a transaction is committed.
@@ -93,6 +390,16 @@ impl Connection {
         F: FnMut() -> bool + Send + RefUnwindSafe + 'static,
     {
         self.db.borrow_mut().progress_handler(num_ops, handler);
+    }
+
+    /// `feature = "hooks"` Register an authorizer callback that's invoked
+    /// as a statement is being prepared.
+    #[inline]
+    pub fn authorizer<'c, F>(&self, hook: Option<F>) -> crate::Result<()>
+    where
+        F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + RefUnwindSafe + 'static,
+    {
+        self.db.borrow_mut().authorizer(hook)
     }
 }
 
@@ -297,6 +604,76 @@ impl InnerConnection {
             }
         };
     }
+
+    pub fn authorizer<'c, F>(&'c mut self, authorizer: Option<F>) -> crate::Result<()>
+    where
+        F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + RefUnwindSafe + 'static,
+    {
+        unsafe extern "C" fn call_boxed_closure<'c, F>(
+            p_arg: *mut c_void,
+            action_code: c_int,
+            action_arg1_str: *const c_char,
+            action_arg2_str: *const c_char,
+            db_str: *const c_char,
+            accessor_str: *const c_char,
+        ) -> c_int
+        where
+            F: FnMut(AuthContext<'c>) -> Authorization + Send + 'static,
+        {
+            use std::ffi::CStr;
+            use std::str;
+
+            let optional_str = |p_str: *const c_char| {
+                if p_str.is_null() {
+                    None
+                } else {
+                    let c_slice = CStr::from_ptr(p_str).to_bytes();
+                    str::from_utf8(c_slice).ok()
+                }
+            };
+            let action = AuthAction::from_raw(
+                action_code,
+                optional_str(action_arg1_str),
+                optional_str(action_arg2_str),
+            );
+            let auth_ctx = AuthContext {
+                action,
+                database_name: optional_str(db_str),
+                accessor: optional_str(accessor_str),
+            };
+
+            let r = catch_unwind(|| {
+                let boxed_hook: *mut F = p_arg as *mut F;
+                (*boxed_hook)(auth_ctx)
+            });
+            match r {
+                Ok(auth) => auth.into_raw(),
+                Err(_) => ffi::SQLITE_ERROR,
+            }
+        }
+
+        let callback_fn = authorizer
+            .as_ref()
+            .map(|_| call_boxed_closure::<'c, F> as unsafe extern "C" fn(_, _, _, _, _, _) -> _);
+        let boxed_authorizer = authorizer.map(Box::new);
+
+        match unsafe {
+            ffi::sqlite3_set_authorizer(
+                self.db(),
+                callback_fn,
+                boxed_authorizer
+                    .as_ref()
+                    .map(|f| &**f as *const F as *mut _)
+                    .unwrap_or_else(ptr::null_mut),
+            )
+        } {
+            ffi::SQLITE_OK => {
+                self.authorizer = boxed_authorizer.map(|ba| ba as BoxedAuthorizer);
+                Ok(())
+            }
+            err_code => Err(unsafe { crate::error::error_from_handle(self.db(), err_code) }),
+        }
+    }
 }
 
 unsafe fn free_boxed_hook<F>(p: *mut c_void) {
@@ -396,6 +773,38 @@ mod test {
         db.progress_handler(1, Some(handler));
         db.execute_batch("BEGIN; CREATE TABLE foo (t TEXT); COMMIT;")
             .unwrap_err();
+        Ok(())
+    }
+
+    #[test]
+    fn test_authorizer() -> Result<()> {
+        use super::{AuthAction, AuthContext, Authorization};
+
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE foo (public TEXT, private TEXT)")
+            .unwrap();
+
+        let authorizer = move |ctx: AuthContext<'_>| match ctx.action {
+            AuthAction::Read { column_name, .. } if column_name == "private" => {
+                Authorization::Ignore
+            }
+            AuthAction::DropTable { .. } => Authorization::Deny,
+            _ => Authorization::Allow,
+        };
+
+        db.authorizer(Some(authorizer)).unwrap();
+        db.execute_batch(
+            "BEGIN TRANSACTION; INSERT INTO foo VALUES ('pub txt', 'priv txt'); COMMIT;",
+        )
+        .unwrap();
+        db.query_row_and_then("SELECT * FROM foo", [], |row| -> Result<()> {
+            assert_eq!(row.get::<_, String>("public")?, "pub txt");
+            assert!(row.get::<_, Option<String>>("private")?.is_none());
+            Ok(())
+        })
+        .unwrap();
+        db.execute_batch("DROP TABLE foo").unwrap_err();
+
         Ok(())
     }
 }
