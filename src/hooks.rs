@@ -47,6 +47,7 @@ pub struct AuthContext<'c> {
     pub database_name: Option<&'c str>,
 
     // The inner-most trigger or view responsible for the access attempt.
+    // `None` if the access attempt was made by top-level SQL code.
     pub accessor: Option<&'c str>,
 }
 
@@ -510,31 +511,19 @@ impl InnerConnection {
         unsafe extern "C" fn call_boxed_closure<F>(
             p_arg: *mut c_void,
             action_code: c_int,
-            db_str: *const c_char,
-            tbl_str: *const c_char,
+            p_db_name: *const c_char,
+            p_table_name: *const c_char,
             row_id: i64,
         ) where
             F: FnMut(Action, &str, &str, i64),
         {
-            use std::ffi::CStr;
-            use std::str;
-
             let action = Action::from(action_code);
-            let db_name = {
-                let c_slice = CStr::from_ptr(db_str).to_bytes();
-                str::from_utf8(c_slice)
-            };
-            let tbl_name = {
-                let c_slice = CStr::from_ptr(tbl_str).to_bytes();
-                str::from_utf8(c_slice)
-            };
-
             let _ = catch_unwind(|| {
                 let boxed_hook: *mut F = p_arg as *mut F;
                 (*boxed_hook)(
                     action,
-                    db_name.expect("illegal db name"),
-                    tbl_name.expect("illegal table name"),
+                    expect_utf8(p_db_name, "database name"),
+                    expect_utf8(p_table_name, "table name"),
                     row_id,
                 );
             });
@@ -613,44 +602,33 @@ impl InnerConnection {
         unsafe extern "C" fn call_boxed_closure<'c, F>(
             p_arg: *mut c_void,
             action_code: c_int,
-            action_arg1_str: *const c_char,
-            action_arg2_str: *const c_char,
-            db_str: *const c_char,
-            accessor_str: *const c_char,
+            param1: *const c_char,
+            param2: *const c_char,
+            db_name: *const c_char,
+            trigger_or_view_name: *const c_char,
         ) -> c_int
         where
             F: FnMut(AuthContext<'c>) -> Authorization + Send + 'static,
         {
-            use std::ffi::CStr;
-            use std::str;
-
-            let expect_optional_utf8 = |p_str: *const c_char, description: &'static str| {
-                if p_str.is_null() {
-                    return None;
-                }
-                str::from_utf8(CStr::from_ptr(p_str).to_bytes())
-                    .unwrap_or_else(|_| panic!("received non-utf8 string as {}", description))
-                    .into()
-            };
-
-            let r = catch_unwind(|| {
+            catch_unwind(|| {
                 let action = AuthAction::from_raw(
                     action_code,
-                    expect_optional_utf8(action_arg1_str, "authorizer param 1"),
-                    expect_optional_utf8(action_arg2_str, "authorizer param 2"),
+                    expect_optional_utf8(param1, "authorizer param 1"),
+                    expect_optional_utf8(param2, "authorizer param 2"),
                 );
                 let auth_ctx = AuthContext {
                     action,
-                    database_name: expect_optional_utf8(db_str, "database name"),
-                    accessor: expect_optional_utf8(accessor_str, "inner-most trigger or view"),
+                    database_name: expect_optional_utf8(db_name, "database name"),
+                    accessor: expect_optional_utf8(
+                        trigger_or_view_name,
+                        "accessor (inner-most trigger or view)",
+                    ),
                 };
                 let boxed_hook: *mut F = p_arg as *mut F;
                 (*boxed_hook)(auth_ctx)
-            });
-            match r {
-                Ok(auth) => auth.into_raw(),
-                Err(_) => ffi::SQLITE_ERROR,
-            }
+            })
+            .map(Authorization::into_raw)
+            .unwrap_or_else(|_| ffi::SQLITE_ERROR)
         }
 
         let callback_fn = authorizer
@@ -669,14 +647,14 @@ impl InnerConnection {
             )
         } {
             ffi::SQLITE_OK => {
-                self.authorizer = boxed_authorizer.map(|ba| ba as BoxedAuthorizer);
+                self.authorizer = boxed_authorizer.map(|ba| ba as _);
             }
             err_code => {
                 // The only error that `sqlite3_set_authorizer` returns is `SQLITE_MISUSE`
                 // when compiled with `ENABLE_API_ARMOR` and the db pointer is invalid.
                 // This library does not allow constructing a null db ptr, so if this branch
                 // is hit, something very bad has happened. Panicking instead of returning
-                // `Result` hooks keeps this hook's API consistent with the others.
+                // `Result` keeps this hook's API consistent with the others.
                 panic!("unexpectedly failed to set_authorizer: {}", unsafe {
                     crate::error::error_from_handle(self.db(), err_code)
                 });
@@ -687,6 +665,23 @@ impl InnerConnection {
 
 unsafe fn free_boxed_hook<F>(p: *mut c_void) {
     drop(Box::from_raw(p as *mut F));
+}
+
+unsafe fn expect_utf8<'a>(p_str: *const c_char, description: &'static str) -> &'a str {
+    expect_optional_utf8(p_str, description)
+        .unwrap_or_else(|| panic!("received empty {}", description))
+}
+
+unsafe fn expect_optional_utf8<'a>(
+    p_str: *const c_char,
+    description: &'static str,
+) -> Option<&'a str> {
+    if p_str.is_null() {
+        return None;
+    }
+    std::str::from_utf8(std::ffi::CStr::from_ptr(p_str).to_bytes())
+        .unwrap_or_else(|_| panic!("received non-utf8 string as {}", description))
+        .into()
 }
 
 #[cfg(test)]
