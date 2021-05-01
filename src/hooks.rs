@@ -624,26 +624,26 @@ impl InnerConnection {
             use std::ffi::CStr;
             use std::str;
 
-            let optional_str = |p_str: *const c_char| {
+            let expect_optional_utf8 = |p_str: *const c_char, description: &'static str| {
                 if p_str.is_null() {
-                    None
-                } else {
-                    let c_slice = CStr::from_ptr(p_str).to_bytes();
-                    str::from_utf8(c_slice).ok()
+                    return None;
                 }
-            };
-            let action = AuthAction::from_raw(
-                action_code,
-                optional_str(action_arg1_str),
-                optional_str(action_arg2_str),
-            );
-            let auth_ctx = AuthContext {
-                action,
-                database_name: optional_str(db_str),
-                accessor: optional_str(accessor_str),
+                str::from_utf8(CStr::from_ptr(p_str).to_bytes())
+                    .unwrap_or_else(|_| panic!("received non-utf8 string as {}", description))
+                    .into()
             };
 
             let r = catch_unwind(|| {
+                let action = AuthAction::from_raw(
+                    action_code,
+                    expect_optional_utf8(action_arg1_str, "authorizer param 1"),
+                    expect_optional_utf8(action_arg2_str, "authorizer param 2"),
+                );
+                let auth_ctx = AuthContext {
+                    action,
+                    database_name: expect_optional_utf8(db_str, "database name"),
+                    accessor: expect_optional_utf8(accessor_str, "inner-most trigger or view"),
+                };
                 let boxed_hook: *mut F = p_arg as *mut F;
                 (*boxed_hook)(auth_ctx)
             });
