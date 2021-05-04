@@ -151,3 +151,26 @@ jobs:
 
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
+
+  # Checks that the library builds properly when using the MSRV as compiler.
+  msrv:
+    name: Minimum Supported Rust Version
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: 1.41
+        profile: minimal
+        override: true
+    - name: Rust and Cargo version
+      run: |
+        rustc --version --verbose
+        cargo --version --verbose
+    - name: Basic build
+      run: |
+        cargo build --features bundled
+    - name: Basic tests
+      run: |
+        cargo test --features bundled
