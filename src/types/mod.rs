@@ -428,34 +428,40 @@ mod test {
         // Basic non-converting test.
         test_conversion!(db_etc, 0u8, u8, expect 0u8);
 
+        // Constants like u32::MAX are only available in Rust 1.43+.
+        const U32_MAX: u32 = 4294967295;
+        const I64_MIN: i64 = -9223372036854775808;
+        const I64_MAX: i64 = 9223372036854775807;
+        const U64_MAX: u64 = 18446744073709551615;
+
         // In-range integral conversions.
         test_conversion!(db_etc, 100u8, i8, expect 100i8);
         test_conversion!(db_etc, 200u8, u8, expect 200u8);
         test_conversion!(db_etc, 100u16, i8, expect 100i8);
         test_conversion!(db_etc, 200u16, u8, expect 200u8);
-        test_conversion!(db_etc, u32::MAX, u64, expect u32::MAX as u64);
-        test_conversion!(db_etc, i64::MIN, i64, expect i64::MIN);
-        test_conversion!(db_etc, i64::MAX, i64, expect i64::MAX);
-        test_conversion!(db_etc, i64::MAX, u64, expect i64::MAX as u64);
+        test_conversion!(db_etc, U32_MAX, u64, expect U32_MAX as u64);
+        test_conversion!(db_etc, I64_MIN, i64, expect I64_MIN);
+        test_conversion!(db_etc, I64_MAX, i64, expect I64_MAX);
+        test_conversion!(db_etc, I64_MAX, u64, expect I64_MAX as u64);
         test_conversion!(db_etc, 100usize, usize, expect 100usize);
         test_conversion!(db_etc, 100u64, u64, expect 100u64);
-        test_conversion!(db_etc, i64::MAX as u64, u64, expect i64::MAX as u64);
+        test_conversion!(db_etc, I64_MAX as u64, u64, expect I64_MAX as u64);
 
         // Out-of-range integral conversions.
         test_conversion!(db_etc, 200u8, i8, expect_from_sql_error);
         test_conversion!(db_etc, 400u16, i8, expect_from_sql_error);
         test_conversion!(db_etc, 400u16, u8, expect_from_sql_error);
         test_conversion!(db_etc, -1i8, u8, expect_from_sql_error);
-        test_conversion!(db_etc, i64::MIN, u64, expect_from_sql_error);
-        test_conversion!(db_etc, u64::MAX, i64, expect_to_sql_error);
-        test_conversion!(db_etc, u64::MAX, u64, expect_to_sql_error);
-        test_conversion!(db_etc, i64::MAX as u64 + 1, u64, expect_to_sql_error);
+        test_conversion!(db_etc, I64_MIN, u64, expect_from_sql_error);
+        test_conversion!(db_etc, U64_MAX, i64, expect_to_sql_error);
+        test_conversion!(db_etc, U64_MAX, u64, expect_to_sql_error);
+        test_conversion!(db_etc, I64_MAX as u64 + 1, u64, expect_to_sql_error);
 
         // FromSql integer to float, always works.
-        test_conversion!(db_etc, i64::MIN, f32, expect i64::MIN as f32);
-        test_conversion!(db_etc, i64::MAX, f32, expect i64::MAX as f32);
-        test_conversion!(db_etc, i64::MIN, f64, expect i64::MIN as f64);
-        test_conversion!(db_etc, i64::MAX, f64, expect i64::MAX as f64);
+        test_conversion!(db_etc, I64_MIN, f32, expect I64_MIN as f32);
+        test_conversion!(db_etc, I64_MAX, f32, expect I64_MAX as f32);
+        test_conversion!(db_etc, I64_MIN, f64, expect I64_MIN as f64);
+        test_conversion!(db_etc, I64_MAX, f64, expect I64_MAX as f64);
 
         // FromSql float to int conversion, never works even if the actual value
         // is an integer.
