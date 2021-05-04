@@ -245,7 +245,7 @@ impl<'stmt> Row<'stmt> {
     /// Panics if calling [`row.get(idx)`](Row::get) would return an error,
     /// including:
     ///
-    /// * If the underlying SQLite column type is not a valid type as a source
+    /// * If the underlying SQLite value is not a valid type as a source
     ///   for `T`
     /// * If the underlying SQLite integral value is outside the range
     ///   representable by `T`
@@ -258,8 +258,9 @@ impl<'stmt> Row<'stmt> {
     ///
     /// ## Failure
     ///
-    /// Returns an `Error::InvalidColumnType` if the underlying SQLite column
-    /// type is not a valid type as a source for `T`.
+    /// Returns an `Error::InvalidColumnType` if the underlying SQLite value
+    /// is not a valid type as a source for `T`, for example if T is a different
+    /// type or the value is `NULL` and `T` is not `Option`.
     ///
     /// Returns an `Error::InvalidColumnIndex` if `idx` is outside the valid
     /// column range for this row.
