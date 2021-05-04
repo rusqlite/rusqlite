@@ -261,7 +261,8 @@ impl InnerConnection {
         let tail = if c_tail.is_null() {
             0
         } else {
-            let n = unsafe { c_tail.offset_from(c_sql) };
+            // note: feature ptr_offset_from (#41079) only available in Rust 1.47 or later
+            let n = (c_tail as isize) - (c_sql as isize);
             if n <= 0 || n >= len as isize {
                 0
             } else {
