@@ -239,7 +239,10 @@ mod test {
     #[allow(clippy::cognitive_complexity)]
     fn test_mismatched_types() -> Result<()> {
         fn is_invalid_column_type(err: Error) -> bool {
-            matches!(err, Error::InvalidColumnType(..))
+            match err {
+                Error::InvalidColumnType(..) => true,
+                _ => false,
+            }
         }
 
         let db = checked_memory_handle()?;

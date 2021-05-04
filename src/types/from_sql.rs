@@ -136,7 +136,10 @@ impl FromSql for f64 {
 impl FromSql for bool {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        i64::column_result(value).map(|i| !matches!(i, 0))
+        i64::column_result(value).map(|i| match i {
+            0 => false,
+            _ => true,
+        })
     }
 }
 
