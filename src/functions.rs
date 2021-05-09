@@ -4,7 +4,7 @@
 //!
 //! Adding a `regexp` function to a connection in which compiled regular
 //! expressions are cached in a `HashMap`. For an alternative implementation
-//! that uses SQLite's [Function Auxilliary Data](https://www.sqlite.org/c3ref/get_auxdata.html) interface
+//! that uses SQLite's [Function Auxiliary Data](https://www.sqlite.org/c3ref/get_auxdata.html) interface
 //! to avoid recompiling regular expressions, see the unit tests for this
 //! module.
 //!
@@ -53,6 +53,8 @@
 //! }
 //! ```
 use std::any::Any;
+use std::marker::PhantomData;
+use std::ops::Deref;
 use std::os::raw::{c_int, c_void};
 use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
 use std::ptr;
@@ -126,7 +128,8 @@ impl Context<'_> {
     ///
     /// # Failure
     ///
-    /// Will panic if `idx` is greater than or equal to [`self.len()`](Context::len).
+    /// Will panic if `idx` is greater than or equal to
+    /// [`self.len()`](Context::len).
     ///
     /// Will return Err if the underlying SQLite type cannot be converted to a
     /// `T`.
@@ -156,16 +159,18 @@ impl Context<'_> {
     ///
     /// # Failure
     ///
-    /// Will panic if `idx` is greater than or equal to [`self.len()`](Context::len).
+    /// Will panic if `idx` is greater than or equal to
+    /// [`self.len()`](Context::len).
     #[inline]
     pub fn get_raw(&self, idx: usize) -> ValueRef<'_> {
         let arg = self.args[idx];
         unsafe { ValueRef::from_value(arg) }
     }
 
-    /// Fetch or insert the auxilliary data associated with a particular
+    /// Fetch or insert the auxiliary data associated with a particular
     /// parameter. This is intended to be an easier-to-use way of fetching it
-    /// compared to calling [`get_aux`](Context::get_aux) and [`set_aux`](Context::set_aux) separately.
+    /// compared to calling [`get_aux`](Context::get_aux) and
+    /// [`set_aux`](Context::set_aux) separately.
     ///
     /// See `https://www.sqlite.org/c3ref/get_auxdata.html` for a discussion of
     /// this feature, or the unit tests of this module for an example.
@@ -186,7 +191,7 @@ impl Context<'_> {
         }
     }
 
-    /// Sets the auxilliary data associated with a particular parameter. See
+    /// Sets the auxiliary data associated with a particular parameter. See
     /// `https://www.sqlite.org/c3ref/get_auxdata.html` for a discussion of
     /// this feature, or the unit tests of this module for an example.
     pub fn set_aux<T: Send + Sync + 'static>(&self, arg: c_int, value: T) -> Result<Arc<T>> {
@@ -205,10 +210,10 @@ impl Context<'_> {
         Ok(orig)
     }
 
-    /// Gets the auxilliary data that was associated with a given parameter via
-    /// [`set_aux`](Context::set_aux). Returns `Ok(None)` if no data has been associated, and
-    /// Ok(Some(v)) if it has. Returns an error if the requested type does not
-    /// match.
+    /// Gets the auxiliary data that was associated with a given parameter via
+    /// [`set_aux`](Context::set_aux). Returns `Ok(None)` if no data has been
+    /// associated, and Ok(Some(v)) if it has. Returns an error if the
+    /// requested type does not match.
     pub fn get_aux<T: Send + Sync + 'static>(&self, arg: c_int) -> Result<Option<Arc<T>>> {
         let p = unsafe { ffi::sqlite3_get_auxdata(self.ctx, arg) as *const AuxInner };
         if p.is_null() {
@@ -219,6 +224,37 @@ impl Context<'_> {
                 .map(Some)
                 .map_err(|_| Error::GetAuxWrongType)
         }
+    }
+
+    /// Get the db connection handle via [sqlite3_context_db_handle](https://www.sqlite.org/c3ref/context_db_handle.html)
+    ///
+    /// # Safety
+    ///
+    /// This function is marked unsafe because there is a potential for other
+    /// references to the connection to be sent across threads, [see this comment](https://github.com/rusqlite/rusqlite/issues/643#issuecomment-640181213).
+    pub unsafe fn get_connection(&self) -> Result<ConnectionRef<'_>> {
+        let handle = ffi::sqlite3_context_db_handle(self.ctx);
+        Ok(ConnectionRef {
+            conn: Connection::from_handle(handle)?,
+            phantom: PhantomData,
+        })
+    }
+}
+
+/// A reference to a connection handle with a lifetime bound to something.
+pub struct ConnectionRef<'ctx> {
+    // comes from Connection::from_handle(sqlite3_context_db_handle(...))
+    // and is non-owning
+    conn: Connection,
+    phantom: PhantomData<&'ctx Context<'ctx>>,
+}
+
+impl Deref for ConnectionRef<'_> {
+    type Target = Connection;
+
+    #[inline]
+    fn deref(&self) -> &Connection {
+        &self.conn
     }
 }
 
@@ -235,20 +271,25 @@ where
     T: ToSql,
 {
     /// Initializes the aggregation context. Will be called prior to the first
-    /// call to [`step()`](Aggregate::step) to set up the context for an invocation of the
-    /// function. (Note: `init()` will not be called if there are no rows.)
-    fn init(&self) -> A;
+    /// call to [`step()`](Aggregate::step) to set up the context for an
+    /// invocation of the function. (Note: `init()` will not be called if
+    /// there are no rows.)
+    fn init(&self, _: &mut Context<'_>) -> Result<A>;
 
     /// "step" function called once for each row in an aggregate group. May be
     /// called 0 times if there are no rows.
     fn step(&self, _: &mut Context<'_>, _: &mut A) -> Result<()>;
 
     /// Computes and returns the final result. Will be called exactly once for
-    /// each invocation of the function. If [`step()`](Aggregate::step) was called at least
-    /// once, will be given `Some(A)` (the same `A` as was created by
-    /// [`init`](Aggregate::init) and given to [`step`](Aggregate::step)); if [`step()`](Aggregate::step) was not called (because
-    /// the function is running against 0 rows), will be given `None`.
-    fn finalize(&self, _: Option<A>) -> Result<T>;
+    /// each invocation of the function. If [`step()`](Aggregate::step) was
+    /// called at least once, will be given `Some(A)` (the same `A` as was
+    /// created by [`init`](Aggregate::init) and given to
+    /// [`step`](Aggregate::step)); if [`step()`](Aggregate::step) was not
+    /// called (because the function is running against 0 rows), will be
+    /// given `None`.
+    ///
+    /// The passed context will have no arguments.
+    fn finalize(&self, _: &mut Context<'_>, _: Option<A>) -> Result<T>;
 }
 
 /// `feature = "window"` WindowAggregate is the callback interface for
@@ -309,7 +350,8 @@ impl Connection {
     /// given the same input, `deterministic` should be `true`.
     ///
     /// The function will remain available until the connection is closed or
-    /// until it is explicitly removed via [`remove_function`](Connection::remove_function).
+    /// until it is explicitly removed via
+    /// [`remove_function`](Connection::remove_function).
     ///
     /// # Example
     ///
@@ -405,7 +447,8 @@ impl Connection {
     /// database connection.
     ///
     /// `fn_name` and `n_arg` should match the name and number of arguments
-    /// given to [`create_scalar_function`](Connection::create_scalar_function) or [`create_aggregate_function`](Connection::create_aggregate_function).
+    /// given to [`create_scalar_function`](Connection::create_scalar_function)
+    /// or [`create_aggregate_function`](Connection::create_aggregate_function).
     ///
     /// # Failure
     ///
@@ -591,13 +634,15 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
             !boxed_aggr.is_null(),
             "Internal error - null aggregate pointer"
         );
-        if (*pac as *mut A).is_null() {
-            *pac = Box::into_raw(Box::new((*boxed_aggr).init()));
-        }
         let mut ctx = Context {
             ctx,
             args: slice::from_raw_parts(argv, argc as usize),
         };
+
+        if (*pac as *mut A).is_null() {
+            *pac = Box::into_raw(Box::new((*boxed_aggr).init(&mut ctx)?));
+        }
+
         (*boxed_aggr).step(&mut ctx, &mut **pac)
     });
     let r = match r {
@@ -682,7 +727,8 @@ where
             !boxed_aggr.is_null(),
             "Internal error - null aggregate pointer"
         );
-        (*boxed_aggr).finalize(a)
+        let mut ctx = Context { ctx, args: &mut [] };
+        (*boxed_aggr).finalize(&mut ctx, a)
     });
     let t = match r {
         Err(_) => {
@@ -793,7 +839,7 @@ mod test {
         Ok(())
     }
 
-    // This implementation of a regexp scalar function uses SQLite's auxilliary data
+    // This implementation of a regexp scalar function uses SQLite's auxiliary data
     // (https://www.sqlite.org/c3ref/get_auxdata.html) to avoid recompiling the regular
     // expression multiple times within one query.
     fn regexp_with_auxilliary(ctx: &Context<'_>) -> Result<bool> {
@@ -906,8 +952,8 @@ mod test {
     struct Count;
 
     impl Aggregate<i64, Option<i64>> for Sum {
-        fn init(&self) -> i64 {
-            0
+        fn init(&self, _: &mut Context<'_>) -> Result<i64> {
+            Ok(0)
         }
 
         fn step(&self, ctx: &mut Context<'_>, sum: &mut i64) -> Result<()> {
@@ -915,14 +961,14 @@ mod test {
             Ok(())
         }
 
-        fn finalize(&self, sum: Option<i64>) -> Result<Option<i64>> {
+        fn finalize(&self, _: &mut Context<'_>, sum: Option<i64>) -> Result<Option<i64>> {
             Ok(sum)
         }
     }
 
     impl Aggregate<i64, i64> for Count {
-        fn init(&self) -> i64 {
-            0
+        fn init(&self, _: &mut Context<'_>) -> Result<i64> {
+            Ok(0)
         }
 
         fn step(&self, _ctx: &mut Context<'_>, sum: &mut i64) -> Result<()> {
@@ -930,7 +976,7 @@ mod test {
             Ok(())
         }
 
-        fn finalize(&self, sum: Option<i64>) -> Result<i64> {
+        fn finalize(&self, _: &mut Context<'_>, sum: Option<i64>) -> Result<i64> {
             Ok(sum.unwrap_or(0))
         }
     }

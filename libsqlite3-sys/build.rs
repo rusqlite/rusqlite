@@ -179,13 +179,20 @@ mod build_bundled {
             }
         }
 
+        // on android sqlite can't figure out where to put the temp files.
+        // the bundled sqlite on android also uses `SQLITE_TEMP_STORE=3`.
+        // https://android.googlesource.com/platform/external/sqlite/+/2c8c9ae3b7e6f340a19a0001c2a889a211c9d8b2/dist/Android.mk
+        if cfg!(target_os = "android") {
+            cfg.flag("-DSQLITE_TEMP_STORE=3");
+        }
+
         if cfg!(feature = "with-asan") {
             cfg.flag("-fsanitize=address");
         }
 
         // Older versions of visual studio don't support c99 (including isnan), which
         // causes a build failure when the linker fails to find the `isnan`
-        // function. `sqlite` provides its own implmentation, using the fact
+        // function. `sqlite` provides its own implementation, using the fact
         // that x != x when x is NaN.
         //
         // There may be other platforms that don't support `isnan`, they should be
@@ -486,7 +493,10 @@ mod bindings {
     fn generating_bundled_bindings() -> bool {
         // Hacky way to know if we're generating the bundled bindings
         println!("cargo:rerun-if-env-changed=LIBSQLITE3_SYS_BUNDLING");
-        matches!(std::env::var("LIBSQLITE3_SYS_BUNDLING"), Ok(v) if v != "0")
+        match std::env::var("LIBSQLITE3_SYS_BUNDLING") {
+            Ok(v) => v != "0",
+            Err(_) => false,
+        }
     }
 
     pub fn write_to_out_dir(header: HeaderLocation, out_path: &Path) {
@@ -513,32 +523,32 @@ mod bindings {
         if cfg!(all(windows, feature = "winsqlite3")) {
             bindings = bindings
                 .clang_arg("-DBINDGEN_USE_WINSQLITE3")
-                .blacklist_item("NTDDI_.+")
-                .blacklist_item("WINAPI_FAMILY.*")
-                .blacklist_item("_WIN32_.+")
-                .blacklist_item("_VCRT_COMPILER_PREPROCESSOR")
-                .blacklist_item("_SAL_VERSION")
-                .blacklist_item("__SAL_H_VERSION")
-                .blacklist_item("_USE_DECLSPECS_FOR_SAL")
-                .blacklist_item("_USE_ATTRIBUTES_FOR_SAL")
-                .blacklist_item("_CRT_PACKING")
-                .blacklist_item("_HAS_EXCEPTIONS")
-                .blacklist_item("_STL_LANG")
-                .blacklist_item("_HAS_CXX17")
-                .blacklist_item("_HAS_CXX20")
-                .blacklist_item("_HAS_NODISCARD")
-                .blacklist_item("WDK_NTDDI_VERSION")
-                .blacklist_item("OSVERSION_MASK")
-                .blacklist_item("SPVERSION_MASK")
-                .blacklist_item("SUBVERSION_MASK")
-                .blacklist_item("WINVER")
-                .blacklist_item("__security_cookie")
-                .blacklist_type("size_t")
-                .blacklist_type("__vcrt_bool")
-                .blacklist_type("wchar_t")
-                .blacklist_function("__security_init_cookie")
-                .blacklist_function("__report_gsfailure")
-                .blacklist_function("__va_start");
+                .blocklist_item("NTDDI_.+")
+                .blocklist_item("WINAPI_FAMILY.*")
+                .blocklist_item("_WIN32_.+")
+                .blocklist_item("_VCRT_COMPILER_PREPROCESSOR")
+                .blocklist_item("_SAL_VERSION")
+                .blocklist_item("__SAL_H_VERSION")
+                .blocklist_item("_USE_DECLSPECS_FOR_SAL")
+                .blocklist_item("_USE_ATTRIBUTES_FOR_SAL")
+                .blocklist_item("_CRT_PACKING")
+                .blocklist_item("_HAS_EXCEPTIONS")
+                .blocklist_item("_STL_LANG")
+                .blocklist_item("_HAS_CXX17")
+                .blocklist_item("_HAS_CXX20")
+                .blocklist_item("_HAS_NODISCARD")
+                .blocklist_item("WDK_NTDDI_VERSION")
+                .blocklist_item("OSVERSION_MASK")
+                .blocklist_item("SPVERSION_MASK")
+                .blocklist_item("SUBVERSION_MASK")
+                .blocklist_item("WINVER")
+                .blocklist_item("__security_cookie")
+                .blocklist_type("size_t")
+                .blocklist_type("__vcrt_bool")
+                .blocklist_type("wchar_t")
+                .blocklist_function("__security_init_cookie")
+                .blocklist_function("__report_gsfailure")
+                .blocklist_function("__va_start");
         }
 
         // When cross compiling unless effort is taken to fix the issue, bindgen
@@ -560,14 +570,14 @@ mod bindings {
         if generating_bundled_bindings() || is_cross_compiling {
             // Get rid of va_list, as it's not
             bindings = bindings
-                .blacklist_function("sqlite3_vmprintf")
-                .blacklist_function("sqlite3_vsnprintf")
-                .blacklist_function("sqlite3_str_vappendf")
-                .blacklist_type("va_list")
-                .blacklist_type("__builtin_va_list")
-                .blacklist_type("__gnuc_va_list")
-                .blacklist_type("__va_list_tag")
-                .blacklist_item("__GNUC_VA_LIST");
+                .blocklist_function("sqlite3_vmprintf")
+                .blocklist_function("sqlite3_vsnprintf")
+                .blocklist_function("sqlite3_str_vappendf")
+                .blocklist_type("va_list")
+                .blocklist_type("__builtin_va_list")
+                .blocklist_type("__gnuc_va_list")
+                .blocklist_type("__va_list_tag")
+                .blocklist_item("__GNUC_VA_LIST");
         }
 
         bindings

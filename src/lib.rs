@@ -522,7 +522,7 @@ impl Connection {
     /// fn insert(conn: &Connection) -> Result<usize> {
     ///     conn.execute(
     ///         "INSERT INTO test (name) VALUES (:name)",
-    ///         rusqlite::named_params!{ ":name": "one" },
+    ///         &[(":name", "one")],
     ///     )
     /// }
     /// ```
@@ -673,8 +673,8 @@ impl Connection {
     /// # use rusqlite::{Connection, Result};
     /// fn insert_new_people(conn: &Connection) -> Result<()> {
     ///     let mut stmt = conn.prepare("INSERT INTO People (name) VALUES (?)")?;
-    ///     stmt.execute(&["Joe Smith"])?;
-    ///     stmt.execute(&["Bob Jones"])?;
+    ///     stmt.execute(["Joe Smith"])?;
+    ///     stmt.execute(["Bob Jones"])?;
     ///     Ok(())
     /// }
     /// ```
@@ -974,7 +974,7 @@ impl Default for OpenFlags {
 ///
 /// This function is unsafe because if you call it and SQLite has actually been
 /// configured to run in single-thread mode,
-/// you may enounter memory errors or data corruption or any number of terrible
+/// you may encounter memory errors or data corruption or any number of terrible
 /// things that should not be possible when you're using Rust.
 pub unsafe fn bypass_sqlite_initialization() {
     BYPASS_SQLITE_INIT.store(true, Ordering::Relaxed);
@@ -1084,7 +1084,7 @@ mod test {
             tx1.query_row("SELECT x FROM foo LIMIT 1", [], |_| Ok(()))?;
             tx2.query_row("SELECT x FROM foo LIMIT 1", [], |_| Ok(()))?;
 
-            tx1.execute("INSERT INTO foo VALUES(?1)", &[&1])?;
+            tx1.execute("INSERT INTO foo VALUES(?1)", [1])?;
             let _ = tx2.execute("INSERT INTO foo VALUES(?1)", [2]);
 
             let _ = tx1.commit();
@@ -1317,8 +1317,8 @@ mod test {
         assert_eq!(insert_stmt.execute([2i32])?, 1);
         assert_eq!(insert_stmt.execute([3i32])?, 1);
 
-        assert_eq!(insert_stmt.execute(["hello".to_string()])?, 1);
-        assert_eq!(insert_stmt.execute(["goodbye".to_string()])?, 1);
+        assert_eq!(insert_stmt.execute(["hello"])?, 1);
+        assert_eq!(insert_stmt.execute(["goodbye"])?, 1);
         assert_eq!(insert_stmt.execute([types::Null])?, 1);
 
         let mut update_stmt = db.prepare("UPDATE foo SET x=? WHERE x<?")?;
@@ -1614,10 +1614,20 @@ mod test {
         let mut rows = query.query([])?;
 
         while let Some(row) = rows.next()? {
-            let i = row.get_raw(0).as_i64()?;
+            let i = row.get_ref(0)?.as_i64()?;
             let expect = vals[i as usize];
-            let x = row.get_raw("x").as_str()?;
+            let x = row.get_ref("x")?.as_str()?;
             assert_eq!(x, expect);
+        }
+
+        let mut query = db.prepare("SELECT x FROM foo")?;
+        let rows = query.query_map([], |row| {
+            let x = row.get_ref(0)?.as_str()?; // check From<FromSqlError> for Error
+            Ok(x[..].to_owned())
+        })?;
+
+        for (i, row) in rows.enumerate() {
+            assert_eq!(row?, vals[i]);
         }
         Ok(())
     }
@@ -1909,6 +1919,19 @@ mod test {
             let mut stmt = stmt?;
             stmt.execute([])?;
         }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "bundled")] // SQLite >= 3.35.0
+    fn test_returning() -> Result<()> {
+        let db = checked_memory_handle();
+        db.execute_batch("CREATE TABLE foo(x INTEGER PRIMARY KEY)")?;
+        let row_id =
+            db.query_row::<i64, _, _>("INSERT INTO foo DEFAULT VALUES RETURNING ROWID", [], |r| {
+                r.get(0)
+            })?;
+        assert_eq!(row_id, 1);
         Ok(())
     }
 }

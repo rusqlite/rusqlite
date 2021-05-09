@@ -145,6 +145,18 @@ impl RawStatement {
     }
 
     #[inline]
+    pub fn bind_parameter_name(&self, index: i32) -> Option<&CStr> {
+        unsafe {
+            let name = ffi::sqlite3_bind_parameter_name(self.ptr, index);
+            if name.is_null() {
+                None
+            } else {
+                Some(CStr::from_ptr(name))
+            }
+        }
+    }
+
+    #[inline]
     pub fn clear_bindings(&self) -> c_int {
         unsafe { ffi::sqlite3_clear_bindings(self.ptr) }
     }
@@ -170,6 +182,7 @@ impl RawStatement {
         r
     }
 
+    // does not work for PRAGMA
     #[inline]
     #[cfg(all(feature = "extra_check", feature = "modern_sqlite"))] // 3.7.4
     pub fn readonly(&self) -> bool {

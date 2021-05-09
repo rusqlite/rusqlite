@@ -261,7 +261,7 @@ impl InnerConnection {
         let tail = if c_tail.is_null() {
             0
         } else {
-            let n = unsafe { c_tail.offset_from(c_sql) };
+            let n = (c_tail as isize) - (c_sql as isize);
             if n <= 0 || n >= len as isize {
                 0
             } else {
@@ -424,18 +424,14 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
             }
 
             unsafe {
-                let msg = "\
-Could not ensure safe initialization of SQLite.
-To fix this, either:
-* Upgrade SQLite to at least version 3.7.0
-* Ensure that SQLite has been initialized in Multi-thread or Serialized mode and call
-  rusqlite::bypass_sqlite_initialization() prior to your first connection attempt.";
-
-                if ffi::sqlite3_config(ffi::SQLITE_CONFIG_MULTITHREAD) != ffi::SQLITE_OK {
-                    panic!(msg);
-                }
-                if ffi::sqlite3_initialize() != ffi::SQLITE_OK {
-                    panic!(msg);
+                if ffi::sqlite3_config(ffi::SQLITE_CONFIG_MULTITHREAD) != ffi::SQLITE_OK || ffi::sqlite3_initialize() != ffi::SQLITE_OK {
+                    panic!(
+                        "Could not ensure safe initialization of SQLite.\n\
+                         To fix this, either:\n\
+                         * Upgrade SQLite to at least version 3.7.0\n\
+                         * Ensure that SQLite has been initialized in Multi-thread or Serialized mode and call\n\
+                           rusqlite::bypass_sqlite_initialization() prior to your first connection attempt."
+                    );
                 }
             }
         });
