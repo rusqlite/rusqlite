@@ -4,7 +4,7 @@
 //!
 //! Adding a `regexp` function to a connection in which compiled regular
 //! expressions are cached in a `HashMap`. For an alternative implementation
-//! that uses SQLite's [Function Auxilliary Data](https://www.sqlite.org/c3ref/get_auxdata.html) interface
+//! that uses SQLite's [Function Auxiliary Data](https://www.sqlite.org/c3ref/get_auxdata.html) interface
 //! to avoid recompiling regular expressions, see the unit tests for this
 //! module.
 //!
@@ -128,7 +128,8 @@ impl Context<'_> {
     ///
     /// # Failure
     ///
-    /// Will panic if `idx` is greater than or equal to [`self.len()`](Context::len).
+    /// Will panic if `idx` is greater than or equal to
+    /// [`self.len()`](Context::len).
     ///
     /// Will return Err if the underlying SQLite type cannot be converted to a
     /// `T`.
@@ -158,16 +159,18 @@ impl Context<'_> {
     ///
     /// # Failure
     ///
-    /// Will panic if `idx` is greater than or equal to [`self.len()`](Context::len).
+    /// Will panic if `idx` is greater than or equal to
+    /// [`self.len()`](Context::len).
     #[inline]
     pub fn get_raw(&self, idx: usize) -> ValueRef<'_> {
         let arg = self.args[idx];
         unsafe { ValueRef::from_value(arg) }
     }
 
-    /// Fetch or insert the auxilliary data associated with a particular
+    /// Fetch or insert the auxiliary data associated with a particular
     /// parameter. This is intended to be an easier-to-use way of fetching it
-    /// compared to calling [`get_aux`](Context::get_aux) and [`set_aux`](Context::set_aux) separately.
+    /// compared to calling [`get_aux`](Context::get_aux) and
+    /// [`set_aux`](Context::set_aux) separately.
     ///
     /// See `https://www.sqlite.org/c3ref/get_auxdata.html` for a discussion of
     /// this feature, or the unit tests of this module for an example.
@@ -188,7 +191,7 @@ impl Context<'_> {
         }
     }
 
-    /// Sets the auxilliary data associated with a particular parameter. See
+    /// Sets the auxiliary data associated with a particular parameter. See
     /// `https://www.sqlite.org/c3ref/get_auxdata.html` for a discussion of
     /// this feature, or the unit tests of this module for an example.
     pub fn set_aux<T: Send + Sync + 'static>(&self, arg: c_int, value: T) -> Result<Arc<T>> {
@@ -207,10 +210,10 @@ impl Context<'_> {
         Ok(orig)
     }
 
-    /// Gets the auxilliary data that was associated with a given parameter via
-    /// [`set_aux`](Context::set_aux). Returns `Ok(None)` if no data has been associated, and
-    /// Ok(Some(v)) if it has. Returns an error if the requested type does not
-    /// match.
+    /// Gets the auxiliary data that was associated with a given parameter via
+    /// [`set_aux`](Context::set_aux). Returns `Ok(None)` if no data has been
+    /// associated, and Ok(Some(v)) if it has. Returns an error if the
+    /// requested type does not match.
     pub fn get_aux<T: Send + Sync + 'static>(&self, arg: c_int) -> Result<Option<Arc<T>>> {
         let p = unsafe { ffi::sqlite3_get_auxdata(self.ctx, arg) as *const AuxInner };
         if p.is_null() {
@@ -268,8 +271,9 @@ where
     T: ToSql,
 {
     /// Initializes the aggregation context. Will be called prior to the first
-    /// call to [`step()`](Aggregate::step) to set up the context for an invocation of the
-    /// function. (Note: `init()` will not be called if there are no rows.)
+    /// call to [`step()`](Aggregate::step) to set up the context for an
+    /// invocation of the function. (Note: `init()` will not be called if
+    /// there are no rows.)
     fn init(&self, _: &mut Context<'_>) -> Result<A>;
 
     /// "step" function called once for each row in an aggregate group. May be
@@ -277,10 +281,12 @@ where
     fn step(&self, _: &mut Context<'_>, _: &mut A) -> Result<()>;
 
     /// Computes and returns the final result. Will be called exactly once for
-    /// each invocation of the function. If [`step()`](Aggregate::step) was called at least
-    /// once, will be given `Some(A)` (the same `A` as was created by
-    /// [`init`](Aggregate::init) and given to [`step`](Aggregate::step)); if [`step()`](Aggregate::step) was not called (because
-    /// the function is running against 0 rows), will be given `None`.
+    /// each invocation of the function. If [`step()`](Aggregate::step) was
+    /// called at least once, will be given `Some(A)` (the same `A` as was
+    /// created by [`init`](Aggregate::init) and given to
+    /// [`step`](Aggregate::step)); if [`step()`](Aggregate::step) was not
+    /// called (because the function is running against 0 rows), will be
+    /// given `None`.
     ///
     /// The passed context will have no arguments.
     fn finalize(&self, _: &mut Context<'_>, _: Option<A>) -> Result<T>;
@@ -344,7 +350,8 @@ impl Connection {
     /// given the same input, `deterministic` should be `true`.
     ///
     /// The function will remain available until the connection is closed or
-    /// until it is explicitly removed via [`remove_function`](Connection::remove_function).
+    /// until it is explicitly removed via
+    /// [`remove_function`](Connection::remove_function).
     ///
     /// # Example
     ///
@@ -440,7 +447,8 @@ impl Connection {
     /// database connection.
     ///
     /// `fn_name` and `n_arg` should match the name and number of arguments
-    /// given to [`create_scalar_function`](Connection::create_scalar_function) or [`create_aggregate_function`](Connection::create_aggregate_function).
+    /// given to [`create_scalar_function`](Connection::create_scalar_function)
+    /// or [`create_aggregate_function`](Connection::create_aggregate_function).
     ///
     /// # Failure
     ///
@@ -831,7 +839,7 @@ mod test {
         Ok(())
     }
 
-    // This implementation of a regexp scalar function uses SQLite's auxilliary data
+    // This implementation of a regexp scalar function uses SQLite's auxiliary data
     // (https://www.sqlite.org/c3ref/get_auxdata.html) to avoid recompiling the regular
     // expression multiple times within one query.
     fn regexp_with_auxilliary(ctx: &Context<'_>) -> Result<bool> {

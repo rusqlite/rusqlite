@@ -29,7 +29,8 @@ impl<'stmt> Rows<'stmt> {
     /// This interface is not compatible with Rust's `Iterator` trait, because
     /// the lifetime of the returned row is tied to the lifetime of `self`.
     /// This is a fallible "streaming iterator". For a more natural interface,
-    /// consider using [`query_map`](crate::Statement::query_map) or [`query_and_then`](crate::Statement::query_and_then) instead, which
+    /// consider using [`query_map`](crate::Statement::query_map) or
+    /// [`query_and_then`](crate::Statement::query_and_then) instead, which
     /// return types that implement `Iterator`.
     #[allow(clippy::should_implement_trait)] // cannot implement Iterator
     #[inline]
@@ -109,7 +110,8 @@ impl Drop for Rows<'_> {
     }
 }
 
-/// `F` is used to tranform the _streaming_ iterator into a _fallible_ iterator.
+/// `F` is used to transform the _streaming_ iterator into a _fallible_
+/// iterator.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub struct Map<'stmt, F> {
     rows: Rows<'stmt>,
@@ -134,7 +136,8 @@ where
 
 /// An iterator over the mapped resulting rows of a query.
 ///
-/// `F` is used to tranform the _streaming_ iterator into a _standard_ iterator.
+/// `F` is used to transform the _streaming_ iterator into a _standard_
+/// iterator.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub struct MappedRows<'stmt, F> {
     rows: Rows<'stmt>,
@@ -336,8 +339,8 @@ impl<'stmt> Row<'stmt> {
     ///
     /// ## Failure
     ///
-    /// Panics if calling [`row.get_ref(idx)`](Row::get_ref) would return an error,
-    /// including:
+    /// Panics if calling [`row.get_ref(idx)`](Row::get_ref) would return an
+    /// error, including:
     ///
     /// * If `idx` is outside the range of columns in the returned query.
     /// * If `idx` is not a valid column name for this row.

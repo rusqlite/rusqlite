@@ -1,9 +1,9 @@
 //! `feature = "vtab"` Create virtual tables.
 //!
 //! Follow these steps to create your own virtual table:
-//! 1. Write implemenation of [`VTab`] and [`VTabCursor`] traits.
-//! 2. Create an instance of the [`Module`] structure specialized for [`VTab`] impl.
-//! from step 1.
+//! 1. Write implementation of [`VTab`] and [`VTabCursor`] traits.
+//! 2. Create an instance of the [`Module`] structure specialized for [`VTab`]
+//! impl. from step 1.
 //! 3. Register your [`Module`] structure using [`Connection::create_module`].
 //! 4. Run a `CREATE VIRTUAL TABLE` command that specifies the new module in the
 //! `USING` clause.
@@ -261,6 +261,7 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
 /// See [Virtual Table Constraint Operator Codes](https://sqlite.org/c3ref/c_index_constraint_eq.html) for details.
 #[derive(Debug, PartialEq)]
 #[allow(non_snake_case, non_camel_case_types, missing_docs)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum IndexConstraintOp {
     SQLITE_INDEX_CONSTRAINT_EQ,
     SQLITE_INDEX_CONSTRAINT_GT,
@@ -429,7 +430,8 @@ impl IndexConstraint<'_> {
 pub struct IndexConstraintUsage<'a>(&'a mut ffi::sqlite3_index_constraint_usage);
 
 impl IndexConstraintUsage<'_> {
-    /// if `argv_index` > 0, constraint is part of argv to [`VTabCursor::filter`]
+    /// if `argv_index` > 0, constraint is part of argv to
+    /// [`VTabCursor::filter`]
     #[inline]
     pub fn set_argv_index(&mut self, argv_index: c_int) {
         self.0.argvIndex = argv_index;
@@ -495,8 +497,8 @@ pub unsafe trait VTabCursor: Sized {
     /// Begin a search of a virtual table.
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xfilter_method))
     fn filter(&mut self, idx_num: c_int, idx_str: Option<&str>, args: &Values<'_>) -> Result<()>;
-    /// Advance cursor to the next row of a result set initiated by [`filter`](VTabCursor::filter).
-    /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xnext_method))
+    /// Advance cursor to the next row of a result set initiated by
+    /// [`filter`](VTabCursor::filter). (See [SQLite doc](https://sqlite.org/vtab.html#the_xnext_method))
     fn next(&mut self) -> Result<()>;
     /// Must return `false` if the cursor currently points to a valid row of
     /// data, or `true` otherwise.
@@ -678,7 +680,7 @@ impl InnerConnection {
     }
 }
 
-/// `feature = "vtab"` Escape double-quote (`"`) character occurences by
+/// `feature = "vtab"` Escape double-quote (`"`) character occurrences by
 /// doubling them (`""`).
 pub fn escape_double_quote(identifier: &str) -> Cow<'_, str> {
     if identifier.contains('"') {

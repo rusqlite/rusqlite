@@ -114,11 +114,11 @@ impl Statement<'_> {
     ///
     /// # Note
     ///
-    /// This function is a convenience wrapper around [`execute()`](Statement::execute) intended for
-    /// queries that insert a single item. It is possible to misuse this
-    /// function in a way that it cannot detect, such as by calling it on a
-    /// statement which _updates_ a single
-    /// item rather than inserting one. Please don't do that.
+    /// This function is a convenience wrapper around
+    /// [`execute()`](Statement::execute) intended for queries that insert a
+    /// single item. It is possible to misuse this function in a way that it
+    /// cannot detect, such as by calling it on a statement which _updates_
+    /// a single item rather than inserting one. Please don't do that.
     ///
     /// # Failure
     ///
@@ -136,7 +136,8 @@ impl Statement<'_> {
     /// rows.
     ///
     /// Due to lifetime restricts, the rows handle returned by `query` does not
-    /// implement the `Iterator` trait. Consider using [`query_map`](Statement::query_map) or
+    /// implement the `Iterator` trait. Consider using
+    /// [`query_map`](Statement::query_map) or
     /// [`query_and_then`](Statement::query_and_then) instead, which do.
     ///
     /// ## Example
@@ -246,7 +247,7 @@ impl Statement<'_> {
     /// Executes the prepared statement and maps a function over the resulting
     /// rows, returning an iterator over the mapped function results.
     ///
-    /// `f` is used to tranform the _streaming_ iterator into a _standard_
+    /// `f` is used to transform the _streaming_ iterator into a _standard_
     /// iterator.
     ///
     /// This is equivalent to `stmt.query(params)?.mapped(f)`.
@@ -309,7 +310,7 @@ impl Statement<'_> {
     /// most-recently bound value from a previous call to `query_named`,
     /// or `NULL` if they have never been bound.
     ///
-    /// `f` is used to tranform the _streaming_ iterator into a _standard_
+    /// `f` is used to transform the _streaming_ iterator into a _standard_
     /// iterator.
     ///
     /// ## Failure
@@ -396,8 +397,9 @@ impl Statement<'_> {
     /// iterator over the result of calling the mapping function over the
     /// query's rows.
     ///
-    /// Note: This function is deprecated in favor of [`Statement::query_and_then`],
-    /// which can now take named parameters directly.
+    /// Note: This function is deprecated in favor of
+    /// [`Statement::query_and_then`], which can now take named parameters
+    /// directly.
     ///
     /// If any parameters that were in the prepared statement are not included
     /// in `params`, they will continue to use the most-recently bound value
@@ -436,9 +438,10 @@ impl Statement<'_> {
     /// ignored.
     ///
     /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
-    /// query truly is optional, you can call [`.optional()`](crate::OptionalExtension::optional) on the result of
-    /// this to get a `Result<Option<T>>` (requires that the trait `rusqlite::OptionalExtension`
-    /// is imported).
+    /// query truly is optional, you can call
+    /// [`.optional()`](crate::OptionalExtension::optional) on the result of
+    /// this to get a `Result<Option<T>>` (requires that the trait
+    /// `rusqlite::OptionalExtension` is imported).
     ///
     /// # Failure
     ///
@@ -456,16 +459,18 @@ impl Statement<'_> {
     /// Convenience method to execute a query with named parameter(s) that is
     /// expected to return a single row.
     ///
-    /// Note: This function is deprecated in favor of [`Statement::query_and_then`],
-    /// which can now take named parameters directly.
+    /// Note: This function is deprecated in favor of
+    /// [`Statement::query_and_then`], which can now take named parameters
+    /// directly.
     ///
     /// If the query returns more than one row, all rows except the first are
     /// ignored.
     ///
     /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
-    /// query truly is optional, you can call [`.optional()`](crate::OptionalExtension::optional) on the result of
-    /// this to get a `Result<Option<T>>` (requires that the trait `rusqlite::OptionalExtension`
-    /// is imported).
+    /// query truly is optional, you can call
+    /// [`.optional()`](crate::OptionalExtension::optional) on the result of
+    /// this to get a `Result<Option<T>>` (requires that the trait
+    /// `rusqlite::OptionalExtension` is imported).
     ///
     /// # Failure
     ///
@@ -514,6 +519,30 @@ impl Statement<'_> {
     #[inline]
     pub fn parameter_index(&self, name: &str) -> Result<Option<usize>> {
         Ok(self.stmt.bind_parameter_index(name))
+    }
+
+    /// Return the SQL parameter name given its (one-based) index (the inverse
+    /// of [`Statement::parameter_index`]).
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// fn example(conn: &Connection) -> Result<()> {
+    ///     let stmt = conn.prepare("SELECT * FROM test WHERE name = :example")?;
+    ///     let index = stmt.parameter_name(1);
+    ///     assert_eq!(index, Some(":example"));
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// # Failure
+    ///
+    /// Will return `None` if the column index is out of bounds or if the
+    /// parameter is positional.
+    #[inline]
+    pub fn parameter_name(&self, index: usize) -> Option<&'_ str> {
+        self.stmt.bind_parameter_name(index as i32).map(|name| {
+            str::from_utf8(name.to_bytes()).expect("Invalid UTF-8 sequence in parameter name")
+        })
     }
 
     #[inline]
@@ -1326,6 +1355,17 @@ mod test {
         db.query_row("SELECT ?1, ?2, ?3", params_from_iter(data.iter()), |row| {
             row.get::<_, u8>(0)
         })?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_parameter_name() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE test (name TEXT, value INTEGER)")?;
+        let stmt = db.prepare("INSERT INTO test (name, value) VALUES (:name, ?3)")?;
+        assert_eq!(stmt.parameter_name(0), None);
+        assert_eq!(stmt.parameter_name(1), Some(":name"));
+        assert_eq!(stmt.parameter_name(2), None);
         Ok(())
     }
 

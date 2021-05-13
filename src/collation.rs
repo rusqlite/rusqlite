@@ -97,7 +97,8 @@ impl InnerConnection {
             )
         };
         let res = self.decode_result(r);
-        // The xDestroy callback is not called if the sqlite3_create_collation_v2() function fails.
+        // The xDestroy callback is not called if the sqlite3_create_collation_v2()
+        // function fails.
         if res.is_err() {
             drop(unsafe { Box::from_raw(boxed_f) });
         }
@@ -109,6 +110,7 @@ impl InnerConnection {
         x_coll_needed: fn(&Connection, &str) -> Result<()>,
     ) -> Result<()> {
         use std::mem;
+        #[allow(clippy::needless_return)]
         unsafe extern "C" fn collation_needed_callback(
             arg1: *mut c_void,
             arg2: *mut ffi::sqlite3,
@@ -128,7 +130,7 @@ impl InnerConnection {
                 let conn = Connection::from_handle(arg2).unwrap();
                 let collation_name = {
                     let c_slice = CStr::from_ptr(arg3).to_bytes();
-                    str::from_utf8(c_slice).expect("illegal coallation sequence name")
+                    str::from_utf8(c_slice).expect("illegal collation sequence name")
                 };
                 callback(&conn, collation_name)
             });

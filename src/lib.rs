@@ -974,7 +974,7 @@ impl Default for OpenFlags {
 ///
 /// This function is unsafe because if you call it and SQLite has actually been
 /// configured to run in single-thread mode,
-/// you may enounter memory errors or data corruption or any number of terrible
+/// you may encounter memory errors or data corruption or any number of terrible
 /// things that should not be possible when you're using Rust.
 pub unsafe fn bypass_sqlite_initialization() {
     BYPASS_SQLITE_INIT.store(true, Ordering::Relaxed);
@@ -1919,6 +1919,19 @@ mod test {
             let mut stmt = stmt?;
             stmt.execute([])?;
         }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "bundled")] // SQLite >= 3.35.0
+    fn test_returning() -> Result<()> {
+        let db = checked_memory_handle();
+        db.execute_batch("CREATE TABLE foo(x INTEGER PRIMARY KEY)")?;
+        let row_id =
+            db.query_row::<i64, _, _>("INSERT INTO foo DEFAULT VALUES RETURNING ROWID", [], |r| {
+                r.get(0)
+            })?;
+        assert_eq!(row_id, 1);
         Ok(())
     }
 }
