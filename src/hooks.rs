@@ -38,6 +38,8 @@ impl From<i32> for Action {
 }
 
 /// `feature = "hooks"` The context recieved by an authorizer hook.
+///
+/// See <https://sqlite.org/c3ref/set_authorizer.html> for more info.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AuthContext<'c> {
     // The action to be authorized.
@@ -51,11 +53,13 @@ pub struct AuthContext<'c> {
     pub accessor: Option<&'c str>,
 }
 
-/// `feature = "hooks"` Actions and arguments
-/// found within a statement during preparation.
+/// `feature = "hooks"` Actions and arguments found within a statement during
+/// preparation.
+///
+/// See <https://sqlite.org/c3ref/c_alter_table.html> for more info.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
-#[allow(missing_docs)] // This is self-documenting.
+#[allow(missing_docs)]
 pub enum AuthAction<'c> {
     /// This variant is not normally produced by SQLite. You may encounter it
     // if you're using a different version than what's supported by this library.
@@ -147,7 +151,7 @@ pub enum AuthAction<'c> {
         column_name: &'c str,
     },
     Attach {
-        filename: &'c std::path::Path,
+        filename: &'c str,
     },
     Detach {
         database_name: &'c str,
@@ -258,9 +262,7 @@ impl<'c> AuthAction<'c> {
                 table_name,
                 column_name,
             },
-            (ffi::SQLITE_ATTACH, Some(filename_str), _) => Self::Attach {
-                filename: std::path::Path::new(filename_str),
-            },
+            (ffi::SQLITE_ATTACH, Some(filename), _) => Self::Attach { filename },
             (ffi::SQLITE_DETACH, Some(database_name), _) => Self::Detach { database_name },
             (ffi::SQLITE_ALTER_TABLE, Some(database_name), Some(table_name)) => Self::AlterTable {
                 database_name,
