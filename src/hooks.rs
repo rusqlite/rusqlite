@@ -37,7 +37,7 @@ unsafe fn free_boxed_hook<F>(p: *mut c_void) {
 }
 
 #[cfg(feature = "preupdate_hook")]
-mod preupdate_hook {
+pub mod preupdate_hook {
     use super::free_boxed_hook;
     use super::Action;
 
