@@ -35,17 +35,13 @@ fn main() {
         return;
     }
     if cfg!(feature = "sqlcipher") {
-        if cfg!(feature = "bundled")
-            || (win_target() && cfg!(feature = "bundled-windows"))
-        {
+        if cfg!(feature = "bundled") || (win_target() && cfg!(feature = "bundled-windows")) {
             println!(
                 "cargo:warning=Builds with bundled SQLCipher are not supported. Searching for SQLCipher to link against. \
                  This can lead to issues if your version of SQLCipher is not up to date!");
         }
         build_linked::main(&out_dir, &out_path)
-    } else if cfg!(feature = "bundled")
-        || (win_target() && cfg!(feature = "bundled-windows"))
-    {
+    } else if cfg!(feature = "bundled") || (win_target() && cfg!(feature = "bundled-windows")) {
         build_bundled::main(&out_dir, &out_path)
     } else {
         build_linked::main(&out_dir, &out_path)
@@ -132,7 +128,7 @@ mod build_bundled {
         } else {
             cfg.flag("-DHAVE_ISNAN");
         }
-        if ! win_target() {
+        if !win_target() {
             cfg.flag("-DHAVE_LOCALTIME_R");
         }
         // Target wasm32-wasi can't compile the default VFS
@@ -221,17 +217,15 @@ mod build_linked {
     #[cfg(all(feature = "vcpkg", target_env = "msvc"))]
     extern crate vcpkg;
 
-    use super::{bindings, env_prefix, HeaderLocation, is_compiler, win_target};
+    use super::{bindings, env_prefix, is_compiler, win_target, HeaderLocation};
     use std::env;
     use std::path::Path;
 
     pub fn main(_out_dir: &str, out_path: &Path) {
         let header = find_sqlite();
-        if (cfg!(any(
-            feature = "bundled_bindings",
-            feature = "bundled"
-        )) || (win_target() && cfg!(feature = "bundled-windows")))
-        && !cfg!(feature = "buildtime_bindgen")
+        if (cfg!(any(feature = "bundled_bindings", feature = "bundled"))
+            || (win_target() && cfg!(feature = "bundled-windows")))
+            && !cfg!(feature = "buildtime_bindgen")
         {
             // Generally means the `bundled_bindings` feature is enabled
             // (there's also an edge case where we get here involving
