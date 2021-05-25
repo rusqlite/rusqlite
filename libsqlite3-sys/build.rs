@@ -43,14 +43,12 @@ fn main() {
                  This can lead to issues if your version of SQLCipher is not up to date!");
         }
         build_linked::main(&out_dir, &out_path)
+    } else if cfg!(feature = "bundled")
+        || (win_target() && cfg!(feature = "bundled-windows"))
+    {
+        build_bundled::main(&out_dir, &out_path)
     } else {
-        if cfg!(feature = "bundled")
-            || (win_target() && cfg!(feature = "bundled-windows"))
-        {
-            build_bundled::main(&out_dir, &out_path)
-        } else {
-            build_linked::main(&out_dir, &out_path)
-        }
+        build_linked::main(&out_dir, &out_path)
     }
 }
 
