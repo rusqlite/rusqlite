@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - fix_cross_compilation
   pull_request:
     branches:
       - master
