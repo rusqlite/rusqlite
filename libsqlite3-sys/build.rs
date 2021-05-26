@@ -223,7 +223,7 @@ impl From<HeaderLocation> for String {
 }
 
 mod build_linked {
-    #[cfg(all(feature = "vcpkg", target_env = "msvc"))]
+    #[cfg(feature = "vcpkg")]
     extern crate vcpkg;
 
     use super::{bindings, env_prefix, is_compiler, win_target, HeaderLocation};
