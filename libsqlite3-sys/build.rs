@@ -12,6 +12,7 @@ fn win_target() -> bool {
 
 /// Tells whether we're building for Android.
 /// See [`win_target`]
+#[cfg(any(feature = "bundled", feature = "bundled-windows"))]
 fn android_target() -> bool {
     std::env::var("CARGO_CFG_TARGET_OS") == Ok(String::from("android"))
 }
@@ -42,13 +43,16 @@ fn main() {
         }
         build_linked::main(&out_dir, &out_path)
     } else if cfg!(feature = "bundled") || (win_target() && cfg!(feature = "bundled-windows")) {
-        build_bundled::main(&out_dir, &out_path)
+        #[cfg(any(feature = "bundled", feature = "bundled-windows"))]
+        build_bundled::main(&out_dir, &out_path);
+        #[cfg(not(any(feature = "bundled", feature = "bundled-windows")))]
+        panic!("The runtime test should not run this branch, which has not compiled any logic.")
     } else {
         build_linked::main(&out_dir, &out_path)
     }
 }
 
-//#[cfg(any(feature = "bundled", all(windows, feature = "bundled-windows")))]
+#[cfg(any(feature = "bundled", feature = "bundled-windows"))]
 mod build_bundled {
     use std::env;
     use std::path::Path;
@@ -59,6 +63,11 @@ mod build_bundled {
         if cfg!(feature = "sqlcipher") {
             // This is just a sanity check, the top level `main` should ensure this.
             panic!("Builds with bundled SQLCipher are not supported");
+        }
+
+        if cfg!(feature = "bundled-windows") && !cfg!(feature = "bundled") && !win_target() {
+            // This is just a sanity check, the top level `main` should ensure this.
+            panic!("This module should not be used: we're not on Windows and the bundled feature has not been enabled");
         }
 
         #[cfg(feature = "buildtime_bindgen")]
