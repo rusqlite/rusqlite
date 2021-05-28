@@ -14,7 +14,7 @@ fn win_target() -> bool {
 /// See [`win_target`]
 #[cfg(any(feature = "bundled", feature = "bundled-windows"))]
 fn android_target() -> bool {
-    std::env::var("CARGO_CFG_TARGET_OS") == Ok(String::from("android"))
+    std::env::var("CARGO_CFG_TARGET_OS").map_or(false, |v| v == "android")
 }
 
 /// Tells whether a given compiler will be used
@@ -22,7 +22,7 @@ fn android_target() -> bool {
 ///
 /// See [`win_target`]
 fn is_compiler(compiler_name: &str) -> bool {
-    std::env::var("CARGO_CFG_TARGET_ENV") == Ok(String::from(compiler_name))
+    std::env::var("CARGO_CFG_TARGET_ENV").map_or(false, |v| v == compiler_name)
 }
 
 fn main() {
