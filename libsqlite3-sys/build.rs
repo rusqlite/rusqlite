@@ -1,11 +1,12 @@
 use std::env;
 use std::path::Path;
 
-/// Tells whether we're building for Windows.
-/// This is more suitable than a plain `cfg!(windows)`, since the latter does not properly handle cross-compilation
+/// Tells whether we're building for Windows. This is more suitable than a plain
+/// `cfg!(windows)`, since the latter does not properly handle cross-compilation
 ///
-/// Note that there is no way to know at compile-time which system we'll be targetting, and this test must be made at run-time (of the build script)
-/// See https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
+/// Note that there is no way to know at compile-time which system we'll be
+/// targetting, and this test must be made at run-time (of the build script) See
+/// https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
 fn win_target() -> bool {
     std::env::var("CARGO_CFG_WINDOWS").is_ok()
 }
@@ -17,8 +18,8 @@ fn android_target() -> bool {
     std::env::var("CARGO_CFG_TARGET_OS").map_or(false, |v| v == "android")
 }
 
-/// Tells whether a given compiler will be used
-/// `compiler_name` is compared to the content of `CARGO_CFG_TARGET_ENV` (and is always lowercase)
+/// Tells whether a given compiler will be used `compiler_name` is compared to
+/// the content of `CARGO_CFG_TARGET_ENV` (and is always lowercase)
 ///
 /// See [`win_target`]
 fn is_compiler(compiler_name: &str) -> bool {
