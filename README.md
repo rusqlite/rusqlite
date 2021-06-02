@@ -100,10 +100,10 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
   `Url` type from the [`url` crate](https://crates.io/crates/url).
 * `bundled` uses a bundled version of SQLite.  This is a good option for cases where linking to SQLite is complicated, such as Windows.
 * `sqlcipher` looks for the SQLCipher library to link against instead of SQLite. This feature overrides `bundled`.
-* `bundled-sqlcipher` uses a bundled version of SQLCipher (Unix only). This searches for and links against a system-installed crypto library to provide the crypto implementation.
+* `bundled-sqlcipher` uses a bundled version of SQLCipher (more or less Unix only at the moment). This searches for and links against a system-installed crypto library to provide the crypto implementation.
 * `bundled-sqlcipher-vendored-openssl` allows using bundled-sqlcipher with a vendored version of OpenSSL (via the `openssl-sys` crate) as the crypto provider.
   - As the name implies this depends on the `bundled-sqlcipher` feature, and automatically turns it on.
-  - If turned on, this uses the [`openssl-sys`](https://crates.io/crates/openssl-sys) crate, with the `vendored` feature enabled in order to build and bundle the OpenSSL crypto library. (You very likely will have more luck directing OpenSSL-specific build issues to them than filing them with us).
+  - If turned on, this uses the [`openssl-sys`](https://crates.io/crates/openssl-sys) crate, with the `vendored` feature enabled in order to build and bundle the OpenSSL crypto library.
 * `hooks` for [Commit, Rollback](http://sqlite.org/c3ref/commit_hook.html) and [Data Change](http://sqlite.org/c3ref/update_hook.html) notification callbacks.
 * `unlock_notify` for [Unlock](https://sqlite.org/unlock_notify.html) notification.
 * `vtab` for [virtual table](https://sqlite.org/vtab.html) support (allows you to write virtual table implementations in Rust). Currently, only read-only virtual tables are supported.
