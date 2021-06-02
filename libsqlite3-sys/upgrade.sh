@@ -51,6 +51,6 @@ cd "$SCRIPT_DIR/.." || { echo "fatal error" >&2; exit 1; }
 cargo update
 cargo test --features "backup blob chrono functions limits load_extension serde_json trace vtab bundled"
 printf '    \e[35;1mFinished\e[0m bundled sqlite3 tests\n'
-cargo test --features "backup blob chrono functions limits load_extension serde_json trace vtab bundled-ssl"
-printf '    \e[35;1mFinished\e[0m bundled-ssl/sqlcipher tests\n'
+cargo test --features "backup blob chrono functions limits load_extension serde_json trace vtab bundled-sqlcipher-vendored-openssl"
+printf '    \e[35;1mFinished\e[0m bundled-sqlcipher-vendored-openssl/sqlcipher tests\n'
 echo 'You should increment the version in libsqlite3-sys/Cargo.toml'

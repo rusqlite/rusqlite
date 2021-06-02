@@ -45,7 +45,7 @@ fn main() {
                 "cargo:warning=For backwards compatibility, feature 'sqlcipher' overrides
                 features 'bundled' and 'bundled-windows'. If you want a bundled build of
                 SQLCipher (available for the moment only on Unix), use feature 'bundled-sqlcipher'
-                or 'bundled-ssl' to also bundle OpenSSL crypto."
+                or 'bundled-sqlcipher-vendored-openssl' to also bundle OpenSSL crypto."
             )
         }
         build_linked::main(&out_dir, &out_path)
@@ -179,7 +179,7 @@ mod build_bundled {
                 },
             };
 
-            if cfg!(feature = "bundled-ssl") {
+            if cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
                 cfg.include(std::env::var("DEP_OPENSSL_INCLUDE").unwrap());
                 println!("cargo:rustc-link-lib=static=crypto"); // cargo will resolve downstream to the static lib in openssl-sys
             } else if is_windows {
