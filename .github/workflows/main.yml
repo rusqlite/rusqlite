@@ -64,7 +64,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
+        # TODO: find a way to test this on windows :(
 
     steps:
       - uses: actions/checkout@v2
