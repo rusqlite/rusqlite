@@ -310,7 +310,7 @@ pub const TEMP_DB: DatabaseName<'static> = DatabaseName::Temp;
 ))]
 impl DatabaseName<'_> {
     #[inline]
-    fn to_cstring(&self) -> Result<util::SmallCString> {
+    fn as_cstring(&self) -> Result<util::SmallCString> {
         use self::DatabaseName::{Attached, Main, Temp};
         match *self {
             Main => str_to_cstring("main"),
@@ -535,6 +535,16 @@ impl Connection {
     pub fn execute<P: Params>(&self, sql: &str, params: P) -> Result<usize> {
         self.prepare(sql)
             .and_then(|mut stmt| stmt.check_no_tail().and_then(|_| stmt.execute(params)))
+    }
+
+    /// Returns the path to the database file, if one exists and is known.
+    ///
+    /// Note that in some cases [PRAGMA
+    /// database_list](https://sqlite.org/pragma.html#pragma_database_list) is
+    /// likely to be more robust.
+    #[inline]
+    pub fn path(&self) -> Option<&Path> {
+        self.path.as_deref()
     }
 
     /// Convenience method to prepare and execute a single SQL statement with
@@ -1016,7 +1026,7 @@ impl InterruptHandle {
 
 #[cfg(feature = "modern_sqlite")] // 3.7.10
 unsafe fn db_filename(db: *mut ffi::sqlite3) -> Option<PathBuf> {
-    let db_name = DatabaseName::Main.to_cstring().unwrap();
+    let db_name = DatabaseName::Main.as_cstring().unwrap();
     let db_filename = ffi::sqlite3_db_filename(db, db_name.as_ptr());
     if db_filename.is_null() {
         None
@@ -1861,7 +1871,7 @@ mod test {
         db.execute_batch(sql)?;
 
         db.query_row("SELECT * FROM foo", [], |r| {
-            assert_eq!(2, r.column_count());
+            assert_eq!(2, r.as_ref().column_count());
             Ok(())
         })
     }

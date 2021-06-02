@@ -43,8 +43,6 @@ openssl-sys = { version = "0.9.58", optional = true }
 
 [build-dependencies]
 bindgen = { version = "0.58", optional = true, default-features = false, features = ["runtime"] }
-pkg-config = { version = "0.3", optional = true }
+pkg-config = { version = "0.3.19", optional = true }
 cc = { version = "1.0", optional = true }
-
-[target.'cfg(target_env = "msvc")'.build-dependencies]
 vcpkg = { version = "0.2", optional = true }
