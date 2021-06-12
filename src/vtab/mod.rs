@@ -559,6 +559,9 @@ impl Values<'_> {
                 Error::FromSqlConversionFailure(idx, value.data_type(), err)
             }
             FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
+            FromSqlError::InvalidDatetime(_) => {
+                Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
+            }
             #[cfg(feature = "i128_blob")]
             FromSqlError::InvalidI128Size(_) => {
                 Error::InvalidColumnType(idx, idx.to_string(), value.data_type())

@@ -15,6 +15,11 @@ pub enum FromSqlError {
     /// requested type.
     OutOfRange(i64),
 
+    /// Error when the datetime value returned by SQLite does not conform to the
+    /// declared expected formats <https://sqlite.org/lang_datefunc.html>. The
+    /// value can still be accessed if CASTed as TEXT.
+    InvalidDatetime(String),
+
     /// `feature = "i128_blob"` Error returned when reading an `i128` from a
     /// blob with a size other than 16. Only available when the `i128_blob`
     /// feature is enabled.
@@ -56,6 +61,9 @@ impl fmt::Display for FromSqlError {
             #[cfg(feature = "uuid")]
             FromSqlError::InvalidUuidSize(s) => {
                 write!(f, "Cannot read UUID value out of {} byte blob", s)
+            }
+            FromSqlError::InvalidDatetime(ref s) => {
+                write!(f, "Cannot parse datetime value: {}", s)
             }
             FromSqlError::Other(ref err) => err.fmt(f),
         }
