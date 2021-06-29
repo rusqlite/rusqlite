@@ -287,6 +287,9 @@ impl<'stmt> Row<'stmt> {
                 value.data_type(),
             ),
             FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
+            FromSqlError::InvalidDatetime(_) => {
+                Error::FromSqlConversionFailure(idx as usize, value.data_type(), Box::new(err))
+            }
             FromSqlError::Other(err) => {
                 Error::FromSqlConversionFailure(idx as usize, value.data_type(), err)
             }
