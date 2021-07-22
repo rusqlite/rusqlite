@@ -680,7 +680,11 @@ impl Connection {
         stmt.check_no_tail()?;
         let mut rows = stmt.query(params)?;
 
-        rows.get_expected_row().map_err(E::from).and_then(|r| f(r))
+        let result = rows.get_expected_row().map_err(E::from).and_then(|r| f(r));
+        if result.is_ok() {
+            rows.next()?; // needed for INSERT ... RETURNING ...; statements
+        }
+        result
     }
 
     /// Prepare a SQL statement for execution.

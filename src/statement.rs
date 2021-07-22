@@ -453,7 +453,11 @@ impl Statement<'_> {
     {
         let mut rows = self.query(params)?;
 
-        rows.get_expected_row().and_then(|r| f(r))
+        let result = rows.get_expected_row().and_then(|r| f(r));
+        if result.is_ok() {
+            rows.next()?; // needed for INSERT ... RETURNING ...; statements
+        }
+        result
     }
 
     /// Convenience method to execute a query with named parameter(s) that is
@@ -1276,6 +1280,19 @@ mod test {
         let mut stmt = db.prepare("SELECT y FROM foo WHERE x = ?")?;
         let y: Result<i64> = stmt.query_row([1i32], |r| r.get(0));
         assert_eq!(3i64, y?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_row_with_constraint_violation() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let sql = "CREATE TABLE items (id INTEGER PRIMARY KEY);
+                   CREATE TABLE trades (item INTEGER REFERENCES items(id) NOT NULL);
+                   PRAGMA foreign_keys=true;";
+        db.execute_batch(sql)?;
+        let mut stmt = db.prepare("INSERT INTO trades (item) VALUES (42) RETURNING *;")?;
+        let result: Result<i64> = stmt.query_row([], |r| r.get(0));
+        assert!(result.is_err());
         Ok(())
     }
 
