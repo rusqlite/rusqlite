@@ -129,6 +129,10 @@ mod build_bundled {
             .flag("-D_POSIX_THREAD_SAFE_FUNCTIONS") // cross compile with MinGW
             .warnings(false);
 
+        if cfg.get_compiler().is_like_clang() {
+            cfg.flag_if_supported("-flto");
+        }
+
         if cfg!(feature = "bundled-sqlcipher") {
             cfg.flag("-DSQLITE_HAS_CODEC").flag("-DSQLITE_TEMP_STORE=2");
 
