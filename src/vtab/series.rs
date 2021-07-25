@@ -10,15 +10,17 @@ use std::os::raw::c_int;
 use crate::ffi;
 use crate::types::Type;
 use crate::vtab::{
-    eponymous_only_module, BestIndex, Context, IndexConstraintOp, IndexConstraintUsages, IndexInfo,
-    VTab, VTabConnection, VTabCursor, Values,
+    eponymous_only_module_safe, Context, IndexConstraintOp,
+    IndexInfo, IndexConstraintUsages, BestIndex,
+    VTabSafe, VTabConnection, VTabCursor,
+    Values,
 };
 use crate::{Connection, Error, Result};
 
 /// Register the "generate_series" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module("generate_series", eponymous_only_module::<SeriesTab>(), aux)
+    conn.create_module("generate_series", eponymous_only_module_safe::<SeriesTab>(), aux)
 }
 
 // Column numbers
@@ -46,13 +48,9 @@ bitflags::bitflags! {
 }
 
 /// An instance of the Series virtual table
-#[repr(C)]
-struct SeriesTab {
-    /// Base class. Must be first
-    base: ffi::sqlite3_vtab,
-}
+struct SeriesTab;
 
-unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
+impl<'vtab> VTabSafe<'vtab> for SeriesTab {
     type Aux = ();
     type Cursor = SeriesTabCursor<'vtab>;
 
@@ -61,9 +59,7 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
         _aux: Option<&()>,
         _args: &[&[u8]],
     ) -> Result<(String, SeriesTab)> {
-        let vtab = SeriesTab {
-            base: ffi::sqlite3_vtab::default(),
-        };
+        let vtab = Self;
         Ok((
             "CREATE TABLE x(value,start hidden,stop hidden,step hidden)".to_owned(),
             vtab,
