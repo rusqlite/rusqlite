@@ -30,10 +30,8 @@ use std::str;
 use crate::ffi;
 use crate::types::Null;
 use crate::vtab::{
-    read_only_module_safe, Context, dequote, parse_boolean, escape_double_quote,
-    CreateVTabSafe, IndexInfo, IndexConstraintUsages, BestIndex,
-    VTabSafe, VTabConnection, VTabCursor,
-    Values,
+    dequote, escape_double_quote, parse_boolean, read_only_module_safe, BestIndex, Context,
+    CreateVTabSafe, IndexConstraintUsages, IndexInfo, VTabConnection, VTabCursor, VTabSafe, Values,
 };
 use crate::{Connection, Error, Result};
 

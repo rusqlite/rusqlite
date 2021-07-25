@@ -125,9 +125,8 @@ pub fn read_only_module<'vtab, T: CreateVTab<'vtab>>() -> &'static Module<'vtab,
 /// Create a read-only virtual table implementation.
 ///
 /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
-pub fn read_only_module_safe<'vtab, T: CreateVTabSafe<'vtab>>()
-    -> &'static Module<'vtab, SafeCreateVTabWrapper<'vtab, T>>
-{
+pub fn read_only_module_safe<'vtab, T: CreateVTabSafe<'vtab>>(
+) -> &'static Module<'vtab, SafeCreateVTabWrapper<'vtab, T>> {
     read_only_module::<'_, SafeCreateVTabWrapper<'_, T>>()
 }
 
@@ -173,9 +172,8 @@ pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, 
 /// Create an eponymous only virtual table implementation.
 ///
 /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
-pub fn eponymous_only_module_safe<'vtab, T: VTabSafe<'vtab>>()
-    -> &'static Module<'vtab, SafeVTabWrapper<'vtab, T>>
-{
+pub fn eponymous_only_module_safe<'vtab, T: VTabSafe<'vtab>>(
+) -> &'static Module<'vtab, SafeVTabWrapper<'vtab, T>> {
     eponymous_only_module::<'_, SafeVTabWrapper<'_, T>>()
 }
 
@@ -302,7 +300,7 @@ pub trait VTabSafe<'vtab>: Sized {
     fn best_index(
         &self,
         info: &IndexInfo,
-        constraint_usages: &mut IndexConstraintUsages
+        constraint_usages: &mut IndexConstraintUsages,
     ) -> Result<BestIndex>;
 
     /// Create a new cursor used for accessing a virtual table.
@@ -313,11 +311,11 @@ pub trait VTabSafe<'vtab>: Sized {
 /// Wrapper for `VTabSafe` that implements `VTab`
 #[repr(C)]
 pub struct SafeVTabWrapper<'vtab, T: VTabSafe<'vtab>> {
-   /// Base class. Must be first
-   base: sqlite3_vtab,
-   /* Virtual table implementations will typically add additional fields */
-   inner: T,
-   phantom: PhantomData<&'vtab ()>,
+    /// Base class. Must be first
+    base: sqlite3_vtab,
+    /* Virtual table implementations will typically add additional fields */
+    inner: T,
+    phantom: PhantomData<&'vtab ()>,
 }
 unsafe impl<'vtab, T: VTabSafe<'vtab>> VTab<'vtab> for SafeVTabWrapper<'vtab, T> {
     type Aux = <T as VTabSafe<'vtab>>::Aux;
@@ -331,14 +329,18 @@ unsafe impl<'vtab, T: VTabSafe<'vtab>> VTab<'vtab> for SafeVTabWrapper<'vtab, T>
         let (sql_dec, inner) = T::connect(db, aux, args)?;
         Ok((
             sql_dec,
-            Self { inner, phantom: PhantomData, base: Default::default() },
+            Self {
+                inner,
+                phantom: PhantomData,
+                base: Default::default(),
+            },
         ))
     }
 
     fn best_index(
         &self,
         info: &IndexInfo,
-        constraint_usages: &mut IndexConstraintUsages
+        constraint_usages: &mut IndexConstraintUsages,
     ) -> Result<BestIndex> {
         self.inner.best_index(info, constraint_usages)
     }
@@ -380,11 +382,11 @@ pub trait CreateVTabSafe<'vtab>: VTabSafe<'vtab> {
 /// Wrapper for `CreateVTabVTabSafe` that implements `CreateVTab`
 #[repr(C)]
 pub struct SafeCreateVTabWrapper<'vtab, T: CreateVTabSafe<'vtab>> {
-   /// Base class. Must be first
-   base: sqlite3_vtab,
-   /* Virtual table implementations will typically add additional fields */
-   inner: T,
-   phantom: PhantomData<&'vtab ()>,
+    /// Base class. Must be first
+    base: sqlite3_vtab,
+    /* Virtual table implementations will typically add additional fields */
+    inner: T,
+    phantom: PhantomData<&'vtab ()>,
 }
 unsafe impl<'vtab, T: CreateVTabSafe<'vtab>> VTab<'vtab> for SafeCreateVTabWrapper<'vtab, T> {
     type Aux = <T as VTabSafe<'vtab>>::Aux;
@@ -398,14 +400,18 @@ unsafe impl<'vtab, T: CreateVTabSafe<'vtab>> VTab<'vtab> for SafeCreateVTabWrapp
         let (sql_dec, inner) = T::connect(db, aux, args)?;
         Ok((
             sql_dec,
-            Self { inner, phantom: PhantomData, base: Default::default() },
+            Self {
+                inner,
+                phantom: PhantomData,
+                base: Default::default(),
+            },
         ))
     }
 
     fn best_index(
         &self,
         info: &IndexInfo,
-        constraint_usages: &mut IndexConstraintUsages
+        constraint_usages: &mut IndexConstraintUsages,
     ) -> Result<BestIndex> {
         self.inner.best_index(info, constraint_usages)
     }
@@ -424,7 +430,11 @@ impl<'vtab, T: CreateVTabSafe<'vtab>> CreateVTab<'vtab> for SafeCreateVTabWrappe
         let (sql_dec, inner) = T::create(db, aux, args)?;
         Ok((
             sql_dec,
-            Self { inner, phantom: PhantomData, base: Default::default() },
+            Self {
+                inner,
+                phantom: PhantomData,
+                base: Default::default(),
+            },
         ))
     }
 

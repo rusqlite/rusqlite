@@ -10,17 +10,19 @@ use std::os::raw::c_int;
 use crate::ffi;
 use crate::types::Type;
 use crate::vtab::{
-    eponymous_only_module_safe, Context, IndexConstraintOp,
-    IndexInfo, IndexConstraintUsages, BestIndex,
-    VTabSafe, VTabConnection, VTabCursor,
-    Values,
+    eponymous_only_module_safe, BestIndex, Context, IndexConstraintOp, IndexConstraintUsages,
+    IndexInfo, VTabConnection, VTabCursor, VTabSafe, Values,
 };
 use crate::{Connection, Error, Result};
 
 /// Register the "generate_series" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module("generate_series", eponymous_only_module_safe::<SeriesTab>(), aux)
+    conn.create_module(
+        "generate_series",
+        eponymous_only_module_safe::<SeriesTab>(),
+        aux,
+    )
 }
 
 // Column numbers

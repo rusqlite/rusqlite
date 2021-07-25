@@ -34,10 +34,8 @@ use std::rc::Rc;
 use crate::ffi;
 use crate::types::{ToSql, ToSqlOutput, Value};
 use crate::vtab::{
-    eponymous_only_module_safe, Context, IndexConstraintOp,
-    IndexInfo, IndexConstraintUsages, BestIndex,
-    VTabSafe, VTabConnection, VTabCursor,
-    Values,
+    eponymous_only_module_safe, BestIndex, Context, IndexConstraintOp, IndexConstraintUsages,
+    IndexInfo, VTabConnection, VTabCursor, VTabSafe, Values,
 };
 use crate::{Connection, Result};
 
