@@ -221,7 +221,11 @@ pub unsafe trait VTab<'vtab>: Sized {
 
     /// Determine the best way to access the virtual table.
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xbestindex_method))
-    fn best_index(&self, info: &mut IndexInfo) -> Result<()>;
+    fn best_index(
+        &self,
+        info: &IndexInfo,
+        constraint_usages: &mut IndexConstraintUsages
+    ) -> Result<BestIndex>;
 
     /// Create a new cursor used for accessing a virtual table.
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xopen_method))
@@ -302,86 +306,77 @@ impl From<u8> for IndexConstraintOp {
     }
 }
 
+// TODO idxFlags
+// TODO colUsed
+// TODO sqlite3_vtab_collation (http://sqlite.org/c3ref/vtab_collation.html)
+
 /// Pass information into and receive the reply from the
 /// [`VTab::best_index`] method.
 ///
 /// (See [SQLite doc](http://sqlite.org/c3ref/index_info.html))
-pub struct IndexInfo(*mut ffi::sqlite3_index_info);
+pub struct IndexInfo<'a> {
+    constraints_iter: IndexConstraintIter<'a>,
+    order_by_iter: OrderByIter<'a>,
+    order_by_cnt: usize,
+}
+impl<'a> IndexInfo<'a> {
+    fn new(info: &'a ffi::sqlite3_index_info) -> Self {
+        let (constraints, order_bys, order_by_cnt) = 
+            unsafe {
+                (
+                    slice::from_raw_parts(info.aConstraint, info.nConstraint as usize),
+                    slice::from_raw_parts(info.aOrderBy, info.nOrderBy as usize),
+                    info.nOrderBy as usize,
+                )
+            };
 
-impl IndexInfo {
+        let constraints_iter = IndexConstraintIter {
+            iter: constraints.iter(),
+        };
+        let order_by_iter = OrderByIter {
+            iter: order_bys.iter(),
+        };
+
+        Self {
+            constraints_iter,
+            order_by_iter,
+            order_by_cnt,
+        }
+    }
+
     /// Record WHERE clause constraints.
     #[inline]
-    pub fn constraints(&self) -> IndexConstraintIter<'_> {
-        let constraints =
-            unsafe { slice::from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint as usize) };
-        IndexConstraintIter {
-            iter: constraints.iter(),
-        }
+    pub fn constraints(&self) -> &IndexConstraintIter<'a> {
+        &self.constraints_iter
     }
 
     /// Information about the ORDER BY clause.
     #[inline]
-    pub fn order_bys(&self) -> OrderByIter<'_> {
-        let order_bys =
-            unsafe { slice::from_raw_parts((*self.0).aOrderBy, (*self.0).nOrderBy as usize) };
-        OrderByIter {
-            iter: order_bys.iter(),
-        }
+    pub fn order_bys(&self) -> &OrderByIter<'a> {
+        &self.order_by_iter
     }
 
     /// Number of terms in the ORDER BY clause
     #[inline]
     pub fn num_of_order_by(&self) -> usize {
-        unsafe { (*self.0).nOrderBy as usize }
+        self.order_by_cnt
     }
+}
 
-    /// Information about what parameters to pass to [`VTabCursor::filter`].
-    #[inline]
-    pub fn constraint_usage(&mut self, constraint_idx: usize) -> IndexConstraintUsage<'_> {
-        let constraint_usages = unsafe {
-            slice::from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint as usize)
-        };
-        IndexConstraintUsage(&mut constraint_usages[constraint_idx])
-    }
-
+/// The return type of VTab::best_index
+pub struct BestIndex {
     /// Number used to identify the index
-    #[inline]
-    pub fn set_idx_num(&mut self, idx_num: c_int) {
-        unsafe {
-            (*self.0).idxNum = idx_num;
-        }
-    }
-
+    pub idx_num: c_int,
     /// True if output is already ordered
-    #[inline]
-    pub fn set_order_by_consumed(&mut self, order_by_consumed: bool) {
-        unsafe {
-            (*self.0).orderByConsumed = if order_by_consumed { 1 } else { 0 };
-        }
-    }
-
+    pub order_by_consumed: bool,
     /// Estimated cost of using this index
-    #[inline]
-    pub fn set_estimated_cost(&mut self, estimated_ost: f64) {
-        unsafe {
-            (*self.0).estimatedCost = estimated_ost;
-        }
-    }
-
+    ///
+    /// Usually it is set to `log(estimated_rows)` if the index
+    /// can be accomplished using binary search or `estimated_rows`
+    /// if it is a linear scan.
+    pub estimated_cost: f64,
     /// Estimated number of rows returned.
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.8.2
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-    #[inline]
-    pub fn set_estimated_rows(&mut self, estimated_rows: i64) {
-        unsafe {
-            (*self.0).estimatedRows = estimated_rows;
-        }
-    }
-
-    // TODO idxFlags
-    // TODO colUsed
-
-    // TODO sqlite3_vtab_collation (http://sqlite.org/c3ref/vtab_collation.html)
+    pub estimated_rows: i64,
 }
 
 /// `feature = "vtab"`
@@ -424,6 +419,34 @@ impl IndexConstraint<'_> {
     pub fn is_usable(&self) -> bool {
         self.0.usable != 0
     }
+}
+
+/// Information about what parameters to pass to
+/// [`VTabCursor::filter`].
+pub struct IndexConstraintUsages<'a>(&'a mut [ffi::sqlite3_index_constraint_usage]);
+impl<'a> IndexConstraintUsages<'a> {
+    fn new(info: &'a mut ffi::sqlite3_index_info) -> Self {
+        let constraint_usages = unsafe {
+            slice::from_raw_parts_mut(info.aConstraintUsage, info.nConstraint as usize)
+        };
+
+        // Initialize constraint_usages to some sane default value
+        for (index, each) in constraint_usages.iter_mut().enumerate() {
+            let mut each = IndexConstraintUsage(each);
+            each.set_argv_index(index as i32);
+            each.set_omit(false);
+        }
+
+        Self(constraint_usages)
+    }
+
+    /// Information about what parameters to pass to [`VTabCursor::filter`].
+    #[inline]
+    #[must_use]
+    pub fn constraint_usage(&mut self, constraint_idx: usize) -> IndexConstraintUsage<'_> {
+        IndexConstraintUsage(&mut self.0[constraint_idx])
+    }
+
 }
 
 /// Information about what parameters to pass to
@@ -847,9 +870,24 @@ where
     T: VTab<'vtab>,
 {
     let vt = vtab as *mut T;
-    let mut idx_info = IndexInfo(info);
-    match (*vt).best_index(&mut idx_info) {
-        Ok(_) => ffi::SQLITE_OK,
+    let index_info = IndexInfo::new(& *info);
+    let mut constraint_usages = IndexConstraintUsages::new(&mut *info);
+
+    match (*vt).best_index(&index_info, &mut constraint_usages) {
+        Ok(best_index) => {
+            let info = &mut *info;
+
+            info.idxNum = best_index.idx_num;
+            info.orderByConsumed = if best_index.order_by_consumed { 1 } else { 0 };
+            info.estimatedCost = best_index.estimated_cost;
+
+            #[cfg(feature = "modern_sqlite")]
+            {
+                info.estimatedRows = best_index.estimated_rows;
+            }
+
+            ffi::SQLITE_OK
+        },
         Err(Error::SqliteFailure(err, s)) => {
             if let Some(err_msg) = s {
                 set_err_msg(vtab, &err_msg);

@@ -4,8 +4,9 @@
 #[test]
 fn test_dummy_module() -> rusqlite::Result<()> {
     use rusqlite::vtab::{
-        eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context, IndexInfo, VTab,
-        VTabConnection, VTabCursor, Values,
+        eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context,
+        IndexInfo, IndexConstraintUsages, BestIndex,
+        VTab, VTabConnection, VTabCursor, Values,
     };
     use rusqlite::{version_number, Connection, Result};
     use std::marker::PhantomData;
@@ -34,9 +35,17 @@ fn test_dummy_module() -> rusqlite::Result<()> {
             Ok(("CREATE TABLE x(value)".to_owned(), vtab))
         }
 
-        fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
-            info.set_estimated_cost(1.);
-            Ok(())
+        fn best_index(
+            &self,
+            _info: &IndexInfo,
+            _constraint_usages: &mut IndexConstraintUsages
+        ) -> Result<BestIndex> {
+            Ok(BestIndex {
+                idx_num: 0,
+                order_by_consumed: false,
+                estimated_cost: 1.,
+                estimated_rows: i64::MAX,
+            })
         }
 
         fn open(&'vtab self) -> Result<DummyTabCursor<'vtab>> {
