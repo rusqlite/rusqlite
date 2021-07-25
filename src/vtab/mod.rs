@@ -364,6 +364,7 @@ impl<'a> IndexInfo<'a> {
 }
 
 /// The return type of VTab::best_index
+#[derive(Copy, Clone, Debug, Default)]
 pub struct BestIndex {
     /// Number used to identify the index
     pub idx_num: c_int,
