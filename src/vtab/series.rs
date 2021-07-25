@@ -10,10 +10,8 @@ use std::os::raw::c_int;
 use crate::ffi;
 use crate::types::Type;
 use crate::vtab::{
-    eponymous_only_module, Context, IndexConstraintOp,
-    IndexInfo, IndexConstraintUsages, BestIndex,
-    VTab, VTabConnection, VTabCursor,
-    Values,
+    eponymous_only_module, BestIndex, Context, IndexConstraintOp, IndexConstraintUsages, IndexInfo,
+    VTab, VTabConnection, VTabCursor, Values,
 };
 use crate::{Connection, Error, Result};
 
@@ -75,7 +73,7 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
     fn best_index(
         &self,
         info: &IndexInfo,
-        constraint_usages: &mut IndexConstraintUsages
+        constraint_usages: &mut IndexConstraintUsages,
     ) -> Result<BestIndex> {
         // The query plan bitmask
         let mut idx_num: QueryPlanFlags = QueryPlanFlags::empty();
@@ -117,7 +115,9 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
             ));
         }
 
-        let mut ret = BestIndex { ..Default::default() };
+        let mut ret = BestIndex {
+            ..Default::default()
+        };
         if idx_num.contains(QueryPlanFlags::BOTH) {
             // Both start= and stop= boundaries are available.
             ret.estimated_cost = f64::from(

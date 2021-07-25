@@ -30,10 +30,8 @@ use std::str;
 use crate::ffi;
 use crate::types::Null;
 use crate::vtab::{
-    read_only_module, Context, dequote, parse_boolean, escape_double_quote, CreateVTab,
-    IndexInfo, IndexConstraintUsages, BestIndex,
-    VTab, VTabConnection, VTabCursor,
-    Values,
+    dequote, escape_double_quote, parse_boolean, read_only_module, BestIndex, Context, CreateVTab,
+    IndexConstraintUsages, IndexInfo, VTab, VTabConnection, VTabCursor, Values,
 };
 use crate::{Connection, Error, Result};
 
@@ -259,9 +257,9 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
     fn best_index(
         &self,
         _info: &IndexInfo,
-        _constraint_usages: &mut IndexConstraintUsages
+        _constraint_usages: &mut IndexConstraintUsages,
     ) -> Result<BestIndex> {
-        Ok(BestIndex{
+        Ok(BestIndex {
             idx_num: 0,
             order_by_consumed: false,
             estimated_cost: 1_000_000.,

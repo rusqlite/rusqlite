@@ -224,7 +224,7 @@ pub unsafe trait VTab<'vtab>: Sized {
     fn best_index(
         &self,
         info: &IndexInfo,
-        constraint_usages: &mut IndexConstraintUsages
+        constraint_usages: &mut IndexConstraintUsages,
     ) -> Result<BestIndex>;
 
     /// Create a new cursor used for accessing a virtual table.
@@ -321,14 +321,13 @@ pub struct IndexInfo<'a> {
 }
 impl<'a> IndexInfo<'a> {
     fn new(info: &'a ffi::sqlite3_index_info) -> Self {
-        let (constraints, order_bys, order_by_cnt) = 
-            unsafe {
-                (
-                    slice::from_raw_parts(info.aConstraint, info.nConstraint as usize),
-                    slice::from_raw_parts(info.aOrderBy, info.nOrderBy as usize),
-                    info.nOrderBy as usize,
-                )
-            };
+        let (constraints, order_bys, order_by_cnt) = unsafe {
+            (
+                slice::from_raw_parts(info.aConstraint, info.nConstraint as usize),
+                slice::from_raw_parts(info.aOrderBy, info.nOrderBy as usize),
+                info.nOrderBy as usize,
+            )
+        };
 
         let constraints_iter = IndexConstraintIter {
             iter: constraints.iter(),
@@ -428,9 +427,8 @@ impl IndexConstraint<'_> {
 pub struct IndexConstraintUsages<'a>(&'a mut [ffi::sqlite3_index_constraint_usage]);
 impl<'a> IndexConstraintUsages<'a> {
     fn new(info: &'a mut ffi::sqlite3_index_info) -> Self {
-        let constraint_usages = unsafe {
-            slice::from_raw_parts_mut(info.aConstraintUsage, info.nConstraint as usize)
-        };
+        let constraint_usages =
+            unsafe { slice::from_raw_parts_mut(info.aConstraintUsage, info.nConstraint as usize) };
 
         Self(constraint_usages)
     }
@@ -441,7 +439,6 @@ impl<'a> IndexConstraintUsages<'a> {
     pub fn constraint_usage(&mut self, constraint_idx: usize) -> IndexConstraintUsage<'_> {
         IndexConstraintUsage(&mut self.0[constraint_idx])
     }
-
 }
 
 /// Information about what parameters to pass to
@@ -866,7 +863,7 @@ where
     T: VTab<'vtab>,
 {
     let vt = vtab as *mut T;
-    let index_info = IndexInfo::new(& *info);
+    let index_info = IndexInfo::new(&*info);
     let mut constraint_usages = IndexConstraintUsages::new(&mut *info);
 
     match (*vt).best_index(&index_info, &mut constraint_usages) {
@@ -883,7 +880,7 @@ where
             }
 
             ffi::SQLITE_OK
-        },
+        }
         Err(Error::SqliteFailure(err, s)) => {
             if let Some(err_msg) = s {
                 set_err_msg(vtab, &err_msg);

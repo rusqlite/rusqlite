@@ -4,9 +4,8 @@
 #[test]
 fn test_dummy_module() -> rusqlite::Result<()> {
     use rusqlite::vtab::{
-        eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context,
-        IndexInfo, IndexConstraintUsages, BestIndex,
-        VTab, VTabConnection, VTabCursor, Values,
+        eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, BestIndex, Context,
+        IndexConstraintUsages, IndexInfo, VTab, VTabConnection, VTabCursor, Values,
     };
     use rusqlite::{version_number, Connection, Result};
     use std::marker::PhantomData;
@@ -38,7 +37,7 @@ fn test_dummy_module() -> rusqlite::Result<()> {
         fn best_index(
             &self,
             _info: &IndexInfo,
-            _constraint_usages: &mut IndexConstraintUsages
+            _constraint_usages: &mut IndexConstraintUsages,
         ) -> Result<BestIndex> {
             Ok(BestIndex {
                 idx_num: 0,

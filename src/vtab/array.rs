@@ -34,10 +34,8 @@ use std::rc::Rc;
 use crate::ffi;
 use crate::types::{ToSql, ToSqlOutput, Value};
 use crate::vtab::{
-    eponymous_only_module, Context, IndexConstraintOp,
-    IndexInfo, IndexConstraintUsages, BestIndex,
-    VTab, VTabConnection, VTabCursor,
-    Values,
+    eponymous_only_module, BestIndex, Context, IndexConstraintOp, IndexConstraintUsages, IndexInfo,
+    VTab, VTabConnection, VTabCursor, Values,
 };
 use crate::{Connection, Result};
 
@@ -94,7 +92,7 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
     fn best_index(
         &self,
         info: &IndexInfo,
-        constraint_usages: &mut IndexConstraintUsages
+        constraint_usages: &mut IndexConstraintUsages,
     ) -> Result<BestIndex> {
         // Index of the pointer= constraint
         let mut ptr_idx = None;
@@ -115,14 +113,14 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
                 constraint_usage.set_argv_index(1);
                 constraint_usage.set_omit(true);
             }
-            Ok(BestIndex{
+            Ok(BestIndex {
                 idx_num: 1,
                 order_by_consumed: false,
                 estimated_cost: 1f64,
                 estimated_rows: 100,
             })
         } else {
-            Ok(BestIndex{
+            Ok(BestIndex {
                 idx_num: 0,
                 order_by_consumed: false,
                 estimated_cost: 2_147_483_647f64,
