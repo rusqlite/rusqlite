@@ -98,7 +98,7 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
     ) -> Result<BestIndex> {
         // Index of the pointer= constraint
         let mut ptr_idx = None;
-        for (i, constraint) in info.constraints().enumerate() {
+        for (i, constraint) in info.constraints().clone().enumerate() {
             if !constraint.is_usable() {
                 continue;
             }
