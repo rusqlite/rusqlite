@@ -34,8 +34,10 @@ use std::rc::Rc;
 use crate::ffi;
 use crate::types::{ToSql, ToSqlOutput, Value};
 use crate::vtab::{
-    eponymous_only_module, BestIndex, Context, IndexConstraintOp, IndexConstraintUsages, IndexInfo,
-    VTab, VTabConnection, VTabCursor, Values,
+    eponymous_only_module_safe, Context, IndexConstraintOp,
+    IndexInfo, IndexConstraintUsages, BestIndex,
+    VTabSafe, VTabConnection, VTabCursor,
+    Values,
 };
 use crate::{Connection, Result};
 
@@ -60,7 +62,7 @@ impl ToSql for Array {
 /// Register the "rarray" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module("rarray", eponymous_only_module::<ArrayTab>(), aux)
+    conn.create_module("rarray", eponymous_only_module_safe::<ArrayTab>(), aux)
 }
 
 // Column numbers
@@ -68,13 +70,9 @@ pub fn load_module(conn: &Connection) -> Result<()> {
 const CARRAY_COLUMN_POINTER: c_int = 1;
 
 /// An instance of the Array virtual table
-#[repr(C)]
-struct ArrayTab {
-    /// Base class. Must be first
-    base: ffi::sqlite3_vtab,
-}
+struct ArrayTab;
 
-unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
+impl<'vtab> VTabSafe<'vtab> for ArrayTab {
     type Aux = ();
     type Cursor = ArrayTabCursor<'vtab>;
 
@@ -83,9 +81,7 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
         _aux: Option<&()>,
         _args: &[&[u8]],
     ) -> Result<(String, ArrayTab)> {
-        let vtab = ArrayTab {
-            base: ffi::sqlite3_vtab::default(),
-        };
+        let vtab = Self;
         Ok(("CREATE TABLE x(value,pointer hidden)".to_owned(), vtab))
     }
 
