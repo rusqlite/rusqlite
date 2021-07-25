@@ -381,6 +381,7 @@ pub struct BestIndex {
 }
 
 /// `feature = "vtab"`
+#[derive(Clone)]
 pub struct IndexConstraintIter<'a> {
     iter: slice::Iter<'a, ffi::sqlite3_index_constraint>,
 }
@@ -470,6 +471,7 @@ impl IndexConstraintUsage<'_> {
 }
 
 /// `feature = "vtab"`
+#[derive(Clone)]
 pub struct OrderByIter<'a> {
     iter: slice::Iter<'a, ffi::sqlite3_index_info_sqlite3_index_orderby>,
 }
