@@ -30,8 +30,10 @@ use std::str;
 use crate::ffi;
 use crate::types::Null;
 use crate::vtab::{
-    dequote, escape_double_quote, parse_boolean, read_only_module, Context, CreateVTab, IndexInfo,
-    VTab, VTabConnection, VTabCursor, Values,
+    read_only_module, Context, dequote, parse_boolean, escape_double_quote, CreateVTab,
+    IndexInfo, IndexConstraintUsages, BestIndex,
+    VTab, VTabConnection, VTabCursor,
+    Values,
 };
 use crate::{Connection, Error, Result};
 
@@ -253,10 +255,18 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
         Ok((schema.unwrap(), vtab))
     }
 
-    // Only a forward full table scan is supported.
-    fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
-        info.set_estimated_cost(1_000_000.);
-        Ok(())
+    /// Only a forward full table scan is supported.
+    fn best_index(
+        &self,
+        _info: &IndexInfo,
+        _constraint_usages: &mut IndexConstraintUsages
+    ) -> Result<BestIndex> {
+        Ok(BestIndex{
+            idx_num: 0,
+            order_by_consumed: false,
+            estimated_cost: 1_000_000.,
+            estimated_rows: 1_000_000,
+        })
     }
 
     fn open(&self) -> Result<CsvTabCursor<'_>> {

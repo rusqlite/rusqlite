@@ -10,7 +10,9 @@ use std::os::raw::c_int;
 use crate::ffi;
 use crate::types::Type;
 use crate::vtab::{
-    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConnection, VTabCursor,
+    eponymous_only_module, Context, IndexConstraintOp,
+    IndexInfo, IndexConstraintUsages, BestIndex,
+    VTab, VTabConnection, VTabCursor,
     Values,
 };
 use crate::{Connection, Error, Result};
@@ -70,14 +72,18 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
         ))
     }
 
-    fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
+    fn best_index(
+        &self,
+        info: &IndexInfo,
+        constraint_usages: &mut IndexConstraintUsages
+    ) -> Result<BestIndex> {
         // The query plan bitmask
         let mut idx_num: QueryPlanFlags = QueryPlanFlags::empty();
         // Mask of unusable constraints
         let mut unusable_mask: QueryPlanFlags = QueryPlanFlags::empty();
         // Constraints on start, stop, and step
         let mut a_idx: [Option<usize>; 3] = [None, None, None];
-        for (i, constraint) in info.constraints().enumerate() {
+        for (i, constraint) in info.constraints().clone().enumerate() {
             if constraint.column() < SERIES_COLUMN_START {
                 continue;
             }
@@ -100,7 +106,7 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
         let mut n_arg = 0;
         for j in a_idx.iter().flatten() {
             n_arg += 1;
-            let mut constraint_usage = info.constraint_usage(*j);
+            let mut constraint_usage = constraint_usages.constraint_usage(*j);
             constraint_usage.set_argv_index(n_arg);
             constraint_usage.set_omit(true);
         }
@@ -110,18 +116,20 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
                 None,
             ));
         }
+
+        let mut ret = BestIndex { ..Default::default() };
         if idx_num.contains(QueryPlanFlags::BOTH) {
             // Both start= and stop= boundaries are available.
-            info.set_estimated_cost(f64::from(
+            ret.estimated_cost = f64::from(
                 2 - if idx_num.contains(QueryPlanFlags::STEP) {
                     1
                 } else {
                     0
                 },
-            ));
-            info.set_estimated_rows(1000);
+            );
+            ret.estimated_rows = 1000;
             let order_by_consumed = {
-                let mut order_bys = info.order_bys();
+                let mut order_bys = info.order_bys().clone();
                 if let Some(order_by) = order_bys.next() {
                     if order_by.is_order_by_desc() {
                         idx_num |= QueryPlanFlags::DESC;
@@ -134,16 +142,16 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
                 }
             };
             if order_by_consumed {
-                info.set_order_by_consumed(true);
+                ret.order_by_consumed = true;
             }
         } else {
             // If either boundary is missing, we have to generate a huge span
             // of numbers.  Make this case very expensive so that the query
             // planner will work hard to avoid it.
-            info.set_estimated_rows(2_147_483_647);
+            ret.estimated_rows = 2_147_483_647;
         }
-        info.set_idx_num(idx_num.bits());
-        Ok(())
+        ret.idx_num = idx_num.bits();
+        Ok(ret)
     }
 
     fn open(&self) -> Result<SeriesTabCursor<'_>> {

@@ -34,7 +34,9 @@ use std::rc::Rc;
 use crate::ffi;
 use crate::types::{ToSql, ToSqlOutput, Value};
 use crate::vtab::{
-    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConnection, VTabCursor,
+    eponymous_only_module, Context, IndexConstraintOp,
+    IndexInfo, IndexConstraintUsages, BestIndex,
+    VTab, VTabConnection, VTabCursor,
     Values,
 };
 use crate::{Connection, Result};
@@ -89,7 +91,11 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
         Ok(("CREATE TABLE x(value,pointer hidden)".to_owned(), vtab))
     }
 
-    fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
+    fn best_index(
+        &self,
+        info: &IndexInfo,
+        constraint_usages: &mut IndexConstraintUsages
+    ) -> Result<BestIndex> {
         // Index of the pointer= constraint
         let mut ptr_idx = None;
         for (i, constraint) in info.constraints().enumerate() {
@@ -105,19 +111,24 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
         }
         if let Some(ptr_idx) = ptr_idx {
             {
-                let mut constraint_usage = info.constraint_usage(ptr_idx);
+                let mut constraint_usage = constraint_usages.constraint_usage(ptr_idx);
                 constraint_usage.set_argv_index(1);
                 constraint_usage.set_omit(true);
             }
-            info.set_estimated_cost(1f64);
-            info.set_estimated_rows(100);
-            info.set_idx_num(1);
+            Ok(BestIndex{
+                idx_num: 1,
+                order_by_consumed: false,
+                estimated_cost: 1f64,
+                estimated_rows: 100,
+            })
         } else {
-            info.set_estimated_cost(2_147_483_647f64);
-            info.set_estimated_rows(2_147_483_647);
-            info.set_idx_num(0);
+            Ok(BestIndex{
+                idx_num: 0,
+                order_by_consumed: false,
+                estimated_cost: 2_147_483_647f64,
+                estimated_rows: 2_147_483_647,
+            })
         }
-        Ok(())
     }
 
     fn open(&self) -> Result<ArrayTabCursor<'_>> {
