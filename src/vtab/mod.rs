@@ -122,6 +122,15 @@ pub fn read_only_module<'vtab, T: CreateVTab<'vtab>>() -> &'static Module<'vtab,
     }
 }
 
+/// Create a read-only virtual table implementation.
+///
+/// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
+pub fn read_only_module_safe<'vtab, T: CreateVTabSafe<'vtab>>()
+    -> &'static Module<'vtab, SafeCreateVTabWrapper<'vtab, T>>
+{
+    read_only_module::<'_, SafeCreateVTabWrapper<'_, T>>()
+}
+
 /// Create an eponymous only virtual table implementation.
 ///
 /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
@@ -159,6 +168,15 @@ pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, 
         },
         phantom: PhantomData::<&'vtab T>,
     }
+}
+
+/// Create an eponymous only virtual table implementation.
+///
+/// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
+pub fn eponymous_only_module_safe<'vtab, T: VTabSafe<'vtab>>()
+    -> &'static Module<'vtab, SafeVTabWrapper<'vtab, T>>
+{
+    eponymous_only_module::<'_, SafeVTabWrapper<'_, T>>()
 }
 
 /// `feature = "vtab"`
@@ -258,6 +276,160 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xdestroy_method))
     fn destroy(&self) -> Result<()> {
         Ok(())
+    }
+}
+
+/// Virtual table instance trait.
+///
+/// (See [SQLite doc](https://sqlite.org/c3ref/vtab.html))
+pub trait VTabSafe<'vtab>: Sized {
+    /// Client data passed to [`Connection::create_module`].
+    type Aux;
+    /// Specific cursor implementation
+    type Cursor: VTabCursor;
+
+    /// Establish a new connection to an existing virtual table.
+    ///
+    /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xconnect_method))
+    fn connect(
+        db: &mut VTabConnection,
+        aux: Option<&Self::Aux>,
+        args: &[&[u8]],
+    ) -> Result<(String, Self)>;
+
+    /// Determine the best way to access the virtual table.
+    /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xbestindex_method))
+    fn best_index(
+        &self,
+        info: &IndexInfo,
+        constraint_usages: &mut IndexConstraintUsages
+    ) -> Result<BestIndex>;
+
+    /// Create a new cursor used for accessing a virtual table.
+    /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xopen_method))
+    fn open(&'vtab self) -> Result<Self::Cursor>;
+}
+
+/// Wrapper for `VTabSafe` that implements `VTab`
+#[repr(C)]
+pub struct SafeVTabWrapper<'vtab, T: VTabSafe<'vtab>> {
+   /// Base class. Must be first
+   base: sqlite3_vtab,
+   /* Virtual table implementations will typically add additional fields */
+   inner: T,
+   phantom: PhantomData<&'vtab ()>,
+}
+unsafe impl<'vtab, T: VTabSafe<'vtab>> VTab<'vtab> for SafeVTabWrapper<'vtab, T> {
+    type Aux = <T as VTabSafe<'vtab>>::Aux;
+    type Cursor = <T as VTabSafe<'vtab>>::Cursor;
+
+    fn connect(
+        db: &mut VTabConnection,
+        aux: Option<&Self::Aux>,
+        args: &[&[u8]],
+    ) -> Result<(String, Self)> {
+        let (sql_dec, inner) = T::connect(db, aux, args)?;
+        Ok((
+            sql_dec,
+            Self { inner, phantom: PhantomData, base: Default::default() },
+        ))
+    }
+
+    fn best_index(
+        &self,
+        info: &IndexInfo,
+        constraint_usages: &mut IndexConstraintUsages
+    ) -> Result<BestIndex> {
+        self.inner.best_index(info, constraint_usages)
+    }
+
+    fn open(&'vtab self) -> Result<Self::Cursor> {
+        self.inner.open()
+    }
+}
+
+/// Non-eponymous virtual table instance trait.
+///
+/// (See [SQLite doc](https://sqlite.org/c3ref/vtab.html))
+pub trait CreateVTabSafe<'vtab>: VTabSafe<'vtab> {
+    /// Create a new instance of a virtual table in response to a CREATE VIRTUAL
+    /// TABLE statement. The `db` parameter is a pointer to the SQLite
+    /// database connection that is executing the CREATE VIRTUAL TABLE
+    /// statement.
+    ///
+    /// Call [`connect`](VTabSafe::connect) by default.
+    /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xcreate_method))
+    fn create(
+        db: &mut VTabConnection,
+        aux: Option<&Self::Aux>,
+        args: &[&[u8]],
+    ) -> Result<(String, Self)> {
+        Self::connect(db, aux, args)
+    }
+
+    /// Destroy the underlying table implementation. This method undoes the work
+    /// of [`create`](CreateVTabSafe::create).
+    ///
+    /// Do nothing by default.
+    /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xdestroy_method))
+    fn destroy(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
+/// Wrapper for `CreateVTabVTabSafe` that implements `CreateVTab`
+#[repr(C)]
+pub struct SafeCreateVTabWrapper<'vtab, T: CreateVTabSafe<'vtab>> {
+   /// Base class. Must be first
+   base: sqlite3_vtab,
+   /* Virtual table implementations will typically add additional fields */
+   inner: T,
+   phantom: PhantomData<&'vtab ()>,
+}
+unsafe impl<'vtab, T: CreateVTabSafe<'vtab>> VTab<'vtab> for SafeCreateVTabWrapper<'vtab, T> {
+    type Aux = <T as VTabSafe<'vtab>>::Aux;
+    type Cursor = <T as VTabSafe<'vtab>>::Cursor;
+
+    fn connect(
+        db: &mut VTabConnection,
+        aux: Option<&Self::Aux>,
+        args: &[&[u8]],
+    ) -> Result<(String, Self)> {
+        let (sql_dec, inner) = T::connect(db, aux, args)?;
+        Ok((
+            sql_dec,
+            Self { inner, phantom: PhantomData, base: Default::default() },
+        ))
+    }
+
+    fn best_index(
+        &self,
+        info: &IndexInfo,
+        constraint_usages: &mut IndexConstraintUsages
+    ) -> Result<BestIndex> {
+        self.inner.best_index(info, constraint_usages)
+    }
+
+    fn open(&'vtab self) -> Result<Self::Cursor> {
+        self.inner.open()
+    }
+}
+
+impl<'vtab, T: CreateVTabSafe<'vtab>> CreateVTab<'vtab> for SafeCreateVTabWrapper<'vtab, T> {
+    fn create(
+        db: &mut VTabConnection,
+        aux: Option<&Self::Aux>,
+        args: &[&[u8]],
+    ) -> Result<(String, Self)> {
+        let (sql_dec, inner) = T::create(db, aux, args)?;
+        Ok((
+            sql_dec,
+            Self { inner, phantom: PhantomData, base: Default::default() },
+        ))
+    }
+
+    fn destroy(&self) -> Result<()> {
+        self.inner.destroy()
     }
 }
 
