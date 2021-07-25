@@ -30,8 +30,10 @@ use std::str;
 use crate::ffi;
 use crate::types::Null;
 use crate::vtab::{
-    dequote, escape_double_quote, parse_boolean, read_only_module, BestIndex, Context, CreateVTab,
-    IndexConstraintUsages, IndexInfo, VTab, VTabConnection, VTabCursor, Values,
+    read_only_module_safe, Context, dequote, parse_boolean, escape_double_quote,
+    CreateVTabSafe, IndexInfo, IndexConstraintUsages, BestIndex,
+    VTabSafe, VTabConnection, VTabCursor,
+    Values,
 };
 use crate::{Connection, Error, Result};
 
@@ -48,14 +50,11 @@ use crate::{Connection, Error, Result};
 /// ```
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module("csv", read_only_module::<CsvTab>(), aux)
+    conn.create_module("csv", read_only_module_safe::<CsvTab>(), aux)
 }
 
 /// An instance of the CSV virtual table
-#[repr(C)]
 struct CsvTab {
-    /// Base class. Must be first
-    base: ffi::sqlite3_vtab,
     /// Name of the CSV file
     filename: String,
     has_headers: bool,
@@ -96,7 +95,7 @@ impl CsvTab {
     }
 }
 
-unsafe impl<'vtab> VTab<'vtab> for CsvTab {
+impl<'vtab> VTabSafe<'vtab> for CsvTab {
     type Aux = ();
     type Cursor = CsvTabCursor<'vtab>;
 
@@ -110,7 +109,6 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
         }
 
         let mut vtab = CsvTab {
-            base: ffi::sqlite3_vtab::default(),
             filename: "".to_owned(),
             has_headers: false,
             delimiter: b',',
@@ -272,7 +270,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
     }
 }
 
-impl CreateVTab<'_> for CsvTab {}
+impl CreateVTabSafe<'_> for CsvTab {}
 
 /// A cursor for the CSV virtual table
 #[repr(C)]
