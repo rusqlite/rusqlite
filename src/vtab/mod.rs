@@ -432,13 +432,6 @@ impl<'a> IndexConstraintUsages<'a> {
             slice::from_raw_parts_mut(info.aConstraintUsage, info.nConstraint as usize)
         };
 
-        // Initialize constraint_usages to some sane default value
-        for (index, each) in constraint_usages.iter_mut().enumerate() {
-            let mut each = IndexConstraintUsage(each);
-            each.set_argv_index(index as i32);
-            each.set_omit(false);
-        }
-
         Self(constraint_usages)
     }
 
