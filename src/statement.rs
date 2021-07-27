@@ -1284,6 +1284,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "modern_sqlite")]
     fn test_query_row_with_constraint_violation() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "CREATE TABLE items (id INTEGER PRIMARY KEY);
@@ -1291,6 +1292,10 @@ mod test {
                    PRAGMA foreign_keys=true;";
         db.execute_batch(sql)?;
         let mut stmt = db.prepare("INSERT INTO trades (item) VALUES (42) RETURNING *;")?;
+        let result: Result<i64> = stmt.query_row([], |r| r.get(0));
+        assert!(result.is_err());
+
+        let mut stmt = db.prepare("INSERT INTO trades (item) VALUES (42), (123) RETURNING *;")?;
         let result: Result<i64> = stmt.query_row([], |r| r.get(0));
         assert!(result.is_err());
         Ok(())
