@@ -41,6 +41,10 @@ winsqlite3 = ["min_sqlite_version_3_7_16"]
 [dependencies]
 openssl-sys = { version = "0.9", optional = true }
 
+[target.wasm32-unknown-unknown.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+js-sys = "0.3"
+
 [build-dependencies]
 bindgen = { version = "0.59", optional = true, default-features = false, features = ["runtime"] }
 pkg-config = { version = "0.3.19", optional = true }

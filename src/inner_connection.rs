@@ -4,6 +4,7 @@ use std::os::raw::{c_char, c_int};
 use std::path::Path;
 use std::ptr;
 use std::str;
+#[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -13,6 +14,7 @@ use super::{Connection, InterruptHandle, OpenFlags, Result};
 use crate::error::{error_from_handle, error_from_sqlite_code, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
+#[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
 use crate::version::version_number;
 
 pub struct InnerConnection {
