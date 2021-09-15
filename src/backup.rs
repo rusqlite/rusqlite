@@ -278,6 +278,8 @@ impl Backup<'_, '_> {
     /// current progress of the backup. Note that is possible the progress may
     /// not change if the step returns `Busy` or `Locked` even though the
     /// backup is still running.
+    /// 
+    /// If `pages_per_step` is `-1` the entire database will be copied in a single step.
     ///
     /// # Failure
     ///
@@ -291,7 +293,7 @@ impl Backup<'_, '_> {
     ) -> Result<()> {
         use self::StepResult::{Busy, Done, Locked, More};
 
-        assert!(pages_per_step > 0, "pages_per_step must be positive");
+        assert!(pages_per_step > 0 || pages_per_step == -1, "pages_per_step must be positive or -1 to indicate unlimited");
 
         loop {
             let r = self.step(pages_per_step)?;
