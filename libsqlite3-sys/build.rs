@@ -239,6 +239,12 @@ mod build_bundled {
         if !win_target() {
             cfg.flag("-DHAVE_LOCALTIME_R");
         }
+
+        if cfg!(feature = "cksumvfs") {
+            cfg.flag("-DSQLITE_CKSUMVFS_STATIC");
+            cfg.file("sqlite3/cksumvfs.c");
+        }
+
         // Target wasm32-wasi can't compile the default VFS
         if is_compiler("wasm32-wasi") {
             cfg.flag("-DSQLITE_OS_OTHER")

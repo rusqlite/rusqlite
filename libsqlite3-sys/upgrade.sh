@@ -1,4 +1,5 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
 SCRIPT_DIR=$(cd "$(dirname "$_")" && pwd)
 CUR_DIR=$(pwd -P)
@@ -11,12 +12,19 @@ export SQLITE3_INCLUDE_DIR="$SQLITE3_LIB_DIR"
 export SQLCIPHER_LIB_DIR="$SCRIPT_DIR/sqlcipher"
 export SQLCIPHER_INCLUDE_DIR="$SQLCIPHER_LIB_DIR"
 
+SQLITE_VERSION=3360000
 # Download and extract amalgamation
-SQLITE=sqlite-amalgamation-3360000
+SQLITE=sqlite-amalgamation-$SQLITE_VERSION
 curl -O https://sqlite.org/2021/$SQLITE.zip
 unzip -p "$SQLITE.zip" "$SQLITE/sqlite3.c" > "$SQLITE3_LIB_DIR/sqlite3.c"
 unzip -p "$SQLITE.zip" "$SQLITE/sqlite3.h" > "$SQLITE3_LIB_DIR/sqlite3.h"
 unzip -p "$SQLITE.zip" "$SQLITE/sqlite3ext.h" > "$SQLITE3_LIB_DIR/sqlite3ext.h"
+rm -f "$SQLITE.zip"
+
+# Download and extract extra extensions
+SQLITE=sqlite-src-$SQLITE_VERSION
+curl -O https://sqlite.org/2021/$SQLITE.zip
+unzip -p "$SQLITE.zip" "$SQLITE/ext/misc/cksumvfs.c" > "$SQLITE3_LIB_DIR/cksumvfs.c"
 rm -f "$SQLITE.zip"
 
 # Regenerate bindgen file for sqlite3

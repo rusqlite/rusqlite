@@ -62,6 +62,11 @@ mod bindings {
 }
 pub use bindings::*;
 
+extern "C" {
+    #[cfg(feature = "cksumvfs")]
+    pub fn sqlite3_register_cksumvfs(unused: *const u8) -> ::std::os::raw::c_int;
+}
+
 pub type sqlite3_index_constraint = sqlite3_index_info_sqlite3_index_constraint;
 pub type sqlite3_index_constraint_usage = sqlite3_index_info_sqlite3_index_constraint_usage;
 

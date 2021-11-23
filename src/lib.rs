@@ -2019,4 +2019,37 @@ mod test {
         let db = Connection::open_in_memory()?;
         db.cache_flush()
     }
+
+    #[test]
+    #[cfg(feature = "cksumvfs")]
+    fn test_cksumvfs() -> Result<()> {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("test.db3");
+        {
+            unsafe {
+                assert_eq!(
+                    ffi::sqlite3_register_cksumvfs(std::ptr::null()),
+                    ffi::SQLITE_OK
+                )
+            };
+            let db = Connection::open(&path)?;
+            let mut n = 8;
+            unsafe {
+                assert_eq!(
+                    ffi::sqlite3_file_control(
+                        db.handle(),
+                        std::ptr::null(),
+                        ffi::SQLITE_FCNTL_RESERVE_BYTES,
+                        (&mut n) as *mut i32 as *mut core::ffi::c_void,
+                    ),
+                    ffi::SQLITE_OK
+                );
+            }
+            db.execute_batch("vacuum;")?;
+            let enabled: String =
+                db.query_row("PRAGMA checksum_verification;", [], |r| Ok(r.get(0)?))?;
+            assert_eq!(enabled, "1");
+        }
+        Ok(())
+    }
 }
