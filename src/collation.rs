@@ -47,16 +47,19 @@ impl InnerConnection {
     /// fn main() -> Result<()> {
     ///     let db = Connection::open_in_memory()?;
     ///     {
-    ///     let mut called = std::sync::atomic::AtomicBool::new(false);
-    ///     db.create_collation("foo", |_, _| {
-    ///         called.store(true, std::sync::atomic::Ordering::Relaxed);
-    ///         std::cmp::Ordering::Equal
-    ///     })?;
+    ///         let mut called = std::sync::atomic::AtomicBool::new(false);
+    ///         db.create_collation("foo", |_, _| {
+    ///             called.store(true, std::sync::atomic::Ordering::Relaxed);
+    ///             std::cmp::Ordering::Equal
+    ///         })?;
     ///     }
-    ///     let value: String = db.query_row("WITH cte(bar) AS
+    ///     let value: String = db.query_row(
+    ///         "WITH cte(bar) AS
     ///        (VALUES ('v1'),('v2'),('v3'),('v4'),('v5'))
     ///         SELECT DISTINCT bar COLLATE foo FROM cte;",
-    ///     [], |row| row.get(0))?;
+    ///         [],
+    ///         |row| row.get(0),
+    ///     )?;
     ///     assert_eq!(value, "v1");
     ///     Ok(())
     /// }
