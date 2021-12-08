@@ -86,14 +86,14 @@ impl Connection {
                 c.db(),
                 config as c_int,
                 -1,
-                &mut val
+                &mut val,
             ))?;
             #[cfg(feature = "loadable_extension")]
             check(ffi::sqlite3_db_config_int_mutint(
                 c.db(),
                 config as c_int,
                 -1,
-                &mut val
+                &mut val,
             ))?;
             Ok(val != 0)
         }
@@ -123,14 +123,14 @@ impl Connection {
                 c.db(),
                 config as c_int,
                 if new_val { 1 } else { 0 },
-                &mut val
+                &mut val,
             ))?;
             #[cfg(feature = "loadable_extension")]
             check(ffi::sqlite3_db_config_int_mutint(
                 c.db(),
                 config as c_int,
                 if new_val { 1 } else { 0 },
-                &mut val
+                &mut val,
             ))?;
             Ok(val != 0)
         }

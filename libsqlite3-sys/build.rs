@@ -375,7 +375,9 @@ mod build_linked {
     #[cfg(feature = "vcpkg")]
     extern crate vcpkg;
 
-    use super::{bindings, env_prefix, header_file, is_compiler, lib_name, win_target, HeaderLocation};
+    use super::{
+        bindings, env_prefix, header_file, is_compiler, lib_name, win_target, HeaderLocation,
+    };
     use std::env;
     use std::path::Path;
 
