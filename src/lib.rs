@@ -67,6 +67,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::cache::StatementCache;
 use crate::inner_connection::{InnerConnection, BYPASS_SQLITE_INIT};
+#[cfg(feature = "public-raw-statement")]
+pub use crate::raw_statement::RawStatement;
+#[cfg(not(feature = "public-raw-statement"))]
 use crate::raw_statement::RawStatement;
 use crate::types::ValueRef;
 
