@@ -20,7 +20,7 @@ expected_vtable_output="example_embedded_test_value"
 expected_function_output="Example embedded extension loaded correctly!"
 
 # sqlite3 include dir (location of sqlite3ext.h) - can be set by SQLITE3_INCLUDE_DIR env var or defaults to bundled version
-sqlite3_include_dir=${SQLITE3_INCLUDE_DIR:-${crate_dir}/../sqlite3}
+sqlite3_include_dir=${SQLITE3_INCLUDE_DIR:-${crate_dir}/../libsqlite3-sys/sqlite3}
 
 >&2 echo "checking for sqlite3 shell"
 sqlite3_cmd=$(which sqlite3)

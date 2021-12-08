@@ -37,7 +37,7 @@ function generate_bindgen_binding() {
 
 # Regenerate bindgen files
 generate_bindgen_binding "buildtime_bindgen session" "$SQLITE3_LIB_DIR/bindgen_bundled_version.rs"
-generate_bindgen_binding "buildtime_bindgen session loadable_extension" "$SQLITE3_LIB_DIR/bindgen_bundled_version-ext.rs"
+generate_bindgen_binding "buildtime_bindgen loadable_extension" "$SQLITE3_LIB_DIR/bindgen_bundled_version-ext.rs"
 
 # Sanity checks
 cd "$SCRIPT_DIR/.." || { echo "fatal error" >&2; exit 1; }

@@ -655,18 +655,49 @@ mod bindings {
             .header(header.clone())
             .parse_callbacks(Box::new(SqliteTypeChooser))
             .rustfmt_bindings(true);
-
+        #[cfg(feature = "loadable_extension")]
+        // Create parallel bindgen Builder for generating bindings with comments
+        // Ideally we would just have one builder until the very end and we could
+        // just clone it and add `generate_comments(true)` on one of them but
+        // unfortunately rust-bindgen does not implement Clone on the Builder
+        // type. See issue: https://github.com/rust-lang/rust-bindgen/issues/2132
+        let mut bindings_with_comments = bindgen::builder()
+            .trust_clang_mangling(false)
+            .header(header.clone())
+            .parse_callbacks(Box::new(SqliteTypeChooser))
+            .rustfmt_bindings(true);
+        
         if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
             bindings = bindings.clang_arg("-DSQLITE_HAS_CODEC");
+            // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+            #[cfg(feature = "loadable_extension")]
+            {
+                bindings_with_comments = bindings_with_comments.clang_arg("-DSQLITE_HAS_CODEC");
+            }
         }
         if cfg!(feature = "unlock_notify") {
             bindings = bindings.clang_arg("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
+            // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+            #[cfg(feature = "loadable_extension")]
+            {
+                bindings_with_comments = bindings_with_comments.clang_arg("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
+            }
         }
         if cfg!(feature = "preupdate_hook") {
             bindings = bindings.clang_arg("-DSQLITE_ENABLE_PREUPDATE_HOOK");
+            // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+            #[cfg(feature = "loadable_extension")]
+            {
+                bindings_with_comments = bindings_with_comments.clang_arg("-DSQLITE_ENABLE_PREUPDATE_HOOK");
+            }
         }
         if cfg!(feature = "session") {
             bindings = bindings.clang_arg("-DSQLITE_ENABLE_SESSION");
+            // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+            #[cfg(feature = "loadable_extension")]
+            {
+                bindings_with_comments = bindings_with_comments.clang_arg("-DSQLITE_ENABLE_SESSION");
+            }
         }
         if win_target() && cfg!(feature = "winsqlite3") {
             bindings = bindings
@@ -697,6 +728,38 @@ mod bindings {
                 .blocklist_function("__security_init_cookie")
                 .blocklist_function("__report_gsfailure")
                 .blocklist_function("__va_start");
+            // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+            #[cfg(feature = "loadable_extension")]
+            {
+                bindings_with_comments = bindings_with_comments
+                    .clang_arg("-DBINDGEN_USE_WINSQLITE3")
+                    .blocklist_item("NTDDI_.+")
+                    .blocklist_item("WINAPI_FAMILY.*")
+                    .blocklist_item("_WIN32_.+")
+                    .blocklist_item("_VCRT_COMPILER_PREPROCESSOR")
+                    .blocklist_item("_SAL_VERSION")
+                    .blocklist_item("__SAL_H_VERSION")
+                    .blocklist_item("_USE_DECLSPECS_FOR_SAL")
+                    .blocklist_item("_USE_ATTRIBUTES_FOR_SAL")
+                    .blocklist_item("_CRT_PACKING")
+                    .blocklist_item("_HAS_EXCEPTIONS")
+                    .blocklist_item("_STL_LANG")
+                    .blocklist_item("_HAS_CXX17")
+                    .blocklist_item("_HAS_CXX20")
+                    .blocklist_item("_HAS_NODISCARD")
+                    .blocklist_item("WDK_NTDDI_VERSION")
+                    .blocklist_item("OSVERSION_MASK")
+                    .blocklist_item("SPVERSION_MASK")
+                    .blocklist_item("SUBVERSION_MASK")
+                    .blocklist_item("WINVER")
+                    .blocklist_item("__security_cookie")
+                    .blocklist_type("size_t")
+                    .blocklist_type("__vcrt_bool")
+                    .blocklist_type("wchar_t")
+                    .blocklist_function("__security_init_cookie")
+                    .blocklist_function("__report_gsfailure")
+                    .blocklist_function("__va_start");
+            }
         }
 
         // When cross compiling unless effort is taken to fix the issue, bindgen
@@ -723,7 +786,12 @@ mod bindings {
         if generating_bundled_bindings() || is_cross_compiling {
             // get rid of blocklisted functions that use va_list
             for fn_name in blocklist_va_list_functions {
-                bindings = bindings.blocklist_function(fn_name)
+                bindings = bindings.blocklist_function(fn_name);
+                // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+                #[cfg(feature = "loadable_extension")]
+                {
+                    bindings_with_comments = bindings_with_comments.blocklist_function(fn_name);
+                }
             }
             // Get rid of va_list
             bindings = bindings
@@ -731,41 +799,74 @@ mod bindings {
                 .blocklist_type("__builtin_va_list")
                 .blocklist_type("__gnuc_va_list")
                 .blocklist_item("__GNUC_VA_LIST");
+            // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+            #[cfg(feature = "loadable_extension")]
+            {
+                bindings_with_comments = bindings_with_comments
+                    .blocklist_type("va_list")
+                    .blocklist_type("__builtin_va_list")
+                    .blocklist_type("__gnuc_va_list")
+                    .blocklist_item("__GNUC_VA_LIST");
+            }
 
             // handle __va_list_tag specially as it is referenced from sqlite3_api_routines
             // so if it is blocklisted, those references will be broken for loadable extensions.
             #[cfg(not(feature = "loadable_extension"))]
             {
                 bindings = bindings.blocklist_type("__va_list_tag");
+                // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+                #[cfg(feature = "loadable_extension")]
+                {
+                    bindings_with_comments = bindings_with_comments.blocklist_type("__va_list_tag");
+                }
             }
             // when building as a loadable_extension, make __va_list_tag opaque instead of omitting it
             #[cfg(feature = "loadable_extension")]
             {
                 bindings = bindings.opaque_type("__va_list_tag");
+                // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+                #[cfg(feature = "loadable_extension")]
+                {
+                    bindings_with_comments = bindings_with_comments.opaque_type("__va_list_tag");
+                }
             }
         }
 
         // rust-bindgen does not handle CPP macros that alias functions, so
         // when using sqlite3ext.h to support loadable extensions, the macros
         // that attempt to redefine sqlite3 API routines to be redirected through
-        // the global sqlite3_api instance of the sqlite3_api_routines structure
-        // do not result in any code production.
+        // the static instance of the sqlite3_api_routines structure do not result
+        // in any code production.
         //
         // Before defining wrappers to take their place, we need to blocklist
         // all sqlite3 API functions since none of their symbols will be
         // available directly when being loaded as an extension.
         #[cfg(feature = "loadable_extension")]
         {
-            // some api functions do not have an implementation in sqlite3_api_routines
-            // (for example: sqlite3_config, sqlite3_initialize, sqlite3_interrupt, ...).
-            // while this isn't a problem for shared libraries (unless we actually try to
-            // call them, it is better to blocklist them all so that the build will fail
-            // if an attempt is made to call an extern function that we know won't exist
-            // and to avoid undefined symbol issues when linking the loadable extension
-            // rust code with other (e.g. non-rust) code
-            bindings = bindings.blocklist_function(".*")
+            bindings = bindings.blocklist_function(".*");
+            // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+            #[cfg(feature = "loadable_extension")]
+            {
+                bindings_with_comments = bindings_with_comments.blocklist_function(".*");
+            }
         }
 
+        // When building a loadable extension, make a copy of the bindgen
+        // Builder so we can generate identical output with comments after we
+        // generate the bindings without comments.
+        //
+        // Uncomment once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
+        // #[cfg(feature = "loadable_extension")]
+        // let mut bindings_with_comments = bindings.clone();
+
+        #[cfg(feature = "loadable_extension")]
+        {
+            bindings_with_comments = bindings_with_comments
+                .clang_arg("-fparse-all-comments")
+                .generate_comments(true);
+        }
+
+        // Generate rust bindings (without comments)
         bindings
             .generate()
             .unwrap_or_else(|_| panic!("could not run bindgen on header {}", header))
@@ -775,20 +876,42 @@ mod bindings {
         #[allow(unused_mut)]
         let mut output_string = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
 
-        // Get the list of API functions supported by sqlite3_api_routines,
-        // set the corresponding sqlite3 api routine to be blocklisted in the
-        // final bindgen run, and add wrappers for each of the API functions to
-        // dispatch the API call through a sqlite3_api global, which is defined
-        // outside the generated bindings in lib.rs, either as a built-in static
-        // or an extern symbol in the case of loadable_extension_embedded (i.e.
-        // when the rust code will be a part of an extension but not implement
-        // the extension entrypoint itself).
         #[cfg(feature = "loadable_extension")]
         {
+            // When building a loadable extension, we need doc comments to be
+            // included in the bindings we process to determine minimum version
+            // requirements for each API function (i.e. those documented in
+            // `sqlite3ext.h`)
+            //
+            // We could just add comments above, but then they would be included
+            // in the generated bindings which increases their size by ~4x.
+            //
+            // Instead, we run bindgen again to generate another version of
+            // the bindings that includes comments, use that to generate API
+            // function wrappers, and then insert those wrappers into the
+            // non-commented bindings generated above.
+            let mut output_with_comments = Vec::new();
+            bindings_with_comments
+                .generate()
+                .unwrap_or_else(|_| panic!("could not run bindgen on header {}", header))
+                .write(Box::new(&mut output_with_comments))
+                .expect("could not write output of bindgen with comments");
+            let output_with_comments_string = String::from_utf8(output_with_comments).expect("bindgen output with comments was not UTF-8?!");
+
+            // Get the list of API functions supported by sqlite3_api_routines,
+            // and add wrappers for each of the API functions to dispatch the API
+            // call through the loadable_extension_sqlite3_api(), which is defined
+            // in the crate outside the generated bindings.
+            //
+            // While parsing the bindings, we check for comments (in the form of doc
+            // attributes) that contain sqlite3 version strings to generate runtime
+            // checks for minimum version to prevent accessing elements beyond the
+            // end of the sqlite3_api_routines struct when loaded into an older
+            // sqlite.
             let api_routines_struct_name = "sqlite3_api_routines".to_owned();
 
             let api_routines_struct =
-                match get_struct_by_name(&output_string, &api_routines_struct_name) {
+                match get_struct_by_name(&output_with_comments_string, &api_routines_struct_name) {
                     Some(s) => s,
                     None => {
                         panic!(
@@ -801,14 +924,33 @@ mod bindings {
             output_string.push_str(
                 r#"
 
-// sqlite3_api is defined in lib.rs as either a static or an extern when compiled as a loadable_extension
-use crate::sqlite3_api;
+// The `loadable_extension_sqlite3_api` function is defined when compiled as a
+// loadable_extension. It is used to safely access the static `SQLITE3_API`
+// reference that is populated by a call to either`loadable_extension_init`
+// or `loadable_extension_embedded_init`
+use crate::loadable_extension_sqlite3_api;
 
-// sqlite3 API wrappers to support loadable extensions (Note: these were generated from build.rs - not by rust-bindgen)
+// sqlite3 API wrappers to support loadable extensions (Note: these were generated from libsqlite3-sys/build.rs - not by rust-bindgen)
 
 "#,
             );
 
+            // compile a regex to match sqlite3 version strings that annotate
+            // fields in the sqlite3_api_routines struct as comments in
+            // the sqlite3ext.h sqlite header file
+            let version_re = regex::Regex::new(r"[^0-9](?P<version>3[.][0-9]+[.][0-9]+)[^0-9]").expect("failed to compile regex");
+
+            // prior to any version comments, we don't enable any version checks
+            // the earliest version mentioned is 3.3.13, and it appears from the
+            // comments that nearly all of the earlier fields in
+            // `sqlite3_api_routines` existed in the earliest version, with the
+            // possible exception of `sqlite3_overload_function` which is
+            // annotated with the comment `Added ???`
+            //
+            // I have added a special case for `sqlite3_overload_function`
+            // to hard-code the version requirement for it to 3.3.13, which is
+            // the fail-safe way of handling that ambiguity.
+            let mut require_sqlite3_version = None;
             // create wrapper for each field in api routines struct
             for field in &api_routines_struct.fields {
                 let ident = match &field.ident {
@@ -818,6 +960,39 @@ use crate::sqlite3_api;
                     }
                 };
                 let field_type = &field.ty;
+                for attr in &field.attrs {
+                    match attr.path.get_ident() {
+                        Some(ident) => {
+                            if ident == "doc" {
+                                for t in attr.tokens.clone().into_iter() {
+                                    if let proc_macro2::TokenTree::Literal(l) = t {
+                                        let literal_comments = l.to_string();
+                                        if let Some(captures) = version_re.captures(&literal_comments) {
+                                            if let Some(sqlite3_version_match) = captures.name("version") {
+                                                let sqlite3_version = sqlite3_version_match.as_str().to_string();
+                                                match require_sqlite3_version {
+                                                    None => {
+                                                        require_sqlite3_version = Some(sqlite3_version);
+                                                    }
+                                                    Some(require_sqlite3_version_str) => {
+                                                        if version_compare::compare_to(&sqlite3_version, &require_sqlite3_version_str, version_compare::Cmp::Lt).expect("failed to compare version strings") {
+                                                            panic!("Unexpectedly found sqlite3 version requirement in sqlite3ext.h that is lower than the version required for the previous field in sqlite3_api_routines (found '{}' after '{}')", &sqlite3_version, &require_sqlite3_version_str);
+                                                        } else {
+                                                            require_sqlite3_version = Some(sqlite3_version);
+                                                        }
+                                                    }
+                                                }
+                                            } else {
+                                                panic!("Regex matched but was missing version capture group");
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        None => {}
+                    }
+                }
 
                 // construct global sqlite api function identifier from field identifier
                 let api_fn_name = format!("sqlite3_{}", ident);
@@ -832,7 +1007,14 @@ use crate::sqlite3_api;
                 }
 
                 // generate wrapper function and push it to output string
-                let wrapper = generate_wrapper(ident, field_type, &api_fn_name);
+                let require_sqlite3_version_with_overrides = if &api_fn_name == "sqlite3_overload_function" {
+                    // override the version requirement for sqlite3_overload_function since it is commented
+                    // with `Added ???` in sqlite3ext.h`
+                    Some("3.3.13")
+                } else {
+                    require_sqlite3_version.as_deref()
+                };
+                let wrapper = generate_wrapper(ident, field_type, &api_fn_name, require_sqlite3_version_with_overrides);
                 output_string.push_str(&wrapper);
             }
 
@@ -983,6 +1165,7 @@ use crate::sqlite3_api;
         field_ident: &syn::Ident,
         syn_type: &syn::Type,
         api_fn_name: &str,
+        require_sqlite3_version: Option<&str>,
     ) -> String {
         use quote::quote;
         use std::collections::BTreeMap;
@@ -1069,13 +1252,54 @@ use crate::sqlite3_api;
                 })
                 .collect();
 
+            // Generate api version check to check the require_sqlite3_version_number
+            // against the SQLITE_VERSION_NUMBER style integer version returned by a
+            // sqlite3_libversion_number() call in order to protect api calls from
+            // being made when the sqlite version the extension is loaded into does
+            // not support them.
+            // For more information, refer to sqlite docs: https://sqlite.org/c3ref/c_source_id.html
+            let api_version_check_tokens = match require_sqlite3_version {
+                Some(version) => {
+                    let require_sqlite3_version = version_compare::Version::from(version).expect("failed to parse required sqlite3 version as Version");
+                    let require_sqlite3_version_parts = require_sqlite3_version.parts();
+                    if require_sqlite3_version_parts.len() != 3 {
+                        panic!("sqlite3 version '{}' does not have exactly three parts", version);
+                    }
+                    let major = match require_sqlite3_version_parts[0] {
+                        version_compare::Part::Number(major) => major,
+                        _ => {
+                            panic!("non-numeric major part found in sqlite3 version requirement '{}'", require_sqlite3_version_parts[0]);
+                        }
+                    };
+                    let minor = match require_sqlite3_version_parts[1] {
+                        version_compare::Part::Number(minor) => minor,
+                        _ => {
+                            panic!("non-numeric minor part found in sqlite3 version requirement '{}'", require_sqlite3_version_parts[1]);
+                        }
+                    };
+                    let patch = match require_sqlite3_version_parts[2] {
+                        version_compare::Part::Number(patch) => patch,
+                        _ => {
+                            panic!("non-numeric patch part found in sqlite3 version requirement '{}'", require_sqlite3_version_parts[2]);
+                        }
+                    };
+                    let require_sqlite3_version_number = 1_000_000 * major + 1_000 * minor + patch;
+                    quote! {
+                        let sqlite3_version_number = sqlite3_libversion_number();
+                        if sqlite3_version_number < #require_sqlite3_version_number {
+                            panic!(stringify!("sqlite3 version is {} but version {} is required for the ", #api_fn_ident, " function"), sqlite3_version_number, #require_sqlite3_version_number);
+                        }
+                    }
+                }
+                None => quote! {},
+            };
+
             // generate wrapper and return it as a string
             let wrapper_tokens = quote! {
                 pub unsafe fn #api_fn_ident(#api_fn_inputs) #api_fn_output {
-                    if sqlite3_api.is_null() {
-                        panic!("sqlite3_api is null");
-                    }
-                    ((*sqlite3_api).#field_ident
+                    let p_api = loadable_extension_sqlite3_api();
+                    #api_version_check_tokens
+                    ((*p_api).#field_ident
                         .expect(stringify!("sqlite3_api contains null pointer for ", #field_name, " function")))(
                             #(#api_fn_input_idents),*
                     )

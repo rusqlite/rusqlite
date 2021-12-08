@@ -18,8 +18,8 @@ bundled-windows = ["cc", "bundled_bindings"]
 bundled-sqlcipher = ["bundled"]
 bundled-sqlcipher-vendored-openssl = ["bundled-sqlcipher", "openssl-sys/vendored"]
 buildtime_bindgen = ["bindgen", "pkg-config", "vcpkg"]
-loadable_extension = ["syn", "quote", "which"]
-loadable_extension_embedded = ["loadable_extension"]
+loadable_extension = ["proc-macro2", "regex", "syn", "quote", "version-compare", "which"]
+loadable_extension_embedded = ["loadable_extension", "lazy_static"]
 sqlcipher = []
 min_sqlite_version_3_6_8 = ["pkg-config", "vcpkg"]
 min_sqlite_version_3_6_23 = ["pkg-config", "vcpkg"]
@@ -41,13 +41,17 @@ wasm32-wasi-vfs = []
 winsqlite3 = ["min_sqlite_version_3_7_16"]
 
 [dependencies]
+lazy_static = { version = "1.4", optional = true }
 openssl-sys = { version = "0.9", optional = true }
 
 [build-dependencies]
 bindgen = { version = "0.59", optional = true, default-features = false, features = ["runtime"] }
 cc = { version = "1.0", optional = true }
 pkg-config = { version = "0.3.19", optional = true }
+proc-macro2 = { version = "1.0", optional = true }
 quote = { version = "1.0", optional = true }
+regex = { version = "1.5", optional = true }
 syn = { version = "1.0", features = ["extra-traits", "full", "printing"], optional = true }
 vcpkg = { version = "0.2", optional = true }
+version-compare = { version = "0.1", optional = true }
 which = { version = "4.0.2", optional = true }

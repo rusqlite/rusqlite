@@ -1,3 +1,4 @@
+use crate::ffi::loadable_extension_embedded_init; // required feature `loadable_extension_embedded`
 use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int};
 
@@ -28,13 +29,15 @@ use rusqlite::{to_sqlite_error, Connection, Result};
 /// It does *not* have to return sqlite status codes (such as SQLITE_OK), we
 /// just do that here to keep the C extension simple.
 #[no_mangle]
-pub extern "C" fn example_embedded_extension_init(
+pub unsafe extern "C" fn example_embedded_extension_init(
     db: *mut ffi::sqlite3,
     pz_err_msg: *mut *mut c_char,
 ) -> c_int {
+    loadable_extension_embedded_init();
+
     let res = example_embedded_init(db);
     if let Err(err) = res {
-        return unsafe { to_sqlite_error(&err, pz_err_msg) };
+        return to_sqlite_error(&err, pz_err_msg);
     }
 
     ffi::SQLITE_OK
