@@ -1019,7 +1019,6 @@ use crate::sqlite3_api;
             // transparently wrap variadic api functions.
             // generate specific set of args in place of
             // variadic for each function we care about.
-            // functions we don't handle will have
             match api_fn_name {
                 "sqlite3_db_config" => {
                     // https://sqlite.org/c3ref/c_dbconfig_defensive.html
