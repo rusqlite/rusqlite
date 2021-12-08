@@ -48,11 +48,9 @@ fn main() {
                 or 'bundled-sqlcipher-vendored-openssl' to also bundle OpenSSL crypto."
             )
         }
-        build_linked::main(&out_dir, &out_path);
-        return;
+        build_linked::main(&out_dir, &out_path)
     } else if cfg!(feature = "loadable_extension") {
-        build_loadable_extension::main(&out_dir, &out_path);
-        return;
+        build_loadable_extension::main(&out_dir, &out_path)
     } else if cfg!(feature = "bundled")
         || (win_target() && cfg!(feature = "bundled-windows"))
         || cfg!(feature = "bundled-sqlcipher")
@@ -96,7 +94,8 @@ mod build_bundled {
         #[cfg(feature = "buildtime_bindgen")]
         {
             use super::{bindings, header_file, HeaderLocation};
-            let header = HeaderLocation::FromPath(format!("{}/{}", lib_name, header_file()));
+            let header_path = format!("{}/{}", lib_name, header_file());
+            let header = HeaderLocation::FromPath(header_path);
             bindings::write_to_out_dir(header, out_path);
             println!("cargo:rerun-if-changed={}", header_path);
         }
@@ -332,8 +331,10 @@ fn wrapper_file() -> &'static str {
         "wrapper-ext.h"
     } else {
         "wrapper.h"
+    }
+}
 
-        fn lib_name() -> &'static str {
+fn lib_name() -> &'static str {
     if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
         "sqlcipher"
     } else if cfg!(all(windows, feature = "winsqlite3")) {
