@@ -11,5 +11,5 @@ fn main() {
         .with_crate(crate_dir)
         .generate()
         .expect("Unable to generate bindings")
-        .write_to_file("dummy-embedded-extension.h");
+        .write_to_file("example-embedded-extension.h");
 }

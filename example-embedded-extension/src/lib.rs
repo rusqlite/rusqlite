@@ -12,13 +12,13 @@ use rusqlite::{
 };
 use rusqlite::{to_sqlite_error, Connection, Result};
 
-/// dummy_embedded_extension_init is the entry point for this library.
+/// example_embedded_extension_init is the entry point for this library.
 ///
 /// This crate produces a cdylib that is intended to be embedded within
 /// (i.e. linked into) another library that implements the sqlite loadable
 /// extension entrypoint.
 ///
-/// In the case of this example code, refer to the `dummy-c-host-extension`
+/// In the case of this example code, refer to the `example-c-host-extension`
 /// C code to find where this entry point is invoked.
 ///
 /// Note that this interface is private between the host extension and this
@@ -28,11 +28,11 @@ use rusqlite::{to_sqlite_error, Connection, Result};
 /// It does *not* have to return sqlite status codes (such as SQLITE_OK), we
 /// just do that here to keep the C extension simple.
 #[no_mangle]
-pub extern "C" fn dummy_embedded_extension_init(
+pub extern "C" fn example_embedded_extension_init(
     db: *mut ffi::sqlite3,
     pz_err_msg: *mut *mut c_char,
 ) -> c_int {
-    let res = dummy_embedded_init(db);
+    let res = example_embedded_init(db);
     if let Err(err) = res {
         return unsafe { to_sqlite_error(&err, pz_err_msg) };
     }
@@ -41,21 +41,21 @@ pub extern "C" fn dummy_embedded_extension_init(
 }
 
 #[repr(C)]
-struct DummyEmbeddedTab {
+struct ExampleEmbeddedTab {
     /// Base class. Must be first
     base: sqlite3_vtab,
 }
 
-unsafe impl<'vtab> VTab<'vtab> for DummyEmbeddedTab {
+unsafe impl<'vtab> VTab<'vtab> for ExampleEmbeddedTab {
     type Aux = ();
-    type Cursor = DummyEmbeddedTabCursor<'vtab>;
+    type Cursor = ExampleEmbeddedTabCursor<'vtab>;
 
     fn connect(
         _: &mut VTabConnection,
         _aux: Option<&()>,
         _args: &[&[u8]],
-    ) -> Result<(String, DummyEmbeddedTab)> {
-        let vtab = DummyEmbeddedTab {
+    ) -> Result<(String, ExampleEmbeddedTab)> {
+        let vtab = ExampleEmbeddedTab {
             base: sqlite3_vtab::default(),
         };
         Ok(("CREATE TABLE x(value TEXT)".to_owned(), vtab))
@@ -66,22 +66,22 @@ unsafe impl<'vtab> VTab<'vtab> for DummyEmbeddedTab {
         Ok(())
     }
 
-    fn open(&'vtab self) -> Result<DummyEmbeddedTabCursor<'vtab>> {
-        Ok(DummyEmbeddedTabCursor::default())
+    fn open(&'vtab self) -> Result<ExampleEmbeddedTabCursor<'vtab>> {
+        Ok(ExampleEmbeddedTabCursor::default())
     }
 }
 
 #[derive(Default)]
 #[repr(C)]
-struct DummyEmbeddedTabCursor<'vtab> {
+struct ExampleEmbeddedTabCursor<'vtab> {
     /// Base class. Must be first
     base: sqlite3_vtab_cursor,
     /// The rowid
     row_id: i64,
-    phantom: PhantomData<&'vtab DummyEmbeddedTab>,
+    phantom: PhantomData<&'vtab ExampleEmbeddedTab>,
 }
 
-unsafe impl VTabCursor for DummyEmbeddedTabCursor<'_> {
+unsafe impl VTabCursor for ExampleEmbeddedTabCursor<'_> {
     fn filter(
         &mut self,
         _idx_num: c_int,
@@ -102,7 +102,7 @@ unsafe impl VTabCursor for DummyEmbeddedTabCursor<'_> {
     }
 
     fn column(&self, ctx: &mut Context, _: c_int) -> Result<()> {
-        ctx.set_result(&"dummy_embedded_test_value".to_string())
+        ctx.set_result(&"example_embedded_test_value".to_string())
     }
 
     fn rowid(&self) -> Result<i64> {
@@ -110,18 +110,18 @@ unsafe impl VTabCursor for DummyEmbeddedTabCursor<'_> {
     }
 }
 
-fn dummy_embedded_init(db: *mut ffi::sqlite3) -> Result<()> {
+fn example_embedded_init(db: *mut ffi::sqlite3) -> Result<()> {
     let conn = unsafe { Connection::from_handle(db)? };
-    eprintln!("inited dummy embedded extension module {:?}", db);
+    eprintln!("inited example embedded extension module {:?}", db);
     conn.create_scalar_function(
-        "dummy_embedded_test_function",
+        "example_embedded_test_function",
         0,
         FunctionFlags::SQLITE_DETERMINISTIC,
         |_ctx| {
             Ok(ToSqlOutput::Owned(Value::Text(
-                "Dummy embedded extension loaded correctly!".to_string(),
+                "Example embedded extension loaded correctly!".to_string(),
             )))
         },
     )?;
-    conn.create_module::<DummyEmbeddedTab>("dummy_embedded", eponymous_only_module::<DummyEmbeddedTab>(), None)
+    conn.create_module::<ExampleEmbeddedTab>("example_embedded", eponymous_only_module::<ExampleEmbeddedTab>(), None)
 }

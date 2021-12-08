@@ -23,7 +23,7 @@ pub extern "C" fn sqlite3_extension_init(
     unsafe {
         ffi::sqlite3_api = p_api;
     }
-    let res = dummy_init(db);
+    let res = example_init(db);
     if let Err(err) = res {
         return unsafe { to_sqlite_error(&err, pz_err_msg) };
     }
@@ -32,21 +32,21 @@ pub extern "C" fn sqlite3_extension_init(
 }
 
 #[repr(C)]
-struct DummyTab {
+struct ExampleTab {
     /// Base class. Must be first
     base: sqlite3_vtab,
 }
 
-unsafe impl<'vtab> VTab<'vtab> for DummyTab {
+unsafe impl<'vtab> VTab<'vtab> for ExampleTab {
     type Aux = ();
-    type Cursor = DummyTabCursor<'vtab>;
+    type Cursor = ExampleTabCursor<'vtab>;
 
     fn connect(
         _: &mut VTabConnection,
         _aux: Option<&()>,
         _args: &[&[u8]],
-    ) -> Result<(String, DummyTab)> {
-        let vtab = DummyTab {
+    ) -> Result<(String, ExampleTab)> {
+        let vtab = ExampleTab {
             base: sqlite3_vtab::default(),
         };
         Ok(("CREATE TABLE x(value)".to_owned(), vtab))
@@ -57,22 +57,22 @@ unsafe impl<'vtab> VTab<'vtab> for DummyTab {
         Ok(())
     }
 
-    fn open(&'vtab self) -> Result<DummyTabCursor<'vtab>> {
-        Ok(DummyTabCursor::default())
+    fn open(&'vtab self) -> Result<ExampleTabCursor<'vtab>> {
+        Ok(ExampleTabCursor::default())
     }
 }
 
 #[derive(Default)]
 #[repr(C)]
-struct DummyTabCursor<'vtab> {
+struct ExampleTabCursor<'vtab> {
     /// Base class. Must be first
     base: sqlite3_vtab_cursor,
     /// The rowid
     row_id: i64,
-    phantom: PhantomData<&'vtab DummyTab>,
+    phantom: PhantomData<&'vtab ExampleTab>,
 }
 
-unsafe impl VTabCursor for DummyTabCursor<'_> {
+unsafe impl VTabCursor for ExampleTabCursor<'_> {
     fn filter(
         &mut self,
         _idx_num: c_int,
@@ -101,18 +101,18 @@ unsafe impl VTabCursor for DummyTabCursor<'_> {
     }
 }
 
-fn dummy_init(db: *mut ffi::sqlite3) -> Result<()> {
+fn example_init(db: *mut ffi::sqlite3) -> Result<()> {
     let conn = unsafe { Connection::from_handle(db)? };
-    eprintln!("inited dummy module {:?}", db);
+    eprintln!("inited example module {:?}", db);
     conn.create_scalar_function(
-        "dummy_test_function",
+        "example_test_function",
         0,
         FunctionFlags::SQLITE_DETERMINISTIC,
         |_ctx| {
             Ok(ToSqlOutput::Owned(Value::Text(
-                "Dummy extension loaded correctly!".to_string(),
+                "Example extension loaded correctly!".to_string(),
             )))
         },
     )?;
-    conn.create_module::<DummyTab>("dummy", eponymous_only_module::<DummyTab>(), None)
+    conn.create_module::<ExampleTab>("example", eponymous_only_module::<ExampleTab>(), None)
 }

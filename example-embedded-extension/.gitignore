@@ -1,0 +1,3 @@
+example-embedded-extension.h
+example-c-host-extension/libexample_c_host_extension.so
+target/
