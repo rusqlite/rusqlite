@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - master
+      - hotfixes-*
   pull_request:
     branches:
       - master
+      - hotfixes-*
   schedule:
     - cron: '00 01 * * *'
 env:
