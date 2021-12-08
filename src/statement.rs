@@ -55,7 +55,7 @@ impl Statement<'_> {
     ///     // The `rusqlite::named_params!` macro (like `params!`) is useful for heterogeneous
     ///     // sets of parameters (where all parameters are not the same type), or for queries
     ///     // with many (more than 32) statically known parameters.
-    ///     stmt.execute(named_params!{ ":key": "one", ":val": 2 })?;
+    ///     stmt.execute(named_params! { ":key": "one", ":val": 2 })?;
     ///     // However, named parameters can also be passed like:
     ///     stmt.execute(&[(":key", "three"), (":val", "four")])?;
     ///     // Or even: (note that a &T is required for the value type, currently)
@@ -135,10 +135,10 @@ impl Statement<'_> {
     /// Execute the prepared statement, returning a handle to the resulting
     /// rows.
     ///
-    /// Due to lifetime restricts, the rows handle returned by `query` does not
-    /// implement the `Iterator` trait. Consider using
-    /// [`query_map`](Statement::query_map) or [`query_and_then`](Statement::query_and_then)
-    /// instead, which do.
+    /// Due to lifetime restrictions, the rows handle returned by `query` does
+    /// not implement the `Iterator` trait. Consider using
+    /// [`query_map`](Statement::query_map) or
+    /// [`query_and_then`](Statement::query_and_then) instead, which do.
     ///
     /// ## Example
     ///
@@ -208,7 +208,7 @@ impl Statement<'_> {
     /// # use rusqlite::{Connection, Result, named_params};
     /// fn query(conn: &Connection) -> Result<()> {
     ///     let mut stmt = conn.prepare("SELECT * FROM test where name = :name")?;
-    ///     let mut rows = stmt.query(named_params!{ ":name": "one" })?;
+    ///     let mut rows = stmt.query(named_params! { ":name": "one" })?;
     ///     while let Some(row) = rows.next()? {
     ///         // ...
     ///     }
@@ -247,7 +247,7 @@ impl Statement<'_> {
     /// Executes the prepared statement and maps a function over the resulting
     /// rows, returning an iterator over the mapped function results.
     ///
-    /// `f` is used to tranform the _streaming_ iterator into a _standard_
+    /// `f` is used to transform the _streaming_ iterator into a _standard_
     /// iterator.
     ///
     /// This is equivalent to `stmt.query(params)?.mapped(f)`.
@@ -310,7 +310,7 @@ impl Statement<'_> {
     /// most-recently bound value from a previous call to `query_named`,
     /// or `NULL` if they have never been bound.
     ///
-    /// `f` is used to tranform the _streaming_ iterator into a _standard_
+    /// `f` is used to transform the _streaming_ iterator into a _standard_
     /// iterator.
     ///
     /// ## Failure
@@ -346,13 +346,12 @@ impl Statement<'_> {
     ///
     /// fn name_to_person(name: String) -> Result<Person> {
     ///     // ... check for valid name
-    ///     Ok(Person { name: name })
+    ///     Ok(Person { name })
     /// }
     ///
     /// fn get_names(conn: &Connection) -> Result<Vec<Person>> {
     ///     let mut stmt = conn.prepare("SELECT name FROM people WHERE id = :id")?;
-    ///     let rows =
-    ///         stmt.query_and_then(&[(":id", "one")], |row| name_to_person(row.get(0)?))?;
+    ///     let rows = stmt.query_and_then(&[(":id", "one")], |row| name_to_person(row.get(0)?))?;
     ///
     ///     let mut persons = Vec::new();
     ///     for person_result in rows {
@@ -453,7 +452,7 @@ impl Statement<'_> {
     {
         let mut rows = self.query(params)?;
 
-        rows.get_expected_row().and_then(|r| f(&r))
+        rows.get_expected_row().and_then(f)
     }
 
     /// Convenience method to execute a query with named parameter(s) that is
@@ -519,6 +518,30 @@ impl Statement<'_> {
     #[inline]
     pub fn parameter_index(&self, name: &str) -> Result<Option<usize>> {
         Ok(self.stmt.bind_parameter_index(name))
+    }
+
+    /// Return the SQL parameter name given its (one-based) index (the inverse
+    /// of [`Statement::parameter_index`]).
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// fn example(conn: &Connection) -> Result<()> {
+    ///     let stmt = conn.prepare("SELECT * FROM test WHERE name = :example")?;
+    ///     let index = stmt.parameter_name(1);
+    ///     assert_eq!(index, Some(":example"));
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// # Failure
+    ///
+    /// Will return `None` if the column index is out of bounds or if the
+    /// parameter is positional.
+    #[inline]
+    pub fn parameter_name(&self, index: usize) -> Option<&'_ str> {
+        self.stmt.bind_parameter_name(index as i32).map(|name| {
+            str::from_utf8(name.to_bytes()).expect("Invalid UTF-8 sequence in parameter name")
+        })
     }
 
     #[inline]
@@ -752,6 +775,7 @@ impl Statement<'_> {
     /// Returns a string containing the SQL text of prepared statement with
     /// bound parameters expanded.
     #[cfg(feature = "modern_sqlite")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn expanded_sql(&self) -> Option<String> {
         self.stmt
             .expanded_sql()
@@ -1331,6 +1355,17 @@ mod test {
         db.query_row("SELECT ?1, ?2, ?3", params_from_iter(data.iter()), |row| {
             row.get::<_, u8>(0)
         })?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_parameter_name() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE test (name TEXT, value INTEGER)")?;
+        let stmt = db.prepare("INSERT INTO test (name, value) VALUES (:name, ?3)")?;
+        assert_eq!(stmt.parameter_name(0), None);
+        assert_eq!(stmt.parameter_name(1), Some(":name"));
+        assert_eq!(stmt.parameter_name(2), None);
         Ok(())
     }
 

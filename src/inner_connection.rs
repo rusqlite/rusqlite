@@ -32,6 +32,8 @@ pub struct InnerConnection {
     pub free_update_hook: Option<unsafe fn(*mut ::std::os::raw::c_void)>,
     #[cfg(feature = "hooks")]
     pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
+    #[cfg(feature = "hooks")]
+    pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
     owned: bool,
 }
 
@@ -50,6 +52,8 @@ impl InnerConnection {
             free_update_hook: None,
             #[cfg(feature = "hooks")]
             progress_handler: None,
+            #[cfg(feature = "hooks")]
+            authorizer: None,
             owned,
         }
     }
@@ -131,7 +135,7 @@ impl InnerConnection {
     }
 
     #[inline]
-    pub fn decode_result(&mut self, code: c_int) -> Result<()> {
+    pub fn decode_result(&self, code: c_int) -> Result<()> {
         unsafe { InnerConnection::decode_result_raw(self.db(), code) }
     }
 
@@ -181,34 +185,31 @@ impl InnerConnection {
 
     #[inline]
     #[cfg(feature = "load_extension")]
-    pub fn enable_load_extension(&mut self, onoff: c_int) -> Result<()> {
-        let r = unsafe { ffi::sqlite3_enable_load_extension(self.db, onoff) };
+    pub unsafe fn enable_load_extension(&mut self, onoff: c_int) -> Result<()> {
+        let r = ffi::sqlite3_enable_load_extension(self.db, onoff);
         self.decode_result(r)
     }
 
     #[cfg(feature = "load_extension")]
-    pub fn load_extension(&self, dylib_path: &Path, entry_point: Option<&str>) -> Result<()> {
+    pub unsafe fn load_extension(
+        &self,
+        dylib_path: &Path,
+        entry_point: Option<&str>,
+    ) -> Result<()> {
         let dylib_str = super::path_to_cstring(dylib_path)?;
-        unsafe {
-            let mut errmsg: *mut c_char = ptr::null_mut();
-            let r = if let Some(entry_point) = entry_point {
-                let c_entry = crate::str_to_cstring(entry_point)?;
-                ffi::sqlite3_load_extension(
-                    self.db,
-                    dylib_str.as_ptr(),
-                    c_entry.as_ptr(),
-                    &mut errmsg,
-                )
-            } else {
-                ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), ptr::null(), &mut errmsg)
-            };
-            if r == ffi::SQLITE_OK {
-                Ok(())
-            } else {
-                let message = super::errmsg_to_string(errmsg);
-                ffi::sqlite3_free(errmsg as *mut ::std::os::raw::c_void);
-                Err(error_from_sqlite_code(r, Some(message)))
-            }
+        let mut errmsg: *mut c_char = ptr::null_mut();
+        let r = if let Some(entry_point) = entry_point {
+            let c_entry = crate::str_to_cstring(entry_point)?;
+            ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry.as_ptr(), &mut errmsg)
+        } else {
+            ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), ptr::null(), &mut errmsg)
+        };
+        if r == ffi::SQLITE_OK {
+            Ok(())
+        } else {
+            let message = super::errmsg_to_string(errmsg);
+            ffi::sqlite3_free(errmsg as *mut ::std::os::raw::c_void);
+            Err(error_from_sqlite_code(r, Some(message)))
         }
     }
 
@@ -260,7 +261,7 @@ impl InnerConnection {
         let tail = if c_tail.is_null() {
             0
         } else {
-            let n = unsafe { c_tail.offset_from(c_sql) };
+            let n = (c_tail as isize) - (c_sql as isize);
             if n <= 0 || n >= len as isize {
                 0
             } else {
@@ -273,7 +274,7 @@ impl InnerConnection {
     }
 
     #[inline]
-    pub fn changes(&mut self) -> usize {
+    pub fn changes(&self) -> usize {
         unsafe { ffi::sqlite3_changes(self.db()) as usize }
     }
 
@@ -295,6 +296,11 @@ impl InnerConnection {
             }
         }
         false
+    }
+
+    #[cfg(feature = "modern_sqlite")] // 3.10.0
+    pub fn cache_flush(&mut self) -> Result<()> {
+        crate::error::check(unsafe { ffi::sqlite3_db_cacheflush(self.db()) })
     }
 
     #[cfg(not(feature = "hooks"))]
@@ -432,15 +438,13 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
             }
 
             unsafe {
-                if ffi::sqlite3_config(ffi::SQLITE_CONFIG_MULTITHREAD) != ffi::SQLITE_OK || ffi::sqlite3_initialize() != ffi::SQLITE_OK {
-                    panic!(
+                assert!(ffi::sqlite3_config(ffi::SQLITE_CONFIG_MULTITHREAD) == ffi::SQLITE_OK && ffi::sqlite3_initialize() == ffi::SQLITE_OK,
                         "Could not ensure safe initialization of SQLite.\n\
                          To fix this, either:\n\
                          * Upgrade SQLite to at least version 3.7.0\n\
                          * Ensure that SQLite has been initialized in Multi-thread or Serialized mode and call\n\
                            rusqlite::bypass_sqlite_initialization() prior to your first connection attempt."
                     );
-                }
             }
         });
         Ok(())

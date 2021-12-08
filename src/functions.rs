@@ -1,10 +1,10 @@
-//! `feature = "functions"` Create or redefine SQL functions.
+//! Create or redefine SQL functions.
 //!
 //! # Example
 //!
 //! Adding a `regexp` function to a connection in which compiled regular
 //! expressions are cached in a `HashMap`. For an alternative implementation
-//! that uses SQLite's [Function Auxilliary Data](https://www.sqlite.org/c3ref/get_auxdata.html) interface
+//! that uses SQLite's [Function Auxiliary Data](https://www.sqlite.org/c3ref/get_auxdata.html) interface
 //! to avoid recompiling regular expressions, see the unit tests for this
 //! module.
 //!
@@ -104,7 +104,7 @@ unsafe extern "C" fn free_boxed_value<T>(p: *mut c_void) {
     drop(Box::from_raw(p as *mut T));
 }
 
-/// `feature = "functions"` Context is a wrapper for the SQLite function
+/// Context is a wrapper for the SQLite function
 /// evaluation context.
 pub struct Context<'a> {
     ctx: *mut sqlite3_context,
@@ -167,7 +167,7 @@ impl Context<'_> {
         unsafe { ValueRef::from_value(arg) }
     }
 
-    /// Fetch or insert the auxilliary data associated with a particular
+    /// Fetch or insert the auxiliary data associated with a particular
     /// parameter. This is intended to be an easier-to-use way of fetching it
     /// compared to calling [`get_aux`](Context::get_aux) and
     /// [`set_aux`](Context::set_aux) separately.
@@ -191,7 +191,7 @@ impl Context<'_> {
         }
     }
 
-    /// Sets the auxilliary data associated with a particular parameter. See
+    /// Sets the auxiliary data associated with a particular parameter. See
     /// `https://www.sqlite.org/c3ref/get_auxdata.html` for a discussion of
     /// this feature, or the unit tests of this module for an example.
     pub fn set_aux<T: Send + Sync + 'static>(&self, arg: c_int, value: T) -> Result<Arc<T>> {
@@ -210,7 +210,7 @@ impl Context<'_> {
         Ok(orig)
     }
 
-    /// Gets the auxilliary data that was associated with a given parameter via
+    /// Gets the auxiliary data that was associated with a given parameter via
     /// [`set_aux`](Context::set_aux). Returns `Ok(None)` if no data has been
     /// associated, and Ok(Some(v)) if it has. Returns an error if the
     /// requested type does not match.
@@ -260,7 +260,7 @@ impl Deref for ConnectionRef<'_> {
 
 type AuxInner = Arc<dyn Any + Send + Sync + 'static>;
 
-/// `feature = "functions"` Aggregate is the callback interface for user-defined
+/// Aggregate is the callback interface for user-defined
 /// aggregate function.
 ///
 /// `A` is the type of the aggregation context and `T` is the type of the final
@@ -292,9 +292,10 @@ where
     fn finalize(&self, _: &mut Context<'_>, _: Option<A>) -> Result<T>;
 }
 
-/// `feature = "window"` WindowAggregate is the callback interface for
+/// WindowAggregate is the callback interface for
 /// user-defined aggregate window function.
 #[cfg(feature = "window")]
+#[cfg_attr(docsrs, doc(cfg(feature = "window")))]
 pub trait WindowAggregate<A, T>: Aggregate<A, T>
 where
     A: RefUnwindSafe + UnwindSafe,
@@ -341,7 +342,7 @@ impl Default for FunctionFlags {
 }
 
 impl Connection {
-    /// `feature = "functions"` Attach a user-defined scalar function to
+    /// Attach a user-defined scalar function to
     /// this database connection.
     ///
     /// `fn_name` is the name the function will be accessible from SQL.
@@ -379,15 +380,15 @@ impl Connection {
     ///
     /// Will return Err if the function could not be attached to the connection.
     #[inline]
-    pub fn create_scalar_function<'c, F, T>(
-        &'c self,
+    pub fn create_scalar_function<F, T>(
+        &self,
         fn_name: &str,
         n_arg: c_int,
         flags: FunctionFlags,
         x_func: F,
     ) -> Result<()>
     where
-        F: FnMut(&Context<'_>) -> Result<T> + Send + UnwindSafe + 'c,
+        F: FnMut(&Context<'_>) -> Result<T> + Send + UnwindSafe + 'static,
         T: ToSql,
     {
         self.db
@@ -395,7 +396,7 @@ impl Connection {
             .create_scalar_function(fn_name, n_arg, flags, x_func)
     }
 
-    /// `feature = "functions"` Attach a user-defined aggregate function to this
+    /// Attach a user-defined aggregate function to this
     /// database connection.
     ///
     /// # Failure
@@ -411,7 +412,7 @@ impl Connection {
     ) -> Result<()>
     where
         A: RefUnwindSafe + UnwindSafe,
-        D: Aggregate<A, T>,
+        D: Aggregate<A, T> + 'static,
         T: ToSql,
     {
         self.db
@@ -419,12 +420,13 @@ impl Connection {
             .create_aggregate_function(fn_name, n_arg, flags, aggr)
     }
 
-    /// `feature = "window"` Attach a user-defined aggregate window function to
+    /// Attach a user-defined aggregate window function to
     /// this database connection.
     ///
     /// See `https://sqlite.org/windowfunctions.html#udfwinfunc` for more
     /// information.
     #[cfg(feature = "window")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "window")))]
     #[inline]
     pub fn create_window_function<A, W, T>(
         &self,
@@ -435,7 +437,7 @@ impl Connection {
     ) -> Result<()>
     where
         A: RefUnwindSafe + UnwindSafe,
-        W: WindowAggregate<A, T>,
+        W: WindowAggregate<A, T> + 'static,
         T: ToSql,
     {
         self.db
@@ -443,7 +445,7 @@ impl Connection {
             .create_window_function(fn_name, n_arg, flags, aggr)
     }
 
-    /// `feature = "functions"` Removes a user-defined function from this
+    /// Removes a user-defined function from this
     /// database connection.
     ///
     /// `fn_name` and `n_arg` should match the name and number of arguments
@@ -460,15 +462,15 @@ impl Connection {
 }
 
 impl InnerConnection {
-    fn create_scalar_function<'c, F, T>(
-        &'c mut self,
+    fn create_scalar_function<F, T>(
+        &mut self,
         fn_name: &str,
         n_arg: c_int,
         flags: FunctionFlags,
         x_func: F,
     ) -> Result<()>
     where
-        F: FnMut(&Context<'_>) -> Result<T> + Send + UnwindSafe + 'c,
+        F: FnMut(&Context<'_>) -> Result<T> + Send + UnwindSafe + 'static,
         T: ToSql,
     {
         unsafe extern "C" fn call_boxed_closure<F, T>(
@@ -531,7 +533,7 @@ impl InnerConnection {
     ) -> Result<()>
     where
         A: RefUnwindSafe + UnwindSafe,
-        D: Aggregate<A, T>,
+        D: Aggregate<A, T> + 'static,
         T: ToSql,
     {
         let boxed_aggr: *mut D = Box::into_raw(Box::new(aggr));
@@ -562,7 +564,7 @@ impl InnerConnection {
     ) -> Result<()>
     where
         A: RefUnwindSafe + UnwindSafe,
-        W: WindowAggregate<A, T>,
+        W: WindowAggregate<A, T> + 'static,
         T: ToSql,
     {
         let boxed_aggr: *mut W = Box::into_raw(Box::new(aggr));
@@ -839,7 +841,7 @@ mod test {
         Ok(())
     }
 
-    // This implementation of a regexp scalar function uses SQLite's auxilliary data
+    // This implementation of a regexp scalar function uses SQLite's auxiliary data
     // (https://www.sqlite.org/c3ref/get_auxdata.html) to avoid recompiling the regular
     // expression multiple times within one query.
     fn regexp_with_auxilliary(ctx: &Context<'_>) -> Result<bool> {
@@ -883,7 +885,7 @@ mod test {
         let result: Result<bool> =
             db.query_row("SELECT regexp('l.s[aeiouy]', 'lisa')", [], |r| r.get(0));
 
-        assert_eq!(true, result?);
+        assert!(result?);
 
         let result: Result<i64> = db.query_row(
             "SELECT COUNT(*) FROM foo WHERE regexp('l.s[aeiouy]', x) == 1",

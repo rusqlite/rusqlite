@@ -41,22 +41,24 @@ For example, to store datetimes as `i64`s counting the number of seconds since
 the Unix epoch:
 
 ```
-use rusqlite::types::{FromSql, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
+use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use rusqlite::Result;
 
 pub struct DateTimeSql(pub time::OffsetDateTime);
 
 impl FromSql for DateTimeSql {
     fn column_result(value: ValueRef) -> FromSqlResult<Self> {
-        i64::column_result(value).map(|as_i64| {
-            DateTimeSql(time::OffsetDateTime::from_unix_timestamp(as_i64))
+        i64::column_result(value).and_then(|as_i64| {
+            time::OffsetDateTime::from_unix_timestamp(as_i64)
+            .map(|odt| DateTimeSql(odt))
+            .map_err(|err| FromSqlError::Other(Box::new(err)))
         })
     }
 }
 
 impl ToSql for DateTimeSql {
     fn to_sql(&self) -> Result<ToSqlOutput> {
-        Ok(self.0.timestamp().into())
+        Ok(self.0.unix_timestamp().into())
     }
 }
 ```
@@ -75,14 +77,18 @@ pub use self::value_ref::ValueRef;
 use std::fmt;
 
 #[cfg(feature = "chrono")]
+#[cfg_attr(docsrs, doc(cfg(feature = "chrono")))]
 mod chrono;
 mod from_sql;
 #[cfg(feature = "serde_json")]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde_json")))]
 mod serde_json;
 #[cfg(feature = "time")]
+#[cfg_attr(docsrs, doc(cfg(feature = "time")))]
 mod time;
 mod to_sql;
 #[cfg(feature = "url")]
+#[cfg_attr(docsrs, doc(cfg(feature = "url")))]
 mod url;
 mod value;
 mod value_ref;

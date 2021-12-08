@@ -64,7 +64,7 @@ impl Connection {
                 0
             }
         }
-        let mut c = self.db.borrow_mut();
+        let c = self.db.borrow_mut();
         let r = match callback {
             Some(f) => unsafe {
                 ffi::sqlite3_busy_handler(c.db(), Some(busy_handler_callback), f as *mut c_void)
@@ -169,7 +169,7 @@ mod test {
         let _ = db2
             .query_row("PRAGMA schema_version", [], |row| row.get::<_, i32>(0))
             .expect("unexpected error");
-        assert_eq!(CALLED.load(Ordering::Relaxed), true);
+        assert!(CALLED.load(Ordering::Relaxed));
 
         child.join().unwrap();
     }

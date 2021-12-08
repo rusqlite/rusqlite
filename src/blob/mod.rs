@@ -1,4 +1,4 @@
-//! `feature = "blob"` Incremental BLOB I/O.
+//! Incremental BLOB I/O.
 //!
 //! Note that SQLite does not provide API-level access to change the size of a
 //! BLOB; that must be performed through SQL statements.
@@ -54,11 +54,11 @@
 //!    filled in order for the call to be considered a success.
 //!
 //!    The "exact" functions require the provided buffer be entirely filled, or
-//!    they return an error, wheras the "inexact" functions read as much out of
+//!    they return an error, whereas the "inexact" functions read as much out of
 //!    the blob as is available, and return how much they were able to read.
 //!
-//!    The inexact functions are preferrable if you do not know the size of the
-//!    blob already, and the exact functions are preferrable if you do.
+//!    The inexact functions are preferable if you do not know the size of the
+//!    blob already, and the exact functions are preferable if you do.
 //!
 //! ### Comparison to using the `std::io` traits:
 //!
@@ -196,7 +196,7 @@ use crate::{Connection, DatabaseName, Result};
 
 mod pos_io;
 
-/// `feature = "blob"` Handle to an open BLOB. See
+/// Handle to an open BLOB. See
 /// [`rusqlite::blob`](crate::blob) documentation for in-depth discussion.
 pub struct Blob<'conn> {
     conn: &'conn Connection,
@@ -206,7 +206,7 @@ pub struct Blob<'conn> {
 }
 
 impl Connection {
-    /// `feature = "blob"` Open a handle to the BLOB located in `row_id`,
+    /// Open a handle to the BLOB located in `row_id`,
     /// `column`, `table` in database `db`.
     ///
     /// # Failure
@@ -223,9 +223,9 @@ impl Connection {
         row_id: i64,
         read_only: bool,
     ) -> Result<Blob<'a>> {
-        let mut c = self.db.borrow_mut();
+        let c = self.db.borrow_mut();
         let mut blob = ptr::null_mut();
-        let db = db.to_cstring()?;
+        let db = db.as_cstring()?;
         let table = super::str_to_cstring(table)?;
         let column = super::str_to_cstring(column)?;
         let rc = unsafe {
@@ -272,7 +272,6 @@ impl Blob<'_> {
     /// Return the current size in bytes of the BLOB.
     #[inline]
     pub fn len(&self) -> usize {
-        use std::convert::TryInto;
         self.size().try_into().unwrap()
     }
 
@@ -400,7 +399,7 @@ impl Drop for Blob<'_> {
     }
 }
 
-/// `feature = "blob"` BLOB of length N that is filled with zeroes.
+/// BLOB of length N that is filled with zeroes.
 ///
 /// Zeroblobs are intended to serve as placeholders for BLOBs whose content is
 /// later written using incremental BLOB I/O routines.

@@ -1,4 +1,4 @@
-//! `feature = "series"` Generate series virtual table.
+//! Generate series virtual table.
 //!
 //! Port of C [generate series
 //! "function"](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/series.c):
@@ -15,7 +15,7 @@ use crate::vtab::{
 };
 use crate::{Connection, Error, Result};
 
-/// `feature = "series"` Register the "generate_series" module.
+/// Register the "generate_series" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
     conn.create_module("generate_series", eponymous_only_module::<SeriesTab>(), aux)
@@ -162,7 +162,7 @@ struct SeriesTabCursor<'vtab> {
     row_id: i64,
     /// Current value ("value")
     value: i64,
-    /// Mimimum value ("start")
+    /// Minimum value ("start")
     min_value: i64,
     /// Maximum value ("stop")
     max_value: i64,
@@ -185,6 +185,7 @@ impl SeriesTabCursor<'_> {
         }
     }
 }
+#[allow(clippy::comparison_chain)]
 unsafe impl VTabCursor for SeriesTabCursor<'_> {
     fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
         let mut idx_num = QueryPlanFlags::from_bits_truncate(idx_num);
@@ -203,7 +204,6 @@ unsafe impl VTabCursor for SeriesTabCursor<'_> {
         }
         if idx_num.contains(QueryPlanFlags::STEP) {
             self.step = args.get(i)?;
-            #[allow(clippy::comparison_chain)]
             if self.step == 0 {
                 self.step = 1;
             } else if self.step < 0 {

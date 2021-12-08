@@ -99,7 +99,11 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
   `Url` type from the [`url` crate](https://crates.io/crates/url).
 * `bundled` uses a bundled version of SQLite.  This is a good option for cases where linking to SQLite is complicated, such as Windows.
-* `sqlcipher` looks for the SQLCipher library to link against instead of SQLite. This feature is mutually exclusive with `bundled`.
+* `sqlcipher` looks for the SQLCipher library to link against instead of SQLite. This feature overrides `bundled`.
+* `bundled-sqlcipher` uses a bundled version of SQLCipher. This searches for and links against a system-installed crypto library to provide the crypto implementation.
+* `bundled-sqlcipher-vendored-openssl` allows using bundled-sqlcipher with a vendored version of OpenSSL (via the `openssl-sys` crate) as the crypto provider.
+  - As the name implies this depends on the `bundled-sqlcipher` feature, and automatically turns it on.
+  - If turned on, this uses the [`openssl-sys`](https://crates.io/crates/openssl-sys) crate, with the `vendored` feature enabled in order to build and bundle the OpenSSL crypto library.
 * `hooks` for [Commit, Rollback](http://sqlite.org/c3ref/commit_hook.html) and [Data Change](http://sqlite.org/c3ref/update_hook.html) notification callbacks.
 * `unlock_notify` for [Unlock](https://sqlite.org/unlock_notify.html) notification.
 * `vtab` for [virtual table](https://sqlite.org/vtab.html) support (allows you to write virtual table implementations in Rust). Currently, only read-only virtual tables are supported.
@@ -121,26 +125,28 @@ declarations for SQLite's C API. By default, `libsqlite3-sys` attempts to find a
 
 You can adjust this behavior in a number of ways:
 
-* If you use the `bundled` feature, `libsqlite3-sys` will use the
-  [cc](https://crates.io/crates/cc) crate to compile SQLite from source and
+* If you use the `bundled`, `bundled-sqlcipher`, or `bundled-sqlcipher-vendored-openssl` features, `libsqlite3-sys` will use the
+  [cc](https://crates.io/crates/cc) crate to compile SQLite or SQLCipher from source and
   link against that. This source is embedded in the `libsqlite3-sys` crate and
-  is currently SQLite 3.35.4 (as of `rusqlite` 0.25.0 / `libsqlite3-sys`
-  0.22.0).  This is probably the simplest solution to any build problems. You can enable this by adding the following in your `Cargo.toml` file:
+  is currently SQLite 3.36.0 (as of `rusqlite` 0.26.0 / `libsqlite3-sys`
+  0.23.0).  This is probably the simplest solution to any build problems. You can enable this by adding the following in your `Cargo.toml` file:
   ```toml
   [dependencies.rusqlite]
-  version = "0.25.0"
+  version = "0.26.0"
   features = ["bundled"]
   ```
-* When using the `bundled` feature, the build script will honor `SQLITE_MAX_VARIABLE_NUMBER` and `SQLITE_MAX_EXPR_DEPTH` variables. It will also honor a `LIBSQLITE3_FLAGS` variable, which can have a format like `"-USQLITE_ALPHA -DSQLITE_BETA SQLITE_GAMMA ..."`. That would disable the `SQLITE_ALPHA` flag, and set the `SQLITE_BETA` and `SQLITE_GAMMA` flags. (The initial `-D` can be omitted, as on the last one.)
+* When using any of the `bundled` features, the build script will honor `SQLITE_MAX_VARIABLE_NUMBER` and `SQLITE_MAX_EXPR_DEPTH` variables. It will also honor a `LIBSQLITE_FLAGS` variable, which can have a format like `"-USQLITE_ALPHA -DSQLITE_BETA SQLITE_GAMMA ..."`. That would disable the `SQLITE_ALPHA` flag, and set the `SQLITE_BETA` and `SQLITE_GAMMA` flags. (The initial `-D` can be omitted, as on the last one.)
+* When using `bundled-sqlcipher` (and not also using `bundled-sqlcipher-vendored-openssl`), `libsqlite3-sys` will need to
+  link against crypto libraries on the system. If the build script can find a `libcrypto` from OpenSSL or LibreSSL (it will consult `OPENSSL_LIB_DIR`/`OPENSSL_INCLUDE_DIR` and `OPENSSL_DIR` environment variables), it will use that. If building on and for Macs, and none of those variables are set, it will use the system's SecurityFramework instead.
 
-* When linking against a SQLite library already on the system (so *not* using the `bundled` feature), you can set the `SQLITE3_LIB_DIR` environment variable to point to a directory containing the library. You can also set the `SQLITE3_INCLUDE_DIR` variable to point to the directory containing `sqlite3.h`.
+* When linking against a SQLite (or SQLCipher) library already on the system (so *not* using any of the `bundled` features), you can set the `SQLITE3_LIB_DIR` (or `SQLCIPHER_LIB_DIR`) environment variable to point to a directory containing the library. You can also set the `SQLITE3_INCLUDE_DIR` (or `SQLCIPHER_INCLUDE_DIR`) variable to point to the directory containing `sqlite3.h`.
 * Installing the sqlite3 development packages will usually be all that is required, but
   the build helpers for [pkg-config](https://github.com/alexcrichton/pkg-config-rs)
   and [vcpkg](https://github.com/mcgoo/vcpkg-rs) have some additional configuration
   options. The default when using vcpkg is to dynamically link,
   which must be enabled by setting `VCPKGRS_DYNAMIC=1` environment variable before build.
   `vcpkg install sqlite3:x64-windows` will install the required library.
-* When linking against a SQLite library already on the system, you can set the `SQLITE3_STATIC` environment variable to 1 to request that the library be statically instead of dynamically linked.
+* When linking against a SQLite (or SQLCipher) library already on the system, you can set the `SQLITE3_STATIC` (or `SQLCIPHER_STATIC`) environment variable to 1 to request that the library be statically instead of dynamically linked.
 
 
 ### Binding generation
@@ -169,8 +175,8 @@ pregenerated bindings are chosen:
 * `min_sqlite_version_3_7_7` - SQLite 3.7.7 bindings
 * `min_sqlite_version_3_7_16` - SQLite 3.7.16 bindings
 
-If you use the `bundled` feature, you will get pregenerated bindings for the
-bundled version of SQLite. If you need other specific pregenerated binding
+If you use any of the `bundled` features, you will get pregenerated bindings for the
+bundled version of SQLite/SQLCipher. If you need other specific pregenerated binding
 versions, please file an issue. If you want to run `bindgen` at buildtime to
 produce your own bindings, use the `buildtime_bindgen` Cargo feature.
 
@@ -195,10 +201,10 @@ instead.
 ### Checklist
 
 - Run `cargo fmt` to ensure your Rust code is correctly formatted.
-- Ensure `cargo clippy --all-targets --workspace --features bundled` passes without warnings.
-- Ensure `cargo clippy --all-targets --workspace --features "bundled-full session buildtime_bindgen"` passes without warnings.
-- Ensure `cargo test --all-targets --workspace --features bundled` reports no failures.
-- Ensure `cargo test --all-targets --workspace --features "bundled-full session buildtime_bindgen"` reports no failures.
+- Ensure `cargo clippy --workspace --features bundled` passes without warnings.
+- Ensure `cargo clippy --workspace --features "bundled-full session buildtime_bindgen"` passes without warnings.
+- Ensure `cargo test --workspace --features bundled` reports no failures.
+- Ensure `cargo test --workspace --features "bundled-full session buildtime_bindgen"` reports no failures.
 
 ## Author
 
@@ -211,4 +217,14 @@ Currently there's a gitter channel set up for rusqlite [here](https://gitter.im/
 
 ## License
 
-Rusqlite is available under the MIT license. See the LICENSE file for more info.
+Rusqlite and libsqlite3-sys are available under the MIT license. See the LICENSE file for more info.
+
+### Licenses of Bundled Software
+
+Depending on the set of enabled cargo `features`, rusqlite and libsqlite3-sys will also bundle other libraries, which have their own licensing terms:
+
+- If `--features=bundled-sqlcipher` is enabled, the vendored source of [SQLcipher](https://github.com/sqlcipher/sqlcipher) will be compiled and statically linked in. SQLcipher is distributed under a BSD-style license, as described [here](libsqlite3-sys/sqlcipher/LICENSE).
+
+- If `--features=bundled` is enabled, the vendored source of SQLite will be compiled and linked in. SQLite is in the public domain, as described [here](https://www.sqlite.org/copyright.html).
+
+Both of these are quite permissive, have no bearing on the license of the code in `rusqlite` or `libsqlite3-sys` themselves, and can be entirely ignored if you do not use the feature in question.

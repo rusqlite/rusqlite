@@ -78,6 +78,11 @@ impl<'stmt> Rows<'stmt> {
     {
         AndThenRows { rows: self, map: f }
     }
+
+    /// Give access to the underlying statement
+    pub fn as_ref(&self) -> Option<&Statement<'stmt>> {
+        self.stmt
+    }
 }
 
 impl<'stmt> Rows<'stmt> {
@@ -105,7 +110,8 @@ impl Drop for Rows<'_> {
     }
 }
 
-/// `F` is used to tranform the _streaming_ iterator into a _fallible_ iterator.
+/// `F` is used to transform the _streaming_ iterator into a _fallible_
+/// iterator.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub struct Map<'stmt, F> {
     rows: Rows<'stmt>,
@@ -130,7 +136,8 @@ where
 
 /// An iterator over the mapped resulting rows of a query.
 ///
-/// `F` is used to tranform the _streaming_ iterator into a _standard_ iterator.
+/// `F` is used to transform the _streaming_ iterator into a _standard_
+/// iterator.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub struct MappedRows<'stmt, F> {
     rows: Rows<'stmt>,
@@ -149,7 +156,7 @@ where
         self.rows
             .next()
             .transpose()
-            .map(|row_result| row_result.and_then(|row| (map)(&row)))
+            .map(|row_result| row_result.and_then(map))
     }
 }
 
@@ -174,7 +181,7 @@ where
         self.rows
             .next()
             .transpose()
-            .map(|row_result| row_result.map_err(E::from).and_then(|row| (map)(&row)))
+            .map(|row_result| row_result.map_err(E::from).and_then(map))
     }
 }
 
@@ -203,7 +210,7 @@ impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
     #[inline]
     fn advance(&mut self) -> Result<()> {
         match self.stmt {
-            Some(ref stmt) => match stmt.step() {
+            Some(stmt) => match stmt.step() {
                 Ok(true) => {
                     self.row = Some(Row { stmt });
                     Ok(())
@@ -353,6 +360,12 @@ impl<'stmt> Row<'stmt> {
     #[inline]
     pub fn get_raw<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
         self.get_ref_unwrap(idx)
+    }
+}
+
+impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> {
+    fn as_ref(&self) -> &Statement<'stmt> {
+        self.stmt
     }
 }
 

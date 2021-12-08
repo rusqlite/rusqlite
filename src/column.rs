@@ -1,6 +1,6 @@
 use std::str;
 
-use crate::{Error, Result, Row, Rows, Statement};
+use crate::{Error, Result, Statement};
 
 /// Information about a column of a SQLite query.
 #[derive(Debug)]
@@ -132,6 +132,7 @@ impl Statement<'_> {
     /// sure that current statement has already been stepped once before
     /// calling this method.
     #[cfg(feature = "column_decltype")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
     pub fn columns(&self) -> Vec<Column> {
         let n = self.column_count();
         let mut cols = Vec::with_capacity(n as usize);
@@ -144,72 +145,6 @@ impl Statement<'_> {
             cols.push(Column { name, decl_type });
         }
         cols
-    }
-}
-
-impl<'stmt> Rows<'stmt> {
-    /// Get all the column names.
-    #[inline]
-    pub fn column_names(&self) -> Option<Vec<&str>> {
-        self.stmt.map(Statement::column_names)
-    }
-
-    /// Return the number of columns.
-    #[inline]
-    pub fn column_count(&self) -> Option<usize> {
-        self.stmt.map(Statement::column_count)
-    }
-
-    /// Return the name of the column.
-    #[inline]
-    pub fn column_name(&self, col: usize) -> Option<Result<&str>> {
-        self.stmt.map(|stmt| stmt.column_name(col))
-    }
-
-    /// Return the index of the column.
-    #[inline]
-    pub fn column_index(&self, name: &str) -> Option<Result<usize>> {
-        self.stmt.map(|stmt| stmt.column_index(name))
-    }
-
-    /// Returns a slice describing the columns of the Rows.
-    #[inline]
-    #[cfg(feature = "column_decltype")]
-    pub fn columns(&self) -> Option<Vec<Column>> {
-        self.stmt.map(Statement::columns)
-    }
-}
-
-impl<'stmt> Row<'stmt> {
-    /// Get all the column names of the Row.
-    #[inline]
-    pub fn column_names(&self) -> Vec<&str> {
-        self.stmt.column_names()
-    }
-
-    /// Return the number of columns in the current row.
-    #[inline]
-    pub fn column_count(&self) -> usize {
-        self.stmt.column_count()
-    }
-
-    /// Return the name of the column.
-    #[inline]
-    pub fn column_name(&self, col: usize) -> Result<&str> {
-        self.stmt.column_name(col)
-    }
-
-    /// Return the index of the column.
-    #[inline]
-    pub fn column_index(&self, name: &str) -> Result<usize> {
-        self.stmt.column_index(name)
-    }
-
-    /// Returns a slice describing the columns of the Row.
-    #[inline]
-    #[cfg(feature = "column_decltype")]
-    pub fn columns(&self) -> Vec<Column> {
-        self.stmt.columns()
     }
 }
 
@@ -230,10 +165,17 @@ mod test {
             column_names.as_slice(),
             &["type", "name", "tbl_name", "rootpage", "sql"]
         );
-        let column_types: Vec<Option<&str>> = columns.iter().map(Column::decl_type).collect();
+        let column_types: Vec<Option<String>> = columns
+            .iter()
+            .map(|col| col.decl_type().map(str::to_lowercase))
+            .collect();
         assert_eq!(
             &column_types[..3],
-            &[Some("text"), Some("text"), Some("text"),]
+            &[
+                Some("text".to_owned()),
+                Some("text".to_owned()),
+                Some("text".to_owned()),
+            ]
         );
         Ok(())
     }
@@ -278,7 +220,8 @@ mod test {
     /// reset) even if DB schema is altered (SQLite documentation is
     /// ambiguous here because it says reference "is valid until (...) the next
     /// call to sqlite3_column_name() or sqlite3_column_name16() on the same
-    /// column.". We assume that reference is valid if only `sqlite3_column_name()` is used):
+    /// column.". We assume that reference is valid if only
+    /// `sqlite3_column_name()` is used):
     #[test]
     #[cfg(feature = "modern_sqlite")]
     fn test_column_name_reference() -> Result<()> {

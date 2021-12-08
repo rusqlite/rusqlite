@@ -1,6 +1,6 @@
 //! Convert most of the [Time Strings](http://sqlite.org/lang_datefunc.html) to chrono types.
 
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 
 use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use crate::Result;
@@ -83,12 +83,32 @@ impl FromSql for NaiveDateTime {
     }
 }
 
-/// Date and time with time zone => UTC RFC3339 timestamp
+/// UTC time => UTC RFC3339 timestamp
 /// ("YYYY-MM-DD HH:MM:SS.SSS+00:00").
-impl<Tz: TimeZone> ToSql for DateTime<Tz> {
+impl ToSql for DateTime<Utc> {
+    #[inline]
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        let date_str = self.format("%F %T%.f%:z").to_string();
+        Ok(ToSqlOutput::from(date_str))
+    }
+}
+
+/// Local time => UTC RFC3339 timestamp
+/// ("YYYY-MM-DD HH:MM:SS.SSS+00:00").
+impl ToSql for DateTime<Local> {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         let date_str = self.with_timezone(&Utc).format("%F %T%.f%:z").to_string();
+        Ok(ToSqlOutput::from(date_str))
+    }
+}
+
+/// Date and time with time zone => RFC3339 timestamp
+/// ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM").
+impl ToSql for DateTime<FixedOffset> {
+    #[inline]
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        let date_str = self.format("%F %T%.f%:z").to_string();
         Ok(ToSqlOutput::from(date_str))
     }
 }
@@ -125,13 +145,26 @@ impl FromSql for DateTime<Local> {
     }
 }
 
+/// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") into `DateTime<FixedOffset>`.
+impl FromSql for DateTime<FixedOffset> {
+    #[inline]
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        let s = String::column_result(value)?;
+        Self::parse_from_rfc3339(s.as_str())
+            .or_else(|_| Self::parse_from_str(s.as_str(), "%F %T%.f%:z"))
+            .map_err(|e| FromSqlError::Other(Box::new(e)))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{
         types::{FromSql, ValueRef},
         Connection, Result,
     };
-    use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+    use chrono::{
+        DateTime, Duration, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc,
+    };
 
     fn checked_memory_handle() -> Result<Connection> {
         let db = Connection::open_in_memory()?;
@@ -230,6 +263,23 @@ mod test {
 
         let v: DateTime<Local> = db.query_row("SELECT t FROM foo", [], |r| r.get(0))?;
         assert_eq!(local, v);
+        Ok(())
+    }
+
+    #[test]
+    fn test_date_time_fixed() -> Result<()> {
+        let db = checked_memory_handle()?;
+        let time = DateTime::parse_from_rfc3339("2020-04-07T11:23:45+04:00").unwrap();
+
+        db.execute("INSERT INTO foo (t) VALUES (?)", [time])?;
+
+        // Stored string should preserve timezone offset
+        let s: String = db.query_row("SELECT t FROM foo", [], |r| r.get(0))?;
+        assert!(s.ends_with("+04:00"));
+
+        let v: DateTime<FixedOffset> = db.query_row("SELECT t FROM foo", [], |r| r.get(0))?;
+        assert_eq!(time.offset(), v.offset());
+        assert_eq!(time, v);
         Ok(())
     }
 
