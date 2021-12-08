@@ -375,7 +375,7 @@ pub unsafe fn to_sqlite_error(
     match e {
         Error::SqliteFailure(err, s) => {
             if let Some(s) = s {
-                *err_msg = crate::util::SqliteMallocString::from_str(&s).into_raw();
+                *err_msg = crate::util::SqliteMallocString::from_str(s).into_raw();
             }
             err.extended_code
         }

@@ -95,9 +95,9 @@ mod build_bundled {
         {
             use super::{bindings, header_file, HeaderLocation};
             let header_path = format!("{}/{}", lib_name, header_file());
-            let header = HeaderLocation::FromPath(header_path);
+            let header = HeaderLocation::FromPath(header_path.clone());
             bindings::write_to_out_dir(header, out_path);
-            println!("cargo:rerun-if-changed={}", header_path);
+            println!("cargo:rerun-if-changed={}", &header_path);
         }
         #[cfg(not(feature = "buildtime_bindgen"))]
         {
