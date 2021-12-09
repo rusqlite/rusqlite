@@ -28,6 +28,11 @@ use rusqlite::{to_sqlite_error, Connection, Result};
 ///
 /// It does *not* have to return sqlite status codes (such as SQLITE_OK), we
 /// just do that here to keep the C extension simple.
+///
+/// # Safety
+///
+/// The C host extension must pass a pointer to a valid `sqlite3` struct in
+/// `db`` and either null or a pointer to a char* in `pz_err_msg`.
 #[no_mangle]
 pub unsafe extern "C" fn example_embedded_extension_init(
     db: *mut ffi::sqlite3,

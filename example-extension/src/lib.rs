@@ -15,6 +15,13 @@ use rusqlite::{to_sqlite_error, Connection, Result};
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
+/// Extension entry point, called by sqlite when this extension is loaded
+///
+/// # Safety
+///
+/// Sqlite must pass a pointer to a valid `sqlite3` struct in `db``, a pointer to a
+/// valid `sqlite3_api_routines` in `p_api`, and either null or a pointer to a char*
+/// in `pz_err_msg`.
 pub unsafe extern "C" fn sqlite3_extension_init(
     db: *mut ffi::sqlite3,
     pz_err_msg: *mut *mut c_char,
