@@ -666,7 +666,7 @@ mod bindings {
             .header(header.clone())
             .parse_callbacks(Box::new(SqliteTypeChooser))
             .rustfmt_bindings(true);
-        
+
         if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
             bindings = bindings.clang_arg("-DSQLITE_HAS_CODEC");
             // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
