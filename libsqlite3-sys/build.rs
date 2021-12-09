@@ -680,7 +680,8 @@ mod bindings {
             // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
             #[cfg(feature = "loadable_extension")]
             {
-                bindings_with_comments = bindings_with_comments.clang_arg("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
+                bindings_with_comments =
+                    bindings_with_comments.clang_arg("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
             }
         }
         if cfg!(feature = "preupdate_hook") {
@@ -688,7 +689,8 @@ mod bindings {
             // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
             #[cfg(feature = "loadable_extension")]
             {
-                bindings_with_comments = bindings_with_comments.clang_arg("-DSQLITE_ENABLE_PREUPDATE_HOOK");
+                bindings_with_comments =
+                    bindings_with_comments.clang_arg("-DSQLITE_ENABLE_PREUPDATE_HOOK");
             }
         }
         if cfg!(feature = "session") {
@@ -696,7 +698,8 @@ mod bindings {
             // Remove once bindgen can clone: https://github.com/rust-lang/rust-bindgen/issues/2132
             #[cfg(feature = "loadable_extension")]
             {
-                bindings_with_comments = bindings_with_comments.clang_arg("-DSQLITE_ENABLE_SESSION");
+                bindings_with_comments =
+                    bindings_with_comments.clang_arg("-DSQLITE_ENABLE_SESSION");
             }
         }
         if win_target() && cfg!(feature = "winsqlite3") {
@@ -896,7 +899,8 @@ mod bindings {
                 .unwrap_or_else(|_| panic!("could not run bindgen on header {}", header))
                 .write(Box::new(&mut output_with_comments))
                 .expect("could not write output of bindgen with comments");
-            let output_with_comments_string = String::from_utf8(output_with_comments).expect("bindgen output with comments was not UTF-8?!");
+            let output_with_comments_string = String::from_utf8(output_with_comments)
+                .expect("bindgen output with comments was not UTF-8?!");
 
             // Get the list of API functions supported by sqlite3_api_routines,
             // and add wrappers for each of the API functions to dispatch the API
@@ -938,7 +942,8 @@ use crate::loadable_extension_sqlite3_api;
             // compile a regex to match sqlite3 version strings that annotate
             // fields in the sqlite3_api_routines struct as comments in
             // the sqlite3ext.h sqlite header file
-            let version_re = regex::Regex::new(r"[^0-9](?P<version>3[.][0-9]+[.][0-9]+)[^0-9]").expect("failed to compile regex");
+            let version_re = regex::Regex::new(r"[^0-9](?P<version>3[.][0-9]+[.][0-9]+)[^0-9]")
+                .expect("failed to compile regex");
 
             // prior to any version comments, we don't enable any version checks
             // the earliest version mentioned is 3.3.13, and it appears from the
@@ -967,18 +972,31 @@ use crate::loadable_extension_sqlite3_api;
                                 for t in attr.tokens.clone().into_iter() {
                                     if let proc_macro2::TokenTree::Literal(l) = t {
                                         let literal_comments = l.to_string();
-                                        if let Some(captures) = version_re.captures(&literal_comments) {
-                                            if let Some(sqlite3_version_match) = captures.name("version") {
-                                                let sqlite3_version = sqlite3_version_match.as_str().to_string();
+                                        if let Some(captures) =
+                                            version_re.captures(&literal_comments)
+                                        {
+                                            if let Some(sqlite3_version_match) =
+                                                captures.name("version")
+                                            {
+                                                let sqlite3_version =
+                                                    sqlite3_version_match.as_str().to_string();
                                                 match require_sqlite3_version {
                                                     None => {
-                                                        require_sqlite3_version = Some(sqlite3_version);
+                                                        require_sqlite3_version =
+                                                            Some(sqlite3_version);
                                                     }
                                                     Some(require_sqlite3_version_str) => {
-                                                        if version_compare::compare_to(&sqlite3_version, &require_sqlite3_version_str, version_compare::Cmp::Lt).expect("failed to compare version strings") {
+                                                        if version_compare::compare_to(
+                                                            &sqlite3_version,
+                                                            &require_sqlite3_version_str,
+                                                            version_compare::Cmp::Lt,
+                                                        )
+                                                        .expect("failed to compare version strings")
+                                                        {
                                                             panic!("Unexpectedly found sqlite3 version requirement in sqlite3ext.h that is lower than the version required for the previous field in sqlite3_api_routines (found '{}' after '{}')", &sqlite3_version, &require_sqlite3_version_str);
                                                         } else {
-                                                            require_sqlite3_version = Some(sqlite3_version);
+                                                            require_sqlite3_version =
+                                                                Some(sqlite3_version);
                                                         }
                                                     }
                                                 }
@@ -1007,14 +1025,20 @@ use crate::loadable_extension_sqlite3_api;
                 }
 
                 // generate wrapper function and push it to output string
-                let require_sqlite3_version_with_overrides = if &api_fn_name == "sqlite3_overload_function" {
-                    // override the version requirement for sqlite3_overload_function since it is commented
-                    // with `Added ???` in sqlite3ext.h`
-                    Some("3.3.13")
-                } else {
-                    require_sqlite3_version.as_deref()
-                };
-                let wrapper = generate_wrapper(ident, field_type, &api_fn_name, require_sqlite3_version_with_overrides);
+                let require_sqlite3_version_with_overrides =
+                    if &api_fn_name == "sqlite3_overload_function" {
+                        // override the version requirement for sqlite3_overload_function since it is commented
+                        // with `Added ???` in sqlite3ext.h`
+                        Some("3.3.13")
+                    } else {
+                        require_sqlite3_version.as_deref()
+                    };
+                let wrapper = generate_wrapper(
+                    ident,
+                    field_type,
+                    &api_fn_name,
+                    require_sqlite3_version_with_overrides,
+                );
                 output_string.push_str(&wrapper);
             }
 
@@ -1260,27 +1284,40 @@ use crate::loadable_extension_sqlite3_api;
             // For more information, refer to sqlite docs: https://sqlite.org/c3ref/c_source_id.html
             let api_version_check_tokens = match require_sqlite3_version {
                 Some(version) => {
-                    let require_sqlite3_version = version_compare::Version::from(version).expect("failed to parse required sqlite3 version as Version");
+                    let require_sqlite3_version = version_compare::Version::from(version)
+                        .expect("failed to parse required sqlite3 version as Version");
                     let require_sqlite3_version_parts = require_sqlite3_version.parts();
                     if require_sqlite3_version_parts.len() != 3 {
-                        panic!("sqlite3 version '{}' does not have exactly three parts", version);
+                        panic!(
+                            "sqlite3 version '{}' does not have exactly three parts",
+                            version
+                        );
                     }
                     let major = match require_sqlite3_version_parts[0] {
                         version_compare::Part::Number(major) => major,
                         _ => {
-                            panic!("non-numeric major part found in sqlite3 version requirement '{}'", require_sqlite3_version_parts[0]);
+                            panic!(
+                                "non-numeric major part found in sqlite3 version requirement '{}'",
+                                require_sqlite3_version_parts[0]
+                            );
                         }
                     };
                     let minor = match require_sqlite3_version_parts[1] {
                         version_compare::Part::Number(minor) => minor,
                         _ => {
-                            panic!("non-numeric minor part found in sqlite3 version requirement '{}'", require_sqlite3_version_parts[1]);
+                            panic!(
+                                "non-numeric minor part found in sqlite3 version requirement '{}'",
+                                require_sqlite3_version_parts[1]
+                            );
                         }
                     };
                     let patch = match require_sqlite3_version_parts[2] {
                         version_compare::Part::Number(patch) => patch,
                         _ => {
-                            panic!("non-numeric patch part found in sqlite3 version requirement '{}'", require_sqlite3_version_parts[2]);
+                            panic!(
+                                "non-numeric patch part found in sqlite3 version requirement '{}'",
+                                require_sqlite3_version_parts[2]
+                            );
                         }
                     };
                     let require_sqlite3_version_number = 1_000_000 * major + 1_000 * minor + patch;

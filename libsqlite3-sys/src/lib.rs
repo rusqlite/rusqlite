@@ -62,10 +62,16 @@ mod loadable_extension;
 #[cfg(feature = "loadable_extension")]
 pub use loadable_extension::loadable_extension_sqlite3_api;
 
-#[cfg(all(feature = "loadable_extension", feature = "loadable_extension_embedded"))]
+#[cfg(all(
+    feature = "loadable_extension",
+    feature = "loadable_extension_embedded"
+))]
 pub use loadable_extension::loadable_extension_embedded_init;
 
-#[cfg(all(feature = "loadable_extension", not(feature = "loadable_extension_embedded")))]
+#[cfg(all(
+    feature = "loadable_extension",
+    not(feature = "loadable_extension_embedded")
+))]
 pub use loadable_extension::loadable_extension_init;
 
 #[allow(clippy::all)]

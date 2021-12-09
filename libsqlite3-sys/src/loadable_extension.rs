@@ -39,15 +39,15 @@ impl Sqlite3ApiRoutines {
 
     #[inline]
     fn get(&self) -> *const sqlite3_api_routines {
-       self.get_mut() as *const sqlite3_api_routines
+        self.get_mut() as *const sqlite3_api_routines
     }
 
     #[inline]
-    fn get_mut(&self) -> *mut sqlite3_api_routines { 
+    fn get_mut(&self) -> *mut sqlite3_api_routines {
         if self.p_api.is_null() {
             panic!("attempted to access Sqlite3ApiRoutines that was not initialized, please ensure you have called loadable_extension_init prior to attempting to use any API functions from a loadable extension");
         }
-       self.p_api
+        self.p_api
     }
 }
 
@@ -68,9 +68,7 @@ static mut SQLITE3_API: Sqlite3ApiRoutines = Sqlite3ApiRoutines::UNINIT;
 /// A call to this function will panic if it is called prior to the
 /// extension being initialized by a call to `loadable_extension_init`.
 pub fn loadable_extension_sqlite3_api() -> *const sqlite3_api_routines {
-    unsafe {
-        SQLITE3_API.get()
-    }
+    unsafe { SQLITE3_API.get() }
 }
 
 #[cfg(not(feature = "loadable_extension_embedded"))]
