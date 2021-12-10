@@ -89,14 +89,14 @@ pub fn loadable_extension_sqlite3_api() -> *const sqlite3_api_routines {
 /// ```
 /// #[no_mangle]
 /// pub unsafe extern "C" fn sqlite3_extension_init(
-///     db: *mut ffi::sqlite3,
-///     pz_err_msg: *mut *mut c_char,
-///     p_api: *mut ffi::sqlite3_api_routines,
-/// ) -> c_int {
+///     db: *mut libsqlite3_sys::sqlite3,
+///     pz_err_msg: *mut *mut std::os::raw::c_char,
+///     p_api: *mut libsqlite3_sys::sqlite3_api_routines,
+/// ) -> std::os::raw::c_int {
 ///     // SQLITE_EXTENSION_INIT2 equivalent
-///     loadable_extension_init(p_api);
+///     libsqlite3_sys::loadable_extension_init(p_api);
 ///
-///     SQLITE_OK
+///     libsqlite3_sys::SQLITE_OK
 /// }
 /// ```
 ///
