@@ -1336,9 +1336,10 @@ use crate::loadable_extension_sqlite3_api;
                 pub unsafe fn #api_fn_ident(#api_fn_inputs) #api_fn_output {
                     let p_api = loadable_extension_sqlite3_api();
                     #api_version_check_tokens
-                    ((*p_api).#field_ident
-                        .expect(stringify!("sqlite3_api contains null pointer for ", #field_name, " function")))(
-                            #(#api_fn_input_idents),*
+                    let api_routine_raw_ptr = core::ptr::addr_of!((*p_api).#field_ident);
+                    (api_routine_raw_ptr.read()
+                     .expect(stringify!("sqlite3_api contains null pointer for ", #field_name, " function")))(
+                        #(#api_fn_input_idents),*
                     )
                 }
             };
