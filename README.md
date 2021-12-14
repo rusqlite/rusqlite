@@ -111,6 +111,7 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
 * [`csvtab`](https://sqlite.org/csv.html), CSV virtual table written in Rust. (Implies `vtab`.)
 * [`array`](https://sqlite.org/carray.html), The `rarray()` Table-Valued Function. (Implies `vtab`.)
 * `i128_blob` allows storing values of type `i128` type in SQLite databases. Internally, the data is stored as a 16 byte big-endian blob, with the most significant bit flipped, which allows ordering and comparison between different blobs storing i128s to work as expected.
+* `rust_decimal` allows storing and retrieving `Decimal` values from the [`rust_decimal`](https://docs.rs/rust_decimal/) crate.
 * `uuid` allows storing and retrieving `Uuid` values from the [`uuid`](https://docs.rs/uuid/) crate using blobs.
 * [`session`](https://sqlite.org/sessionintro.html), Session module extension. Requires `buildtime_bindgen` feature. (Implies `hooks`.)
 * `extra_check` fail when a query passed to execute is readonly or has a column count > 0.
