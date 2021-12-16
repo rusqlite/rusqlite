@@ -1,19 +1,12 @@
 //! [`ToSql`] and [`FromSql`] implementation for [`rust_decimal::Decimal`].
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use crate::Result;
 use rust_decimal::Decimal;
+use std::convert::TryInto;
 use std::str::FromStr;
 
 fn parse_from_str(s: &str) -> Result<Decimal, FromSqlError> {
     Decimal::from_str(s).map_err(|e| FromSqlError::Other(Box::new(e)))
-}
-
-/// Serialize `Decimal` to text.
-impl ToSql for Decimal {
-    #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(self.to_string()))
-    }
 }
 
 /// Deserialize to `Decimal`.
@@ -22,10 +15,14 @@ impl FromSql for Decimal {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         match value {
             ValueRef::Integer(x) => Ok(Decimal::from(x)),
-            //Note: Parsing straight from f64 could cause loss of precision, when parsing from text works fine
-            // like for example f64::MAX
+            //Note: Parsing straight from f64 could cause loss of precision, when parsing from text
+            // works fine like for example f64::MAX
             ValueRef::Real(x) => parse_from_str(&x.to_string()),
             ValueRef::Text(_) => value.as_str().and_then(parse_from_str),
+            ValueRef::Blob(x) => match x.try_into() {
+                Ok(bytes) => Ok(Decimal::deserialize(bytes)),
+                Err(e) => Err(FromSqlError::Other(Box::new(e))),
+            },
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -63,15 +60,13 @@ mod test {
 
         assert_eq!(get_decimal(db, 0)?, zero);
         assert_eq!(get_decimal(db, 1)?, max_float);
-        // Currently the round-trip from Decimal::MAX can fail... The real error is a overflow
-        assert_eq!(
-            get_decimal(db, 2),
-            Err(Error::InvalidColumnType(0, "v".into(), Type::Real))
-        );
+        // Currently the round-trip from Decimal::MAX can fail... The real error is a
+        // overflow
+        assert_eq!(get_decimal(db, 2)?, max_decimal);
         //This is in fact a parsing error...
-        assert_eq!(
+        matches!(
             get_decimal(db, 3),
-            Err(Error::InvalidColumnType(0, "v".into(), Type::Text))
+            Err(Error::FromSqlConversionFailure(0, Type::Text, ..))
         );
 
         Ok(())

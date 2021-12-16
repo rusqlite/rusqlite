@@ -79,6 +79,10 @@ from_value!(i128);
 #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
 from_value!(uuid::Uuid);
 
+#[cfg(feature = "rust_decimal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rust_decimal")))]
+from_value!(rust_decimal::Decimal);
+
 impl ToSql for ToSqlOutput<'_> {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
@@ -172,6 +176,10 @@ to_sql_self!(i128);
 #[cfg(feature = "uuid")]
 #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
 to_sql_self!(uuid::Uuid);
+
+#[cfg(feature = "rust_decimal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rust_decimal")))]
+to_sql_self!(rust_decimal::Decimal);
 
 macro_rules! to_sql_self_fallible(
     ($t:ty) => (

@@ -63,6 +63,16 @@ impl From<uuid::Uuid> for Value {
     }
 }
 
+/// Serialize `Decimal` to blob.
+#[cfg(feature = "rust_decimal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rust_decimal")))]
+impl From<rust_decimal::Decimal> for Value {
+    #[inline]
+    fn from(d: rust_decimal::Decimal) -> Value {
+        Value::Blob(d.serialize().to_vec())
+    }
+}
+
 macro_rules! from_i64(
     ($t:ty) => (
         impl From<$t> for Value {
