@@ -302,12 +302,6 @@ impl<'stmt> Row<'stmt> {
                 self.stmt.column_name_unwrap(idx).into(),
                 value.data_type(),
             ),
-            #[cfg(feature = "rust_decimal")]
-            FromSqlError::InvalidDecimal(_) => Error::InvalidColumnType(
-                idx,
-                self.stmt.column_name_unwrap(idx).into(),
-                value.data_type(),
-            ),
         })
     }
 

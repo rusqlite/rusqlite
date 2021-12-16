@@ -28,12 +28,6 @@ pub enum FromSqlError {
     #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
     InvalidUuidSize(usize),
 
-    /// Error returned when reading a `Decimal`. Only available when the `rust_decimal`
-    /// feature is enabled.
-    #[cfg(feature = "rust_decimal")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rust_decimal")))]
-    InvalidDecimal(rust_decimal::Error),
-
     /// An error case available for implementors of the [`FromSql`] trait.
     Other(Box<dyn Error + Send + Sync + 'static>),
 }
@@ -47,8 +41,6 @@ impl PartialEq for FromSqlError {
             (FromSqlError::InvalidI128Size(s1), FromSqlError::InvalidI128Size(s2)) => s1 == s2,
             #[cfg(feature = "uuid")]
             (FromSqlError::InvalidUuidSize(s1), FromSqlError::InvalidUuidSize(s2)) => s1 == s2,
-            #[cfg(feature = "rust_decimal")]
-            (FromSqlError::InvalidDecimal(e1), FromSqlError::InvalidDecimal(e2)) => e1 == e2,
             (..) => false,
         }
     }
@@ -66,10 +58,6 @@ impl fmt::Display for FromSqlError {
             #[cfg(feature = "uuid")]
             FromSqlError::InvalidUuidSize(s) => {
                 write!(f, "Cannot read UUID value out of {} byte blob", s)
-            }
-            #[cfg(feature = "rust_decimal")]
-            FromSqlError::InvalidDecimal(ref x) => {
-                write!(f, "Cannot read Decimal value out of {} data", x)
             }
             FromSqlError::Other(ref err) => err.fmt(f),
         }

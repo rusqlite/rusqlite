@@ -152,11 +152,6 @@ impl Context<'_> {
             FromSqlError::InvalidUuidSize(_) => {
                 Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
             }
-            #[cfg(feature = "rust_decimal")]
-            #[cfg_attr(docsrs, doc(cfg(feature = "rust_decimal")))]
-            FromSqlError::InvalidDecimal(_) => {
-                Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
-            }
         })
     }
 

@@ -5,7 +5,7 @@ use rust_decimal::Decimal;
 use std::str::FromStr;
 
 fn parse_from_str(s: &str) -> Result<Decimal, FromSqlError> {
-    Decimal::from_str(s).map_err(FromSqlError::InvalidDecimal)
+    Decimal::from_str(s).map_err(|e| FromSqlError::Other(Box::new(e)))
 }
 
 /// Serialize `Decimal` to text.
