@@ -1,5 +1,5 @@
 //! [`ToSql`] and [`FromSql`] implementation for [`rust_decimal::Decimal`].
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ValueRef};
 use crate::Result;
 use rust_decimal::Decimal;
 use std::convert::TryInto;
