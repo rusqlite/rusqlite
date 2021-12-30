@@ -173,6 +173,7 @@ pregenerated bindings are chosen:
 * `min_sqlite_version_3_6_8` - SQLite 3.6.8 bindings (this is the default)
 * `min_sqlite_version_3_6_23` - SQLite 3.6.23 bindings
 * `min_sqlite_version_3_7_7` - SQLite 3.7.7 bindings
+* `min_sqlite_version_3_7_16` - SQLite 3.7.16 bindings
 
 If you use any of the `bundled` features, you will get pregenerated bindings for the
 bundled version of SQLite/SQLCipher. If you need other specific pregenerated binding

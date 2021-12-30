@@ -1,0 +1,22 @@
+[package]
+name = "example-extension"
+version = "0.0.1"
+authors = ["The rusqlite developers"]
+edition = "2018"
+repository = "https://github.com/rusqlite/rusqlite"
+description = "Example extension to demonstrate and test rusqlite feature loadable_extension"
+license = "MIT"
+keywords = ["sqlite", "extension"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[dependencies.rusqlite]
+path = ".."
+default-features = false
+features = ["loadable_extension", "vtab", "functions", "bundled"]
+
+[workspace]
+members = []
