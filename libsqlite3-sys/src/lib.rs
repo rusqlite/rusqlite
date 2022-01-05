@@ -17,7 +17,7 @@ pub fn SQLITE_STATIC() -> sqlite3_destructor_type {
 }
 
 pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
-    Some(unsafe { mem::transmute(-1isize) })
+    Some(unsafe { mem::transmute(-1_isize) })
 }
 
 /// Run-Time Limit Categories
