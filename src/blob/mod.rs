@@ -265,18 +265,22 @@ impl Blob<'_> {
 
     /// Return the size in bytes of the BLOB.
     #[inline]
+    #[must_use]
     pub fn size(&self) -> i32 {
         unsafe { ffi::sqlite3_blob_bytes(self.blob) }
     }
 
     /// Return the current size in bytes of the BLOB.
     #[inline]
+    #[must_use]
     pub fn len(&self) -> usize {
+        use std::convert::TryInto;
         self.size().try_into().unwrap()
     }
 
     /// Return true if the BLOB is empty.
     #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.size() == 0
     }
@@ -317,8 +321,7 @@ impl io::Read for Blob<'_> {
         if n <= 0 {
             return Ok(0);
         }
-        let rc =
-            unsafe { ffi::sqlite3_blob_read(self.blob, buf.as_mut_ptr() as *mut _, n, self.pos) };
+        let rc = unsafe { ffi::sqlite3_blob_read(self.blob, buf.as_mut_ptr().cast(), n, self.pos) };
         self.conn
             .decode_result(rc)
             .map(|_| {

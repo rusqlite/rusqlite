@@ -1,6 +1,6 @@
 use super::ffi;
-use super::unlock_notify;
 use super::StatementStatus;
+use crate::util::ParamIndexCache;
 #[cfg(feature = "modern_sqlite")]
 use crate::util::SqliteMallocString;
 use std::ffi::CStr;
@@ -14,7 +14,7 @@ pub struct RawStatement {
     ptr: *mut ffi::sqlite3_stmt,
     tail: usize,
     // Cached indices of named parameters, computed on the fly.
-    cache: crate::util::ParamIndexCache,
+    cache: ParamIndexCache,
     // Cached SQL (trimmed) that we use as the key when we're in the statement
     // cache. This is None for statements which didn't come from the statement
     // cache.
@@ -34,7 +34,7 @@ impl RawStatement {
         RawStatement {
             ptr: stmt,
             tail,
-            cache: Default::default(),
+            cache: ParamIndexCache::default(),
             statement_cache_key: None,
         }
     }
@@ -101,25 +101,38 @@ impl RawStatement {
         }
     }
 
-    #[cfg_attr(not(feature = "unlock_notify"), inline)]
+    #[inline]
+    #[cfg(not(feature = "unlock_notify"))]
     pub fn step(&self) -> c_int {
-        if cfg!(feature = "unlock_notify") {
-            let db = unsafe { ffi::sqlite3_db_handle(self.ptr) };
-            let mut rc;
-            loop {
-                rc = unsafe { ffi::sqlite3_step(self.ptr) };
-                if unsafe { !unlock_notify::is_locked(db, rc) } {
-                    break;
+        unsafe { ffi::sqlite3_step(self.ptr) }
+    }
+
+    #[cfg(feature = "unlock_notify")]
+    pub fn step(&self) -> c_int {
+        use crate::unlock_notify;
+        let mut db = core::ptr::null_mut::<ffi::sqlite3>();
+        loop {
+            unsafe {
+                let mut rc = ffi::sqlite3_step(self.ptr);
+                // Bail out early for success and errors unrelated to locking. We
+                // still need check `is_locked` after this, but checking now lets us
+                // avoid one or two (admittedly cheap) calls into SQLite that we
+                // don't need to make.
+                if (rc & 0xff) != ffi::SQLITE_LOCKED {
+                    break rc;
                 }
-                rc = unsafe { unlock_notify::wait_for_unlock_notify(db) };
+                if db.is_null() {
+                    db = ffi::sqlite3_db_handle(self.ptr);
+                }
+                if !unlock_notify::is_locked(db, rc) {
+                    break rc;
+                }
+                rc = unlock_notify::wait_for_unlock_notify(db);
                 if rc != ffi::SQLITE_OK {
-                    break;
+                    break rc;
                 }
                 self.reset();
             }
-            rc
-        } else {
-            unsafe { ffi::sqlite3_step(self.ptr) }
         }
     }
 

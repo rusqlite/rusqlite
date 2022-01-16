@@ -125,6 +125,7 @@ mod statement;
 pub mod trace;
 mod transaction;
 pub mod types;
+#[cfg(feature = "unlock_notify")]
 mod unlock_notify;
 mod version;
 #[cfg(feature = "vtab")]
@@ -257,10 +258,10 @@ fn str_to_cstring(s: &str) -> Result<SmallCString> {
 fn str_for_sqlite(s: &[u8]) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type)> {
     let len = len_as_c_int(s.len())?;
     let (ptr, dtor_info) = if len != 0 {
-        (s.as_ptr() as *const c_char, ffi::SQLITE_TRANSIENT())
+        (s.as_ptr().cast::<c_char>(), ffi::SQLITE_TRANSIENT())
     } else {
         // Return a pointer guaranteed to live forever
-        ("".as_ptr() as *const c_char, ffi::SQLITE_STATIC())
+        ("".as_ptr().cast::<c_char>(), ffi::SQLITE_STATIC())
     };
     Ok((ptr, len, dtor_info))
 }
@@ -449,7 +450,7 @@ impl Connection {
     ///
     /// # Failure
     ///
-    /// Will return `Err` if vfs` cannot be converted to a C-compatible
+    /// Will return `Err` if `vfs` cannot be converted to a C-compatible
     /// string or if the underlying SQLite open call fails.
     #[inline]
     pub fn open_in_memory_with_flags_and_vfs(flags: OpenFlags, vfs: &str) -> Result<Connection> {
@@ -1063,21 +1064,6 @@ pub unsafe fn bypass_sqlite_initialization() {
     BYPASS_SQLITE_INIT.store(true, Ordering::Relaxed);
 }
 
-/// rusqlite performs a one-time check that the runtime SQLite version is at
-/// least as new as the version of SQLite found when rusqlite was built.
-/// Bypassing this check may be dangerous; e.g., if you use features of SQLite
-/// that are not present in the runtime version.
-///
-/// # Safety
-///
-/// If you are sure the runtime version is compatible with the
-/// build-time version for your usage, you can bypass the version check by
-/// calling this function before your first connection attempt.
-pub unsafe fn bypass_sqlite_version_check() {
-    #[cfg(not(feature = "bundled"))]
-    inner_connection::BYPASS_VERSION_CHECK.store(true, Ordering::Relaxed);
-}
-
 /// Allows interrupting a long-running computation.
 pub struct InterruptHandle {
     db_lock: Arc<Mutex<*mut ffi::sqlite3>>,
@@ -1217,7 +1203,7 @@ mod test {
     fn test_open_failure() {
         let filename = "no_such_file.db";
         let result = Connection::open_with_flags(filename, OpenFlags::SQLITE_OPEN_READ_ONLY);
-        assert!(!result.is_ok());
+        assert!(result.is_err());
         let err = result.err().unwrap();
         if let Error::SqliteFailure(e, Some(msg)) = err {
             assert_eq!(ErrorCode::CannotOpen, e.code);
