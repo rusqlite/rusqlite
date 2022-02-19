@@ -31,7 +31,9 @@ pub enum DbConfig {
     /// Includes or excludes output for any operations performed by trigger
     /// programs from the output of EXPLAIN QUERY PLAN commands.
     SQLITE_DBCONFIG_TRIGGER_EQP = 1008, // 3.22.0
-    //SQLITE_DBCONFIG_RESET_DATABASE = 1009,
+    /// Activates or deactivates the "reset" flag for a database connection.
+    /// Run VACUUM with this flag set to reset the database.
+    SQLITE_DBCONFIG_RESET_DATABASE = 1009,
     /// Activates or deactivates the "defensive" flag for a database connection.
     SQLITE_DBCONFIG_DEFENSIVE = 1010, // 3.26.0
     /// Activates or deactivates the "writable_schema" flag.
@@ -64,17 +66,17 @@ pub enum DbConfig {
 impl Connection {
     /// Returns the current value of a `config`.
     ///
-    /// - SQLITE_DBCONFIG_ENABLE_FKEY: return `false` or `true` to indicate
+    /// - `SQLITE_DBCONFIG_ENABLE_FKEY`: return `false` or `true` to indicate
     ///   whether FK enforcement is off or on
-    /// - SQLITE_DBCONFIG_ENABLE_TRIGGER: return `false` or `true` to indicate
+    /// - `SQLITE_DBCONFIG_ENABLE_TRIGGER`: return `false` or `true` to indicate
     ///   whether triggers are disabled or enabled
-    /// - SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER: return `false` or `true` to
-    ///   indicate whether fts3_tokenizer are disabled or enabled
-    /// - SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE: return `false` to indicate
+    /// - `SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER`: return `false` or `true` to
+    ///   indicate whether `fts3_tokenizer` are disabled or enabled
+    /// - `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE`: return `false` to indicate
     ///   checkpoints-on-close are not disabled or `true` if they are
-    /// - SQLITE_DBCONFIG_ENABLE_QPSG: return `false` or `true` to indicate
+    /// - `SQLITE_DBCONFIG_ENABLE_QPSG`: return `false` or `true` to indicate
     ///   whether the QPSG is disabled or enabled
-    /// - SQLITE_DBCONFIG_TRIGGER_EQP: return `false` to indicate
+    /// - `SQLITE_DBCONFIG_TRIGGER_EQP`: return `false` to indicate
     ///   output-for-trigger are not disabled or `true` if it is
     #[inline]
     pub fn db_config(&self, config: DbConfig) -> Result<bool> {
@@ -93,17 +95,17 @@ impl Connection {
 
     /// Make configuration changes to a database connection
     ///
-    /// - SQLITE_DBCONFIG_ENABLE_FKEY: `false` to disable FK enforcement, `true`
+    /// - `SQLITE_DBCONFIG_ENABLE_FKEY`: `false` to disable FK enforcement, `true`
     ///   to enable FK enforcement
-    /// - SQLITE_DBCONFIG_ENABLE_TRIGGER: `false` to disable triggers, `true` to
+    /// - `SQLITE_DBCONFIG_ENABLE_TRIGGER`: `false` to disable triggers, `true` to
     ///   enable triggers
-    /// - SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER: `false` to disable
-    ///   fts3_tokenizer(), `true` to enable fts3_tokenizer()
-    /// - SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE: `false` (the default) to enable
+    /// - `SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER`: `false` to disable
+    ///   `fts3_tokenizer()`, `true` to enable `fts3_tokenizer()`
+    /// - `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE`: `false` (the default) to enable
     ///   checkpoints-on-close, `true` to disable them
-    /// - SQLITE_DBCONFIG_ENABLE_QPSG: `false` to disable the QPSG, `true` to
+    /// - `SQLITE_DBCONFIG_ENABLE_QPSG`: `false` to disable the QPSG, `true` to
     ///   enable QPSG
-    /// - SQLITE_DBCONFIG_TRIGGER_EQP: `false` to disable output for trigger
+    /// - `SQLITE_DBCONFIG_TRIGGER_EQP`: `false` to disable output for trigger
     ///   programs, `true` to enable it
     #[inline]
     pub fn set_db_config(&self, config: DbConfig, new_val: bool) -> Result<bool> {

@@ -1,13 +1,12 @@
 # Rusqlite
 
-[![Travis Build Status](https://api.travis-ci.org/rusqlite/rusqlite.svg?branch=master)](https://travis-ci.org/rusqlite/rusqlite)
-[![AppVeyor Build Status](https://ci.appveyor.com/api/projects/status/github/rusqlite/rusqlite?branch=master&svg=true)](https://ci.appveyor.com/project/rusqlite/rusqlite)
-[![Build Status](https://github.com/rusqlite/rusqlite/workflows/CI/badge.svg)](https://github.com/rusqlite/rusqlite/actions)
-[![dependency status](https://deps.rs/repo/github/rusqlite/rusqlite/status.svg)](https://deps.rs/repo/github/rusqlite/rusqlite)
 [![Latest Version](https://img.shields.io/crates/v/rusqlite.svg)](https://crates.io/crates/rusqlite)
-[![Gitter](https://badges.gitter.im/rusqlite.svg)](https://gitter.im/rusqlite/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
-[![Docs](https://docs.rs/rusqlite/badge.svg)](https://docs.rs/rusqlite)
-[![codecov](https://codecov.io/gh/rusqlite/rusqlite/branch/master/graph/badge.svg)](https://codecov.io/gh/rusqlite/rusqlite)
+[![Documentation](https://docs.rs/rusqlite/badge.svg)](https://docs.rs/rusqlite)
+[![Build Status (GitHub)](https://github.com/rusqlite/rusqlite/workflows/CI/badge.svg)](https://github.com/rusqlite/rusqlite/actions)
+[![Build Status (AppVeyor)](https://ci.appveyor.com/api/projects/status/github/rusqlite/rusqlite?branch=master&svg=true)](https://ci.appveyor.com/project/rusqlite/rusqlite)
+[![Code Coverage](https://codecov.io/gh/rusqlite/rusqlite/branch/master/graph/badge.svg)](https://codecov.io/gh/rusqlite/rusqlite)
+[![Dependency Status](https://deps.rs/repo/github/rusqlite/rusqlite/status.svg)](https://deps.rs/repo/github/rusqlite/rusqlite)
+[![Discord Chat](https://img.shields.io/discord/927966344266256434.svg?logo=discord)](https://discord.gg/nFYfGPB8g4)
 
 Rusqlite is an ergonomic wrapper for using SQLite from Rust. It attempts to expose
 an interface similar to [rust-postgres](https://github.com/sfackler/rust-postgres).
@@ -128,7 +127,7 @@ You can adjust this behavior in a number of ways:
 * If you use the `bundled`, `bundled-sqlcipher`, or `bundled-sqlcipher-vendored-openssl` features, `libsqlite3-sys` will use the
   [cc](https://crates.io/crates/cc) crate to compile SQLite or SQLCipher from source and
   link against that. This source is embedded in the `libsqlite3-sys` crate and
-  is currently SQLite 3.36.0 (as of `rusqlite` 0.26.0 / `libsqlite3-sys`
+  is currently SQLite 3.37.0 (as of `rusqlite` 0.26.0 / `libsqlite3-sys`
   0.23.0).  This is probably the simplest solution to any build problems. You can enable this by adding the following in your `Cargo.toml` file:
   ```toml
   [dependencies.rusqlite]
@@ -212,7 +211,7 @@ here: https://github.com/rusqlite/rusqlite/graphs/contributors
 
 ## Community
 
-Currently there's a gitter channel set up for rusqlite [here](https://gitter.im/rusqlite/community).
+Feel free to join the [Rusqlite Discord Server](https://discord.gg/nFYfGPB8g4) to discuss or get help with `rusqlite` or `libsqlite3-sys`.
 
 ## License
 
