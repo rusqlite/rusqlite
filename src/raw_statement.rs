@@ -224,6 +224,9 @@ impl RawStatement {
     pub fn tail(&self) -> usize {
         self.tail
     }
+
+    // TODO sqlite3_normalized_sql (https://sqlite.org/c3ref/expanded_sql.html) // 3.27.0 + SQLITE_ENABLE_NORMALIZE
+    // TODO sqlite3_stmt_isexplain (https://sqlite.org/c3ref/stmt_isexplain.html) // 3.28.0
 }
 
 impl Drop for RawStatement {

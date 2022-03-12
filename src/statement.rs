@@ -727,6 +727,7 @@ impl Statement<'_> {
 
             #[cfg(feature = "blob")]
             ToSqlOutput::ZeroBlob(len) => {
+                // TODO sqlite3_bind_zeroblob64 // 3.8.11
                 return self
                     .conn
                     .decode_result(unsafe { ffi::sqlite3_bind_zeroblob(ptr, col as c_int, len) });
@@ -750,6 +751,7 @@ impl Statement<'_> {
             ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, col as c_int, r) },
             ValueRef::Text(s) => unsafe {
                 let (c_str, len, destructor) = str_for_sqlite(s)?;
+                // TODO sqlite3_bind_text64 // 3.8.7
                 ffi::sqlite3_bind_text(ptr, col as c_int, c_str, len, destructor)
             },
             ValueRef::Blob(b) => unsafe {
@@ -757,6 +759,7 @@ impl Statement<'_> {
                 if length == 0 {
                     ffi::sqlite3_bind_zeroblob(ptr, col as c_int, 0)
                 } else {
+                    // TODO sqlite3_bind_blob64 // 3.8.7
                     ffi::sqlite3_bind_blob(
                         ptr,
                         col as c_int,
@@ -985,15 +988,15 @@ pub enum StatementStatus {
     AutoIndex = 3,
     /// Equivalent to SQLITE_STMTSTATUS_VM_STEP
     VmStep = 4,
-    /// Equivalent to SQLITE_STMTSTATUS_REPREPARE
+    /// Equivalent to SQLITE_STMTSTATUS_REPREPARE (3.20.0)
     RePrepare = 5,
-    /// Equivalent to SQLITE_STMTSTATUS_RUN
+    /// Equivalent to SQLITE_STMTSTATUS_RUN (3.20.0)
     Run = 6,
     /// Equivalent to SQLITE_STMTSTATUS_FILTER_MISS
     FilterMiss = 7,
     /// Equivalent to SQLITE_STMTSTATUS_FILTER_HIT
     FilterHit = 8,
-    /// Equivalent to SQLITE_STMTSTATUS_MEMUSED
+    /// Equivalent to SQLITE_STMTSTATUS_MEMUSED (3.20.0)
     MemUsed = 99,
 }
 

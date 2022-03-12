@@ -257,4 +257,8 @@ impl<'a> ValueRef<'a> {
             _ => unreachable!("sqlite3_value_type returned invalid value"),
         }
     }
+
+    // TODO sqlite3_value_subtype (https://sqlite.org/c3ref/value_subtype.html) // 3.9.0
+    // TODO sqlite3_value_nochange // 3.22.0
+    // TODO sqlite3_value_frombind // 3.28.0
 }

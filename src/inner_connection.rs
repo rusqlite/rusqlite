@@ -222,6 +222,7 @@ impl InnerConnection {
         let mut c_stmt = ptr::null_mut();
         let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
         let mut c_tail = ptr::null();
+        // TODO sqlite3_prepare_v3 (https://sqlite.org/c3ref/c_prepare_normalize.html) // 3.20.0, #728
         #[cfg(not(feature = "unlock_notify"))]
         let r = unsafe {
             ffi::sqlite3_prepare_v2(
@@ -277,6 +278,7 @@ impl InnerConnection {
 
     #[inline]
     pub fn changes(&self) -> usize {
+        // TODO sqlite3_changes64 (3.37.0)
         unsafe { ffi::sqlite3_changes(self.db()) as usize }
     }
 
@@ -308,6 +310,9 @@ impl InnerConnection {
     #[cfg(not(feature = "hooks"))]
     #[inline]
     fn remove_hooks(&mut self) {}
+
+    // TODO sqlite3_db_readonly (https://sqlite.org/c3ref/db_readonly.html) // 3.7.11
+    // TODO sqlite3_txn_state (https://sqlite.org/c3ref/txn_state.html) // 3.37.0
 }
 
 impl Drop for InnerConnection {

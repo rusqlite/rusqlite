@@ -234,6 +234,8 @@ impl Context<'_> {
             phantom: PhantomData,
         })
     }
+
+    // TODO sqlite3_result_subtype (https://sqlite.org/c3ref/result_subtype.html) // 3.9.0
 }
 
 /// A reference to a connection handle with a lifetime bound to something.
@@ -319,7 +321,7 @@ bitflags::bitflags! {
         /// Specifies UTF-16 using native byte order as the text encoding this SQL function prefers for its parameters.
         const SQLITE_UTF16    = ffi::SQLITE_UTF16;
         /// Means that the function always gives the same output when the input parameters are the same.
-        const SQLITE_DETERMINISTIC = ffi::SQLITE_DETERMINISTIC;
+        const SQLITE_DETERMINISTIC = ffi::SQLITE_DETERMINISTIC; // 3.8.3
         /// Means that the function may only be invoked from top-level SQL.
         const SQLITE_DIRECTONLY    = 0x0000_0008_0000; // 3.30.0
         /// Indicates to SQLite that a function may call `sqlite3_value_subtype()` to inspect the sub-types of its arguments.

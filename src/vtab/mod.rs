@@ -169,7 +169,8 @@ pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, 
 pub struct VTabConnection(*mut ffi::sqlite3);
 
 impl VTabConnection {
-    // TODO sqlite3_vtab_config (http://sqlite.org/c3ref/vtab_config.html)
+    // TODO sqlite3_vtab_config (http://sqlite.org/c3ref/vtab_config.html) // 3.7.7
+    // TODO https://sqlite.org/c3ref/c_vtab_constraint_support.html
 
     // TODO sqlite3_vtab_on_conflict (http://sqlite.org/c3ref/vtab_on_conflict.html)
 
@@ -402,10 +403,13 @@ impl IndexInfo {
         }
     }
 
-    // TODO idxFlags
-    // TODO colUsed
+    // TODO idxFlags (https://sqlite.org/vtab.html, https://sqlite.org/c3ref/c_index_scan_unique.html) // 3.9.0, #639, #1001
+    // TODO colUsed (https://sqlite.org/vtab.html#colUsed) // 3.10.0, #598, #639, #1001
 
-    // TODO sqlite3_vtab_collation (http://sqlite.org/c3ref/vtab_collation.html)
+    // TODO sqlite3_vtab_collation (http://sqlite.org/c3ref/vtab_collation.html) // 3.22.0
+    // TODO sqlite3_vtab_distinct (https://sqlite.org/c3ref/vtab_distinct.html) // 3.38.0
+    // TODO sqlite3_vtab_rhs_value (https://sqlite.org/c3ref/vtab_rhs_value.html) // 3.38.0
+    // TODO sqlite3_vtab_in (https://sqlite.org/c3ref/vtab_in.html) // 3.38.0
 }
 
 /// Iterate on index constraint and its associated usage.
@@ -583,7 +587,7 @@ impl Context {
         Ok(())
     }
 
-    // TODO sqlite3_vtab_nochange (http://sqlite.org/c3ref/vtab_nochange.html)
+    // TODO sqlite3_vtab_nochange (http://sqlite.org/c3ref/vtab_nochange.html) // 3.22.0
 }
 
 /// Wrapper to [`VTabCursor::filter`] arguments, the values
