@@ -278,8 +278,14 @@ impl InnerConnection {
 
     #[inline]
     pub fn changes(&self) -> usize {
-        // TODO sqlite3_changes64 (3.37.0)
-        unsafe { ffi::sqlite3_changes(self.db()) as usize }
+        #[cfg(not(feature = "modern_sqlite"))]
+        unsafe {
+            ffi::sqlite3_changes(self.db()) as usize
+        }
+        #[cfg(feature = "modern_sqlite")] // 3.37.0
+        unsafe {
+            ffi::sqlite3_changes64(self.db()) as usize
+        }
     }
 
     #[inline]

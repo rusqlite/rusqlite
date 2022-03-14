@@ -162,6 +162,18 @@ impl Context<'_> {
         unsafe { ValueRef::from_value(arg) }
     }
 
+    /// Returns the subtype of `idx`th argument.
+    ///
+    /// # Failure
+    ///
+    /// Will panic if `idx` is greater than or equal to
+    /// [`self.len()`](Context::len).
+    #[cfg(feature = "modern_sqlite")] // 3.9.0
+    pub fn get_subtype(&self, idx: usize) -> std::os::raw::c_uint {
+        let arg = self.args[idx];
+        unsafe { ffi::sqlite3_value_subtype(arg) }
+    }
+
     /// Fetch or insert the auxiliary data associated with a particular
     /// parameter. This is intended to be an easier-to-use way of fetching it
     /// compared to calling [`get_aux`](Context::get_aux) and
@@ -235,7 +247,11 @@ impl Context<'_> {
         })
     }
 
-    // TODO sqlite3_result_subtype (https://sqlite.org/c3ref/result_subtype.html) // 3.9.0
+    /// Set the Subtype of an SQL function
+    #[cfg(feature = "modern_sqlite")] // 3.9.0
+    pub fn set_result_subtype(&self, sub_type: std::os::raw::c_uint) {
+        unsafe { ffi::sqlite3_result_subtype(self.ctx, sub_type) };
+    }
 }
 
 /// A reference to a connection handle with a lifetime bound to something.

@@ -165,12 +165,28 @@ pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, 
     }
 }
 
+/// Virtual Table Configuration Options
+#[repr(i32)]
+#[non_exhaustive]
+#[cfg(feature = "modern_sqlite")] // 3.7.7
+pub enum VTabConfig {
+    /// Equivalent to SQLITE_VTAB_CONSTRAINT_SUPPORT
+    ConstraintSupport = 1,
+    /// Equivalent to SQLITE_VTAB_INNOCUOUS
+    Innocuous = 2,
+    /// Equivalent to SQLITE_VTAB_DIRECTONLY
+    DirectOnly = 3,
+}
+
 /// `feature = "vtab"`
 pub struct VTabConnection(*mut ffi::sqlite3);
 
 impl VTabConnection {
-    // TODO sqlite3_vtab_config (http://sqlite.org/c3ref/vtab_config.html) // 3.7.7
-    // TODO https://sqlite.org/c3ref/c_vtab_constraint_support.html
+    /// Configure various facets of the virtual table interface
+    #[cfg(feature = "modern_sqlite")] // 3.7.7
+    pub fn config(&mut self, config: VTabConfig) -> Result<()> {
+        crate::error::check(unsafe { ffi::sqlite3_vtab_config(self.0, config as c_int) })
+    }
 
     // TODO sqlite3_vtab_on_conflict (http://sqlite.org/c3ref/vtab_on_conflict.html)
 
@@ -587,7 +603,7 @@ impl Context {
         Ok(())
     }
 
-    // TODO sqlite3_vtab_nochange (http://sqlite.org/c3ref/vtab_nochange.html) // 3.22.0
+    // TODO sqlite3_vtab_nochange (http://sqlite.org/c3ref/vtab_nochange.html) // 3.22.0 & xColumn
 }
 
 /// Wrapper to [`VTabCursor::filter`] arguments, the values
