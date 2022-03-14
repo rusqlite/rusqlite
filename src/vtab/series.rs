@@ -10,8 +10,8 @@ use std::os::raw::c_int;
 use crate::ffi;
 use crate::types::Type;
 use crate::vtab::{
-    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConnection, VTabCursor,
-    Values,
+    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConfig, VTabConnection,
+    VTabCursor, Values,
 };
 use crate::{Connection, Error, Result};
 
@@ -57,13 +57,14 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
     type Cursor = SeriesTabCursor<'vtab>;
 
     fn connect(
-        _: &mut VTabConnection,
+        db: &mut VTabConnection,
         _aux: Option<&()>,
         _args: &[&[u8]],
     ) -> Result<(String, SeriesTab)> {
         let vtab = SeriesTab {
             base: ffi::sqlite3_vtab::default(),
         };
+        db.config(VTabConfig::Innocuous)?;
         Ok((
             "CREATE TABLE x(value,start hidden,stop hidden,step hidden)".to_owned(),
             vtab,
