@@ -33,7 +33,7 @@ rusqlite = { version = "0.27.0", features = ["bundled"] }
 Simple example usage:
 
 ```rust
-use rusqlite::{Connection, Result};
+use rusqlite::{params, Connection, Result};
 
 #[derive(Debug)]
 struct Person {
@@ -51,7 +51,7 @@ fn main() -> Result<()> {
             name  TEXT NOT NULL,
             data  BLOB
         )",
-        (), // empty list of parameters.
+        [], // empty list of parameters.
     )?;
     let me = Person {
         id: 0,
@@ -60,7 +60,7 @@ fn main() -> Result<()> {
     };
     conn.execute(
         "INSERT INTO person (name, data) VALUES (?1, ?2)",
-        (&me.name, &me.data),
+        params!(&me.name, &me.data),
     )?;
 
     let mut stmt = conn.prepare("SELECT id, name, data FROM person")?;
