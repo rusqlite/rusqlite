@@ -165,7 +165,7 @@ pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, 
     }
 }
 
-/// Virtual Table Configuration Options
+/// Virtual table configuration options
 #[repr(i32)]
 #[non_exhaustive]
 #[cfg(feature = "modern_sqlite")] // 3.7.7
@@ -327,10 +327,24 @@ impl From<u8> for IndexConstraintOp {
     }
 }
 
+#[cfg(feature = "modern_sqlite")] // 3.9.0
+bitflags::bitflags! {
+    /// Virtual table scan flags
+    /// See [Function Flags](https://sqlite.org/c3ref/c_index_scan_unique.html) for details.
+    #[repr(C)]
+    pub struct IndexFlags: ::std::os::raw::c_int {
+        /// Default
+        const NONE     = 0;
+        /// Scan visits at most 1 row.
+        const SQLITE_INDEX_SCAN_UNIQUE  = ffi::SQLITE_INDEX_SCAN_UNIQUE;
+    }
+}
+
 /// Pass information into and receive the reply from the
 /// [`VTab::best_index`] method.
 ///
 /// (See [SQLite doc](http://sqlite.org/c3ref/index_info.html))
+#[derive(Debug)]
 pub struct IndexInfo(*mut ffi::sqlite3_index_info);
 
 impl IndexInfo {
@@ -419,13 +433,45 @@ impl IndexInfo {
         }
     }
 
-    // TODO idxFlags (https://sqlite.org/vtab.html, https://sqlite.org/c3ref/c_index_scan_unique.html) // 3.9.0, #639, #1001
-    // TODO colUsed (https://sqlite.org/vtab.html#colUsed) // 3.10.0, #598, #639, #1001
+    /// Mask of SQLITE_INDEX_SCAN_* flags.
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.9.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    #[inline]
+    pub fn set_idx_flags(&mut self, flags: IndexFlags) {
+        unsafe { (*self.0).idxFlags = flags.bits() };
+    }
+
+    /// Mask of columns used by statement
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.10.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    #[inline]
+    pub fn col_used(&self) -> u64 {
+        unsafe { (*self.0).colUsed }
+    }
 
     // TODO sqlite3_vtab_collation (http://sqlite.org/c3ref/vtab_collation.html) // 3.22.0
-    // TODO sqlite3_vtab_distinct (https://sqlite.org/c3ref/vtab_distinct.html) // 3.38.0
-    // TODO sqlite3_vtab_rhs_value (https://sqlite.org/c3ref/vtab_rhs_value.html) // 3.38.0
-    // TODO sqlite3_vtab_in (https://sqlite.org/c3ref/vtab_in.html) // 3.38.0
+
+    /// Determine if a virtual table query is DISTINCT
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn distinct(&self) -> c_int {
+        unsafe { ffi::sqlite3_vtab_distinct(self.0) }
+    }
+
+    /*/// Constraint values
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn set_rhs_value(&mut self, constraint_idx: c_int, value: ValueRef) -> Result<()> {
+        // TODO ValueRef to sqlite3_value
+        crate::error::check(unsafe { ffi::sqlite3_vtab_rhs_value(self.O, constraint_idx, value) })
+    }*/
+
+    /// Identify and handle IN constraints
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn set_in_constraint(&mut self, constraint_idx: c_int, b_handle: c_int) -> bool {
+        unsafe { ffi::sqlite3_vtab_in(self.0, constraint_idx, b_handle) != 0 }
+    } // TODO sqlite3_vtab_in_first / sqlite3_vtab_in_next https://sqlite.org/c3ref/vtab_in_first.html
 }
 
 /// Iterate on index constraint and its associated usage.
