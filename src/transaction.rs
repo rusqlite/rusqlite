@@ -517,7 +517,10 @@ impl Connection {
     /// Determine the transaction state of a database
     #[cfg(feature = "modern_sqlite")] // 3.37.0
     #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-    pub fn txn_state(&self, db_name: Option<crate::DatabaseName<'_>>) -> Result<TransactionState> {
+    pub fn transaction_state(
+        &self,
+        db_name: Option<crate::DatabaseName<'_>>,
+    ) -> Result<TransactionState> {
         self.db.borrow().txn_state(db_name)
     }
 }
@@ -740,15 +743,15 @@ mod test {
         let db = Connection::open_in_memory()?;
         assert_eq!(
             TransactionState::None,
-            db.txn_state(Some(DatabaseName::Main))?
+            db.transaction_state(Some(DatabaseName::Main))?
         );
-        assert_eq!(TransactionState::None, db.txn_state(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state(None)?);
         db.execute_batch("BEGIN")?;
-        assert_eq!(TransactionState::None, db.txn_state(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state(None)?);
         let _: i32 = db.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        assert_eq!(TransactionState::Read, db.txn_state(None)?);
+        assert_eq!(TransactionState::Read, db.transaction_state(None)?);
         db.pragma_update(None, "user_version", 1)?;
-        assert_eq!(TransactionState::Write, db.txn_state(None)?);
+        assert_eq!(TransactionState::Write, db.transaction_state(None)?);
         db.execute_batch("ROLLBACK")?;
         Ok(())
     }

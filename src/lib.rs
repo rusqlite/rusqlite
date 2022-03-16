@@ -931,7 +931,7 @@ impl Connection {
     /// Determine if a database is read-only
     #[cfg(feature = "modern_sqlite")] // 3.7.11
     #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-    pub fn db_readonly(&self, db_name: DatabaseName<'_>) -> Result<bool> {
+    pub fn is_readonly(&self, db_name: DatabaseName<'_>) -> Result<bool> {
         self.db.borrow().db_readonly(db_name)
     }
 }
@@ -2024,7 +2024,7 @@ mod test {
     #[cfg(feature = "modern_sqlite")]
     pub fn db_readonly() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        assert_eq!(false, db.db_readonly(super::MAIN_DB)?);
+        assert_eq!(false, db.is_readonly(super::MAIN_DB)?);
         Ok(())
     }
 }
