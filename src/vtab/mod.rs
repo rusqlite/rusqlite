@@ -474,20 +474,20 @@ impl IndexInfo {
         Ok(unsafe { CStr::from_ptr(collation) }.to_str()?)
     }
 
-    /// Determine if a virtual table query is DISTINCT
+    /*/// Determine if a virtual table query is DISTINCT
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn distinct(&self) -> c_int {
         unsafe { ffi::sqlite3_vtab_distinct(self.0) }
     }
 
-    /*/// Constraint values
+    /// Constraint values
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn set_rhs_value(&mut self, constraint_idx: c_int, value: ValueRef) -> Result<()> {
         // TODO ValueRef to sqlite3_value
         crate::error::check(unsafe { ffi::sqlite3_vtab_rhs_value(self.O, constraint_idx, value) })
-    }*/
+    }
 
     /// Identify and handle IN constraints
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
@@ -495,6 +495,7 @@ impl IndexInfo {
     pub fn set_in_constraint(&mut self, constraint_idx: c_int, b_handle: c_int) -> bool {
         unsafe { ffi::sqlite3_vtab_in(self.0, constraint_idx, b_handle) != 0 }
     } // TODO sqlite3_vtab_in_first / sqlite3_vtab_in_next https://sqlite.org/c3ref/vtab_in_first.html
+    */
 }
 
 /// Iterate on index constraint and its associated usage.
