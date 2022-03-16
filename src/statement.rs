@@ -841,6 +841,16 @@ impl Statement<'_> {
         self.stmt.get_status(status, true)
     }
 
+    /// Returns 1 if the prepared statement is an EXPLAIN statement,
+    /// or 2 if the statement is an EXPLAIN QUERY PLAN,
+    /// or 0 if it is an ordinary statement or a NULL pointer.
+    #[inline]
+    #[cfg(feature = "modern_sqlite")] // 3.28.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn is_explain(&self) -> i32 {
+        self.stmt.is_explain()
+    }
+
     #[cfg(feature = "extra_check")]
     #[inline]
     pub(crate) fn check_no_tail(&self) -> Result<()> {
@@ -1509,6 +1519,15 @@ mod test {
         let expected = "a\x00b";
         let actual: String = db.query_row("SELECT ?", [expected], |row| row.get(0))?;
         assert_eq!(expected, actual);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "modern_sqlite")]
+    fn is_explain() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let stmt = db.prepare("SELECT 1;")?;
+        assert_eq!(0, stmt.is_explain());
         Ok(())
     }
 }

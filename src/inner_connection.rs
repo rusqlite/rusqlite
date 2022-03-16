@@ -317,8 +317,49 @@ impl InnerConnection {
     #[inline]
     fn remove_hooks(&mut self) {}
 
-    // TODO sqlite3_db_readonly (https://sqlite.org/c3ref/db_readonly.html) // 3.7.11
-    // TODO sqlite3_txn_state (https://sqlite.org/c3ref/txn_state.html) // 3.37.0
+    #[cfg(feature = "modern_sqlite")] // 3.7.11
+    pub fn db_readonly(&self, db_name: super::DatabaseName<'_>) -> Result<bool> {
+        let name = db_name.as_cstring()?;
+        let r = unsafe { ffi::sqlite3_db_readonly(self.db, name.as_ptr()) };
+        match r {
+            0 => Ok(false),
+            1 => Ok(true),
+            -1 => Err(Error::SqliteFailure(
+                ffi::Error::new(ffi::SQLITE_MISUSE),
+                Some(format!("{:?} is not the name of a database", db_name)),
+            )),
+            _ => Err(error_from_sqlite_code(
+                r,
+                Some("Unexpected result".to_owned()),
+            )),
+        }
+    }
+
+    #[cfg(feature = "modern_sqlite")] // 3.37.0
+    pub fn txn_state(
+        &self,
+        db_name: Option<super::DatabaseName<'_>>,
+    ) -> Result<super::transaction::TransactionState> {
+        let r = if let Some(ref name) = db_name {
+            let name = name.as_cstring()?;
+            unsafe { ffi::sqlite3_txn_state(self.db, name.as_ptr()) }
+        } else {
+            unsafe { ffi::sqlite3_txn_state(self.db, ptr::null()) }
+        };
+        match r {
+            0 => Ok(super::transaction::TransactionState::None),
+            1 => Ok(super::transaction::TransactionState::Read),
+            2 => Ok(super::transaction::TransactionState::Write),
+            -1 => Err(Error::SqliteFailure(
+                ffi::Error::new(ffi::SQLITE_MISUSE),
+                Some(format!("{:?} is not the name of a valid schema", db_name)),
+            )),
+            _ => Err(error_from_sqlite_code(
+                r,
+                Some("Unexpected result".to_owned()),
+            )),
+        }
+    }
 }
 
 impl Drop for InnerConnection {

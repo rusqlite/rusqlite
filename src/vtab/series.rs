@@ -104,6 +104,8 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
             let mut constraint_usage = info.constraint_usage(*j);
             constraint_usage.set_argv_index(n_arg);
             constraint_usage.set_omit(true);
+            #[cfg(all(test, feature = "modern_sqlite"))]
+            debug_assert_eq!(Ok("BINARY"), info.collation(*j));
         }
         if !(unusable_mask & !idx_num).is_empty() {
             return Err(Error::SqliteFailure(

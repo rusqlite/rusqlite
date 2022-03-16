@@ -169,6 +169,7 @@ pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, 
 #[repr(i32)]
 #[non_exhaustive]
 #[cfg(feature = "modern_sqlite")] // 3.7.7
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VTabConfig {
     /// Equivalent to SQLITE_VTAB_CONSTRAINT_SUPPORT
     ConstraintSupport = 1,
@@ -188,7 +189,7 @@ impl VTabConnection {
         crate::error::check(unsafe { ffi::sqlite3_vtab_config(self.0, config as c_int) })
     }
 
-    // TODO sqlite3_vtab_on_conflict (http://sqlite.org/c3ref/vtab_on_conflict.html)
+    // TODO sqlite3_vtab_on_conflict (http://sqlite.org/c3ref/vtab_on_conflict.html) & xUpdate
 
     /// Get access to the underlying SQLite database connection handle.
     ///
@@ -407,6 +408,14 @@ impl IndexInfo {
         }
     }
 
+    /// String used to identify the index
+    pub fn set_idx_str(&mut self, idx_str: &str) {
+        unsafe {
+            (*self.0).idxStr = alloc(idx_str);
+            (*self.0).needToFreeIdxStr = 1;
+        }
+    }
+
     /// True if output is already ordered
     #[inline]
     pub fn set_order_by_consumed(&mut self, order_by_consumed: bool) {
@@ -449,7 +458,21 @@ impl IndexInfo {
         unsafe { (*self.0).colUsed }
     }
 
-    // TODO sqlite3_vtab_collation (http://sqlite.org/c3ref/vtab_collation.html) // 3.22.0
+    /// Determine the collation for a virtual table constraint
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn collation(&self, constraint_idx: usize) -> Result<&str> {
+        use std::ffi::CStr;
+        let idx = constraint_idx as c_int;
+        let collation = unsafe { ffi::sqlite3_vtab_collation(self.0, idx) };
+        if collation.is_null() {
+            return Err(Error::SqliteFailure(
+                ffi::Error::new(ffi::SQLITE_MISUSE),
+                Some(format!("{} is out of range", constraint_idx)),
+            ));
+        }
+        Ok(unsafe { CStr::from_ptr(collation) }.to_str()?)
+    }
 
     /// Determine if a virtual table query is DISTINCT
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
@@ -717,6 +740,7 @@ impl Values<'_> {
             iter: self.args.iter(),
         }
     }
+    // TODO sqlite3_vtab_in_first / sqlite3_vtab_in_next https://sqlite.org/c3ref/vtab_in_first.html & 3.38.0
 }
 
 impl<'a> IntoIterator for &'a Values<'a> {

@@ -927,6 +927,13 @@ impl Connection {
     pub fn cache_flush(&self) -> Result<()> {
         self.db.borrow_mut().cache_flush()
     }
+
+    /// Determine if a database is read-only
+    #[cfg(feature = "modern_sqlite")] // 3.7.11
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn db_readonly(&self, db_name: DatabaseName<'_>) -> Result<bool> {
+        self.db.borrow().db_readonly(db_name)
+    }
 }
 
 impl fmt::Debug for Connection {
@@ -2011,5 +2018,13 @@ mod test {
     fn test_cache_flush() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.cache_flush()
+    }
+
+    #[test]
+    #[cfg(feature = "modern_sqlite")]
+    pub fn db_readonly() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        assert_eq!(false, db.db_readonly(super::MAIN_DB)?);
+        Ok(())
     }
 }
