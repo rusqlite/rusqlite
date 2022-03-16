@@ -185,6 +185,7 @@ pub struct VTabConnection(*mut ffi::sqlite3);
 impl VTabConnection {
     /// Configure various facets of the virtual table interface
     #[cfg(feature = "modern_sqlite")] // 3.7.7
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn config(&mut self, config: VTabConfig) -> Result<()> {
         crate::error::check(unsafe { ffi::sqlite3_vtab_config(self.0, config as c_int) })
     }
