@@ -2024,7 +2024,7 @@ mod test {
     #[cfg(feature = "modern_sqlite")]
     pub fn db_readonly() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        assert_eq!(false, db.is_readonly(super::MAIN_DB)?);
+        assert!(!db.is_readonly(super::MAIN_DB)?);
         Ok(())
     }
 }
