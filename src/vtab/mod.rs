@@ -171,11 +171,11 @@ pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, 
 #[cfg(feature = "modern_sqlite")] // 3.7.7
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VTabConfig {
-    /// Equivalent to SQLITE_VTAB_CONSTRAINT_SUPPORT
+    /// Equivalent to `SQLITE_VTAB_CONSTRAINT_SUPPORT`
     ConstraintSupport = 1,
-    /// Equivalent to SQLITE_VTAB_INNOCUOUS
+    /// Equivalent to `SQLITE_VTAB_INNOCUOUS`
     Innocuous = 2,
-    /// Equivalent to SQLITE_VTAB_DIRECTONLY
+    /// Equivalent to `SQLITE_VTAB_DIRECTONLY`
     DirectOnly = 3,
 }
 
@@ -280,51 +280,153 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
     }
 }
 
-/// Index constraint operator.
-/// See [Virtual Table Constraint Operator Codes](https://sqlite.org/c3ref/c_index_constraint_eq.html) for details.
-#[derive(Debug, PartialEq)]
-#[allow(non_snake_case, non_camel_case_types, missing_docs)]
-#[allow(clippy::upper_case_acronyms)]
+/// Index constraint operator. See [Virtual Table Constraint Operator
+/// Codes](https://sqlite.org/c3ref/c_index_constraint_eq.html) for details.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum IndexConstraintOp {
-    SQLITE_INDEX_CONSTRAINT_EQ,
-    SQLITE_INDEX_CONSTRAINT_GT,
-    SQLITE_INDEX_CONSTRAINT_LE,
-    SQLITE_INDEX_CONSTRAINT_LT,
-    SQLITE_INDEX_CONSTRAINT_GE,
-    SQLITE_INDEX_CONSTRAINT_MATCH,
-    SQLITE_INDEX_CONSTRAINT_LIKE,         // 3.10.0
-    SQLITE_INDEX_CONSTRAINT_GLOB,         // 3.10.0
-    SQLITE_INDEX_CONSTRAINT_REGEXP,       // 3.10.0
-    SQLITE_INDEX_CONSTRAINT_NE,           // 3.21.0
-    SQLITE_INDEX_CONSTRAINT_ISNOT,        // 3.21.0
-    SQLITE_INDEX_CONSTRAINT_ISNOTNULL,    // 3.21.0
-    SQLITE_INDEX_CONSTRAINT_ISNULL,       // 3.21.0
-    SQLITE_INDEX_CONSTRAINT_IS,           // 3.21.0
-    SQLITE_INDEX_CONSTRAINT_LIMIT,        // 3.38.0
-    SQLITE_INDEX_CONSTRAINT_OFFSET,       // 3.38.0
-    SQLITE_INDEX_CONSTRAINT_FUNCTION(u8), // 3.25.0
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_EQ` in the C API.
+    Eq,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_GT` in the C API.
+    Gt,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_LE` in the C API.
+    Le,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_LT` in the C API.
+    Lt,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_GE` in the C API.
+    Ge,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_MATCH` in the C API.
+    Match,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_LIKE` in the C API.
+    ///
+    /// Requires SQLite version 3.10.0 or later.
+    Like,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_GLOB` in the C API.
+    ///
+    /// Requires SQLite version 3.10.0 or later.
+    Glob,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_REGEXP` in the C API.
+    ///
+    /// Requires SQLite version 3.10.0 or later.
+    Regexp,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_NE` in the C API.
+    ///
+    /// Requires SQLite version 3.21.0 or later.
+    Ne,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_ISNOT` in the C API.
+    ///
+    /// Requires SQLite version 3.21.0 or later.
+    IsNot,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_ISNOTNULL` in the C API.
+    ///
+    /// Requires SQLite version 3.21.0 or later.
+    IsNotNull,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_ISNULL` in the C API.
+    ///
+    /// Requires SQLite version 3.21.0 or later.
+    IsNull,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_IS` in the C API.
+    ///
+    /// Requires SQLite version 3.21.0 or later.
+    Is,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_LIMIT` in the C API.
+    ///
+    /// Requires SQLite version 3.38.0 or later.
+    Limit,
+    /// Equivalent to `SQLITE_INDEX_CONSTRAINT_OFFSET` in the C API.
+    ///
+    /// Requires SQLite version 3.38.0 or later.
+    Offset,
+    /// A function which has been overloaded by
+    /// [`xFindFunction`](https://sqlite.org/vtab.html#xfindfunction).
+    ///
+    /// Should be between 150 and 255, but this is not enforced, so it also may
+    /// be possible to use this as a catch-all/escape-hatch for variants which
+    /// are not yet supported.
+    ///
+    /// Note: `xFindFunction` is not currently exposed by `rusqlite`.
+    #[doc(alias = "SQLITE_INDEX_CONSTRAINT_FUNCTION")]
+    Function(
+        /// Indicates which function. Should be greater or equal to
+        /// [`IndexConstraintOp::FUNCTION_MIN`].
+        u8,
+    ),
+}
+
+impl IndexConstraintOp {
+    /// An alias for [`IndexConstraintOp::Eq`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_EQ: Self = Self::Eq;
+    /// An alias for [`IndexConstraintOp::Gt`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_GT: Self = Self::Gt;
+    /// An alias for [`IndexConstraintOp::Le`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_LE: Self = Self::Le;
+    /// An alias for [`IndexConstraintOp::Lt`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_LT: Self = Self::Lt;
+    /// An alias for [`IndexConstraintOp::Ge`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_GE: Self = Self::Ge;
+    /// An alias for [`IndexConstraintOp::Match`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_MATCH: Self = Self::Match;
+    /// An alias for [`IndexConstraintOp::Like`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_LIKE: Self = Self::Like;
+    /// An alias for [`IndexConstraintOp::Glob`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_GLOB: Self = Self::Glob;
+    /// An alias for [`IndexConstraintOp::Regexp`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_REGEXP: Self = Self::Regexp;
+    /// An alias for [`IndexConstraintOp::Ne`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_NE: Self = Self::Ne;
+    /// An alias for [`IndexConstraintOp::IsNot`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_ISNOT: Self = Self::IsNot;
+    /// An alias for [`IndexConstraintOp::IsNotNull`], provided for
+    /// compatibility with the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_ISNOTNULL: Self = Self::IsNotNull;
+    /// An alias for [`IndexConstraintOp::IsNull`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_ISNULL: Self = Self::IsNull;
+    /// An alias for [`IndexConstraintOp::Is`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_IS: Self = Self::Is;
+    /// An alias for [`IndexConstraintOp::Limit`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_LIMIT: Self = Self::Limit;
+    /// An alias for [`IndexConstraintOp::Offset`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_INDEX_CONSTRAINT_OFFSET: Self = Self::Offset;
+
+    /// The lowest value that should be used with `IndexConstraintOp::Function`,
+    /// (but note that this is not enforced).
+    pub const FUNCTION_MIN: u8 = 150;
 }
 
 impl From<u8> for IndexConstraintOp {
     fn from(code: u8) -> IndexConstraintOp {
         match code {
-            2 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ,
-            4 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GT,
-            8 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LE,
-            16 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LT,
-            32 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GE,
-            64 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_MATCH,
-            65 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIKE,
-            66 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GLOB,
-            67 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_REGEXP,
-            68 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_NE,
-            69 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNOT,
-            70 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNOTNULL,
-            71 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNULL,
-            72 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_IS,
-            73 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIMIT,
-            74 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_OFFSET,
-            v => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_FUNCTION(v),
+            2 => IndexConstraintOp::Eq,
+            4 => IndexConstraintOp::Gt,
+            8 => IndexConstraintOp::Le,
+            16 => IndexConstraintOp::Lt,
+            32 => IndexConstraintOp::Ge,
+            64 => IndexConstraintOp::Match,
+            65 => IndexConstraintOp::Like,
+            66 => IndexConstraintOp::Glob,
+            67 => IndexConstraintOp::Regexp,
+            68 => IndexConstraintOp::Ne,
+            69 => IndexConstraintOp::IsNot,
+            70 => IndexConstraintOp::IsNotNull,
+            71 => IndexConstraintOp::IsNull,
+            72 => IndexConstraintOp::Is,
+            73 => IndexConstraintOp::Limit,
+            74 => IndexConstraintOp::Offset,
+            v => IndexConstraintOp::Function(v),
         }
     }
 }
@@ -1256,5 +1358,57 @@ mod test {
         assert_eq!(Some(false), super::parse_boolean("no"));
         assert_eq!(Some(false), super::parse_boolean("off"));
         assert_eq!(Some(false), super::parse_boolean("false"));
+    }
+    // SQLcipher bundled is behind SQLite. We can remove this when the bundled
+    // SQLcipher has caught up to 3.38.0.
+    #[test]
+    #[cfg(all(feature = "bundled", not(feature = "bundled-sqlcipher")))]
+    fn test_index_constraint_op_values() {
+        use super::IndexConstraintOp;
+        macro_rules! check_all {
+            ($(($RustName:ident, $SQLITE_NAME:ident)),+ $(,)?) => {{
+                // Hack to force a compile failure if we add a variant without
+                // updating this test.
+                const _: fn(IndexConstraintOp) = |r| match r {
+                    IndexConstraintOp::Function(_) => {},
+                    $(IndexConstraintOp::$RustName => {})+
+                };
+                $({
+                    assert_eq!(
+                        IndexConstraintOp::$RustName,
+                        IndexConstraintOp::$SQLITE_NAME,
+                    );
+                    assert_eq!(
+                        IndexConstraintOp::from(crate::ffi::$SQLITE_NAME as u8),
+                        IndexConstraintOp::$RustName,
+                    );
+                })+
+            }};
+        }
+        check_all![
+            (Eq, SQLITE_INDEX_CONSTRAINT_EQ),
+            (Gt, SQLITE_INDEX_CONSTRAINT_GT),
+            (Le, SQLITE_INDEX_CONSTRAINT_LE),
+            (Lt, SQLITE_INDEX_CONSTRAINT_LT),
+            (Ge, SQLITE_INDEX_CONSTRAINT_GE),
+            (Match, SQLITE_INDEX_CONSTRAINT_MATCH),
+            (Like, SQLITE_INDEX_CONSTRAINT_LIKE),
+            (Glob, SQLITE_INDEX_CONSTRAINT_GLOB),
+            (Regexp, SQLITE_INDEX_CONSTRAINT_REGEXP),
+            (Ne, SQLITE_INDEX_CONSTRAINT_NE),
+            (IsNot, SQLITE_INDEX_CONSTRAINT_ISNOT),
+            (IsNotNull, SQLITE_INDEX_CONSTRAINT_ISNOTNULL),
+            (IsNull, SQLITE_INDEX_CONSTRAINT_ISNULL),
+            (Is, SQLITE_INDEX_CONSTRAINT_IS),
+            (Limit, SQLITE_INDEX_CONSTRAINT_LIMIT),
+            (Offset, SQLITE_INDEX_CONSTRAINT_OFFSET),
+        ];
+        assert_eq!(
+            IndexConstraintOp::FUNCTION_MIN as i32,
+            crate::ffi::SQLITE_INDEX_CONSTRAINT_FUNCTION,
+        );
+        for i in IndexConstraintOp::FUNCTION_MIN..=255 {
+            assert_eq!(IndexConstraintOp::from(i), IndexConstraintOp::Function(i));
+        }
     }
 }

@@ -92,7 +92,7 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
             };
             if !constraint.is_usable() {
                 unusable_mask |= i_mask;
-            } else if constraint.operator() == IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ {
+            } else if constraint.operator() == IndexConstraintOp::Eq {
                 idx_num |= i_mask;
                 a_idx[i_col] = Some(i);
             }
