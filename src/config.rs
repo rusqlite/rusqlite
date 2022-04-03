@@ -6,65 +6,203 @@ use crate::error::check;
 use crate::ffi;
 use crate::{Connection, Result};
 
-/// Database Connection Configuration Options
-/// See [Database Connection Configuration Options](https://sqlite.org/c3ref/c_dbconfig_enable_fkey.html) for details.
+/// Per-Connection databse configuration options.
+///
+/// See [Database Connection Configuration Options][dbconfig] for details.
+///
+/// [dbconfig]: https://sqlite.org/c3ref/c_dbconfig_enable_fkey.html
 #[repr(i32)]
-#[allow(non_snake_case, non_camel_case_types)]
 #[non_exhaustive]
-#[allow(clippy::upper_case_acronyms)]
 pub enum DbConfig {
-    //SQLITE_DBCONFIG_MAINDBNAME = 1000, /* const char* */
-    //SQLITE_DBCONFIG_LOOKASIDE = 1001,  /* void* int int */
+    //SQLITE_DBCONFIG_MAINDBNAME = 1000,
+    //SQLITE_DBCONFIG_LOOKASIDE = 1001,
     /// Enable or disable the enforcement of foreign key constraints.
-    SQLITE_DBCONFIG_ENABLE_FKEY = 1002,
+    ///
+    /// Note that by default these are off in most versions of SQLite, although
+    /// if you are using `features = "bundled"`, they will be on by default
+    /// (because the bundled build is performed with the compiler flag
+    /// `-DSQLITE_DEFAULT_FOREIGN_KEYS=1`).
+    ///
+    /// It is frequently useful to temporarially disable this during migrations.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_ENABLE_FKEY` from the C API.
+    ForeignKeysEnabled = 1002,
+
     /// Enable or disable triggers.
-    SQLITE_DBCONFIG_ENABLE_TRIGGER = 1003,
+    ///
+    /// Requires SQLite 3.12.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_ENABLE_TRIGGER` from the C API.
+    TriggersEnabled = 1003,
+
     /// Enable or disable the fts3_tokenizer() function which is part of the
     /// FTS3 full-text search engine extension.
-    SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER = 1004, // 3.12.0
+    ///
+    /// Requires SQLite 3.12.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER` from the C API.
+    Fts3TokenizerEnabled = 1004,
+
+    // Would not be a safe API, so we omit it.
     //SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION = 1005,
     /// In WAL mode, enable or disable the checkpoint operation before closing
     /// the connection.
-    SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE = 1006, // 3.16.2
+    ///
+    /// Requires SQLite 3.16.2 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE` from the C API.
+    NoCheckpointOnClose = 1006,
+
     /// Activates or deactivates the query planner stability guarantee (QPSG).
-    SQLITE_DBCONFIG_ENABLE_QPSG = 1007, // 3.20.0
+    ///
+    /// Requires SQLite 3.20.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_ENABLE_QPSG` from the C API.
+    QueryPlannerStabilityEnabled = 1007,
+
     /// Includes or excludes output for any operations performed by trigger
-    /// programs from the output of EXPLAIN QUERY PLAN commands.
-    SQLITE_DBCONFIG_TRIGGER_EQP = 1008, // 3.22.0
+    /// programs from the output of `EXPLAIN QUERY PLAN` commands.
+    ///
+    /// Requires SQLite 3.22.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_TRIGGER_EQP` from the C API.
+    TriggersInExplainQueryPlan = 1008,
+
     /// Activates or deactivates the "reset" flag for a database connection.
     /// Run VACUUM with this flag set to reset the database.
-    SQLITE_DBCONFIG_RESET_DATABASE = 1009, // 3.24.0
+    ///
+    /// Requires SQLite 3.24.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_RESET_DATABASE` from the C API.
+    ResetDatabase = 1009,
+
     /// Activates or deactivates the "defensive" flag for a database connection.
-    SQLITE_DBCONFIG_DEFENSIVE = 1010, // 3.26.0
+    ///
+    /// Requires SQLite 3.26.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_DEFENSIVE` from the C API.
+    Defensive = 1010,
+
     /// Activates or deactivates the "writable_schema" flag.
-    #[cfg(feature = "modern_sqlite")]
-    SQLITE_DBCONFIG_WRITABLE_SCHEMA = 1011, // 3.28.0
-    /// Activates or deactivates the legacy behavior of the ALTER TABLE RENAME
+    ///
+    /// Requires SQLite 3.28.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_WRITABLE_SCHEMA` from the C API.
+    WritableSchema = 1011,
+
+    /// Activates or deactivates the legacy behavior of the `ALTER TABLE RENAME`
     /// command.
-    #[cfg(feature = "modern_sqlite")]
-    SQLITE_DBCONFIG_LEGACY_ALTER_TABLE = 1012, // 3.29
+    ///
+    /// Requires SQLite 3.29.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_LEGACY_ALTER_TABLE` from the C API.
+    LegacyAlterTable = 1012,
+
     /// Activates or deactivates the legacy double-quoted string literal
-    /// misfeature for DML statements only.
-    #[cfg(feature = "modern_sqlite")]
-    SQLITE_DBCONFIG_DQS_DML = 1013, // 3.29.0
+    /// "misfeature" for data manipulation language (DML) statements only; that
+    /// is, in statements which are not modifying the schema.
+    ///
+    /// Requires SQLite 3.29.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_DQS_DML` from the C API.
+    DoubleQuotedStringInDML = 1013,
+
     /// Activates or deactivates the legacy double-quoted string literal
-    /// misfeature for DDL statements.
-    #[cfg(feature = "modern_sqlite")]
-    SQLITE_DBCONFIG_DQS_DDL = 1014, // 3.29.0
+    /// "misfeature" for data definition language (DDL) statements; that
+    /// is, in statements which are modifying the schema.
+    ///
+    /// Requires SQLite 3.29.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_DQS_DDL` from the C API.
+    DoubleQuotedStringInDDL = 1014,
+
     /// Enable or disable views.
-    #[cfg(feature = "modern_sqlite")]
-    SQLITE_DBCONFIG_ENABLE_VIEW = 1015, // 3.30.0
+    ///
+    /// Requires SQLite 3.30.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_ENABLE_VIEW` from the C API.
+    EnableViews = 1015,
+
     /// Activates or deactivates the legacy file format flag.
-    #[cfg(feature = "modern_sqlite")]
-    SQLITE_DBCONFIG_LEGACY_FILE_FORMAT = 1016, // 3.31.0
+    ///
+    /// Requires SQLite 3.31.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_LEGACY_FILE_FORMAT` from the C API.
+    LegacyFileFormat = 1016,
+
     /// Tells SQLite to assume that database schemas (the contents of the
     /// sqlite_master tables) are untainted by malicious content.
-    #[cfg(feature = "modern_sqlite")]
-    SQLITE_DBCONFIG_TRUSTED_SCHEMA = 1017, // 3.31.0
+    ///
+    /// Requires SQLite 3.31.0 or later, and will produce an error in earlier
+    /// versions.
+    ///
+    /// Equivalent to `SQLITE_DBCONFIG_TRUSTED_SCHEMA` from the C API.
+    TrustedSchema = 1017,
+}
+
+impl DbConfig {
+    /// Alias for [`DbConfig::ForeignKeysEnabled`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_DBCONFIG_ENABLE_FKEY: Self = Self::ForeignKeysEnabled;
+    /// Alias for [`DbConfig::TriggersEnabled`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_DBCONFIG_ENABLE_TRIGGER: Self = Self::TriggersEnabled;
+    /// Alias for [`DbConfig::Fts3TokenizerEnabled`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER: Self = Self::Fts3TokenizerEnabled;
+    /// Alias for [`DbConfig::NoCheckpointOnClose`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE: Self = Self::NoCheckpointOnClose;
+    /// Alias for [`DbConfig::QueryPlannerStabilityEnabled`], provided for
+    /// compatibility with the C API.
+    pub const SQLITE_DBCONFIG_ENABLE_QPSG: Self = Self::QueryPlannerStabilityEnabled;
+    /// Alias for [`DbConfig::TriggersInExplainQueryPlan`], provided for
+    /// compatibility with the C API.
+    pub const SQLITE_DBCONFIG_TRIGGER_EQP: Self = Self::TriggersInExplainQueryPlan;
+    /// Alias for [`DbConfig::ResetDatabase`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_DBCONFIG_RESET_DATABASE: Self = Self::ResetDatabase;
+    /// Alias for [`DbConfig::Defensive`], provided for compatibility with the C
+    /// API.
+    pub const SQLITE_DBCONFIG_DEFENSIVE: Self = Self::Defensive;
+    /// Alias for [`DbConfig::WritableSchema`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_DBCONFIG_WRITABLE_SCHEMA: Self = Self::WritableSchema;
+    /// Alias for [`DbConfig::LegacyAlterTable`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_DBCONFIG_LEGACY_ALTER_TABLE: Self = Self::LegacyAlterTable;
+    /// Alias for [`DbConfig::DoubleQuotedStringInDML`], provided for
+    /// compatibility with the C API.
+    pub const SQLITE_DBCONFIG_DQS_DML: Self = Self::DoubleQuotedStringInDML;
+    /// Alias for [`DbConfig::DoubleQuotedStringInDDL`], provided for
+    /// compatibility with the C API.
+    pub const SQLITE_DBCONFIG_DQS_DDL: Self = Self::DoubleQuotedStringInDDL;
+    /// Alias for [`DbConfig::EnableViews`], provided for compatibility with the
+    /// C API.
+    pub const SQLITE_DBCONFIG_ENABLE_VIEW: Self = Self::EnableViews;
+    /// Alias for [`DbConfig::LegacyFileFormat`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_DBCONFIG_LEGACY_FILE_FORMAT: Self = Self::LegacyFileFormat;
+    /// Alias for [`DbConfig::TrustedSchema`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_DBCONFIG_TRUSTED_SCHEMA: Self = Self::TrustedSchema;
 }
 
 impl Connection {
-    /// Returns the current value of a `config`.
+    /// Returns the current value of a [`DbConfig`].
     ///
     /// - `SQLITE_DBCONFIG_ENABLE_FKEY`: return `false` or `true` to indicate
     ///   whether FK enforcement is off or on
@@ -93,7 +231,7 @@ impl Connection {
         }
     }
 
-    /// Make configuration changes to a database connection
+    /// Make [configuration](DbConfig) changes to a database connection
     ///
     /// - `SQLITE_DBCONFIG_ENABLE_FKEY`: `false` to disable FK enforcement,
     ///   `true` to enable FK enforcement
@@ -127,6 +265,42 @@ impl Connection {
 mod test {
     use super::DbConfig;
     use crate::{Connection, Result};
+
+    #[test]
+    #[cfg(feature = "bundled")]
+    fn test_dbconfig_values() {
+        macro_rules! check_all {
+            ($(($RustName:ident, $SQLITE_NAME:ident)),+ $(,)?) => {{
+                // Hack to force a compile failure if we add a DbConfig variant
+                // without updating this test.
+                const _: fn(DbConfig) = |r| match r { $(DbConfig::$RustName => {}),+ };
+                $({
+                    assert_eq!(DbConfig::$RustName as i32, crate::ffi::$SQLITE_NAME as i32);
+                    assert_eq!(
+                        DbConfig::$SQLITE_NAME as i32,
+                        crate::ffi::$SQLITE_NAME as i32,
+                    );
+                })+
+            }};
+        }
+        check_all![
+            (ForeignKeysEnabled, SQLITE_DBCONFIG_ENABLE_FKEY),
+            (TriggersEnabled, SQLITE_DBCONFIG_ENABLE_TRIGGER),
+            (Fts3TokenizerEnabled, SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER),
+            (NoCheckpointOnClose, SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE),
+            (QueryPlannerStabilityEnabled, SQLITE_DBCONFIG_ENABLE_QPSG),
+            (TriggersInExplainQueryPlan, SQLITE_DBCONFIG_TRIGGER_EQP),
+            (ResetDatabase, SQLITE_DBCONFIG_RESET_DATABASE),
+            (Defensive, SQLITE_DBCONFIG_DEFENSIVE),
+            (WritableSchema, SQLITE_DBCONFIG_WRITABLE_SCHEMA),
+            (LegacyAlterTable, SQLITE_DBCONFIG_LEGACY_ALTER_TABLE),
+            (DoubleQuotedStringInDML, SQLITE_DBCONFIG_DQS_DML),
+            (DoubleQuotedStringInDDL, SQLITE_DBCONFIG_DQS_DDL),
+            (EnableViews, SQLITE_DBCONFIG_ENABLE_VIEW),
+            (LegacyFileFormat, SQLITE_DBCONFIG_LEGACY_FILE_FORMAT),
+            (TrustedSchema, SQLITE_DBCONFIG_TRUSTED_SCHEMA),
+        ];
+    }
 
     #[test]
     fn test_db_config() -> Result<()> {

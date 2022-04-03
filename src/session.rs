@@ -654,43 +654,152 @@ impl Connection {
 
 /// Constants passed to the conflict handler
 /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_CONFLICT) for details.
-#[allow(missing_docs)]
 #[repr(i32)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
-#[allow(clippy::upper_case_acronyms)]
 pub enum ConflictType {
-    UNKNOWN = -1,
-    SQLITE_CHANGESET_DATA = ffi::SQLITE_CHANGESET_DATA,
-    SQLITE_CHANGESET_NOTFOUND = ffi::SQLITE_CHANGESET_NOTFOUND,
-    SQLITE_CHANGESET_CONFLICT = ffi::SQLITE_CHANGESET_CONFLICT,
-    SQLITE_CHANGESET_CONSTRAINT = ffi::SQLITE_CHANGESET_CONSTRAINT,
-    SQLITE_CHANGESET_FOREIGN_KEY = ffi::SQLITE_CHANGESET_FOREIGN_KEY,
+    /// An unknown ConflictType was returned by SQLite.
+    ///
+    /// This should only possible if you are using a SQLite version more recent
+    /// than your rusqlite version.
+    Unknown = -1,
+
+    /// Equivalent to `SQLITE_CHANGESET_DATA` in the C API.
+    ///
+    /// > The conflict handler is invoked with `CHANGESET_DATA` as the second
+    /// > argument when processing a `DELETE` or `UPDATE` change if a row with
+    /// > the required `PRIMARY KEY` fields is present in the database, but one
+    /// > or more other (non primary-key) fields modified by the update do not
+    /// > contain the expected "before" values.
+    /// >
+    /// > The conflicting row, in this case, is the database row with the
+    /// > matching primary key.
+    Data = ffi::SQLITE_CHANGESET_DATA,
+
+    /// Equivalent to `SQLITE_CHANGESET_NOTFOUND` in the C API.
+    ///
+    /// > The conflict handler is invoked with `CHANGESET_NOTFOUND` as the
+    /// > second argument when processing a `DELETE` or `UPDATE` change if a row
+    /// > with the required `PRIMARY KEY` fields is not present in the database.
+    /// >
+    /// > There is no conflicting row in this case.
+    NotFound = ffi::SQLITE_CHANGESET_NOTFOUND,
+
+    /// Equivalent to `SQLITE_CHANGESET_CONFLICT` in the C API.
+    ///
+    /// > `CHANGESET_CONFLICT` is passed as the second argument to the conflict
+    /// > handler while processing an `INSERT` change if the operation would
+    /// > result in duplicate primary key values.
+    /// >
+    /// > The conflicting row in this case is the database row with the matching
+    /// > primary key.
+    Conflict = ffi::SQLITE_CHANGESET_CONFLICT,
+
+    /// Equivalent to `SQLITE_CHANGESET_CONSTRAINT` in the C API.
+    ///
+    /// > If foreign key handling is enabled, and applying a changeset leaves
+    /// > the database in a state containing foreign key violations, the
+    /// > conflict handler is invoked with `CHANGESET_FOREIGN_KEY` as the second
+    /// > argument exactly once before the changeset is committed. If the
+    /// > conflict handler returns `CHANGESET_OMIT`, the changes, including
+    /// > those that caused the foreign key constraint violation, are committed.
+    /// > Or, if it returns `CHANGESET_ABORT`, the changeset is rolled back.
+    /// >
+    /// > No current or conflicting row information is provided.
+    Constraint = ffi::SQLITE_CHANGESET_CONSTRAINT,
+
+    /// Equivalent to `SQLITE_CHANGESET_FOREIGN_KEY` in the C API.
+    ///
+    /// > If any other constraint violation occurs while applying a change (i.e.
+    /// > a `UNIQUE`, `CHECK` or `NOT NULL` constraint), the conflict handler is
+    /// > invoked with `CHANGESET_CONSTRAINT` as the second argument.
+    /// >
+    /// > There is no conflicting row in this case.
+    ForeignKey = ffi::SQLITE_CHANGESET_FOREIGN_KEY,
 }
+
+impl ConflictType {
+    /// An alias for [`ConflictType::Data`], provided for compatibility with the
+    /// C API.
+    pub const SQLITE_CHANGESET_DATA: Self = Self::Data;
+    /// An alias for [`ConflictType::NotFound`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_CHANGESET_NOTFOUND: Self = Self::NotFound;
+    /// An alias for [`ConflictType::Conflict`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_CHANGESET_CONFLICT: Self = Self::Conflict;
+    /// An alias for [`ConflictType::Constraint`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_CHANGESET_CONSTRAINT: Self = Self::Constraint;
+    /// An alias for [`ConflictType::ForeignKey`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_CHANGESET_FOREIGN_KEY: Self = Self::ForeignKey;
+    /// Unsupported / unexpected action. Provided for backwards-compatibility.
+    #[deprecated = "Renamed to `ConflictType::Unknown`"]
+    #[doc(hidden)]
+    pub const UNKNOWN: Self = Self::Unknown;
+}
+
+// TODO: We should probably use `TryFrom` for this...
 impl From<i32> for ConflictType {
     fn from(code: i32) -> ConflictType {
         match code {
-            ffi::SQLITE_CHANGESET_DATA => ConflictType::SQLITE_CHANGESET_DATA,
-            ffi::SQLITE_CHANGESET_NOTFOUND => ConflictType::SQLITE_CHANGESET_NOTFOUND,
-            ffi::SQLITE_CHANGESET_CONFLICT => ConflictType::SQLITE_CHANGESET_CONFLICT,
-            ffi::SQLITE_CHANGESET_CONSTRAINT => ConflictType::SQLITE_CHANGESET_CONSTRAINT,
-            ffi::SQLITE_CHANGESET_FOREIGN_KEY => ConflictType::SQLITE_CHANGESET_FOREIGN_KEY,
-            _ => ConflictType::UNKNOWN,
+            ffi::SQLITE_CHANGESET_DATA => ConflictType::Data,
+            ffi::SQLITE_CHANGESET_NOTFOUND => ConflictType::NotFound,
+            ffi::SQLITE_CHANGESET_CONFLICT => ConflictType::Conflict,
+            ffi::SQLITE_CHANGESET_CONSTRAINT => ConflictType::Constraint,
+            ffi::SQLITE_CHANGESET_FOREIGN_KEY => ConflictType::ForeignKey,
+            _ => ConflictType::Unknown,
         }
     }
 }
 
 /// Constants returned by the conflict handler
 /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_ABORT) for details.
-#[allow(missing_docs)]
 #[repr(i32)]
 #[derive(Debug, PartialEq)]
 #[non_exhaustive]
-#[allow(clippy::upper_case_acronyms)]
 pub enum ConflictAction {
-    SQLITE_CHANGESET_OMIT = ffi::SQLITE_CHANGESET_OMIT,
-    SQLITE_CHANGESET_REPLACE = ffi::SQLITE_CHANGESET_REPLACE,
-    SQLITE_CHANGESET_ABORT = ffi::SQLITE_CHANGESET_ABORT,
+    /// Equivalent to `SQLITE_CHANGESET_OMIT` in the C API.
+    ///
+    /// > If a conflict handler returns this value no special action is taken.
+    /// > The change that caused the conflict is not applied. The session module
+    /// > continues to the next change in the changeset.
+    Omit = ffi::SQLITE_CHANGESET_OMIT,
+    /// Equivalent to `SQLITE_CHANGESET_REPLACE` in the C API.
+    ///
+    /// > This value may only be returned if the second argument to the conflict
+    /// > handler was `Sql` or `SQLITE_CHANGESET_CONFLICT`. If
+    /// > this is not the case, any changes applied so far are rolled back and
+    /// > the call to sqlite3changeset_apply() returns SQLITE_MISUSE.
+    /// >
+    /// > If `CHANGESET_REPLACE` is returned by an `SQLITE_CHANGESET_DATA`
+    /// > conflict handler, then the conflicting row is either updated or
+    /// > deleted, depending on the type of change.
+    /// >
+    /// > If `CHANGESET_REPLACE` is returned by an `SQLITE_CHANGESET_CONFLICT`
+    /// > conflict handler, then the conflicting row is removed from the
+    /// > database and a second attempt to apply the change is made. If this
+    /// > second attempt fails, the original row is restored to the database
+    /// > before continuing.
+    Replace = ffi::SQLITE_CHANGESET_REPLACE,
+    /// Equivalent to `SQLITE_CHANGESET_ABORT` in the C API.
+    ///
+    /// > If this value is returned, any changes applied so far are rolled back
+    /// > and the call to sqlite3changeset_apply() returns `SQLITE_ABORT`.
+    Abort = ffi::SQLITE_CHANGESET_ABORT,
+}
+
+impl ConflictAction {
+    /// An alias for [`ConflictAction::Omit`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_CHANGESET_OMIT: Self = Self::Omit;
+    /// An alias for [`ConflictAction::Replace`], provided for compatibility
+    /// with the C API.
+    pub const SQLITE_CHANGESET_REPLACE: Self = Self::Replace;
+    /// An alias for [`ConflictAction::Abort`], provided for compatibility with
+    /// the C API.
+    pub const SQLITE_CHANGESET_ABORT: Self = Self::Abort;
 }
 
 unsafe extern "C" fn call_filter<F, C>(p_ctx: *mut c_void, tbl_str: *const c_char) -> c_int
