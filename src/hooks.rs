@@ -16,23 +16,37 @@ use crate::{Connection, InnerConnection};
 #[allow(clippy::upper_case_acronyms)]
 pub enum Action {
     /// Unsupported / unexpected action
-    UNKNOWN = -1,
+    Unknown = -1,
     /// DELETE command
-    SQLITE_DELETE = ffi::SQLITE_DELETE,
+    Delete = ffi::SQLITE_DELETE,
     /// INSERT command
-    SQLITE_INSERT = ffi::SQLITE_INSERT,
+    Insert = ffi::SQLITE_INSERT,
     /// UPDATE command
-    SQLITE_UPDATE = ffi::SQLITE_UPDATE,
+    Update = ffi::SQLITE_UPDATE,
+}
+
+impl Action {
+    /// An alias for [`Action::Delete`], provided for compatibility with the C API.
+    pub const SQLITE_DELETE: Self = Self::Delete;
+    /// An alias for [`Action::Delete`], provided for compatibility with the C API.
+    pub const SQLITE_INSERT: Self = Self::Insert;
+    /// An alias for [`Action::Update`], provided for compatibility with the C API.
+    pub const SQLITE_UPDATE: Self = Self::Update;
+
+    /// Unsupported / unexpected action. Provided for backwards-compatibility.
+    #[deprecated = "Renamed to `Action::Unknown`"]
+    #[doc(hidden)]
+    pub const UNKNOWN: Self = Self::Unknown;
 }
 
 impl From<i32> for Action {
     #[inline]
     fn from(code: i32) -> Action {
         match code {
-            ffi::SQLITE_DELETE => Action::SQLITE_DELETE,
-            ffi::SQLITE_INSERT => Action::SQLITE_INSERT,
-            ffi::SQLITE_UPDATE => Action::SQLITE_UPDATE,
-            _ => Action::UNKNOWN,
+            ffi::SQLITE_DELETE => Action::Delete,
+            ffi::SQLITE_INSERT => Action::Insert,
+            ffi::SQLITE_UPDATE => Action::Update,
+            _ => Action::Unknown,
         }
     }
 }

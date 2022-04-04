@@ -96,7 +96,7 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
             if !constraint.is_usable() {
                 continue;
             }
-            if constraint.operator() != IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ {
+            if constraint.operator() != IndexConstraintOp::Eq {
                 continue;
             }
             if let CARRAY_COLUMN_POINTER = constraint.column() {
