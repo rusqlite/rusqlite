@@ -34,7 +34,7 @@
 //!                 regexp.is_match(text)
 //!             };
 //!
-//!             Ok(is_match)
+//!             Ok((is_match, None))
 //!         },
 //!     )
 //! }
@@ -247,13 +247,6 @@ impl Context<'_> {
             phantom: PhantomData,
         })
     }
-
-    /// Set the Subtype of an SQL function
-    #[cfg(feature = "modern_sqlite")] // 3.9.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-    pub fn set_result_subtype(&self, sub_type: std::os::raw::c_uint) {
-        unsafe { ffi::sqlite3_result_subtype(self.ctx, sub_type) };
-    }
 }
 
 /// A reference to a connection handle with a lifetime bound to something.
@@ -274,6 +267,9 @@ impl Deref for ConnectionRef<'_> {
 }
 
 type AuxInner = Arc<dyn Any + Send + Sync + 'static>;
+
+/// Subtype of an SQL function
+pub type SubType = Option<std::os::raw::c_uint>;
 
 /// Aggregate is the callback interface for user-defined
 /// aggregate function.
@@ -304,7 +300,7 @@ where
     /// given `None`.
     ///
     /// The passed context will have no arguments.
-    fn finalize(&self, _: &mut Context<'_>, _: Option<A>) -> Result<T>;
+    fn finalize(&self, _: &mut Context<'_>, _: Option<A>) -> Result<(T, SubType)>;
 }
 
 /// `WindowAggregate` is the callback interface for
@@ -318,7 +314,7 @@ where
 {
     /// Returns the current value of the aggregate. Unlike xFinal, the
     /// implementation should not delete any context.
-    fn value(&self, _: Option<&A>) -> Result<T>;
+    fn value(&self, _: Option<&A>) -> Result<(T, SubType)>;
 
     /// Removes a row from the current window.
     fn inverse(&self, _: &mut Context<'_>, _: &mut A) -> Result<()>;
@@ -381,7 +377,7 @@ impl Connection {
     ///         FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
     ///         |ctx| {
     ///             let value = ctx.get::<f64>(0)?;
-    ///             Ok(value / 2f64)
+    ///             Ok((value / 2f64, None))
     ///         },
     ///     )?;
     ///
@@ -403,7 +399,7 @@ impl Connection {
         x_func: F,
     ) -> Result<()>
     where
-        F: FnMut(&Context<'_>) -> Result<T> + Send + UnwindSafe + 'static,
+        F: FnMut(&Context<'_>) -> Result<(T, SubType)> + Send + UnwindSafe + 'static,
         T: ToSql,
     {
         self.db
@@ -485,7 +481,7 @@ impl InnerConnection {
         x_func: F,
     ) -> Result<()>
     where
-        F: FnMut(&Context<'_>) -> Result<T> + Send + UnwindSafe + 'static,
+        F: FnMut(&Context<'_>) -> Result<(T, SubType)> + Send + UnwindSafe + 'static,
         T: ToSql,
     {
         unsafe extern "C" fn call_boxed_closure<F, T>(
@@ -493,7 +489,7 @@ impl InnerConnection {
             argc: c_int,
             argv: *mut *mut sqlite3_value,
         ) where
-            F: FnMut(&Context<'_>) -> Result<T>,
+            F: FnMut(&Context<'_>) -> Result<(T, SubType)>,
             T: ToSql,
         {
             let r = catch_unwind(|| {
@@ -512,11 +508,17 @@ impl InnerConnection {
                 }
                 Ok(r) => r,
             };
-            let t = t.as_ref().map(|t| ToSql::to_sql(t));
+            let t = t.as_ref().map(|(t, sub_type)| (ToSql::to_sql(t), sub_type));
 
             match t {
-                Ok(Ok(ref value)) => set_result(ctx, value),
-                Ok(Err(err)) => report_error(ctx, &err),
+                Ok((Ok(ref value), sub_type)) => {
+                    set_result(ctx, value);
+                    #[cfg(feature = "modern_sqlite")] // 3.9.0
+                    if let Some(sub_type) = sub_type {
+                        ffi::sqlite3_result_subtype(ctx, *sub_type);
+                    }
+                }
+                Ok((Err(err), _)) => report_error(ctx, &err),
                 Err(err) => report_error(ctx, err),
             }
         }
@@ -752,10 +754,16 @@ where
         }
         Ok(r) => r,
     };
-    let t = t.as_ref().map(|t| ToSql::to_sql(t));
+    let t = t.as_ref().map(|(t, sub_type)| (ToSql::to_sql(t), sub_type));
     match t {
-        Ok(Ok(ref value)) => set_result(ctx, value),
-        Ok(Err(err)) => report_error(ctx, &err),
+        Ok((Ok(ref value), sub_type)) => {
+            set_result(ctx, value);
+            #[cfg(feature = "modern_sqlite")] // 3.9.0
+            if let Some(sub_type) = sub_type {
+                ffi::sqlite3_result_subtype(ctx, *sub_type);
+            }
+        }
+        Ok((Err(err), _)) => report_error(ctx, &err),
         Err(err) => report_error(ctx, err),
     }
 }
@@ -796,10 +804,16 @@ where
         }
         Ok(r) => r,
     };
-    let t = t.as_ref().map(|t| ToSql::to_sql(t));
+    let t = t.as_ref().map(|(t, sub_type)| (ToSql::to_sql(t), sub_type));
     match t {
-        Ok(Ok(ref value)) => set_result(ctx, value),
-        Ok(Err(err)) => report_error(ctx, &err),
+        Ok((Ok(ref value), sub_type)) => {
+            set_result(ctx, value);
+            #[cfg(feature = "modern_sqlite")] // 3.9.0
+            if let Some(sub_type) = sub_type {
+                ffi::sqlite3_result_subtype(ctx, *sub_type);
+            }
+        }
+        Ok((Err(err), _)) => report_error(ctx, &err),
         Err(err) => report_error(ctx, err),
     }
 }
@@ -812,13 +826,13 @@ mod test {
 
     #[cfg(feature = "window")]
     use crate::functions::WindowAggregate;
-    use crate::functions::{Aggregate, Context, FunctionFlags};
+    use crate::functions::{Aggregate, Context, FunctionFlags, SubType};
     use crate::{Connection, Error, Result};
 
-    fn half(ctx: &Context<'_>) -> Result<c_double> {
+    fn half(ctx: &Context<'_>) -> Result<(c_double, SubType)> {
         assert_eq!(ctx.len(), 1, "called with unexpected number of arguments");
         let value = ctx.get::<c_double>(0)?;
-        Ok(value / 2f64)
+        Ok((value / 2f64, None))
     }
 
     #[test]
@@ -857,7 +871,7 @@ mod test {
     // This implementation of a regexp scalar function uses SQLite's auxiliary data
     // (https://www.sqlite.org/c3ref/get_auxdata.html) to avoid recompiling the regular
     // expression multiple times within one query.
-    fn regexp_with_auxilliary(ctx: &Context<'_>) -> Result<bool> {
+    fn regexp_with_auxilliary(ctx: &Context<'_>) -> Result<(bool, SubType)> {
         assert_eq!(ctx.len(), 2, "called with unexpected number of arguments");
         type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
         let regexp: std::sync::Arc<Regex> = ctx
@@ -874,7 +888,7 @@ mod test {
             regexp.is_match(text)
         };
 
-        Ok(is_match)
+        Ok((is_match, None))
     }
 
     #[test]
@@ -925,7 +939,7 @@ mod test {
                     ret.push_str(&s);
                 }
 
-                Ok(ret)
+                Ok((ret, None))
             },
         )?;
 
@@ -950,7 +964,7 @@ mod test {
                 assert_eq!(ctx.get_aux::<String>(0), Err(Error::GetAuxWrongType));
                 assert_eq!(*ctx.get_aux::<i64>(0)?.unwrap(), 100);
             }
-            Ok(true)
+            Ok((true, None))
         })?;
 
         let res: bool = db.query_row(
@@ -976,8 +990,12 @@ mod test {
             Ok(())
         }
 
-        fn finalize(&self, _: &mut Context<'_>, sum: Option<i64>) -> Result<Option<i64>> {
-            Ok(sum)
+        fn finalize(
+            &self,
+            _: &mut Context<'_>,
+            sum: Option<i64>,
+        ) -> Result<(Option<i64>, SubType)> {
+            Ok((sum, None))
         }
     }
 
@@ -991,8 +1009,8 @@ mod test {
             Ok(())
         }
 
-        fn finalize(&self, _: &mut Context<'_>, sum: Option<i64>) -> Result<i64> {
-            Ok(sum.unwrap_or(0))
+        fn finalize(&self, _: &mut Context<'_>, sum: Option<i64>) -> Result<(i64, SubType)> {
+            Ok((sum.unwrap_or(0), None))
         }
     }
 
@@ -1050,8 +1068,8 @@ mod test {
             Ok(())
         }
 
-        fn value(&self, sum: Option<&i64>) -> Result<Option<i64>> {
-            Ok(sum.copied())
+        fn value(&self, sum: Option<&i64>) -> Result<(Option<i64>, SubType)> {
+            Ok((sum.copied(), None))
         }
     }
 

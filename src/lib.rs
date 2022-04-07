@@ -1733,7 +1733,7 @@ mod test {
             crate::functions::FunctionFlags::default(),
             move |_| {
                 interrupt_handle.interrupt();
-                Ok(0)
+                Ok((0, None))
             },
         )?;
 
