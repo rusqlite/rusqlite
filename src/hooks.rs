@@ -285,7 +285,7 @@ impl<'c> AuthAction<'c> {
                 operation: TransactionOperation::from_str(operation_str),
                 savepoint_name,
             },
-            #[cfg(feature = "modern_sqlite")]
+            #[cfg(feature = "modern_sqlite")] // 3.8.3
             (ffi::SQLITE_RECURSIVE, ..) => Self::Recursive,
             (code, arg1, arg2) => Self::Unknown { code, arg1, arg2 },
         }
@@ -345,21 +345,19 @@ impl Connection {
     ///
     /// The callback returns `true` to rollback.
     #[inline]
-    pub fn commit_hook<'c, F>(&'c self, hook: Option<F>)
+    pub fn commit_hook<F>(&self, hook: Option<F>)
     where
-        F: FnMut() -> bool + Send + 'c,
+        F: FnMut() -> bool + Send + 'static,
     {
         self.db.borrow_mut().commit_hook(hook);
     }
 
     /// Register a callback function to be invoked whenever
     /// a transaction is committed.
-    ///
-    /// The callback returns `true` to rollback.
     #[inline]
-    pub fn rollback_hook<'c, F>(&'c self, hook: Option<F>)
+    pub fn rollback_hook<F>(&self, hook: Option<F>)
     where
-        F: FnMut() + Send + 'c,
+        F: FnMut() + Send + 'static,
     {
         self.db.borrow_mut().rollback_hook(hook);
     }
@@ -369,15 +367,15 @@ impl Connection {
     ///
     /// The callback parameters are:
     ///
-    /// - the type of database update (SQLITE_INSERT, SQLITE_UPDATE or
-    /// SQLITE_DELETE),
+    /// - the type of database update (`SQLITE_INSERT`, `SQLITE_UPDATE` or
+    /// `SQLITE_DELETE`),
     /// - the name of the database ("main", "temp", ...),
     /// - the name of the table that is updated,
     /// - the ROWID of the row that is updated.
     #[inline]
-    pub fn update_hook<'c, F>(&'c self, hook: Option<F>)
+    pub fn update_hook<F>(&self, hook: Option<F>)
     where
-        F: FnMut(Action, &str, &str, i64) + Send + 'c,
+        F: FnMut(Action, &str, &str, i64) + Send + 'static,
     {
         self.db.borrow_mut().update_hook(hook);
     }
@@ -404,7 +402,7 @@ impl Connection {
     where
         F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + RefUnwindSafe + 'static,
     {
-        self.db.borrow_mut().authorizer(hook)
+        self.db.borrow_mut().authorizer(hook);
     }
 }
 
@@ -418,16 +416,16 @@ impl InnerConnection {
         self.authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
     }
 
-    fn commit_hook<'c, F>(&'c mut self, hook: Option<F>)
+    fn commit_hook<F>(&mut self, hook: Option<F>)
     where
-        F: FnMut() -> bool + Send + 'c,
+        F: FnMut() -> bool + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<F>(p_arg: *mut c_void) -> c_int
         where
             F: FnMut() -> bool,
         {
             let r = catch_unwind(|| {
-                let boxed_hook: *mut F = p_arg as *mut F;
+                let boxed_hook: *mut F = p_arg.cast::<F>();
                 (*boxed_hook)()
             });
             if let Ok(true) = r {
@@ -453,7 +451,7 @@ impl InnerConnection {
                     ffi::sqlite3_commit_hook(
                         self.db(),
                         Some(call_boxed_closure::<F>),
-                        boxed_hook as *mut _,
+                        boxed_hook.cast(),
                     )
                 }
             }
@@ -467,18 +465,18 @@ impl InnerConnection {
         self.free_commit_hook = free_commit_hook;
     }
 
-    fn rollback_hook<'c, F>(&'c mut self, hook: Option<F>)
+    fn rollback_hook<F>(&mut self, hook: Option<F>)
     where
-        F: FnMut() + Send + 'c,
+        F: FnMut() + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<F>(p_arg: *mut c_void)
         where
             F: FnMut(),
         {
-            let _ = catch_unwind(|| {
-                let boxed_hook: *mut F = p_arg as *mut F;
+            drop(catch_unwind(|| {
+                let boxed_hook: *mut F = p_arg.cast::<F>();
                 (*boxed_hook)();
-            });
+            }));
         }
 
         let free_rollback_hook = if hook.is_some() {
@@ -494,7 +492,7 @@ impl InnerConnection {
                     ffi::sqlite3_rollback_hook(
                         self.db(),
                         Some(call_boxed_closure::<F>),
-                        boxed_hook as *mut _,
+                        boxed_hook.cast(),
                     )
                 }
             }
@@ -508,9 +506,9 @@ impl InnerConnection {
         self.free_rollback_hook = free_rollback_hook;
     }
 
-    fn update_hook<'c, F>(&'c mut self, hook: Option<F>)
+    fn update_hook<F>(&mut self, hook: Option<F>)
     where
-        F: FnMut(Action, &str, &str, i64) + Send + 'c,
+        F: FnMut(Action, &str, &str, i64) + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<F>(
             p_arg: *mut c_void,
@@ -522,15 +520,15 @@ impl InnerConnection {
             F: FnMut(Action, &str, &str, i64),
         {
             let action = Action::from(action_code);
-            let _ = catch_unwind(|| {
-                let boxed_hook: *mut F = p_arg as *mut F;
+            drop(catch_unwind(|| {
+                let boxed_hook: *mut F = p_arg.cast::<F>();
                 (*boxed_hook)(
                     action,
                     expect_utf8(p_db_name, "database name"),
                     expect_utf8(p_table_name, "table name"),
                     row_id,
                 );
-            });
+            }));
         }
 
         let free_update_hook = if hook.is_some() {
@@ -546,7 +544,7 @@ impl InnerConnection {
                     ffi::sqlite3_update_hook(
                         self.db(),
                         Some(call_boxed_closure::<F>),
-                        boxed_hook as *mut _,
+                        boxed_hook.cast(),
                     )
                 }
             }
@@ -569,7 +567,7 @@ impl InnerConnection {
             F: FnMut() -> bool,
         {
             let r = catch_unwind(|| {
-                let boxed_handler: *mut F = p_arg as *mut F;
+                let boxed_handler: *mut F = p_arg.cast::<F>();
                 (*boxed_handler)()
             });
             if let Ok(true) = r {
@@ -579,23 +577,20 @@ impl InnerConnection {
             }
         }
 
-        match handler {
-            Some(handler) => {
-                let boxed_handler = Box::new(handler);
-                unsafe {
-                    ffi::sqlite3_progress_handler(
-                        self.db(),
-                        num_ops,
-                        Some(call_boxed_closure::<F>),
-                        &*boxed_handler as *const F as *mut _,
-                    )
-                }
-                self.progress_handler = Some(boxed_handler);
+        if let Some(handler) = handler {
+            let boxed_handler = Box::new(handler);
+            unsafe {
+                ffi::sqlite3_progress_handler(
+                    self.db(),
+                    num_ops,
+                    Some(call_boxed_closure::<F>),
+                    &*boxed_handler as *const F as *mut _,
+                );
             }
-            _ => {
-                unsafe { ffi::sqlite3_progress_handler(self.db(), num_ops, None, ptr::null_mut()) }
-                self.progress_handler = None;
-            }
+            self.progress_handler = Some(boxed_handler);
+        } else {
+            unsafe { ffi::sqlite3_progress_handler(self.db(), num_ops, None, ptr::null_mut()) }
+            self.progress_handler = None;
         };
     }
 
@@ -628,11 +623,10 @@ impl InnerConnection {
                         "accessor (inner-most trigger or view)",
                     ),
                 };
-                let boxed_hook: *mut F = p_arg as *mut F;
+                let boxed_hook: *mut F = p_arg.cast::<F>();
                 (*boxed_hook)(auth_ctx)
             })
-            .map(Authorization::into_raw)
-            .unwrap_or_else(|_| ffi::SQLITE_ERROR)
+            .map_or_else(|_| ffi::SQLITE_ERROR, Authorization::into_raw)
         }
 
         let callback_fn = authorizer
@@ -646,8 +640,7 @@ impl InnerConnection {
                 callback_fn,
                 boxed_authorizer
                     .as_ref()
-                    .map(|f| &**f as *const F as *mut _)
-                    .unwrap_or_else(ptr::null_mut),
+                    .map_or_else(ptr::null_mut, |f| &**f as *const F as *mut _),
             )
         } {
             ffi::SQLITE_OK => {
@@ -668,7 +661,7 @@ impl InnerConnection {
 }
 
 unsafe fn free_boxed_hook<F>(p: *mut c_void) {
-    drop(Box::from_raw(p as *mut F));
+    drop(Box::from_raw(p.cast::<F>()));
 }
 
 unsafe fn expect_utf8<'a>(p_str: *const c_char, description: &'static str) -> &'a str {
@@ -698,13 +691,13 @@ mod test {
     fn test_commit_hook() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
-        let mut called = false;
+        static CALLED: AtomicBool = AtomicBool::new(false);
         db.commit_hook(Some(|| {
-            called = true;
+            CALLED.store(true, Ordering::Relaxed);
             false
         }));
         db.execute_batch("BEGIN; CREATE TABLE foo (t TEXT); COMMIT;")?;
-        assert!(called);
+        assert!(CALLED.load(Ordering::Relaxed));
         Ok(())
     }
 
@@ -726,12 +719,12 @@ mod test {
     fn test_rollback_hook() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
-        let mut called = false;
+        static CALLED: AtomicBool = AtomicBool::new(false);
         db.rollback_hook(Some(|| {
-            called = true;
+            CALLED.store(true, Ordering::Relaxed);
         }));
         db.execute_batch("BEGIN; CREATE TABLE foo (t TEXT); ROLLBACK;")?;
-        assert!(called);
+        assert!(CALLED.load(Ordering::Relaxed));
         Ok(())
     }
 
@@ -739,17 +732,17 @@ mod test {
     fn test_update_hook() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
-        let mut called = false;
+        static CALLED: AtomicBool = AtomicBool::new(false);
         db.update_hook(Some(|action, db: &str, tbl: &str, row_id| {
             assert_eq!(Action::SQLITE_INSERT, action);
             assert_eq!("main", db);
             assert_eq!("foo", tbl);
             assert_eq!(1, row_id);
-            called = true;
+            CALLED.store(true, Ordering::Relaxed);
         }));
         db.execute_batch("CREATE TABLE foo (t TEXT)")?;
         db.execute_batch("INSERT INTO foo VALUES ('lisa')")?;
-        assert!(called);
+        assert!(CALLED.load(Ordering::Relaxed));
         Ok(())
     }
 

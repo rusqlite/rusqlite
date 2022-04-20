@@ -1,6 +1,7 @@
 [package]
 name = "rusqlite"
-version = "0.25.3"
+# Note: Update version in README.md when you change this.
+version = "0.27.0"
 authors = ["The rusqlite developers"]
 edition = "2018"
 description = "Ergonomic wrapper for SQLite"
@@ -10,6 +11,15 @@ readme = "README.md"
 keywords = ["sqlite", "database", "ffi"]
 license = "MIT"
 categories = ["database"]
+
+exclude = [
+  "/.github/*",
+  "/.gitattributes",
+  "/appveyor.yml",
+  "/Changelog.md",
+  "/clippy.toml",
+  "/codecov.yml",
+]
 
 [badges]
 appveyor = { repository = "rusqlite/rusqlite" }
@@ -39,11 +49,11 @@ bundled-sqlcipher-vendored-openssl = ["libsqlite3-sys/bundled-sqlcipher-vendored
 buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
 limits = []
 hooks = []
-i128_blob = ["byteorder"]
+i128_blob = []
 sqlcipher = ["libsqlite3-sys/sqlcipher"]
 unlock_notify = ["libsqlite3-sys/unlock_notify"]
 # xSavepoint, xRelease and xRollbackTo: 3.7.7 (2011-06-23)
-vtab = ["libsqlite3-sys/min_sqlite_version_3_7_7", "lazy_static"]
+vtab = ["libsqlite3-sys/min_sqlite_version_3_7_7"]
 csvtab = ["csv", "vtab"]
 # pointer passing interfaces: 3.20.0
 array = ["vtab"]
@@ -62,6 +72,7 @@ bundled-windows = ["libsqlite3-sys/bundled-windows"]
 with-asan = ["libsqlite3-sys/with-asan"]
 column_decltype = []
 wasm32-wasi-vfs = ["libsqlite3-sys/wasm32-wasi-vfs"]
+# Note: doesn't support 32-bit.
 winsqlite3 = ["libsqlite3-sys/winsqlite3"]
 
 # Helper feature for enabling most non-build-related optional features
@@ -97,15 +108,14 @@ modern-full = [
 bundled-full = ["modern-full", "bundled"]
 
 [dependencies]
-time = { version = "0.2.23", optional = true }
+time = { version = "0.3.0", features = ["formatting", "macros", "parsing"], optional = true }
 bitflags = "1.2"
-hashlink = "0.7"
-chrono = { version = "0.4", optional = true }
+hashlink = "0.8"
+chrono = { version = "0.4", optional = true, default-features = false, features = ["clock"] }
 serde_json = { version = "1.0", optional = true }
 csv = { version = "1.1", optional = true }
 url = { version = "2.1", optional = true }
 lazy_static = { version = "1.4", optional = true }
-byteorder = { version = "1.3", features = ["i128"], optional = true }
 fallible-iterator = "0.2"
 fallible-streaming-iterator = "0.1"
 memchr = "2.3"
@@ -125,7 +135,7 @@ bencher = "0.1"
 
 [dependencies.libsqlite3-sys]
 path = "libsqlite3-sys"
-version = "0.22.2"
+version = "0.24.0"
 
 [[test]]
 name = "config_log"
@@ -146,7 +156,7 @@ name = "exec"
 harness = false
 
 [package.metadata.docs.rs]
-features = [ "array", "backup", "blob", "chrono", "collation", "functions", "limits", "load_extension", "serde_json", "time", "trace", "url", "vtab", "window", "modern_sqlite", "column_decltype" ]
+features = ["modern-full"]
 all-features = false
 no-default-features = true
 default-target = "x86_64-unknown-linux-gnu"

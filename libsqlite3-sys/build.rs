@@ -46,9 +46,9 @@ fn main() {
                 features 'bundled' and 'bundled-windows'. If you want a bundled build of
                 SQLCipher (available for the moment only on Unix), use feature 'bundled-sqlcipher'
                 or 'bundled-sqlcipher-vendored-openssl' to also bundle OpenSSL crypto."
-            )
+            );
         }
-        build_linked::main(&out_dir, &out_path)
+        build_linked::main(&out_dir, &out_path);
     } else if cfg!(feature = "bundled")
         || (win_target() && cfg!(feature = "bundled-windows"))
         || cfg!(feature = "bundled-sqlcipher")
@@ -66,7 +66,7 @@ fn main() {
         )))]
         panic!("The runtime test should not run this branch, which has not compiled any logic.")
     } else {
-        build_linked::main(&out_dir, &out_path)
+        build_linked::main(&out_dir, &out_path);
     }
 }
 
@@ -85,10 +85,9 @@ mod build_bundled {
     pub fn main(out_dir: &str, out_path: &Path) {
         let lib_name = super::lib_name();
 
-        if cfg!(feature = "bundled-windows") && !cfg!(feature = "bundled") && !win_target() {
-            // This is just a sanity check, the top level `main` should ensure this.
-            panic!("This module should not be used: we're not on Windows and the bundled feature has not been enabled");
-        }
+        // This is just a sanity check, the top level `main` should ensure this.
+        assert!(!(cfg!(feature = "bundled-windows") && !cfg!(feature = "bundled") && !win_target()),
+            "This module should not be used: we're not on Windows and the bundled feature has not been enabled");
 
         #[cfg(feature = "buildtime_bindgen")]
         {
@@ -159,18 +158,17 @@ mod build_bundled {
                         let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
                         let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
 
-                        if !Path::new(&lib_dir).exists() {
-                            panic!(
-                                "OpenSSL library directory does not exist: {}",
-                                lib_dir.to_string_lossy()
-                            );
-                        }
+                        assert!(
+                            Path::new(&lib_dir).exists(),
+                            "OpenSSL library directory does not exist: {}",
+                            lib_dir.to_string_lossy()
+                        );
 
                         if !Path::new(&inc_dir).exists() {
                             panic!(
                                 "OpenSSL include directory does not exist: {}",
                                 inc_dir.to_string_lossy()
-                            )
+                            );
                         }
 
                         use_openssl = true;
@@ -181,31 +179,25 @@ mod build_bundled {
 
             if cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
                 cfg.include(std::env::var("DEP_OPENSSL_INCLUDE").unwrap());
-                println!("cargo:rustc-link-lib=static=crypto"); // cargo will
-                                                                // resolve downstream
-                                                                // to the static
-                                                                // lib in openssl-sys
+                // cargo will resolve downstream to the static lib in
+                // openssl-sys
             } else if is_windows {
-                // FIXME README says that bundled-sqlcipher is Unix only, and the sources are
-                // configured on a Unix machine. So maybe this should be made unreachable.
+                // Windows without `-vendored-openssl` takes this to link against a prebuilt
+                // OpenSSL lib
                 cfg.include(inc_dir.to_string_lossy().as_ref());
-                let mut lib = String::new();
-                lib.push_str(lib_dir.to_string_lossy().as_ref());
-                lib.push('\\');
-                lib.push_str("libeay32.lib");
-                cfg.flag(&lib);
+                let lib = lib_dir.join("libcrypto.lib");
+                cfg.flag(lib.to_string_lossy().as_ref());
             } else if use_openssl {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
+                // branch not taken on Windows, just `crypto` is fine.
                 println!("cargo:rustc-link-lib=dylib=crypto");
-                println!(
-                    "cargo:rustc-link-search={}",
-                    lib_dir.to_string_lossy().as_ref()
-                );
+                println!("cargo:rustc-link-search={}", lib_dir.to_string_lossy());
             } else if is_apple {
                 cfg.flag("-DSQLCIPHER_CRYPTO_CC");
-                println!("cargo:rustc-link-lib=framework=SecurityFoundation");
+                println!("cargo:rustc-link-lib=framework=Security");
                 println!("cargo:rustc-link-lib=framework=CoreFoundation");
             } else {
+                // branch not taken on Windows, just `crypto` is fine.
                 println!("cargo:rustc-link-lib=dylib=crypto");
             }
         }
@@ -219,6 +211,12 @@ mod build_bundled {
 
         if cfg!(feature = "with-asan") {
             cfg.flag("-fsanitize=address");
+        }
+
+        // If explicitly requested: enable static linking against the Microsoft Visual
+        // C++ Runtime to avoid dependencies on vcruntime140.dll and similar libraries.
+        if cfg!(target_feature = "crt-static") && is_compiler("msvc") {
+            cfg.static_crt(true);
         }
 
         // Older versions of visual studio don't support c99 (including isnan), which
@@ -291,7 +289,7 @@ mod build_bundled {
     }
 
     fn env(name: &str) -> Option<OsString> {
-        let prefix = env::var("TARGET").unwrap().to_uppercase().replace("-", "_");
+        let prefix = env::var("TARGET").unwrap().to_uppercase().replace('-', "_");
         let prefixed = format!("{}_{}", prefix, name);
         let var = env::var_os(&prefixed);
 
@@ -431,26 +429,23 @@ mod build_linked {
         }
 
         // See if pkg-config can do everything for us.
-        match pkg_config::Config::new()
+        if let Ok(mut lib) = pkg_config::Config::new()
             .print_system_libs(false)
             .probe(link_lib)
         {
-            Ok(mut lib) => {
-                if let Some(mut header) = lib.include_paths.pop() {
-                    header.push("sqlite3.h");
-                    HeaderLocation::FromPath(header.to_string_lossy().into())
-                } else {
-                    HeaderLocation::Wrapper
-                }
-            }
-            Err(_) => {
-                // No env var set and pkg-config couldn't help; just output the link-lib
-                // request and hope that the library exists on the system paths. We used to
-                // output /usr/lib explicitly, but that can introduce other linking problems;
-                // see https://github.com/rusqlite/rusqlite/issues/207.
-                println!("cargo:rustc-link-lib={}={}", find_link_mode(), link_lib);
+            if let Some(mut header) = lib.include_paths.pop() {
+                header.push("sqlite3.h");
+                HeaderLocation::FromPath(header.to_string_lossy().into())
+            } else {
                 HeaderLocation::Wrapper
             }
+        } else {
+            // No env var set and pkg-config couldn't help; just output the link-lib
+            // request and hope that the library exists on the system paths. We used to
+            // output /usr/lib explicitly, but that can introduce other linking problems;
+            // see https://github.com/rusqlite/rusqlite/issues/207.
+            println!("cargo:rustc-link-lib={}={}", find_link_mode(), link_lib);
+            HeaderLocation::Wrapper
         }
     }
 

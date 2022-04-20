@@ -22,6 +22,7 @@ pub enum ValueRef<'a> {
 impl ValueRef<'_> {
     /// Returns SQLite fundamental datatype.
     #[inline]
+    #[must_use]
     pub fn data_type(&self) -> Type {
         match *self {
             ValueRef::Null => Type::Null,
@@ -45,6 +46,19 @@ impl<'a> ValueRef<'a> {
         }
     }
 
+    /// If `self` is case `Null` returns None.
+    /// If `self` is case `Integer`, returns the integral value.
+    /// Otherwise returns [`Err(Error::InvalidColumnType)`](crate::Error::
+    /// InvalidColumnType).
+    #[inline]
+    pub fn as_i64_or_null(&self) -> FromSqlResult<Option<i64>> {
+        match *self {
+            ValueRef::Null => Ok(None),
+            ValueRef::Integer(i) => Ok(Some(i)),
+            _ => Err(FromSqlError::InvalidType),
+        }
+    }
+
     /// If `self` is case `Real`, returns the floating point value. Otherwise,
     /// returns [`Err(Error::InvalidColumnType)`](crate::Error::
     /// InvalidColumnType).
@@ -52,6 +66,19 @@ impl<'a> ValueRef<'a> {
     pub fn as_f64(&self) -> FromSqlResult<f64> {
         match *self {
             ValueRef::Real(f) => Ok(f),
+            _ => Err(FromSqlError::InvalidType),
+        }
+    }
+
+    /// If `self` is case `Null` returns None.
+    /// If `self` is case `Real`, returns the floating point value.
+    /// Otherwise returns [`Err(Error::InvalidColumnType)`](crate::Error::
+    /// InvalidColumnType).
+    #[inline]
+    pub fn as_f64_or_null(&self) -> FromSqlResult<Option<f64>> {
+        match *self {
+            ValueRef::Null => Ok(None),
+            ValueRef::Real(f) => Ok(Some(f)),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -68,6 +95,21 @@ impl<'a> ValueRef<'a> {
         }
     }
 
+    /// If `self` is case `Null` returns None.
+    /// If `self` is case `Text`, returns the string value.
+    /// Otherwise returns [`Err(Error::InvalidColumnType)`](crate::Error::
+    /// InvalidColumnType).
+    #[inline]
+    pub fn as_str_or_null(&self) -> FromSqlResult<Option<&'a str>> {
+        match *self {
+            ValueRef::Null => Ok(None),
+            ValueRef::Text(t) => std::str::from_utf8(t)
+                .map_err(|e| FromSqlError::Other(Box::new(e)))
+                .map(Some),
+            _ => Err(FromSqlError::InvalidType),
+        }
+    }
+
     /// If `self` is case `Blob`, returns the byte slice. Otherwise, returns
     /// [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
     #[inline]
@@ -78,12 +120,37 @@ impl<'a> ValueRef<'a> {
         }
     }
 
+    /// If `self` is case `Null` returns None.
+    /// If `self` is case `Blob`, returns the byte slice.
+    /// Otherwise returns [`Err(Error::InvalidColumnType)`](crate::Error::
+    /// InvalidColumnType).
+    #[inline]
+    pub fn as_blob_or_null(&self) -> FromSqlResult<Option<&'a [u8]>> {
+        match *self {
+            ValueRef::Null => Ok(None),
+            ValueRef::Blob(b) => Ok(Some(b)),
+            _ => Err(FromSqlError::InvalidType),
+        }
+    }
+
     /// Returns the byte slice that makes up this ValueRef if it's either
     /// [`ValueRef::Blob`] or [`ValueRef::Text`].
     #[inline]
     pub fn as_bytes(&self) -> FromSqlResult<&'a [u8]> {
         match self {
             ValueRef::Text(s) | ValueRef::Blob(s) => Ok(s),
+            _ => Err(FromSqlError::InvalidType),
+        }
+    }
+
+    /// If `self` is case `Null` returns None.
+    /// If `self` is [`ValueRef::Blob`] or [`ValueRef::Text`] returns the byte
+    /// slice that makes up this value
+    #[inline]
+    pub fn as_bytes_or_null(&self) -> FromSqlResult<Option<&'a [u8]>> {
+        match *self {
+            ValueRef::Null => Ok(None),
+            ValueRef::Text(s) | ValueRef::Blob(s) => Ok(Some(s)),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -162,7 +229,7 @@ impl<'a> ValueRef<'a> {
                     !text.is_null(),
                     "unexpected SQLITE_TEXT value type with NULL data"
                 );
-                let s = from_raw_parts(text as *const u8, len as usize);
+                let s = from_raw_parts(text.cast::<u8>(), len as usize);
                 ValueRef::Text(s)
             }
             ffi::SQLITE_BLOB => {
@@ -180,7 +247,7 @@ impl<'a> ValueRef<'a> {
                         !blob.is_null(),
                         "unexpected SQLITE_BLOB value type with NULL data"
                     );
-                    ValueRef::Blob(from_raw_parts(blob as *const u8, len as usize))
+                    ValueRef::Blob(from_raw_parts(blob.cast::<u8>(), len as usize))
                 } else {
                     // The return value from sqlite3_value_blob() for a zero-length BLOB
                     // is a NULL pointer.
@@ -190,4 +257,7 @@ impl<'a> ValueRef<'a> {
             _ => unreachable!("sqlite3_value_type returned invalid value"),
         }
     }
+
+    // TODO sqlite3_value_nochange // 3.22.0 & VTab xUpdate
+    // TODO sqlite3_value_frombind // 3.28.0
 }

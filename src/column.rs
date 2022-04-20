@@ -12,12 +12,14 @@ pub struct Column<'stmt> {
 impl Column<'_> {
     /// Returns the name of the column.
     #[inline]
+    #[must_use]
     pub fn name(&self) -> &str {
         self.name
     }
 
     /// Returns the type of the column (`None` for expression).
     #[inline]
+    #[must_use]
     pub fn decl_type(&self) -> Option<&str> {
         self.decl_type
     }
@@ -165,10 +167,17 @@ mod test {
             column_names.as_slice(),
             &["type", "name", "tbl_name", "rootpage", "sql"]
         );
-        let column_types: Vec<Option<&str>> = columns.iter().map(Column::decl_type).collect();
+        let column_types: Vec<Option<String>> = columns
+            .iter()
+            .map(|col| col.decl_type().map(str::to_lowercase))
+            .collect();
         assert_eq!(
             &column_types[..3],
-            &[Some("text"), Some("text"), Some("text"),]
+            &[
+                Some("text".to_owned()),
+                Some("text".to_owned()),
+                Some("text".to_owned()),
+            ]
         );
         Ok(())
     }

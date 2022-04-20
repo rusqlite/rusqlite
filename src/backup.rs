@@ -40,7 +40,7 @@ use std::time::Duration;
 
 use crate::ffi;
 
-use crate::error::{error_from_handle, error_from_sqlite_code};
+use crate::error::error_from_handle;
 use crate::{Connection, DatabaseName, Result};
 
 impl Connection {
@@ -107,7 +107,7 @@ impl Connection {
         let restore = Backup::new_with_names(&src, DatabaseName::Main, self, name)?;
 
         let mut r = More;
-        let mut busy_count = 0i32;
+        let mut busy_count = 0_i32;
         'restore_loop: while r == More || r == Busy {
             r = restore.step(100)?;
             if let Some(ref f) = progress {
@@ -169,7 +169,7 @@ pub struct Progress {
 /// A handle to an online backup.
 pub struct Backup<'a, 'b> {
     phantom_from: PhantomData<&'a Connection>,
-    phantom_to: PhantomData<&'b Connection>,
+    to: &'b Connection,
     b: *mut ffi::sqlite3_backup,
 }
 
@@ -223,7 +223,7 @@ impl Backup<'_, '_> {
 
         Ok(Backup {
             phantom_from: PhantomData,
-            phantom_to: PhantomData,
+            to,
             b,
         })
     }
@@ -231,6 +231,7 @@ impl Backup<'_, '_> {
     /// Gets the progress of the backup as of the last call to
     /// [`step`](Backup::step).
     #[inline]
+    #[must_use]
     pub fn progress(&self) -> Progress {
         unsafe {
             Progress {
@@ -263,7 +264,7 @@ impl Backup<'_, '_> {
             ffi::SQLITE_OK => Ok(More),
             ffi::SQLITE_BUSY => Ok(Busy),
             ffi::SQLITE_LOCKED => Ok(Locked),
-            _ => Err(error_from_sqlite_code(rc, None)),
+            _ => self.to.decode_result(rc).map(|_| More),
         }
     }
 
@@ -296,7 +297,7 @@ impl Backup<'_, '_> {
         loop {
             let r = self.step(pages_per_step)?;
             if let Some(progress) = progress {
-                progress(self.progress())
+                progress(self.progress());
             }
             match r {
                 More | Busy | Locked => thread::sleep(pause_between_pages),

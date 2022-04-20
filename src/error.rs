@@ -1,6 +1,6 @@
 use crate::types::FromSqlError;
 use crate::types::Type;
-use crate::{errmsg_to_string, ffi};
+use crate::{errmsg_to_string, ffi, Result};
 use std::error;
 use std::fmt;
 use std::os::raw::c_int;
@@ -202,12 +202,7 @@ impl From<FromSqlError> for Error {
         // context.
         match err {
             FromSqlError::OutOfRange(val) => Error::IntegralValueOutOfRange(UNKNOWN_COLUMN, val),
-            #[cfg(feature = "i128_blob")]
-            FromSqlError::InvalidI128Size(_) => {
-                Error::FromSqlConversionFailure(UNKNOWN_COLUMN, Type::Blob, Box::new(err))
-            }
-            #[cfg(feature = "uuid")]
-            FromSqlError::InvalidUuidSize(_) => {
+            FromSqlError::InvalidBlobSize { .. } => {
                 Error::FromSqlConversionFailure(UNKNOWN_COLUMN, Type::Blob, Box::new(err))
             }
             FromSqlError::Other(source) => {
@@ -340,10 +335,29 @@ impl error::Error for Error {
     }
 }
 
+impl Error {
+    /// Returns the underlying SQLite error if this is [`Error::SqliteFailure`].
+    #[inline]
+    pub fn sqlite_error(&self) -> Option<&ffi::Error> {
+        match self {
+            Self::SqliteFailure(error, _) => Some(error),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying SQLite error code if this is
+    /// [`Error::SqliteFailure`].
+    #[inline]
+    pub fn sqlite_error_code(&self) -> Option<ffi::ErrorCode> {
+        self.sqlite_error().map(|error| error.code)
+    }
+}
+
 // These are public but not re-exported by lib.rs, so only visible within crate.
 
 #[cold]
 pub fn error_from_sqlite_code(code: c_int, message: Option<String>) -> Error {
+    // TODO sqlite3_error_offset // 3.38.0, #1130
     Error::SqliteFailure(ffi::Error::new(code), message)
 }
 
@@ -357,11 +371,10 @@ pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     error_from_sqlite_code(code, message)
 }
 
-macro_rules! check {
-    ($funcall:expr) => {{
-        let rc = $funcall;
-        if rc != crate::ffi::SQLITE_OK {
-            return Err(crate::error::error_from_sqlite_code(rc, None).into());
-        }
-    }};
+pub fn check(code: c_int) -> Result<()> {
+    if code != crate::ffi::SQLITE_OK {
+        Err(crate::error::error_from_sqlite_code(code, None))
+    } else {
+        Ok(())
+    }
 }

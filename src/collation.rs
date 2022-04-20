@@ -10,15 +10,15 @@ use crate::{str_to_cstring, Connection, InnerConnection, Result};
 
 // FIXME copy/paste from function.rs
 unsafe extern "C" fn free_boxed_value<T>(p: *mut c_void) {
-    drop(Box::from_raw(p as *mut T));
+    drop(Box::from_raw(p.cast::<T>()));
 }
 
 impl Connection {
     /// Add or modify a collation.
     #[inline]
-    pub fn create_collation<'c, C>(&'c self, collation_name: &str, x_compare: C) -> Result<()>
+    pub fn create_collation<C>(&self, collation_name: &str, x_compare: C) -> Result<()>
     where
-        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'c,
+        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'static,
     {
         self.db
             .borrow_mut()
@@ -42,9 +42,9 @@ impl Connection {
 }
 
 impl InnerConnection {
-    fn create_collation<'c, C>(&'c mut self, collation_name: &str, x_compare: C) -> Result<()>
+    fn create_collation<C>(&mut self, collation_name: &str, x_compare: C) -> Result<()>
     where
-        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'c,
+        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<C>(
             arg1: *mut c_void,
@@ -57,14 +57,14 @@ impl InnerConnection {
             C: Fn(&str, &str) -> Ordering,
         {
             let r = catch_unwind(|| {
-                let boxed_f: *mut C = arg1 as *mut C;
+                let boxed_f: *mut C = arg1.cast::<C>();
                 assert!(!boxed_f.is_null(), "Internal error - null function pointer");
                 let s1 = {
-                    let c_slice = slice::from_raw_parts(arg3 as *const u8, arg2 as usize);
+                    let c_slice = slice::from_raw_parts(arg3.cast::<u8>(), arg2 as usize);
                     String::from_utf8_lossy(c_slice)
                 };
                 let s2 = {
-                    let c_slice = slice::from_raw_parts(arg5 as *const u8, arg4 as usize);
+                    let c_slice = slice::from_raw_parts(arg5.cast::<u8>(), arg4 as usize);
                     String::from_utf8_lossy(c_slice)
                 };
                 (*boxed_f)(s1.as_ref(), s2.as_ref())
@@ -91,7 +91,7 @@ impl InnerConnection {
                 self.db(),
                 c_name.as_ptr(),
                 flags,
-                boxed_f as *mut c_void,
+                boxed_f.cast::<c_void>(),
                 Some(call_boxed_closure::<C>),
                 Some(free_boxed_value::<C>),
             )
