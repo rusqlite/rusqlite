@@ -384,9 +384,8 @@ impl Connection {
     ///
     /// - Open the database for both reading or writing.
     /// - Create the database if one does not exist at the path.
-    /// - Allow the filename to be interpreted as a URI (see
-    ///   <https://www.sqlite.org/uri.html#uri_filenames_in_sqlite> for
-    ///   details).
+    /// - Allow the filename to be interpreted as a URI (see <https://www.sqlite.org/uri.html#uri_filenames_in_sqlite>
+    ///   for details).
     /// - Disables the use of a per-connection mutex.
     ///
     ///     Rusqlite enforces thread-safety at compile time, so additional
@@ -594,6 +593,16 @@ impl Connection {
     #[inline]
     pub fn path(&self) -> Option<&Path> {
         self.path.as_deref()
+    }
+
+    /// Attempts to free as much heap memory as possible from the database
+    /// connection.
+    ///
+    /// This calls [`sqlite3_db_release_memory`](https://www.sqlite.org/c3ref/db_release_memory.html).
+    #[inline]
+    #[cfg(feature = "release_memory")]
+    pub fn release_memory(&self) -> Result<()> {
+        self.db.borrow_mut().release_memory()
     }
 
     /// Convenience method to prepare and execute a single SQL statement with
@@ -1289,7 +1298,7 @@ mod test {
         let filename = "no_such_file.db";
         let result = Connection::open_with_flags(filename, OpenFlags::SQLITE_OPEN_READ_ONLY);
         assert!(result.is_err());
-        let err = result.err().unwrap();
+        let err = result.unwrap_err();
         if let Error::SqliteFailure(e, Some(msg)) = err {
             assert_eq!(ErrorCode::CannotOpen, e.code);
             assert_eq!(ffi::SQLITE_CANTOPEN, e.extended_code);
@@ -1742,14 +1751,10 @@ mod test {
 
         let result: Result<Vec<i32>> = stmt.query([])?.map(|r| r.get(0)).collect();
 
-        match result.unwrap_err() {
-            Error::SqliteFailure(err, _) => {
-                assert_eq!(err.code, ErrorCode::OperationInterrupted);
-            }
-            err => {
-                panic!("Unexpected error {}", err);
-            }
-        }
+        assert_eq!(
+            result.unwrap_err().sqlite_error_code(),
+            Some(ErrorCode::OperationInterrupted)
+        );
         Ok(())
     }
 
@@ -2093,7 +2098,7 @@ mod test {
     }
 
     #[test]
-    #[cfg(all(feature = "bundled", not(feature = "bundled-sqlcipher")))] // SQLite >= 3.35.0
+    #[cfg(feature = "modern_sqlite")]
     fn test_returning() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER PRIMARY KEY)")?;
