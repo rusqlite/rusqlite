@@ -33,7 +33,7 @@ pub enum DbConfig {
     SQLITE_DBCONFIG_TRIGGER_EQP = 1008, // 3.22.0
     /// Activates or deactivates the "reset" flag for a database connection.
     /// Run VACUUM with this flag set to reset the database.
-    SQLITE_DBCONFIG_RESET_DATABASE = 1009,
+    SQLITE_DBCONFIG_RESET_DATABASE = 1009, // 3.24.0
     /// Activates or deactivates the "defensive" flag for a database connection.
     SQLITE_DBCONFIG_DEFENSIVE = 1010, // 3.26.0
     /// Activates or deactivates the "writable_schema" flag.
@@ -95,10 +95,10 @@ impl Connection {
 
     /// Make configuration changes to a database connection
     ///
-    /// - `SQLITE_DBCONFIG_ENABLE_FKEY`: `false` to disable FK enforcement, `true`
-    ///   to enable FK enforcement
-    /// - `SQLITE_DBCONFIG_ENABLE_TRIGGER`: `false` to disable triggers, `true` to
-    ///   enable triggers
+    /// - `SQLITE_DBCONFIG_ENABLE_FKEY`: `false` to disable FK enforcement,
+    ///   `true` to enable FK enforcement
+    /// - `SQLITE_DBCONFIG_ENABLE_TRIGGER`: `false` to disable triggers, `true`
+    ///   to enable triggers
     /// - `SQLITE_DBCONFIG_ENABLE_FTS3_TOKENIZER`: `false` to disable
     ///   `fts3_tokenizer()`, `true` to enable `fts3_tokenizer()`
     /// - `SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE`: `false` (the default) to enable
