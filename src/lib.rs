@@ -215,7 +215,7 @@ macro_rules! named_params {
     // Note: It's a lot more work to support this as part of the same macro as
     // `params!`, unfortunately.
     ($($param_name:literal: $param_val:expr),+ $(,)?) => {
-        &[$(($param_name, &$param_val as &dyn $crate::ToSql)),+] as &[(&str, &dyn $crate::ToSql)]
+        &[$((($param_name).replace(" ", ""), &$param_val as &dyn $crate::ToSql)),+] as &[(&str, &dyn $crate::ToSql)]
     };
 }
 
