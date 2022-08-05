@@ -41,10 +41,10 @@ use crate::{Connection, Result};
 
 // http://sqlite.org/bindptr.html
 
-pub(crate) const ARRAY_TYPE: *const c_char = b"rarray\0" as *const u8 as *const c_char;
+pub(crate) const ARRAY_TYPE: *const c_char = (b"rarray\0" as *const u8).cast::<c_char>();
 
 pub(crate) unsafe extern "C" fn free_array(p: *mut c_void) {
-    let _: Array = Rc::from_raw(p as *const Vec<Value>);
+    drop(Rc::from_raw(p as *const Vec<Value>));
 }
 
 /// Array parameter / pointer
@@ -106,18 +106,18 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
             }
         }
         if ptr_idx {
-            info.set_estimated_cost(1f64);
+            info.set_estimated_cost(1_f64);
             info.set_estimated_rows(100);
             info.set_idx_num(1);
         } else {
-            info.set_estimated_cost(2_147_483_647f64);
+            info.set_estimated_cost(2_147_483_647_f64);
             info.set_estimated_rows(2_147_483_647);
             info.set_idx_num(0);
         }
         Ok(())
     }
 
-    fn open(&self) -> Result<ArrayTabCursor<'_>> {
+    fn open(&mut self) -> Result<ArrayTabCursor<'_>> {
         Ok(ArrayTabCursor::new())
     }
 }

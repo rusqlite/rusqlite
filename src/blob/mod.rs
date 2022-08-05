@@ -265,12 +265,14 @@ impl Blob<'_> {
 
     /// Return the size in bytes of the BLOB.
     #[inline]
+    #[must_use]
     pub fn size(&self) -> i32 {
         unsafe { ffi::sqlite3_blob_bytes(self.blob) }
     }
 
     /// Return the current size in bytes of the BLOB.
     #[inline]
+    #[must_use]
     pub fn len(&self) -> usize {
         use std::convert::TryInto;
         self.size().try_into().unwrap()
@@ -278,6 +280,7 @@ impl Blob<'_> {
 
     /// Return true if the BLOB is empty.
     #[inline]
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.size() == 0
     }
@@ -318,8 +321,7 @@ impl io::Read for Blob<'_> {
         if n <= 0 {
             return Ok(0);
         }
-        let rc =
-            unsafe { ffi::sqlite3_blob_read(self.blob, buf.as_mut_ptr() as *mut _, n, self.pos) };
+        let rc = unsafe { ffi::sqlite3_blob_read(self.blob, buf.as_mut_ptr().cast(), n, self.pos) };
         self.conn
             .decode_result(rc)
             .map(|_| {
@@ -471,14 +473,14 @@ mod test {
         assert_eq!(&bytes, b"Clob5");
 
         // should not be able to seek negative or past end
-        assert!(blob.seek(SeekFrom::Current(-20)).is_err());
-        assert!(blob.seek(SeekFrom::End(0)).is_ok());
-        assert!(blob.seek(SeekFrom::Current(1)).is_err());
+        blob.seek(SeekFrom::Current(-20)).unwrap_err();
+        blob.seek(SeekFrom::End(0)).unwrap();
+        blob.seek(SeekFrom::Current(1)).unwrap_err();
 
         // write_all should detect when we return Ok(0) because there is no space left,
         // and return a write error
         blob.reopen(rowid)?;
-        assert!(blob.write_all(b"0123456789x").is_err());
+        blob.write_all(b"0123456789x").unwrap_err();
         Ok(())
     }
 
@@ -517,7 +519,7 @@ mod test {
             // trying to write too much and then flush should fail
             assert_eq!(8, writer.write(b"01234567").unwrap());
             assert_eq!(8, writer.write(b"01234567").unwrap());
-            assert!(writer.flush().is_err());
+            writer.flush().unwrap_err();
         }
 
         {
@@ -534,7 +536,7 @@ mod test {
 
             // trying to write_all too much should fail
             writer.write_all(b"aaaaaaaaaabbbbb").unwrap();
-            assert!(writer.flush().is_err());
+            writer.flush().unwrap_err();
         }
 
         {

@@ -8,14 +8,14 @@ use std::path::Path;
 /// targetting, and this test must be made at run-time (of the build script) See
 /// https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
 fn win_target() -> bool {
-    std::env::var("CARGO_CFG_WINDOWS").is_ok()
+    env::var("CARGO_CFG_WINDOWS").is_ok()
 }
 
 /// Tells whether we're building for Android.
 /// See [`win_target`]
 #[cfg(any(feature = "bundled", feature = "bundled-windows"))]
 fn android_target() -> bool {
-    std::env::var("CARGO_CFG_TARGET_OS").map_or(false, |v| v == "android")
+    env::var("CARGO_CFG_TARGET_OS").map_or(false, |v| v == "android")
 }
 
 /// Tells whether a given compiler will be used `compiler_name` is compared to
@@ -23,7 +23,7 @@ fn android_target() -> bool {
 ///
 /// See [`win_target`]
 fn is_compiler(compiler_name: &str) -> bool {
-    std::env::var("CARGO_CFG_TARGET_ENV").map_or(false, |v| v == compiler_name)
+    env::var("CARGO_CFG_TARGET_ENV").map_or(false, |v| v == compiler_name)
 }
 
 fn main() {
@@ -46,9 +46,9 @@ fn main() {
                 features 'bundled' and 'bundled-windows'. If you want a bundled build of
                 SQLCipher (available for the moment only on Unix), use feature 'bundled-sqlcipher'
                 or 'bundled-sqlcipher-vendored-openssl' to also bundle OpenSSL crypto."
-            )
+            );
         }
-        build_linked::main(&out_dir, &out_path)
+        build_linked::main(&out_dir, &out_path);
     } else if cfg!(feature = "bundled")
         || (win_target() && cfg!(feature = "bundled-windows"))
         || cfg!(feature = "bundled-sqlcipher")
@@ -66,7 +66,7 @@ fn main() {
         )))]
         panic!("The runtime test should not run this branch, which has not compiled any logic.")
     } else {
-        build_linked::main(&out_dir, &out_path)
+        build_linked::main(&out_dir, &out_path);
     }
 }
 
@@ -168,7 +168,7 @@ mod build_bundled {
                             panic!(
                                 "OpenSSL include directory does not exist: {}",
                                 inc_dir.to_string_lossy()
-                            )
+                            );
                         }
 
                         use_openssl = true;
@@ -178,7 +178,7 @@ mod build_bundled {
             };
 
             if cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
-                cfg.include(std::env::var("DEP_OPENSSL_INCLUDE").unwrap());
+                cfg.include(env::var("DEP_OPENSSL_INCLUDE").unwrap());
                 // cargo will resolve downstream to the static lib in
                 // openssl-sys
             } else if is_windows {
@@ -289,7 +289,7 @@ mod build_bundled {
     }
 
     fn env(name: &str) -> Option<OsString> {
-        let prefix = env::var("TARGET").unwrap().to_uppercase().replace("-", "_");
+        let prefix = env::var("TARGET").unwrap().to_uppercase().replace('-', "_");
         let prefixed = format!("{}_{}", prefix, name);
         let var = env::var_os(&prefixed);
 
@@ -429,26 +429,23 @@ mod build_linked {
         }
 
         // See if pkg-config can do everything for us.
-        match pkg_config::Config::new()
+        if let Ok(mut lib) = pkg_config::Config::new()
             .print_system_libs(false)
             .probe(link_lib)
         {
-            Ok(mut lib) => {
-                if let Some(mut header) = lib.include_paths.pop() {
-                    header.push("sqlite3.h");
-                    HeaderLocation::FromPath(header.to_string_lossy().into())
-                } else {
-                    HeaderLocation::Wrapper
-                }
-            }
-            Err(_) => {
-                // No env var set and pkg-config couldn't help; just output the link-lib
-                // request and hope that the library exists on the system paths. We used to
-                // output /usr/lib explicitly, but that can introduce other linking problems;
-                // see https://github.com/rusqlite/rusqlite/issues/207.
-                println!("cargo:rustc-link-lib={}={}", find_link_mode(), link_lib);
+            if let Some(mut header) = lib.include_paths.pop() {
+                header.push("sqlite3.h");
+                HeaderLocation::FromPath(header.to_string_lossy().into())
+            } else {
                 HeaderLocation::Wrapper
             }
+        } else {
+            // No env var set and pkg-config couldn't help; just output the link-lib
+            // request and hope that the library exists on the system paths. We used to
+            // output /usr/lib explicitly, but that can introduce other linking problems;
+            // see https://github.com/rusqlite/rusqlite/issues/207.
+            println!("cargo:rustc-link-lib={}={}", find_link_mode(), link_lib);
+            HeaderLocation::Wrapper
         }
     }
 
@@ -508,7 +505,7 @@ mod bindings {
 
     impl ParseCallbacks for SqliteTypeChooser {
         fn int_macro(&self, _name: &str, value: i64) -> Option<IntKind> {
-            if value >= i32::min_value() as i64 && value <= i32::max_value() as i64 {
+            if value >= i32::MIN as i64 && value <= i32::MAX as i64 {
                 Some(IntKind::I32)
             } else {
                 None

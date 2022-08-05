@@ -10,8 +10,8 @@ use std::os::raw::c_int;
 use crate::ffi;
 use crate::types::Type;
 use crate::vtab::{
-    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConnection, VTabCursor,
-    Values,
+    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConfig, VTabConnection,
+    VTabCursor, Values,
 };
 use crate::{Connection, Error, Result};
 
@@ -38,7 +38,7 @@ bitflags::bitflags! {
         const STEP  = 4;
         // output in descending order
         const DESC  = 8;
-        // output in descending order
+        // output in ascending order
         const ASC  = 16;
         // Both start and stop
         const BOTH  = QueryPlanFlags::START.bits | QueryPlanFlags::STOP.bits;
@@ -57,13 +57,14 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
     type Cursor = SeriesTabCursor<'vtab>;
 
     fn connect(
-        _: &mut VTabConnection,
+        db: &mut VTabConnection,
         _aux: Option<&()>,
         _args: &[&[u8]],
     ) -> Result<(String, SeriesTab)> {
         let vtab = SeriesTab {
             base: ffi::sqlite3_vtab::default(),
         };
+        db.config(VTabConfig::Innocuous)?;
         Ok((
             "CREATE TABLE x(value,start hidden,stop hidden,step hidden)".to_owned(),
             vtab,
@@ -103,6 +104,8 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
             let mut constraint_usage = info.constraint_usage(*j);
             constraint_usage.set_argv_index(n_arg);
             constraint_usage.set_omit(true);
+            #[cfg(all(test, feature = "modern_sqlite"))]
+            debug_assert_eq!(Ok("BINARY"), info.collation(*j));
         }
         if !(unusable_mask & !idx_num).is_empty() {
             return Err(Error::SqliteFailure(
@@ -123,12 +126,16 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
             let order_by_consumed = {
                 let mut order_bys = info.order_bys();
                 if let Some(order_by) = order_bys.next() {
-                    if order_by.is_order_by_desc() {
-                        idx_num |= QueryPlanFlags::DESC;
+                    if order_by.column() == 0 {
+                        if order_by.is_order_by_desc() {
+                            idx_num |= QueryPlanFlags::DESC;
+                        } else {
+                            idx_num |= QueryPlanFlags::ASC;
+                        }
+                        true
                     } else {
-                        idx_num |= QueryPlanFlags::ASC;
+                        false
                     }
-                    true
                 } else {
                     false
                 }
@@ -146,7 +153,7 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
         Ok(())
     }
 
-    fn open(&self) -> Result<SeriesTabCursor<'_>> {
+    fn open(&mut self) -> Result<SeriesTabCursor<'_>> {
         Ok(SeriesTabCursor::new())
     }
 }

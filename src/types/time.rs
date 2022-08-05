@@ -47,7 +47,7 @@ impl FromSql for OffsetDateTime {
                 len if len <= 19 => {
                     // TODO YYYY-MM-DDTHH:MM:SS
                     PrimitiveDateTime::parse(s, &PRIMITIVE_SHORT_DATE_TIME_FORMAT)
-                        .map(|d| d.assume_utc())
+                        .map(PrimitiveDateTime::assume_utc)
                 }
                 _ if s.as_bytes()[19] == b':' => {
                     // legacy
@@ -56,7 +56,7 @@ impl FromSql for OffsetDateTime {
                 _ if s.as_bytes()[19] == b'.' => OffsetDateTime::parse(s, &OFFSET_DATE_TIME_FORMAT)
                     .or_else(|err| {
                         PrimitiveDateTime::parse(s, &PRIMITIVE_DATE_TIME_FORMAT)
-                            .map(|d| d.assume_utc())
+                            .map(PrimitiveDateTime::assume_utc)
                             .map_err(|_| err)
                     }),
                 _ => OffsetDateTime::parse(s, &OFFSET_SHORT_DATE_TIME_FORMAT),
@@ -154,7 +154,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         let result: Result<OffsetDateTime> =
             db.query_row("SELECT CURRENT_TIMESTAMP", [], |r| r.get(0));
-        assert!(result.is_ok());
+        result.unwrap();
         Ok(())
     }
 
@@ -162,7 +162,7 @@ mod test {
     fn test_param() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let result: Result<bool> = db.query_row("SELECT 1 WHERE ? BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')", [OffsetDateTime::now_utc()], |r| r.get(0));
-        assert!(result.is_ok());
+        result.unwrap();
         Ok(())
     }
 }

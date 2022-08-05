@@ -22,6 +22,7 @@ pub enum ValueRef<'a> {
 impl ValueRef<'_> {
     /// Returns SQLite fundamental datatype.
     #[inline]
+    #[must_use]
     pub fn data_type(&self) -> Type {
         match *self {
             ValueRef::Null => Type::Null,
@@ -228,7 +229,7 @@ impl<'a> ValueRef<'a> {
                     !text.is_null(),
                     "unexpected SQLITE_TEXT value type with NULL data"
                 );
-                let s = from_raw_parts(text as *const u8, len as usize);
+                let s = from_raw_parts(text.cast::<u8>(), len as usize);
                 ValueRef::Text(s)
             }
             ffi::SQLITE_BLOB => {
@@ -246,7 +247,7 @@ impl<'a> ValueRef<'a> {
                         !blob.is_null(),
                         "unexpected SQLITE_BLOB value type with NULL data"
                     );
-                    ValueRef::Blob(from_raw_parts(blob as *const u8, len as usize))
+                    ValueRef::Blob(from_raw_parts(blob.cast::<u8>(), len as usize))
                 } else {
                     // The return value from sqlite3_value_blob() for a zero-length BLOB
                     // is a NULL pointer.
@@ -256,4 +257,7 @@ impl<'a> ValueRef<'a> {
             _ => unreachable!("sqlite3_value_type returned invalid value"),
         }
     }
+
+    // TODO sqlite3_value_nochange // 3.22.0 & VTab xUpdate
+    // TODO sqlite3_value_frombind // 3.28.0
 }
