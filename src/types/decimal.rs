@@ -1,5 +1,5 @@
 //! [`ToSql`] and [`FromSql`] implementation for [`rust_decimal::Decimal`].
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ValueRef};
+use crate::types::{FromSql, FromSqlError, FromSqlResult,  ValueRef};
 use crate::Result;
 use rust_decimal::Decimal;
 use std::convert::TryInto;
@@ -49,23 +49,19 @@ mod test {
         let db = &checked_memory_handle()?;
 
         let zero = Decimal::from(0);
-        let max_float = Decimal::from_str(&f64::MAX.to_string()).unwrap();
         let max_decimal = Decimal::MAX;
 
         db.execute(
-            "INSERT INTO Decimals (i, v) VALUES (0, ?), (1, ?), (2, ?), (3, ?)",
+            "INSERT INTO Decimals (i, v) VALUES (0, ?), (1, ?), (2, ?)",
             // also insert invalid data that will fail to decode to decimal
-            params![0, f64::MAX, max_decimal, "illegal"],
+            params![0,  max_decimal, "illegal"],
         )?;
 
         assert_eq!(get_decimal(db, 0)?, zero);
-        assert_eq!(get_decimal(db, 1)?, max_float);
-        // Currently the round-trip from Decimal::MAX can fail... The real error is a
-        // overflow
-        assert_eq!(get_decimal(db, 2)?, max_decimal);
+        assert_eq!(get_decimal(db, 1)?, max_decimal);
         //This is in fact a parsing error...
         matches!(
-            get_decimal(db, 3),
+            get_decimal(db,2),
             Err(Error::FromSqlConversionFailure(0, Type::Text, ..))
         );
 
