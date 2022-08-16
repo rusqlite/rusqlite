@@ -421,20 +421,8 @@ pub struct sqlite3_file_sqlite3_io_methods {
                                                                   ::std::os::raw::c_int)
                                              -> ::std::os::raw::c_int>,
 }
-#[test]
-fn bindgen_test_layout_sqlite3_file_sqlite3_io_methods() {
-    assert_eq!(::std::mem::size_of::<sqlite3_file_sqlite3_io_methods>() ,
-               136usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_file_sqlite3_io_methods>() ,
-               8usize);
-}
 impl Clone for sqlite3_file_sqlite3_io_methods {
     fn clone(&self) -> Self { *self }
-}
-#[test]
-fn bindgen_test_layout_sqlite3_file() {
-    assert_eq!(::std::mem::size_of::<sqlite3_file>() , 8usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_file>() , 8usize);
 }
 impl Clone for sqlite3_file {
     fn clone(&self) -> Self { *self }
@@ -561,11 +549,6 @@ pub struct sqlite3_vfs {
                                                    ->
                                                        *const ::std::os::raw::c_char>,
 }
-#[test]
-fn bindgen_test_layout_sqlite3_vfs() {
-    assert_eq!(::std::mem::size_of::<sqlite3_vfs>() , 168usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_vfs>() , 8usize);
-}
 impl Clone for sqlite3_vfs {
     fn clone(&self) -> Self { *self }
 }
@@ -616,11 +599,6 @@ pub struct sqlite3_mem_methods {
     pub xShutdown: ::std::option::Option<unsafe extern "C" fn(arg1:
                                                                   *mut ::std::os::raw::c_void)>,
     pub pAppData: *mut ::std::os::raw::c_void,
-}
-#[test]
-fn bindgen_test_layout_sqlite3_mem_methods() {
-    assert_eq!(::std::mem::size_of::<sqlite3_mem_methods>() , 64usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_mem_methods>() , 8usize);
 }
 impl Clone for sqlite3_mem_methods {
     fn clone(&self) -> Self { *self }
@@ -1532,11 +1510,6 @@ pub struct sqlite3_vtab {
     pub nRef: ::std::os::raw::c_int,
     pub zErrMsg: *mut ::std::os::raw::c_char,
 }
-#[test]
-fn bindgen_test_layout_sqlite3_vtab() {
-    assert_eq!(::std::mem::size_of::<sqlite3_vtab>() , 24usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_vtab>() , 8usize);
-}
 impl Clone for sqlite3_vtab {
     fn clone(&self) -> Self { *self }
 }
@@ -1562,13 +1535,6 @@ pub struct sqlite3_index_info_sqlite3_index_constraint {
     pub usable: ::std::os::raw::c_uchar,
     pub iTermOffset: ::std::os::raw::c_int,
 }
-#[test]
-fn bindgen_test_layout_sqlite3_index_info_sqlite3_index_constraint() {
-    assert_eq!(::std::mem::size_of::<sqlite3_index_info_sqlite3_index_constraint>()
-               , 12usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_index_info_sqlite3_index_constraint>()
-               , 4usize);
-}
 impl Clone for sqlite3_index_info_sqlite3_index_constraint {
     fn clone(&self) -> Self { *self }
 }
@@ -1577,13 +1543,6 @@ impl Clone for sqlite3_index_info_sqlite3_index_constraint {
 pub struct sqlite3_index_info_sqlite3_index_orderby {
     pub iColumn: ::std::os::raw::c_int,
     pub desc: ::std::os::raw::c_uchar,
-}
-#[test]
-fn bindgen_test_layout_sqlite3_index_info_sqlite3_index_orderby() {
-    assert_eq!(::std::mem::size_of::<sqlite3_index_info_sqlite3_index_orderby>()
-               , 8usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_index_info_sqlite3_index_orderby>()
-               , 4usize);
 }
 impl Clone for sqlite3_index_info_sqlite3_index_orderby {
     fn clone(&self) -> Self { *self }
@@ -1594,20 +1553,8 @@ pub struct sqlite3_index_info_sqlite3_index_constraint_usage {
     pub argvIndex: ::std::os::raw::c_int,
     pub omit: ::std::os::raw::c_uchar,
 }
-#[test]
-fn bindgen_test_layout_sqlite3_index_info_sqlite3_index_constraint_usage() {
-    assert_eq!(::std::mem::size_of::<sqlite3_index_info_sqlite3_index_constraint_usage>()
-               , 8usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_index_info_sqlite3_index_constraint_usage>()
-               , 4usize);
-}
 impl Clone for sqlite3_index_info_sqlite3_index_constraint_usage {
     fn clone(&self) -> Self { *self }
-}
-#[test]
-fn bindgen_test_layout_sqlite3_index_info() {
-    assert_eq!(::std::mem::size_of::<sqlite3_index_info>() , 72usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_index_info>() , 8usize);
 }
 impl Clone for sqlite3_index_info {
     fn clone(&self) -> Self { *self }
@@ -1616,11 +1563,6 @@ impl Clone for sqlite3_index_info {
 #[derive(Debug, Copy)]
 pub struct sqlite3_vtab_cursor {
     pub pVtab: *mut sqlite3_vtab,
-}
-#[test]
-fn bindgen_test_layout_sqlite3_vtab_cursor() {
-    assert_eq!(::std::mem::size_of::<sqlite3_vtab_cursor>() , 8usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_vtab_cursor>() , 8usize);
 }
 impl Clone for sqlite3_vtab_cursor {
     fn clone(&self) -> Self { *self }
@@ -1761,11 +1703,6 @@ pub struct sqlite3_module {
                                                                     ::std::os::raw::c_int)
                                                -> ::std::os::raw::c_int>,
 }
-#[test]
-fn bindgen_test_layout_sqlite3_module() {
-    assert_eq!(::std::mem::size_of::<sqlite3_module>() , 184usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_module>() , 8usize);
-}
 impl Clone for sqlite3_module {
     fn clone(&self) -> Self { *self }
 }
@@ -1892,11 +1829,6 @@ pub struct sqlite3_mutex_methods {
                                                                       *mut sqlite3_mutex)
                                                  -> ::std::os::raw::c_int>,
 }
-#[test]
-fn bindgen_test_layout_sqlite3_mutex_methods() {
-    assert_eq!(::std::mem::size_of::<sqlite3_mutex_methods>() , 72usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_mutex_methods>() , 8usize);
-}
 impl Clone for sqlite3_mutex_methods {
     fn clone(&self) -> Self { *self }
 }
@@ -1993,11 +1925,6 @@ pub struct sqlite3_pcache_methods {
                                                                   ::std::os::raw::c_uint)>,
     pub xDestroy: ::std::option::Option<unsafe extern "C" fn(arg1:
                                                                  *mut sqlite3_pcache)>,
-}
-#[test]
-fn bindgen_test_layout_sqlite3_pcache_methods() {
-    assert_eq!(::std::mem::size_of::<sqlite3_pcache_methods>() , 88usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_pcache_methods>() , 8usize);
 }
 impl Clone for sqlite3_pcache_methods {
     fn clone(&self) -> Self { *self }
@@ -2101,11 +2028,6 @@ pub struct sqlite3_rtree_geometry {
     pub pUser: *mut ::std::os::raw::c_void,
     pub xDelUser: ::std::option::Option<unsafe extern "C" fn(arg1:
                                                                  *mut ::std::os::raw::c_void)>,
-}
-#[test]
-fn bindgen_test_layout_sqlite3_rtree_geometry() {
-    assert_eq!(::std::mem::size_of::<sqlite3_rtree_geometry>() , 40usize);
-    assert_eq!(::std::mem::align_of::<sqlite3_rtree_geometry>() , 8usize);
 }
 impl Clone for sqlite3_rtree_geometry {
     fn clone(&self) -> Self { *self }
