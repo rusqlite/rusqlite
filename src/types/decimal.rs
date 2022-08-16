@@ -1,5 +1,5 @@
 //! [`ToSql`] and [`FromSql`] implementation for [`rust_decimal::Decimal`].
-use crate::types::{FromSql, FromSqlError, FromSqlResult,  ValueRef};
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ValueRef};
 use crate::Result;
 use rust_decimal::Decimal;
 use std::convert::TryInto;
@@ -54,14 +54,14 @@ mod test {
         db.execute(
             "INSERT INTO Decimals (i, v) VALUES (0, ?), (1, ?), (2, ?)",
             // also insert invalid data that will fail to decode to decimal
-            params![0,  max_decimal, "illegal"],
+            params![0, max_decimal, "illegal"],
         )?;
 
         assert_eq!(get_decimal(db, 0)?, zero);
         assert_eq!(get_decimal(db, 1)?, max_decimal);
         //This is in fact a parsing error...
         matches!(
-            get_decimal(db,2),
+            get_decimal(db, 2),
             Err(Error::FromSqlConversionFailure(0, Type::Text, ..))
         );
 
