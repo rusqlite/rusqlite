@@ -805,13 +805,10 @@ mod test {
 
     fn one_changeset_update() -> Result<Changeset> {
         let db = Connection::open_in_memory()?;
-        db.execute_batch("
-            CREATE TABLE foo(
-                t TEXT PRIMARY KEY NOT NULL,
-                i INTEGER NOT NULL DEFAULT 0
-            );
-            INSERT INTO foo (t) VALUES ('bar');
-        ")?;
+        db.execute_batch(
+            "CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL, i INTEGER NOT NULL DEFAULT 0);",
+        )?;
+        db.execute_batch("INSERT INTO foo (t) VALUES ('bar');")?;
 
         let mut session = Session::new(&db)?;
         session.attach(None)?;
