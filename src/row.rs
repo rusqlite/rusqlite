@@ -29,7 +29,8 @@ impl<'stmt> Rows<'stmt> {
     /// This interface is not compatible with Rust's `Iterator` trait, because
     /// the lifetime of the returned row is tied to the lifetime of `self`.
     /// This is a fallible "streaming iterator". For a more natural interface,
-    /// consider using [`query_map`](crate::Statement::query_map) or [`query_and_then`](crate::Statement::query_and_then) instead, which
+    /// consider using [`query_map`](crate::Statement::query_map) or
+    /// [`query_and_then`](crate::Statement::query_and_then) instead, which
     /// return types that implement `Iterator`.
     #[allow(clippy::should_implement_trait)] // cannot implement Iterator
     #[inline]
@@ -77,6 +78,12 @@ impl<'stmt> Rows<'stmt> {
     {
         AndThenRows { rows: self, map: f }
     }
+
+    /// Give access to the underlying statement
+    #[must_use]
+    pub fn as_ref(&self) -> Option<&Statement<'stmt>> {
+        self.stmt
+    }
 }
 
 impl<'stmt> Rows<'stmt> {
@@ -104,7 +111,8 @@ impl Drop for Rows<'_> {
     }
 }
 
-/// `F` is used to tranform the _streaming_ iterator into a _fallible_ iterator.
+/// `F` is used to transform the _streaming_ iterator into a _fallible_
+/// iterator.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub struct Map<'stmt, F> {
     rows: Rows<'stmt>,
@@ -129,7 +137,8 @@ where
 
 /// An iterator over the mapped resulting rows of a query.
 ///
-/// `F` is used to tranform the _streaming_ iterator into a _standard_ iterator.
+/// `F` is used to transform the _streaming_ iterator into a _standard_
+/// iterator.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub struct MappedRows<'stmt, F> {
     rows: Rows<'stmt>,
@@ -148,7 +157,7 @@ where
         self.rows
             .next()
             .transpose()
-            .map(|row_result| row_result.and_then(|row| (map)(&row)))
+            .map(|row_result| row_result.and_then(map))
     }
 }
 
@@ -162,7 +171,7 @@ pub struct AndThenRows<'stmt, F> {
 
 impl<T, E, F> Iterator for AndThenRows<'_, F>
 where
-    E: convert::From<Error>,
+    E: From<Error>,
     F: FnMut(&Row<'_>) -> Result<T, E>,
 {
     type Item = Result<T, E>;
@@ -173,13 +182,13 @@ where
         self.rows
             .next()
             .transpose()
-            .map(|row_result| row_result.map_err(E::from).and_then(|row| (map)(&row)))
+            .map(|row_result| row_result.map_err(E::from).and_then(map))
     }
 }
 
 /// `FallibleStreamingIterator` differs from the standard library's `Iterator`
 /// in two ways:
-/// * each call to `next` (sqlite3_step) can fail.
+/// * each call to `next` (`sqlite3_step`) can fail.
 /// * returned `Row` is valid until `next` is called again or `Statement` is
 ///   reset or finalized.
 ///
@@ -201,8 +210,8 @@ impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
 
     #[inline]
     fn advance(&mut self) -> Result<()> {
-        match self.stmt {
-            Some(ref stmt) => match stmt.step() {
+        if let Some(stmt) = self.stmt {
+            match stmt.step() {
                 Ok(true) => {
                     self.row = Some(Row { stmt });
                     Ok(())
@@ -217,11 +226,10 @@ impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
                     self.row = None;
                     Err(e)
                 }
-            },
-            None => {
-                self.row = None;
-                Ok(())
             }
+        } else {
+            self.row = None;
+            Ok(())
         }
     }
 
@@ -280,20 +288,11 @@ impl<'stmt> Row<'stmt> {
             ),
             FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
             FromSqlError::Other(err) => {
-                Error::FromSqlConversionFailure(idx as usize, value.data_type(), err)
+                Error::FromSqlConversionFailure(idx, value.data_type(), err)
             }
-            #[cfg(feature = "i128_blob")]
-            FromSqlError::InvalidI128Size(_) => Error::InvalidColumnType(
-                idx,
-                self.stmt.column_name_unwrap(idx).into(),
-                value.data_type(),
-            ),
-            #[cfg(feature = "uuid")]
-            FromSqlError::InvalidUuidSize(_) => Error::InvalidColumnType(
-                idx,
-                self.stmt.column_name_unwrap(idx).into(),
-                value.data_type(),
-            ),
+            FromSqlError::InvalidBlobSize { .. } => {
+                Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
+            }
         })
     }
 
@@ -331,8 +330,8 @@ impl<'stmt> Row<'stmt> {
     ///
     /// ## Failure
     ///
-    /// Panics if calling [`row.get_ref(idx)`](Row::get_ref) would return an error,
-    /// including:
+    /// Panics if calling [`row.get_ref(idx)`](Row::get_ref) would return an
+    /// error, including:
     ///
     /// * If `idx` is outside the range of columns in the returned query.
     /// * If `idx` is not a valid column name for this row.
@@ -352,6 +351,12 @@ impl<'stmt> Row<'stmt> {
     #[inline]
     pub fn get_raw<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
         self.get_ref_unwrap(idx)
+    }
+}
+
+impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> {
+    fn as_ref(&self) -> &Statement<'stmt> {
+        self.stmt
     }
 }
 
@@ -386,7 +391,7 @@ impl RowIndex for usize {
 impl RowIndex for &'_ str {
     #[inline]
     fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
-        stmt.column_index(*self)
+        stmt.column_index(self)
     }
 }
 
@@ -443,7 +448,7 @@ mod tests {
         let val = conn.query_row("SELECT a FROM test", [], |row| <(u32,)>::try_from(row))?;
         assert_eq!(val, (42,));
         let fail = conn.query_row("SELECT a FROM test", [], |row| <(u32, u32)>::try_from(row));
-        assert!(fail.is_err());
+        fail.unwrap_err();
         Ok(())
     }
 
@@ -461,7 +466,7 @@ mod tests {
         let fail = conn.query_row("SELECT a, b FROM test", [], |row| {
             <(u32, u32, u32)>::try_from(row)
         });
-        assert!(fail.is_err());
+        fail.unwrap_err();
         Ok(())
     }
 

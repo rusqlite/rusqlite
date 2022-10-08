@@ -87,6 +87,7 @@ pub struct Transaction<'conn> {
 ///     sp.commit()
 /// }
 /// ```
+#[derive(Debug)]
 pub struct Savepoint<'conn> {
     conn: &'conn Connection,
     name: String,
@@ -169,6 +170,7 @@ impl Transaction<'_> {
     /// Get the current setting for what happens to the transaction when it is
     /// dropped.
     #[inline]
+    #[must_use]
     pub fn drop_behavior(&self) -> DropBehavior {
         self.drop_behavior
     }
@@ -177,7 +179,7 @@ impl Transaction<'_> {
     /// dropped.
     #[inline]
     pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior) {
-        self.drop_behavior = drop_behavior
+        self.drop_behavior = drop_behavior;
     }
 
     /// A convenience method which consumes and commits a transaction.
@@ -296,6 +298,7 @@ impl Savepoint<'_> {
     /// Get the current setting for what happens to the savepoint when it is
     /// dropped.
     #[inline]
+    #[must_use]
     pub fn drop_behavior(&self) -> DropBehavior {
         self.drop_behavior
     }
@@ -304,7 +307,7 @@ impl Savepoint<'_> {
     /// dropped.
     #[inline]
     pub fn set_drop_behavior(&mut self, drop_behavior: DropBehavior) {
-        self.drop_behavior = drop_behavior
+        self.drop_behavior = drop_behavior;
     }
 
     /// A convenience method which consumes and commits a savepoint.
@@ -373,11 +376,26 @@ impl Drop for Savepoint<'_> {
     }
 }
 
+/// Transaction state of a database
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+#[cfg(feature = "modern_sqlite")] // 3.37.0
+#[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+pub enum TransactionState {
+    /// Equivalent to SQLITE_TXN_NONE
+    None,
+    /// Equivalent to SQLITE_TXN_READ
+    Read,
+    /// Equivalent to SQLITE_TXN_WRITE
+    Write,
+}
+
 impl Connection {
     /// Begin a new transaction with the default behavior (DEFERRED).
     ///
     /// The transaction defaults to rolling back when it is dropped. If you
-    /// want the transaction to commit, you must call [`commit`](Transaction::commit) or
+    /// want the transaction to commit, you must call
+    /// [`commit`](Transaction::commit) or
     /// [`set_drop_behavior(DropBehavior::Commit)`](Transaction::set_drop_behavior).
     ///
     /// ## Example
@@ -458,7 +476,8 @@ impl Connection {
     ///
     /// The savepoint defaults to rolling back when it is dropped. If you want
     /// the savepoint to commit, you must call [`commit`](Savepoint::commit) or
-    /// [`set_drop_behavior(DropBehavior::Commit)`](Savepoint::set_drop_behavior).
+    /// [`set_drop_behavior(DropBehavior::Commit)`](Savepoint::
+    /// set_drop_behavior).
     ///
     /// ## Example
     ///
@@ -495,6 +514,16 @@ impl Connection {
     pub fn savepoint_with_name<T: Into<String>>(&mut self, name: T) -> Result<Savepoint<'_>> {
         Savepoint::with_name(self, name)
     }
+
+    /// Determine the transaction state of a database
+    #[cfg(feature = "modern_sqlite")] // 3.37.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn transaction_state(
+        &self,
+        db_name: Option<crate::DatabaseName<'_>>,
+    ) -> Result<TransactionState> {
+        self.db.borrow().txn_state(db_name)
+    }
 }
 
 #[cfg(test)]
@@ -530,7 +559,7 @@ mod test {
         }
         Ok(())
     }
-    fn assert_nested_tx_error(e: crate::Error) {
+    fn assert_nested_tx_error(e: Error) {
         if let Error::SqliteFailure(e, Some(m)) = &e {
             assert_eq!(e.extended_code, crate::ffi::SQLITE_ERROR);
             // FIXME: Not ideal...
@@ -704,6 +733,27 @@ mod test {
     fn assert_current_sum(x: i32, conn: &Connection) -> Result<()> {
         let i = conn.query_row::<i32, _, _>("SELECT SUM(x) FROM foo", [], |r| r.get(0))?;
         assert_eq!(x, i);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "modern_sqlite")]
+    fn txn_state() -> Result<()> {
+        use super::TransactionState;
+        use crate::DatabaseName;
+        let db = Connection::open_in_memory()?;
+        assert_eq!(
+            TransactionState::None,
+            db.transaction_state(Some(DatabaseName::Main))?
+        );
+        assert_eq!(TransactionState::None, db.transaction_state(None)?);
+        db.execute_batch("BEGIN")?;
+        assert_eq!(TransactionState::None, db.transaction_state(None)?);
+        let _: i32 = db.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+        db.pragma_update(None, "user_version", 1)?;
+        assert_eq!(TransactionState::Write, db.transaction_state(None)?);
+        db.execute_batch("ROLLBACK")?;
         Ok(())
     }
 }

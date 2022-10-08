@@ -1,4 +1,4 @@
-//! `feature = "array"` Array Virtual Table.
+//! Array Virtual Table.
 //!
 //! Note: `rarray`, not `carray` is the name of the table valued function we
 //! define.
@@ -41,10 +41,10 @@ use crate::{Connection, Result};
 
 // http://sqlite.org/bindptr.html
 
-pub(crate) const ARRAY_TYPE: *const c_char = b"rarray\0" as *const u8 as *const c_char;
+pub(crate) const ARRAY_TYPE: *const c_char = (b"rarray\0" as *const u8).cast::<c_char>();
 
 pub(crate) unsafe extern "C" fn free_array(p: *mut c_void) {
-    let _: Array = Rc::from_raw(p as *const Vec<Value>);
+    drop(Rc::from_raw(p as *const Vec<Value>));
 }
 
 /// Array parameter / pointer
@@ -57,7 +57,7 @@ impl ToSql for Array {
     }
 }
 
-/// `feature = "array"` Register the "rarray" module.
+/// Register the "rarray" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
     conn.create_module("rarray", eponymous_only_module::<ArrayTab>(), aux)
@@ -91,8 +91,8 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
 
     fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
         // Index of the pointer= constraint
-        let mut ptr_idx = None;
-        for (i, constraint) in info.constraints().enumerate() {
+        let mut ptr_idx = false;
+        for (constraint, mut constraint_usage) in info.constraints_and_usages() {
             if !constraint.is_usable() {
                 continue;
             }
@@ -100,27 +100,24 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
                 continue;
             }
             if let CARRAY_COLUMN_POINTER = constraint.column() {
-                ptr_idx = Some(i);
-            }
-        }
-        if let Some(ptr_idx) = ptr_idx {
-            {
-                let mut constraint_usage = info.constraint_usage(ptr_idx);
+                ptr_idx = true;
                 constraint_usage.set_argv_index(1);
                 constraint_usage.set_omit(true);
             }
-            info.set_estimated_cost(1f64);
+        }
+        if ptr_idx {
+            info.set_estimated_cost(1_f64);
             info.set_estimated_rows(100);
             info.set_idx_num(1);
         } else {
-            info.set_estimated_cost(2_147_483_647f64);
+            info.set_estimated_cost(2_147_483_647_f64);
             info.set_estimated_rows(2_147_483_647);
             info.set_idx_num(0);
         }
         Ok(())
     }
 
-    fn open(&self) -> Result<ArrayTabCursor<'_>> {
+    fn open(&mut self) -> Result<ArrayTabCursor<'_>> {
         Ok(ArrayTabCursor::new())
     }
 }
@@ -211,7 +208,7 @@ mod test {
         {
             let mut stmt = db.prepare("SELECT value from rarray(?);")?;
 
-            let rows = stmt.query_map(&[&ptr], |row| row.get::<_, i64>(0))?;
+            let rows = stmt.query_map([&ptr], |row| row.get::<_, i64>(0))?;
             assert_eq!(2, Rc::strong_count(&ptr));
             let mut count = 0;
             for (i, value) in rows.enumerate() {

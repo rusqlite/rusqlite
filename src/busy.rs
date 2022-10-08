@@ -19,11 +19,11 @@ impl Connection {
     ///
     /// There can only be a single busy handler for a particular database
     /// connection at any given moment. If another busy handler was defined
-    /// (using [`busy_handler`](Connection::busy_handler)) prior to calling this routine, that other
-    /// busy handler is cleared.
+    /// (using [`busy_handler`](Connection::busy_handler)) prior to calling this
+    /// routine, that other busy handler is cleared.
     ///
-    /// Newly created connections currently have a default busy timeout of 5000ms, but this may be
-    /// subject to change.
+    /// Newly created connections currently have a default busy timeout of
+    /// 5000ms, but this may be subject to change.
     pub fn busy_timeout(&self, timeout: Duration) -> Result<()> {
         let ms: i32 = timeout
             .as_secs()
@@ -48,12 +48,13 @@ impl Connection {
     ///
     /// There can only be a single busy handler defined for each database
     /// connection. Setting a new busy handler clears any previously set
-    /// handler. Note that calling [`busy_timeout()`](Connection::busy_timeout) or evaluating `PRAGMA
-    /// busy_timeout=N` will change the busy handler and thus
-    /// clear any previously set busy handler.
+    /// handler. Note that calling [`busy_timeout()`](Connection::busy_timeout)
+    /// or evaluating `PRAGMA busy_timeout=N` will change the busy handler
+    /// and thus clear any previously set busy handler.
     ///
-    /// Newly created connections default to a [`busy_timeout()`](Connection::busy_timeout) handler
-    /// with a timeout of 5000ms, although this is subject to change.
+    /// Newly created connections default to a
+    /// [`busy_timeout()`](Connection::busy_timeout) handler with a timeout
+    /// of 5000ms, although this is subject to change.
     pub fn busy_handler(&self, callback: Option<fn(i32) -> bool>) -> Result<()> {
         unsafe extern "C" fn busy_handler_callback(p_arg: *mut c_void, count: c_int) -> c_int {
             let handler_fn: fn(i32) -> bool = mem::transmute(p_arg);
@@ -63,7 +64,7 @@ impl Connection {
                 0
             }
         }
-        let mut c = self.db.borrow_mut();
+        let c = self.db.borrow_mut();
         let r = match callback {
             Some(f) => unsafe {
                 ffi::sqlite3_busy_handler(c.db(), Some(busy_handler_callback), f as *mut c_void)
@@ -89,7 +90,7 @@ mod test {
     use std::thread;
     use std::time::Duration;
 
-    use crate::{Connection, Error, ErrorCode, Result, TransactionBehavior};
+    use crate::{Connection, ErrorCode, Result, TransactionBehavior};
 
     #[test]
     fn test_default_busy() -> Result<()> {
@@ -100,12 +101,10 @@ mod test {
         let tx1 = db1.transaction_with_behavior(TransactionBehavior::Exclusive)?;
         let db2 = Connection::open(&path)?;
         let r: Result<()> = db2.query_row("PRAGMA schema_version", [], |_| unreachable!());
-        match r.unwrap_err() {
-            Error::SqliteFailure(err, _) => {
-                assert_eq!(err.code, ErrorCode::DatabaseBusy);
-            }
-            err => panic!("Unexpected error {}", err),
-        }
+        assert_eq!(
+            r.unwrap_err().sqlite_error_code(),
+            Some(ErrorCode::DatabaseBusy)
+        );
         tx1.rollback()
     }
 
@@ -168,7 +167,7 @@ mod test {
         let _ = db2
             .query_row("PRAGMA schema_version", [], |row| row.get::<_, i32>(0))
             .expect("unexpected error");
-        assert_eq!(CALLED.load(Ordering::Relaxed), true);
+        assert!(CALLED.load(Ordering::Relaxed));
 
         child.join().unwrap();
     }

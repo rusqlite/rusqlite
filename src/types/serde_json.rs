@@ -17,12 +17,8 @@ impl ToSql for Value {
 impl FromSql for Value {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        match value {
-            ValueRef::Text(s) => serde_json::from_slice(s),
-            ValueRef::Blob(b) => serde_json::from_slice(b),
-            _ => return Err(FromSqlError::InvalidType),
-        }
-        .map_err(|err| FromSqlError::Other(Box::new(err)))
+        let bytes = value.as_bytes()?;
+        serde_json::from_slice(bytes).map_err(|err| FromSqlError::Other(Box::new(err)))
     }
 }
 
@@ -45,7 +41,7 @@ mod test {
         let data: serde_json::Value = serde_json::from_str(json).unwrap();
         db.execute(
             "INSERT INTO foo (t, b) VALUES (?, ?)",
-            &[&data as &dyn ToSql, &json.as_bytes()],
+            [&data as &dyn ToSql, &json.as_bytes()],
         )?;
 
         let t: serde_json::Value = db.query_row("SELECT t FROM foo", [], |r| r.get(0))?;

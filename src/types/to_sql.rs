@@ -16,13 +16,15 @@ pub enum ToSqlOutput<'a> {
     /// An owned SQLite-representable value.
     Owned(Value),
 
-    /// `feature = "blob"` A BLOB of the given length that is filled with
+    /// A BLOB of the given length that is filled with
     /// zeroes.
     #[cfg(feature = "blob")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "blob")))]
     ZeroBlob(i32),
 
     /// `feature = "array"`
     #[cfg(feature = "array")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "array")))]
     Array(Array),
 }
 
@@ -70,9 +72,11 @@ from_value!(Vec<u8>);
 // `i128` needs in `Into<Value>`, but it's probably fine for the moment, and not
 // worth adding another case to Value.
 #[cfg(feature = "i128_blob")]
+#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 from_value!(i128);
 
 #[cfg(feature = "uuid")]
+#[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
 from_value!(uuid::Uuid);
 
 impl ToSql for ToSqlOutput<'_> {
@@ -162,9 +166,11 @@ to_sql_self!(f32);
 to_sql_self!(f64);
 
 #[cfg(feature = "i128_blob")]
+#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 to_sql_self!(i128);
 
 #[cfg(feature = "uuid")]
+#[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
 to_sql_self!(uuid::Uuid);
 
 macro_rules! to_sql_self_fallible(
@@ -218,6 +224,13 @@ impl ToSql for Vec<u8> {
     }
 }
 
+impl<const N: usize> ToSql for [u8; N] {
+    #[inline]
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(&self[..]))
+    }
+}
+
 impl ToSql for [u8] {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
@@ -260,15 +273,24 @@ mod test {
     }
 
     #[test]
+    fn test_u8_array() {
+        let a: [u8; 99] = [0u8; 99];
+        let _a: &[&dyn ToSql] = crate::params![a];
+        let r = ToSql::to_sql(&a);
+
+        r.unwrap();
+    }
+
+    #[test]
     fn test_cow_str() {
         use std::borrow::Cow;
         let s = "str";
         let cow: Cow<str> = Cow::Borrowed(s);
         let r = cow.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
         let cow: Cow<str> = Cow::Owned::<str>(String::from(s));
         let r = cow.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
         // Ensure this compiles.
         let _p: &[&dyn ToSql] = crate::params![cow];
     }
@@ -279,7 +301,7 @@ mod test {
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = ToSql::to_sql(&s);
 
-        assert!(r.is_ok());
+        r.unwrap();
     }
 
     #[test]
@@ -288,7 +310,7 @@ mod test {
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
 
-        assert!(r.is_ok());
+        r.unwrap();
     }
 
     #[test]
@@ -297,7 +319,7 @@ mod test {
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = ToSql::to_sql(&s);
 
-        assert!(r.is_ok());
+        r.unwrap();
     }
 
     #[test]
@@ -309,39 +331,38 @@ mod test {
         let s: Rc<Box<str>> = Rc::new(source_str.clone());
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
 
         let s: Arc<Box<str>> = Arc::new(source_str.clone());
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
 
         let s: Arc<str> = Arc::from(&*source_str);
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
 
         let s: Arc<dyn ToSql> = Arc::new(source_str.clone());
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
 
         let s: Rc<str> = Rc::from(&*source_str);
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
 
         let s: Rc<dyn ToSql> = Rc::new(source_str);
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
     }
 
     #[cfg(feature = "i128_blob")]
     #[test]
     fn test_i128() -> crate::Result<()> {
         use crate::Connection;
-        use std::i128;
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo (i128 BLOB, desc TEXT)")?;
         db.execute(

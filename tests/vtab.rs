@@ -39,7 +39,7 @@ fn test_dummy_module() -> rusqlite::Result<()> {
             Ok(())
         }
 
-        fn open(&'vtab self) -> Result<DummyTabCursor<'vtab>> {
+        fn open(&'vtab mut self) -> Result<DummyTabCursor<'vtab>> {
             Ok(DummyTabCursor::default())
         }
     }
@@ -85,10 +85,10 @@ fn test_dummy_module() -> rusqlite::Result<()> {
 
     let db = Connection::open_in_memory()?;
 
-    db.create_module::<DummyTab>("dummy", &module, None)?;
+    db.create_module::<DummyTab>("dummy", module, None)?;
 
     let version = version_number();
-    if version < 3_008_012 {
+    if version < 3_009_000 {
         return Ok(());
     }
 
