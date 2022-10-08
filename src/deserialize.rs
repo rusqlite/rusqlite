@@ -87,7 +87,7 @@ impl Connection {
     /// # }
     /// ```
     pub fn serialize(&self, db_name: DatabaseName) -> Result<Vec<u8>> {
-        let schema = db_name.to_cstring()?;
+        let schema = db_name.as_cstring()?;
         let file = file_ptr(&self.db.borrow(), &schema).ok_or_else(|| err_not_found(&schema))?;
         if let Some(vec_db) = VecDbFile::try_cast(file) {
             return Ok(vec_db.data.as_slice().to_vec());
@@ -142,7 +142,7 @@ impl Connection {
     /// ```
     pub fn serialize_get_mut(&mut self, db: DatabaseName) -> Option<&mut MemFile> {
         let c = self.db.borrow_mut();
-        let file = file_ptr(&c, &db.to_cstring().ok()?)?;
+        let file = file_ptr(&c, &db.as_cstring().ok()?)?;
         let vec_db = VecDbFile::try_cast(file)?;
         if vec_db.memory_mapped == 0 && vec_db.lock == 0 {
             Arc::get_mut(&mut vec_db.data)
@@ -169,7 +169,7 @@ impl Connection {
     /// # }
     /// ```
     pub fn serialize_size_limit(&self, db: DatabaseName) -> Result<usize> {
-        let schema = &db.to_cstring()?;
+        let schema = &db.as_cstring()?;
         let file = file_ptr(&self.db.borrow(), schema).ok_or_else(|| err_not_found(schema))?;
         file_size_limit(file, -1).map(|s| s.try_into().unwrap())
     }
@@ -193,7 +193,7 @@ impl Connection {
     /// # }
     /// ```
     pub fn serialize_set_size_limit(&self, db: DatabaseName, size_max: usize) -> Result<usize> {
-        let schema = &db.to_cstring()?;
+        let schema = &db.as_cstring()?;
         let file = file_ptr(&self.db.borrow(), schema).ok_or_else(|| err_not_found(schema))?;
         file_size_limit(file, size_max.try_into().unwrap()).map(|s| s.try_into().unwrap())
     }
@@ -211,8 +211,8 @@ impl Connection {
     /// # Safety
     /// The caller must make sure that `data` outlives the connection.
     unsafe fn deserialize_vec_db(&self, schema: DatabaseName, data: MemFile) -> Result<()> {
-        let schema = schema.to_cstring()?;
-        let mut c = self.db.borrow_mut();
+        let schema = schema.as_cstring()?;
+        let c = self.db.borrow_mut();
         let rc = ffi::sqlite3_deserialize(c.db(), schema.as_ptr(), ptr::null_mut(), 0, 0, 0);
         c.decode_result(rc)?;
         let file = file_ptr(&c, &schema).unwrap();
@@ -302,7 +302,7 @@ impl<'a> BorrowingConnection<'a> {
     /// ```
     pub fn serialize_rc(&self, db: DatabaseName) -> Option<Arc<MemFile<'a>>> {
         let c = self.conn.db.borrow_mut();
-        let file = file_ptr(&c, &db.to_cstring().ok()?)?;
+        let file = file_ptr(&c, &db.as_cstring().ok()?)?;
         VecDbFile::try_cast(file).map(|v| Arc::clone(&v.data))
     }
 
@@ -1159,7 +1159,7 @@ mod test {
         let size = vec.len();
         assert_ne!(0, size);
         db.deserialize_writable(DatabaseName::Main, &mut vec)?;
-        let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
+        let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.as_cstring()?).unwrap();
         // fetch returns null on overflow
         assert!(file_fetch(file, 0, size + 1)?.is_null());
         assert!(file_fetch(file, 1, size)?.is_null());
@@ -1200,7 +1200,7 @@ mod test {
         let db = Connection::open_in_memory().unwrap().into_borrowing();
         db.execute_batch("CREATE TABLE a(x INTEGER)")?;
         db.deserialize(DatabaseName::Main, db.serialize(DatabaseName::Main)?)?;
-        let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
+        let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.as_cstring()?).unwrap();
 
         // when reading past end, the buffer should be filled with zeros
         let mut buf = [1; 16];
@@ -1242,7 +1242,7 @@ mod test {
         let size = vec.len() as i64;
         assert_ne!(0, size);
         db.deserialize_writable(DatabaseName::Main, &mut vec)?;
-        let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.to_cstring()?).unwrap();
+        let file = file_ptr(&db.db.borrow(), &DatabaseName::Main.as_cstring()?).unwrap();
         let cap = file_size_limit(file, -1)?;
         assert_eq!(cap, 1073741824, "default SQLITE_CONFIG_MEMDB_MAXSIZE");
         assert_eq!(size, file_size_limit(file, 200)?);
