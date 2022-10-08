@@ -58,7 +58,7 @@ impl Connection {
     /// # }
     /// ```
     pub fn deserialize(&self, db: DatabaseName, data: Vec<u8>) -> Result<()> {
-        self.deserialize_vec_db(db, MemFile::Owned(data))
+        unsafe { self.deserialize_vec_db(db, MemFile::Owned(data)) }
     }
 
     /// Copies the serialization of a database to a `Vec<u8>`. Errors when
@@ -210,19 +210,17 @@ impl Connection {
     /// Deserialize using a [`VecDbFile`].
     /// # Safety
     /// The caller must make sure that `data` outlives the connection.
-    fn deserialize_vec_db(&self, schema: DatabaseName, data: MemFile) -> Result<()> {
+    unsafe fn deserialize_vec_db(&self, schema: DatabaseName, data: MemFile) -> Result<()> {
         let schema = schema.to_cstring()?;
         let mut c = self.db.borrow_mut();
-        unsafe {
-            let rc = ffi::sqlite3_deserialize(c.db(), schema.as_ptr(), ptr::null_mut(), 0, 0, 0);
-            c.decode_result(rc)?;
-            let file = file_ptr(&c, &schema).unwrap();
-            assert_eq!(file.pMethods, *MEMDB_IO_METHODS);
-            let size_max = file_size_limit(file, -1)?.try_into().unwrap();
-            let file = file as *mut _ as _;
-            ptr::write(file, VecDbFile::new(data, size_max));
-            Ok(())
-        }
+        let rc = ffi::sqlite3_deserialize(c.db(), schema.as_ptr(), ptr::null_mut(), 0, 0, 0);
+        c.decode_result(rc)?;
+        let file = file_ptr(&c, &schema).unwrap();
+        assert_eq!(file.pMethods, *MEMDB_IO_METHODS);
+        let size_max = file_size_limit(file, -1)?.try_into().unwrap();
+        let file = file as *mut _ as _;
+        ptr::write(file, VecDbFile::new(data, size_max));
+        Ok(())
     }
 }
 
@@ -326,7 +324,7 @@ impl<'a> BorrowingConnection<'a> {
     /// # }
     /// ```
     pub fn deserialize_read_only(&self, db: DatabaseName, slice: &'a [u8]) -> Result<()> {
-        self.deserialize_vec_db(db, MemFile::ReadOnly(slice))
+        unsafe { self.deserialize_vec_db(db, MemFile::ReadOnly(slice)) }
     }
 
     /// Disconnects database and reopens it as an in-memory database based
@@ -345,7 +343,7 @@ impl<'a> BorrowingConnection<'a> {
     /// # }
     /// ```
     pub fn deserialize_writable(&self, db: DatabaseName, vec: &'a mut Vec<u8>) -> Result<()> {
-        self.deserialize_vec_db(db, MemFile::Writable(vec))
+        unsafe { self.deserialize_vec_db(db, MemFile::Writable(vec)) }
     }
 
     /// Returns the wrapped connection.
