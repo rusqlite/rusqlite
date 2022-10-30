@@ -171,7 +171,7 @@ pub struct AndThenRows<'stmt, F> {
 
 impl<T, E, F> Iterator for AndThenRows<'_, F>
 where
-    E: convert::From<Error>,
+    E: From<Error>,
     F: FnMut(&Row<'_>) -> Result<T, E>,
 {
     type Item = Result<T, E>;
@@ -391,7 +391,7 @@ impl RowIndex for usize {
 impl RowIndex for &'_ str {
     #[inline]
     fn idx(&self, stmt: &Statement<'_>) -> Result<usize> {
-        stmt.column_index(*self)
+        stmt.column_index(self)
     }
 }
 
@@ -448,7 +448,7 @@ mod tests {
         let val = conn.query_row("SELECT a FROM test", [], |row| <(u32,)>::try_from(row))?;
         assert_eq!(val, (42,));
         let fail = conn.query_row("SELECT a FROM test", [], |row| <(u32, u32)>::try_from(row));
-        assert!(fail.is_err());
+        fail.unwrap_err();
         Ok(())
     }
 
@@ -466,7 +466,7 @@ mod tests {
         let fail = conn.query_row("SELECT a, b FROM test", [], |row| {
             <(u32, u32, u32)>::try_from(row)
         });
-        assert!(fail.is_err());
+        fail.unwrap_err();
         Ok(())
     }
 

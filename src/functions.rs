@@ -75,13 +75,8 @@ unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
     // an explicit feature check for that, and this doesn't really warrant one.
     // We'll use the extended code if we're on the bundled version (since it's
     // at least 3.17.0) and the normal constraint error code if not.
-    #[cfg(feature = "modern_sqlite")]
     fn constraint_error_code() -> i32 {
         ffi::SQLITE_CONSTRAINT_FUNCTION
-    }
-    #[cfg(not(feature = "modern_sqlite"))]
-    fn constraint_error_code() -> i32 {
-        ffi::SQLITE_CONSTRAINT
     }
 
     if let Error::SqliteFailure(ref err, ref s) = *err {
@@ -168,8 +163,6 @@ impl Context<'_> {
     ///
     /// Will panic if `idx` is greater than or equal to
     /// [`self.len()`](Context::len).
-    #[cfg(feature = "modern_sqlite")] // 3.9.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn get_subtype(&self, idx: usize) -> std::os::raw::c_uint {
         let arg = self.args[idx];
         unsafe { ffi::sqlite3_value_subtype(arg) }
@@ -639,7 +632,7 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
     D: Aggregate<A, T>,
     T: ToSql,
 {
-    let pac = if let Some(pac) = aggregate_context(ctx, ::std::mem::size_of::<*mut A>()) {
+    let pac = if let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) {
         pac
     } else {
         ffi::sqlite3_result_error_nomem(ctx);
@@ -686,7 +679,7 @@ unsafe extern "C" fn call_boxed_inverse<A, W, T>(
     W: WindowAggregate<A, T>,
     T: ToSql,
 {
-    let pac = if let Some(pac) = aggregate_context(ctx, ::std::mem::size_of::<*mut A>()) {
+    let pac = if let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) {
         pac
     } else {
         ffi::sqlite3_result_error_nomem(ctx);
@@ -821,7 +814,6 @@ where
 #[cfg(test)]
 mod test {
     use regex::Regex;
-    use std::f64::EPSILON;
     use std::os::raw::c_double;
 
     #[cfg(feature = "window")]
@@ -846,7 +838,7 @@ mod test {
         )?;
         let result: Result<f64> = db.query_row("SELECT half(6)", [], |r| r.get(0));
 
-        assert!((3f64 - result?).abs() < EPSILON);
+        assert!((3f64 - result?).abs() < f64::EPSILON);
         Ok(())
     }
 
@@ -860,11 +852,11 @@ mod test {
             half,
         )?;
         let result: Result<f64> = db.query_row("SELECT half(6)", [], |r| r.get(0));
-        assert!((3f64 - result?).abs() < EPSILON);
+        assert!((3f64 - result?).abs() < f64::EPSILON);
 
         db.remove_function("half", 1)?;
         let result: Result<f64> = db.query_row("SELECT half(6)", [], |r| r.get(0));
-        assert!(result.is_err());
+        result.unwrap_err();
         Ok(())
     }
 

@@ -19,12 +19,14 @@ use crate::{errmsg_to_string, str_to_cstring, Connection, DatabaseName, Result};
 
 // https://sqlite.org/session.html
 
+type Filter = Option<Box<dyn Fn(&str) -> bool>>;
+
 /// An instance of this object is a session that can be
 /// used to record changes to a database.
 pub struct Session<'conn> {
     phantom: PhantomData<&'conn Connection>,
     s: *mut ffi::sqlite3_session,
-    filter: Option<Box<dyn Fn(&str) -> bool>>,
+    filter: Filter,
 }
 
 impl Session<'_> {
@@ -168,7 +170,7 @@ impl Session<'_> {
             if r != ffi::SQLITE_OK {
                 let errmsg: *mut c_char = errmsg;
                 let message = errmsg_to_string(&*errmsg);
-                ffi::sqlite3_free(errmsg as *mut ::std::os::raw::c_void);
+                ffi::sqlite3_free(errmsg as *mut c_void);
                 return Err(error_from_sqlite_code(r, Some(message)));
             }
         }
@@ -656,7 +658,7 @@ impl Connection {
 /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_CONFLICT) for details.
 #[allow(missing_docs)]
 #[repr(i32)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
 #[allow(clippy::upper_case_acronyms)]
 pub enum ConflictType {
@@ -684,7 +686,7 @@ impl From<i32> for ConflictType {
 /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_ABORT) for details.
 #[allow(missing_docs)]
 #[repr(i32)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
 #[allow(clippy::upper_case_acronyms)]
 pub enum ConflictAction {
