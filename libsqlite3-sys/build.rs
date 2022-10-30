@@ -8,14 +8,14 @@ use std::path::Path;
 /// targetting, and this test must be made at run-time (of the build script) See
 /// https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
 fn win_target() -> bool {
-    std::env::var("CARGO_CFG_WINDOWS").is_ok()
+    env::var("CARGO_CFG_WINDOWS").is_ok()
 }
 
 /// Tells whether we're building for Android.
 /// See [`win_target`]
 #[cfg(any(feature = "bundled", feature = "bundled-windows"))]
 fn android_target() -> bool {
-    std::env::var("CARGO_CFG_TARGET_OS").map_or(false, |v| v == "android")
+    env::var("CARGO_CFG_TARGET_OS").map_or(false, |v| v == "android")
 }
 
 /// Tells whether a given compiler will be used `compiler_name` is compared to
@@ -23,7 +23,7 @@ fn android_target() -> bool {
 ///
 /// See [`win_target`]
 fn is_compiler(compiler_name: &str) -> bool {
-    std::env::var("CARGO_CFG_TARGET_ENV").map_or(false, |v| v == compiler_name)
+    env::var("CARGO_CFG_TARGET_ENV").map_or(false, |v| v == compiler_name)
 }
 
 fn main() {
@@ -98,15 +98,15 @@ mod build_bundled {
         #[cfg(not(feature = "buildtime_bindgen"))]
         {
             use std::fs;
-            fs::copy(format!("{}/bindgen_bundled_version.rs", lib_name), out_path)
+            fs::copy(format!("{lib_name}/bindgen_bundled_version.rs"), out_path)
                 .expect("Could not copy bindings to output directory");
         }
         // println!("cargo:rerun-if-changed=sqlite3/sqlite3.c");
         // println!("cargo:rerun-if-changed=sqlcipher/sqlite3.c");
-        println!("cargo:rerun-if-changed={}/sqlite3.c", lib_name);
+        println!("cargo:rerun-if-changed={lib_name}/sqlite3.c");
         println!("cargo:rerun-if-changed=sqlite3/wasm32-wasi-vfs.c");
         let mut cfg = cc::Build::new();
-        cfg.file(format!("{}/sqlite3.c", lib_name))
+        cfg.file(format!("{lib_name}/sqlite3.c"))
             .flag("-DSQLITE_CORE")
             .flag("-DSQLITE_DEFAULT_FOREIGN_KEYS=1")
             .flag("-DSQLITE_ENABLE_API_ARMOR")
@@ -178,7 +178,7 @@ mod build_bundled {
             };
 
             if cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
-                cfg.include(std::env::var("DEP_OPENSSL_INCLUDE").unwrap());
+                cfg.include(env::var("DEP_OPENSSL_INCLUDE").unwrap());
                 // cargo will resolve downstream to the static lib in
                 // openssl-sys
             } else if is_windows {
@@ -261,12 +261,12 @@ mod build_bundled {
         }
 
         if let Ok(limit) = env::var("SQLITE_MAX_VARIABLE_NUMBER") {
-            cfg.flag(&format!("-DSQLITE_MAX_VARIABLE_NUMBER={}", limit));
+            cfg.flag(&format!("-DSQLITE_MAX_VARIABLE_NUMBER={limit}"));
         }
         println!("cargo:rerun-if-env-changed=SQLITE_MAX_VARIABLE_NUMBER");
 
         if let Ok(limit) = env::var("SQLITE_MAX_EXPR_DEPTH") {
-            cfg.flag(&format!("-DSQLITE_MAX_EXPR_DEPTH={}", limit));
+            cfg.flag(&format!("-DSQLITE_MAX_EXPR_DEPTH={limit}"));
         }
         println!("cargo:rerun-if-env-changed=SQLITE_MAX_EXPR_DEPTH");
 
@@ -275,7 +275,7 @@ mod build_bundled {
                 if extra.starts_with("-D") || extra.starts_with("-U") {
                     cfg.flag(extra);
                 } else if extra.starts_with("SQLITE_") {
-                    cfg.flag(&format!("-D{}", extra));
+                    cfg.flag(&format!("-D{extra}"));
                 } else {
                     panic!("Don't understand {} in LIBSQLITE3_FLAGS", extra);
                 }
@@ -285,13 +285,13 @@ mod build_bundled {
 
         cfg.compile(lib_name);
 
-        println!("cargo:lib_dir={}", out_dir);
+        println!("cargo:lib_dir={out_dir}");
     }
 
     fn env(name: &str) -> Option<OsString> {
         let prefix = env::var("TARGET").unwrap().to_uppercase().replace('-', "_");
-        let prefixed = format!("{}_{}", prefix, name);
-        let var = env::var_os(&prefixed);
+        let prefixed = format!("{prefix}_{name}");
+        let var = env::var_os(prefixed);
 
         match var {
             None => env::var_os(name),
@@ -334,7 +334,7 @@ impl From<HeaderLocation> for String {
         match header {
             HeaderLocation::FromEnvironment => {
                 let prefix = env_prefix();
-                let mut header = env::var(format!("{}_INCLUDE_DIR", prefix)).unwrap_or_else(|_| {
+                let mut header = env::var(format!("{prefix}_INCLUDE_DIR")).unwrap_or_else(|_| {
                     panic!(
                         "{}_INCLUDE_DIR must be set if {}_LIB_DIR is set",
                         prefix, prefix
@@ -404,10 +404,10 @@ mod build_linked {
         // `links=` value in our Cargo.toml) to get this value. This might be
         // useful if you need to ensure whatever crypto library sqlcipher relies
         // on is available, for example.
-        println!("cargo:link-target={}", link_lib);
+        println!("cargo:link-target={link_lib}");
 
         if win_target() && cfg!(feature = "winsqlite3") {
-            println!("cargo:rustc-link-lib=dylib={}", link_lib);
+            println!("cargo:rustc-link-lib=dylib={link_lib}");
             return HeaderLocation::Wrapper;
         }
 
@@ -418,8 +418,8 @@ mod build_linked {
             env::set_var("PKG_CONFIG_PATH", pkgconfig_path);
             if pkg_config::Config::new().probe(link_lib).is_err() {
                 // Otherwise just emit the bare minimum link commands.
-                println!("cargo:rustc-link-lib={}={}", find_link_mode(), link_lib);
-                println!("cargo:rustc-link-search={}", dir);
+                println!("cargo:rustc-link-lib={}={link_lib}", find_link_mode());
+                println!("cargo:rustc-link-search={dir}");
             }
             return HeaderLocation::FromEnvironment;
         }
@@ -444,7 +444,7 @@ mod build_linked {
             // request and hope that the library exists on the system paths. We used to
             // output /usr/lib explicitly, but that can introduce other linking problems;
             // see https://github.com/rusqlite/rusqlite/issues/207.
-            println!("cargo:rustc-link-lib={}={}", find_link_mode(), link_lib);
+            println!("cargo:rustc-link-lib={}={link_lib}", find_link_mode());
             HeaderLocation::Wrapper
         }
     }
@@ -473,15 +473,7 @@ mod bindings {
     use std::fs;
     use std::path::Path;
 
-    static PREBUILT_BINDGEN_PATHS: &[&str] = &[
-        "bindgen-bindings/bindgen_3.6.8.rs",
-        #[cfg(feature = "min_sqlite_version_3_6_23")]
-        "bindgen-bindings/bindgen_3.6.23.rs",
-        #[cfg(feature = "min_sqlite_version_3_7_7")]
-        "bindgen-bindings/bindgen_3.7.7.rs",
-        #[cfg(feature = "min_sqlite_version_3_7_16")]
-        "bindgen-bindings/bindgen_3.7.16.rs",
-    ];
+    static PREBUILT_BINDGEN_PATHS: &[&str] = &["bindgen-bindings/bindgen_3.14.0.rs"];
 
     pub fn write_to_out_dir(_header: HeaderLocation, out_path: &Path) {
         let in_path = PREBUILT_BINDGEN_PATHS[PREBUILT_BINDGEN_PATHS.len() - 1];
@@ -505,7 +497,7 @@ mod bindings {
 
     impl ParseCallbacks for SqliteTypeChooser {
         fn int_macro(&self, _name: &str, value: i64) -> Option<IntKind> {
-            if value >= i32::min_value() as i64 && value <= i32::max_value() as i64 {
+            if value >= i32::MIN as i64 && value <= i32::MAX as i64 {
                 Some(IntKind::I32)
             } else {
                 None
@@ -607,6 +599,7 @@ mod bindings {
         }
 
         bindings
+            .layout_tests(false)
             .generate()
             .unwrap_or_else(|_| panic!("could not run bindgen on header {}", header))
             .write(Box::new(&mut output))

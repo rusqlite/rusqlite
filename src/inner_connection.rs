@@ -25,11 +25,11 @@ pub struct InnerConnection {
     // interrupt would only acquire the lock after the query's completion.
     interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
     #[cfg(feature = "hooks")]
-    pub free_commit_hook: Option<unsafe fn(*mut ::std::os::raw::c_void)>,
+    pub free_commit_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
     #[cfg(feature = "hooks")]
-    pub free_rollback_hook: Option<unsafe fn(*mut ::std::os::raw::c_void)>,
+    pub free_rollback_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
     #[cfg(feature = "hooks")]
-    pub free_update_hook: Option<unsafe fn(*mut ::std::os::raw::c_void)>,
+    pub free_update_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
     #[cfg(feature = "hooks")]
     pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
@@ -105,7 +105,7 @@ impl InnerConnection {
                     {
                         e = Error::SqliteFailure(
                             ffi::Error::new(r),
-                            Some(format!("{}: {}", msg, c_path.to_string_lossy())),
+                            Some(format!("{msg}: {}", c_path.to_string_lossy())),
                         );
                     }
                     ffi::sqlite3_close(db);
@@ -208,7 +208,7 @@ impl InnerConnection {
             Ok(())
         } else {
             let message = super::errmsg_to_string(errmsg);
-            ffi::sqlite3_free(errmsg.cast::<::std::os::raw::c_void>());
+            ffi::sqlite3_free(errmsg.cast::<std::os::raw::c_void>());
             Err(error_from_sqlite_code(r, Some(message)))
         }
     }
@@ -295,7 +295,6 @@ impl InnerConnection {
         unsafe { ffi::sqlite3_get_autocommit(self.db()) != 0 }
     }
 
-    #[cfg(feature = "modern_sqlite")] // 3.8.6
     pub fn is_busy(&self) -> bool {
         let db = self.db();
         unsafe {
@@ -310,7 +309,6 @@ impl InnerConnection {
         false
     }
 
-    #[cfg(feature = "modern_sqlite")] // 3.10.0
     pub fn cache_flush(&mut self) -> Result<()> {
         crate::error::check(unsafe { ffi::sqlite3_db_cacheflush(self.db()) })
     }
@@ -319,7 +317,6 @@ impl InnerConnection {
     #[inline]
     fn remove_hooks(&mut self) {}
 
-    #[cfg(feature = "modern_sqlite")] // 3.7.11
     pub fn db_readonly(&self, db_name: super::DatabaseName<'_>) -> Result<bool> {
         let name = db_name.as_cstring()?;
         let r = unsafe { ffi::sqlite3_db_readonly(self.db, name.as_ptr()) };
@@ -328,7 +325,7 @@ impl InnerConnection {
             1 => Ok(true),
             -1 => Err(Error::SqliteFailure(
                 ffi::Error::new(ffi::SQLITE_MISUSE),
-                Some(format!("{:?} is not the name of a database", db_name)),
+                Some(format!("{db_name:?} is not the name of a database")),
             )),
             _ => Err(error_from_sqlite_code(
                 r,
@@ -354,7 +351,7 @@ impl InnerConnection {
             2 => Ok(super::transaction::TransactionState::Write),
             -1 => Err(Error::SqliteFailure(
                 ffi::Error::new(ffi::SQLITE_MISUSE),
-                Some(format!("{:?} is not the name of a valid schema", db_name)),
+                Some(format!("{db_name:?} is not the name of a valid schema")),
             )),
             _ => Err(error_from_sqlite_code(
                 r,
@@ -378,7 +375,7 @@ impl Drop for InnerConnection {
 
         if let Err(e) = self.close() {
             if panicking() {
-                eprintln!("Error while closing SQLite connection: {:?}", e);
+                eprintln!("Error while closing SQLite connection: {e:?}");
             } else {
                 panic!("Error while closing SQLite connection: {:?}", e);
             }
@@ -400,7 +397,7 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
 
 #[cfg(not(any(target_arch = "wasm32")))]
 fn ensure_safe_sqlite_threading_mode() -> Result<()> {
-    // Ensure SQLite was compiled in thredsafe mode.
+    // Ensure SQLite was compiled in threadsafe mode.
     if unsafe { ffi::sqlite3_threadsafe() == 0 } {
         return Err(Error::SqliteSingleThreadedMode);
     }

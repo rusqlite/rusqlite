@@ -3,7 +3,7 @@ use std::os::raw::{c_int, c_void};
 #[cfg(feature = "array")]
 use std::rc::Rc;
 use std::slice::from_raw_parts;
-use std::{convert, fmt, mem, ptr, str};
+use std::{fmt, mem, ptr, str};
 
 use super::ffi;
 use super::{len_as_c_int, str_for_sqlite};
@@ -202,7 +202,7 @@ impl Statement<'_> {
     /// }
     /// ```
     ///
-    /// Or, equivalently (but without the [`params!`] macro).
+    /// Or, equivalently (but without the [`crate::params!`] macro).
     ///
     /// ```rust,no_run
     /// # use rusqlite::{Connection, Result};
@@ -417,7 +417,7 @@ impl Statement<'_> {
     pub fn query_and_then<T, E, P, F>(&mut self, params: P, f: F) -> Result<AndThenRows<'_, F>>
     where
         P: Params,
-        E: convert::From<Error>,
+        E: From<Error>,
         F: FnMut(&Row<'_>) -> Result<T, E>,
     {
         self.query(params).map(|rows| rows.and_then(f))
@@ -447,7 +447,7 @@ impl Statement<'_> {
         f: F,
     ) -> Result<AndThenRows<'_, F>>
     where
-        E: convert::From<Error>,
+        E: From<Error>,
         F: FnMut(&Row<'_>) -> Result<T, E>,
     {
         self.query_and_then(params, f)
@@ -796,21 +796,11 @@ impl Statement<'_> {
         self.conn.decode_result(stmt.finalize())
     }
 
-    #[cfg(all(feature = "modern_sqlite", feature = "extra_check"))]
+    #[cfg(feature = "extra_check")]
     #[inline]
     fn check_update(&self) -> Result<()> {
         // sqlite3_column_count works for DML but not for DDL (ie ALTER)
         if self.column_count() > 0 && self.stmt.readonly() {
-            return Err(Error::ExecuteReturnedResults);
-        }
-        Ok(())
-    }
-
-    #[cfg(all(not(feature = "modern_sqlite"), feature = "extra_check"))]
-    #[inline]
-    fn check_update(&self) -> Result<()> {
-        // sqlite3_column_count works for DML but not for DDL (ie ALTER)
-        if self.column_count() > 0 {
             return Err(Error::ExecuteReturnedResults);
         }
         Ok(())
@@ -825,8 +815,6 @@ impl Statement<'_> {
 
     /// Returns a string containing the SQL text of prepared statement with
     /// bound parameters expanded.
-    #[cfg(feature = "modern_sqlite")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn expanded_sql(&self) -> Option<String> {
         self.stmt
             .expanded_sql()
@@ -1407,7 +1395,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "modern_sqlite")]
     fn test_expanded_sql() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let stmt = db.prepare("SELECT ?")?;
@@ -1422,7 +1409,7 @@ mod test {
         // dynamic slice:
         db.query_row(
             "SELECT ?1, ?2, ?3",
-            &[&1u8 as &dyn ToSql, &"one", &Some("one")],
+            [&1u8 as &dyn ToSql, &"one", &Some("one")],
             |row| row.get::<_, u8>(0),
         )?;
         // existing collection:
@@ -1474,10 +1461,10 @@ mod test {
         let conn = Connection::open_in_memory()?;
         let mut stmt = conn.prepare("")?;
         assert_eq!(0, stmt.column_count());
-        assert!(stmt.parameter_index("test").is_ok());
-        assert!(stmt.step().is_err());
+        stmt.parameter_index("test").unwrap();
+        stmt.step().unwrap_err();
         stmt.reset();
-        assert!(stmt.execute([]).is_err());
+        stmt.execute([]).unwrap_err();
         Ok(())
     }
 
@@ -1507,12 +1494,12 @@ mod test {
     #[test]
     fn test_utf16_conversion() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        db.pragma_update(None, "encoding", &"UTF-16le")?;
+        db.pragma_update(None, "encoding", "UTF-16le")?;
         let encoding: String = db.pragma_query_value(None, "encoding", |row| row.get(0))?;
         assert_eq!("UTF-16le", encoding);
         db.execute_batch("CREATE TABLE foo(x TEXT)")?;
         let expected = "テスト";
-        db.execute("INSERT INTO foo(x) VALUES (?)", &[&expected])?;
+        db.execute("INSERT INTO foo(x) VALUES (?)", [&expected])?;
         let actual: String = db.query_row("SELECT x FROM foo", [], |row| row.get(0))?;
         assert_eq!(expected, actual);
         Ok(())
@@ -1537,12 +1524,11 @@ mod test {
     }
 
     #[test]
-    #[cfg(all(feature = "modern_sqlite", not(feature = "bundled-sqlcipher")))] // SQLite >= 3.38.0
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     fn test_error_offset() -> Result<()> {
         use crate::ffi::ErrorCode;
         let db = Connection::open_in_memory()?;
         let r = db.execute_batch("SELECT CURRENT_TIMESTANP;");
-        assert!(r.is_err());
         match r.unwrap_err() {
             Error::SqlInputError { error, offset, .. } => {
                 assert_eq!(error.code, ErrorCode::Unknown);

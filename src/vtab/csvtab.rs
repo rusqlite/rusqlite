@@ -11,7 +11,7 @@
 //!     // Note: This should be done once (usually when opening the DB).
 //!     let db = Connection::open_in_memory()?;
 //!     rusqlite::vtab::csvtab::load_module(&db)?;
-//!     // Assum3e my_csv.csv
+//!     // Assume my_csv.csv
 //!     let schema = "
 //!         CREATE VIRTUAL TABLE my_csv_data
 //!         USING csv(filename = 'my_csv.csv')
@@ -208,13 +208,13 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                 let mut record = csv::ByteRecord::new();
                 if reader.read_byte_record(&mut record)? {
                     for (i, _) in record.iter().enumerate() {
-                        cols.push(format!("c{}", i));
+                        cols.push(format!("c{i}"));
                     }
                 }
             }
         } else if let Some(n_col) = n_col {
             for i in 0..n_col {
-                cols.push(format!("c{}", i));
+                cols.push(format!("c{i}"));
             }
         }
 

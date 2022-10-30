@@ -57,7 +57,6 @@
 pub use libsqlite3_sys as ffi;
 
 use std::cell::RefCell;
-use std::convert;
 use std::default::Default;
 use std::ffi::{CStr, CString};
 use std::fmt;
@@ -272,7 +271,7 @@ fn str_for_sqlite(s: &[u8]) -> Result<(*const c_char, c_int, ffi::sqlite3_destru
 // Helper to cast to c_int safely, returning the correct error type if the cast
 // failed.
 fn len_as_c_int(len: usize) -> Result<c_int> {
-    if len >= (c_int::max_value() as usize) {
+    if len >= (c_int::MAX as usize) {
         Err(Error::SqliteFailure(
             ffi::Error::new(ffi::SQLITE_TOOBIG),
             None,
@@ -315,15 +314,9 @@ pub const TEMP_DB: DatabaseName<'static> = DatabaseName::Temp;
 
 // Currently DatabaseName is only used by the backup and blob mods, so hide
 // this (private) impl to avoid dead code warnings.
-#[cfg(any(
-    feature = "backup",
-    feature = "blob",
-    feature = "session",
-    feature = "modern_sqlite"
-))]
 impl DatabaseName<'_> {
     #[inline]
-    fn as_cstring(&self) -> Result<util::SmallCString> {
+    fn as_cstring(&self) -> Result<SmallCString> {
         use self::DatabaseName::{Attached, Main, Temp};
         match *self {
             Main => str_to_cstring("main"),
@@ -724,7 +717,7 @@ impl Connection {
     where
         P: Params,
         F: FnOnce(&Row<'_>) -> Result<T, E>,
-        E: convert::From<Error>,
+        E: From<Error>,
     {
         let mut stmt = self.prepare(sql)?;
         stmt.check_no_tail()?;
@@ -962,22 +955,16 @@ impl Connection {
 
     /// Determine if all associated prepared statements have been reset.
     #[inline]
-    #[cfg(feature = "modern_sqlite")] // 3.8.6
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn is_busy(&self) -> bool {
         self.db.borrow().is_busy()
     }
 
     /// Flush caches to disk mid-transaction
-    #[cfg(feature = "modern_sqlite")] // 3.10.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn cache_flush(&self) -> Result<()> {
         self.db.borrow_mut().cache_flush()
     }
 
     /// Determine if a database is read-only
-    #[cfg(feature = "modern_sqlite")] // 3.7.11
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn is_readonly(&self, db_name: DatabaseName<'_>) -> Result<bool> {
         self.db.borrow().db_readonly(db_name)
     }
@@ -1071,9 +1058,9 @@ bitflags::bitflags! {
         /// The database is created if it does not already exist
         const SQLITE_OPEN_CREATE = ffi::SQLITE_OPEN_CREATE;
         /// The filename can be interpreted as a URI if this flag is set.
-        const SQLITE_OPEN_URI = 0x0000_0040;
+        const SQLITE_OPEN_URI = ffi::SQLITE_OPEN_URI;
         /// The database will be opened as an in-memory database.
-        const SQLITE_OPEN_MEMORY = 0x0000_0080;
+        const SQLITE_OPEN_MEMORY = ffi::SQLITE_OPEN_MEMORY;
         /// The new database connection will not use a per-connection mutex (the
         /// connection will use the "multi-thread" threading mode, in SQLite
         /// parlance).
@@ -1177,7 +1164,6 @@ impl InterruptHandle {
     }
 }
 
-#[cfg(feature = "modern_sqlite")] // 3.7.10
 unsafe fn db_filename(db: *mut ffi::sqlite3) -> Option<PathBuf> {
     let db_name = DatabaseName::Main.as_cstring().unwrap();
     let db_filename = ffi::sqlite3_db_filename(db, db_name.as_ptr());
@@ -1186,10 +1172,6 @@ unsafe fn db_filename(db: *mut ffi::sqlite3) -> Option<PathBuf> {
     } else {
         CStr::from_ptr(db_filename).to_str().ok().map(PathBuf::from)
     }
-}
-#[cfg(not(feature = "modern_sqlite"))]
-unsafe fn db_filename(_: *mut ffi::sqlite3) -> Option<PathBuf> {
-    None
 }
 
 #[cfg(doctest)]
@@ -1278,7 +1260,7 @@ mod test {
         }
 
         let path_string = path.to_str().unwrap();
-        let db = Connection::open(&path_string)?;
+        let db = Connection::open(path_string)?;
         let the_answer: Result<i64> = db.query_row("SELECT x FROM foo", [], |r| r.get(0));
 
         assert_eq!(42i64, the_answer?);
@@ -1287,17 +1269,16 @@ mod test {
 
     #[test]
     fn test_open() {
-        assert!(Connection::open_in_memory().is_ok());
+        Connection::open_in_memory().unwrap();
 
         let db = checked_memory_handle();
-        assert!(db.close().is_ok());
+        db.close().unwrap();
     }
 
     #[test]
     fn test_open_failure() {
         let filename = "no_such_file.db";
         let result = Connection::open_with_flags(filename, OpenFlags::SQLITE_OPEN_READ_ONLY);
-        assert!(result.is_err());
         let err = result.unwrap_err();
         if let Error::SqliteFailure(e, Some(msg)) = err {
             assert_eq!(ErrorCode::CannotOpen, e.code);
@@ -1392,7 +1373,7 @@ mod test {
             OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_READ_WRITE,
             OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_CREATE,
         ] {
-            assert!(Connection::open_in_memory_with_flags(*bad_flags).is_err());
+            Connection::open_in_memory_with_flags(*bad_flags).unwrap_err();
         }
     }
 
@@ -1410,7 +1391,7 @@ mod test {
 
         db.execute_batch("UPDATE foo SET x = 3 WHERE x < 3")?;
 
-        assert!(db.execute_batch("INVALID SQL").is_err());
+        db.execute_batch("INVALID SQL").unwrap_err();
         Ok(())
     }
 
@@ -1434,8 +1415,9 @@ mod test {
     fn test_execute_select() {
         let db = checked_memory_handle();
         let err = db.execute("SELECT 1 WHERE 1 < ?", [1i32]).unwrap_err();
-        assert!(
-            err == Error::ExecuteReturnedResults,
+        assert_eq!(
+            err,
+            Error::ExecuteReturnedResults,
             "Unexpected error: {}",
             err
         );
@@ -1572,7 +1554,7 @@ mod test {
 
         let bad_query_result = db.query_row("NOT A PROPER QUERY; test123", [], |_| Ok(()));
 
-        assert!(bad_query_result.is_err());
+        bad_query_result.unwrap_err();
         Ok(())
     }
 
@@ -1596,7 +1578,7 @@ mod test {
 
         let bad_query_result: Result<i64> = db.query_row("NOT A PROPER QUERY", [], |r| r.get(0));
         let bad_query_result = bad_query_result.optional();
-        assert!(bad_query_result.is_err());
+        bad_query_result.unwrap_err();
         Ok(())
     }
 
@@ -1634,7 +1616,7 @@ mod test {
         db.execute_batch("CREATE TABLE foo(x INTEGER);")?;
 
         let err = db.prepare("SELECT * FROM does_not_exist").unwrap_err();
-        assert!(format!("{}", err).contains("does_not_exist"));
+        assert!(format!("{err}").contains("does_not_exist"));
         Ok(())
     }
 
@@ -1665,7 +1647,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "modern_sqlite")]
     fn test_is_busy() -> Result<()> {
         let db = Connection::open_in_memory()?;
         assert!(!db.is_busy());
@@ -1688,7 +1669,7 @@ mod test {
         let query = "SELECT 12345";
         let stmt = db.prepare(query)?;
 
-        assert!(format!("{:?}", stmt).contains(query));
+        assert!(format!("{stmt:?}").contains(query));
         Ok(())
     }
 
@@ -1696,18 +1677,14 @@ mod test {
     fn test_notnull_constraint_error() -> Result<()> {
         // extended error codes for constraints were added in SQLite 3.7.16; if we're
         // running on our bundled version, we know the extended error code exists.
-        #[cfg(feature = "modern_sqlite")]
         fn check_extended_code(extended_code: c_int) {
             assert_eq!(extended_code, ffi::SQLITE_CONSTRAINT_NOTNULL);
         }
-        #[cfg(not(feature = "modern_sqlite"))]
-        fn check_extended_code(_extended_code: c_int) {}
 
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x NOT NULL)")?;
 
         let result = db.execute("INSERT INTO foo (x) VALUES (NULL)", []);
-        assert!(result.is_err());
 
         match result.unwrap_err() {
             Error::SqliteFailure(err, _) => {
@@ -1726,7 +1703,7 @@ mod test {
         let minor = (n % 1_000_000) / 1_000;
         let patch = n % 1_000;
 
-        assert!(version().contains(&format!("{}.{}.{}", major, minor, patch)));
+        assert!(version().contains(&format!("{major}.{minor}.{patch}")));
     }
 
     #[test]
@@ -1739,7 +1716,7 @@ mod test {
         db.create_scalar_function(
             "interrupt",
             0,
-            crate::functions::FunctionFlags::default(),
+            functions::FunctionFlags::default(),
             move |_| {
                 interrupt_handle.interrupt();
                 Ok(0)
@@ -1833,7 +1810,7 @@ mod test {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
                 match *self {
                     CustomError::SomeError => write!(f, "my custom error"),
-                    CustomError::Sqlite(ref se) => write!(f, "my custom error: {}", se),
+                    CustomError::Sqlite(ref se) => write!(f, "my custom error: {se}"),
                 }
             }
         }
@@ -2111,17 +2088,15 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "modern_sqlite")]
     fn test_cache_flush() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.cache_flush()
     }
 
     #[test]
-    #[cfg(feature = "modern_sqlite")]
     pub fn db_readonly() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        assert!(!db.is_readonly(super::MAIN_DB)?);
+        assert!(!db.is_readonly(MAIN_DB)?);
         Ok(())
     }
 }

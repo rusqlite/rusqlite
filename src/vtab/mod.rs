@@ -187,8 +187,7 @@ pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, 
 /// Virtual table configuration options
 #[repr(i32)]
 #[non_exhaustive]
-#[cfg(feature = "modern_sqlite")] // 3.7.7
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum VTabConfig {
     /// Equivalent to SQLITE_VTAB_CONSTRAINT_SUPPORT
     ConstraintSupport = 1,
@@ -203,8 +202,6 @@ pub struct VTabConnection(*mut ffi::sqlite3);
 
 impl VTabConnection {
     /// Configure various facets of the virtual table interface
-    #[cfg(feature = "modern_sqlite")] // 3.7.7
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn config(&mut self, config: VTabConfig) -> Result<()> {
         crate::error::check(unsafe { ffi::sqlite3_vtab_config(self.0, config as c_int) })
     }
@@ -322,7 +319,7 @@ pub trait UpdateVTab<'vtab>: CreateVTab<'vtab> {
 
 /// Index constraint operator.
 /// See [Virtual Table Constraint Operator Codes](https://sqlite.org/c3ref/c_index_constraint_eq.html) for details.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 #[allow(non_snake_case, non_camel_case_types, missing_docs)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum IndexConstraintOp {
@@ -369,7 +366,6 @@ impl From<u8> for IndexConstraintOp {
     }
 }
 
-#[cfg(feature = "modern_sqlite")] // 3.9.0
 bitflags::bitflags! {
     /// Virtual table scan flags
     /// See [Function Flags](https://sqlite.org/c3ref/c_index_scan_unique.html) for details.
@@ -461,7 +457,7 @@ impl IndexInfo {
     #[inline]
     pub fn set_order_by_consumed(&mut self, order_by_consumed: bool) {
         unsafe {
-            (*self.0).orderByConsumed = if order_by_consumed { 1 } else { 0 };
+            (*self.0).orderByConsumed = order_by_consumed as c_int;
         }
     }
 
@@ -474,8 +470,6 @@ impl IndexInfo {
     }
 
     /// Estimated number of rows returned.
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.8.2
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     #[inline]
     pub fn set_estimated_rows(&mut self, estimated_rows: i64) {
         unsafe {
@@ -484,16 +478,12 @@ impl IndexInfo {
     }
 
     /// Mask of SQLITE_INDEX_SCAN_* flags.
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.9.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     #[inline]
     pub fn set_idx_flags(&mut self, flags: IndexFlags) {
         unsafe { (*self.0).idxFlags = flags.bits() };
     }
 
     /// Mask of columns used by statement
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.10.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     #[inline]
     pub fn col_used(&self) -> u64 {
         unsafe { (*self.0).colUsed }
@@ -509,7 +499,7 @@ impl IndexInfo {
         if collation.is_null() {
             return Err(Error::SqliteFailure(
                 ffi::Error::new(ffi::SQLITE_MISUSE),
-                Some(format!("{} is out of range", constraint_idx)),
+                Some(format!("{constraint_idx} is out of range")),
             ));
         }
         Ok(unsafe { CStr::from_ptr(collation) }.to_str()?)
@@ -623,7 +613,7 @@ impl IndexConstraintUsage<'_> {
     /// if `omit`, do not code a test for this constraint
     #[inline]
     pub fn set_omit(&mut self, omit: bool) {
-        self.0.omit = if omit { 1 } else { 0 };
+        self.0.omit = omit as std::os::raw::c_uchar;
     }
 }
 
@@ -934,7 +924,7 @@ pub fn parameter(c_slice: &[u8]) -> Result<(&str, &str)> {
             return Ok((param, value));
         }
     }
-    Err(Error::ModuleError(format!("illegal argument: '{}'", arg)))
+    Err(Error::ModuleError(format!("illegal argument: '{arg}'")))
 }
 
 // FIXME copy/paste from function.rs
@@ -963,7 +953,7 @@ where
         .map(|&cs| CStr::from_ptr(cs).to_bytes()) // FIXME .to_str() -> Result<&str, Utf8Error>
         .collect::<Vec<_>>();
     match T::create(&mut conn, aux.as_ref(), &vec[..]) {
-        Ok((sql, vtab)) => match ::std::ffi::CString::new(sql) {
+        Ok((sql, vtab)) => match std::ffi::CString::new(sql) {
             Ok(c_sql) => {
                 let rc = ffi::sqlite3_declare_vtab(db, c_sql.as_ptr());
                 if rc == ffi::SQLITE_OK {
@@ -1015,7 +1005,7 @@ where
         .map(|&cs| CStr::from_ptr(cs).to_bytes()) // FIXME .to_str() -> Result<&str, Utf8Error>
         .collect::<Vec<_>>();
     match T::connect(&mut conn, aux.as_ref(), &vec[..]) {
-        Ok((sql, vtab)) => match ::std::ffi::CString::new(sql) {
+        Ok((sql, vtab)) => match std::ffi::CString::new(sql) {
             Ok(c_sql) => {
                 let rc = ffi::sqlite3_declare_vtab(db, c_sql.as_ptr());
                 if rc == ffi::SQLITE_OK {
@@ -1334,7 +1324,7 @@ pub mod csvtab;
 #[cfg(feature = "series")]
 #[cfg_attr(docsrs, doc(cfg(feature = "series")))]
 pub mod series; // SQLite >= 3.9.0
-#[cfg(test)]
+#[cfg(all(test, feature = "modern_sqlite"))]
 mod vtablog;
 
 #[cfg(test)]
