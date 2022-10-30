@@ -506,7 +506,6 @@ impl InnerConnection {
             match t {
                 Ok((Ok(ref value), sub_type)) => {
                     set_result(ctx, value);
-                    #[cfg(feature = "modern_sqlite")] // 3.9.0
                     if let Some(sub_type) = sub_type {
                         ffi::sqlite3_result_subtype(ctx, *sub_type);
                     }
@@ -751,7 +750,6 @@ where
     match t {
         Ok((Ok(ref value), sub_type)) => {
             set_result(ctx, value);
-            #[cfg(feature = "modern_sqlite")] // 3.9.0
             if let Some(sub_type) = sub_type {
                 ffi::sqlite3_result_subtype(ctx, *sub_type);
             }
@@ -801,7 +799,6 @@ where
     match t {
         Ok((Ok(ref value), sub_type)) => {
             set_result(ctx, value);
-            #[cfg(feature = "modern_sqlite")] // 3.9.0
             if let Some(sub_type) = sub_type {
                 ffi::sqlite3_result_subtype(ctx, *sub_type);
             }
