@@ -139,6 +139,11 @@ bencher = "0.1"
 path = "libsqlite3-sys"
 version = "0.25.0"
 
+# FIXME optional
+[dependencies.rusqlite-macros]
+path = "rusqlite-macros"
+version = "0.1.0"
+
 [[test]]
 name = "config_log"
 harness = false
