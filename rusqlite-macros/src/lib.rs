@@ -3,8 +3,8 @@
 use proc_macro::{Delimiter, Literal, TokenStream, TokenTree};
 
 use fallible_iterator::FallibleIterator;
-use sqlite3_parser::lexer::sql::Parser;
 use sqlite3_parser::ast::{ParameterInfo, ToTokens};
+use sqlite3_parser::lexer::sql::Parser;
 
 // https://internals.rust-lang.org/t/custom-error-diagnostics-with-procedural-macros-on-almost-stable-rust/8113
 
@@ -19,7 +19,7 @@ type Result<T> = std::result::Result<T, String>;
 fn try_bind(input: TokenStream) -> Result<TokenStream> {
     //eprintln!("INPUT: {:#?}", input);
     let (stmt, literal) = {
-        let mut iter = input.into_iter();
+        let mut iter = input.clone().into_iter();
         let stmt = iter.next().unwrap();
         let _punct = iter.next().unwrap();
         let literal = iter.next().unwrap();
@@ -44,19 +44,34 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
         Err(err) => {
             return Err(err.to_string());
         }
-        Ok(Some(ast)) => ast
+        Ok(Some(ast)) => ast,
     };
     let mut info = ParameterInfo::default();
     if let Err(err) = ast.to_tokens(&mut info) {
         return Err(err.to_string());
     }
+    if info.count == 0 {
+        return Ok(input);
+    }
     //eprintln!("ParameterInfo.count: {:#?}", info.count);
     //eprintln!("ParameterInfo.names: {:#?}", info.names);
+    if info.count as usize != info.names.len() {
+        return Err("Mixing named and numbered parameters is not supported.".to_string());
+    }
 
     let mut res = TokenStream::new();
+    for (i, name) in info.names.iter().enumerate() {
+        //eprintln!("(i: {}, name: {})", i + 1, &name[1..]);
+        res.extend(Some(stmt.clone()));
+        res.extend(parse_ts(&format!(
+            ".raw_bind_parameter({}, &{})?;",
+            i + 1,
+            &name[1..]
+        )));
+    }
+
     Ok(res)
 }
-
 
 fn into_literal(ts: &TokenTree) -> Option<Literal> {
     match ts {
@@ -73,7 +88,10 @@ fn into_literal(ts: &TokenTree) -> Option<Literal> {
 }
 
 fn strip_matches<'a>(s: &'a str, pattern: &str) -> &'a str {
-    s.strip_prefix(pattern).unwrap_or(s).strip_suffix(pattern).unwrap_or(s)
+    s.strip_prefix(pattern)
+        .unwrap_or(s)
+        .strip_suffix(pattern)
+        .unwrap_or(s)
 }
 
 fn parse_ts(s: &str) -> TokenStream {
