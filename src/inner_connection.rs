@@ -377,7 +377,7 @@ impl Drop for InnerConnection {
             if panicking() {
                 eprintln!("Error while closing SQLite connection: {e:?}");
             } else {
-                panic!("Error while closing SQLite connection: {:?}", e);
+                panic!("Error while closing SQLite connection: {e:?}");
             }
         }
     }

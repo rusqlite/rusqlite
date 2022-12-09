@@ -563,7 +563,7 @@ mod test {
             assert_eq!(e.code, crate::ErrorCode::Unknown);
             assert!(m.contains("transaction"));
         } else {
-            panic!("Unexpected error type: {:?}", e);
+            panic!("Unexpected error type: {e:?}");
         }
     }
 

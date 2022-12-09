@@ -405,18 +405,17 @@ mod test {
             db.pragma_update_and_check(None, "journal_mode", "OFF", |row| row.get(0))?;
         assert!(
             journal_mode == "off" || journal_mode == "memory",
-            "mode: {:?}",
-            journal_mode,
+            "mode: {journal_mode:?}"
         );
         // Sanity checks to ensure the move to a generic `ToSql` wasn't breaking
         let mode =
             db.pragma_update_and_check(None, "journal_mode", "OFF", |row| row.get::<_, String>(0))?;
-        assert!(mode == "off" || mode == "memory", "mode: {:?}", mode);
+        assert!(mode == "off" || mode == "memory", "mode: {mode:?}");
 
         let param: &dyn crate::ToSql = &"OFF";
         let mode =
             db.pragma_update_and_check(None, "journal_mode", param, |row| row.get::<_, String>(0))?;
-        assert!(mode == "off" || mode == "memory", "mode: {:?}", mode);
+        assert!(mode == "off" || mode == "memory", "mode: {mode:?}");
         Ok(())
     }
 

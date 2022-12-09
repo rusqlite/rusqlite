@@ -252,11 +252,7 @@ impl fmt::Display for Error {
             ),
             Error::FromSqlConversionFailure(i, ref t, ref err) => {
                 if i != UNKNOWN_COLUMN {
-                    write!(
-                        f,
-                        "Conversion error from type {} at index: {}, {}",
-                        t, i, err
-                    )
+                    write!(f, "Conversion error from type {t} at index: {i}, {err}")
                 } else {
                     err.fmt(f)
                 }
@@ -278,15 +274,12 @@ impl fmt::Display for Error {
             Error::QueryReturnedNoRows => write!(f, "Query returned no rows"),
             Error::InvalidColumnIndex(i) => write!(f, "Invalid column index: {i}"),
             Error::InvalidColumnName(ref name) => write!(f, "Invalid column name: {name}"),
-            Error::InvalidColumnType(i, ref name, ref t) => write!(
-                f,
-                "Invalid column type {} at index: {}, name: {}",
-                t, i, name
-            ),
+            Error::InvalidColumnType(i, ref name, ref t) => {
+                write!(f, "Invalid column type {t} at index: {i}, name: {name}")
+            }
             Error::InvalidParameterCount(i1, n1) => write!(
                 f,
-                "Wrong number of parameters passed to query. Got {}, needed {}",
-                i1, n1
+                "Wrong number of parameters passed to query. Got {i1}, needed {n1}"
             ),
             Error::StatementChangedRows(i) => write!(f, "Query changed {i} rows"),
 
