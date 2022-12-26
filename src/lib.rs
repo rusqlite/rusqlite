@@ -85,6 +85,8 @@ pub use crate::statement::{Statement, StatementStatus};
 pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
 pub use crate::types::ToSql;
 pub use crate::version::*;
+#[doc(hidden)]
+pub use rusqlite_macros::__bind;
 
 mod error;
 
@@ -217,6 +219,30 @@ macro_rules! named_params {
     ($($param_name:literal: $param_val:expr),+ $(,)?) => {
         &[$(($param_name, &$param_val as &dyn $crate::ToSql)),+] as &[(&str, &dyn $crate::ToSql)]
     };
+}
+
+/// Captured identifiers in SQL
+#[macro_export]
+macro_rules! prepare_and_bind {
+    ($conn:expr, $sql:literal) => {{
+        #[cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)]
+        format_args!($sql);
+        let mut stmt = $conn.prepare($sql)?;
+        $crate::__bind!(stmt, $sql);
+        stmt
+    }};
+}
+
+/// Captured identifiers in SQL
+#[macro_export]
+macro_rules! prepare_cached_and_bind {
+    ($conn:expr, $sql:literal) => {{
+        #[cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)]
+        format_args!($sql);
+        let mut stmt = $conn.prepare_cached($sql)?;
+        $crate::__bind!(stmt, $sql);
+        stmt
+    }};
 }
 
 /// A typedef of the result returned by many methods.
@@ -2088,9 +2114,20 @@ mod test {
     }
 
     #[test]
-    pub fn db_readonly() -> Result<()> {
+    fn db_readonly() -> Result<()> {
         let db = Connection::open_in_memory()?;
         assert!(!db.is_readonly(MAIN_DB)?);
+        Ok(())
+    }
+
+    #[test]
+    fn prepare_and_bind() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let name = "Lisa";
+        let age = 8;
+        let mut stmt = prepare_and_bind!(db, "SELECT $name, $age;");
+        let (v1, v2) = stmt.raw_query().get_expected_row().and_then(|r| Ok((r.get::<_,String>(0)?, r.get::<_,i64>(1)?)))?;
+        assert_eq!((v1.as_str(), v2), (name, age));
         Ok(())
     }
 }
