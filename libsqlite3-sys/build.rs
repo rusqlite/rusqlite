@@ -146,15 +146,8 @@ mod build_bundled {
                     use_openssl = true;
                     (lib_dir, inc_dir)
                 }
-                (lib_dir, inc_dir) => match find_openssl_dir(&host, &target) {
-                    None => {
-                        if is_windows && !cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
-                            panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
-                        } else {
-                            (PathBuf::new(), PathBuf::new())
-                        }
-                    }
-                    Some(openssl_dir) => {
+                (lib_dir, inc_dir) => {
+                    if let Some(openssl_dir) = find_openssl_dir(&host, &target) {
                         let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
                         let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
 
@@ -173,8 +166,23 @@ mod build_bundled {
 
                         use_openssl = true;
                         (lib_dir, inc_dir)
+                    } else {
+                        if is_windows {
+                            if cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
+                                (PathBuf::new(), PathBuf::new())
+                            } else {
+                                panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
+                            }
+                        } else {
+                            if let Some((lib_dir, inc_dir)) = try_pkg_config() {
+                                use_openssl = true;
+                                (lib_dir, inc_dir)
+                            } else {
+                                (PathBuf::new(), PathBuf::new())
+                            }
+                        }
                     }
-                },
+                }
             };
 
             if cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
@@ -302,6 +310,21 @@ mod build_bundled {
     fn find_openssl_dir(_host: &str, _target: &str) -> Option<PathBuf> {
         let openssl_dir = env("OPENSSL_DIR");
         openssl_dir.map(PathBuf::from)
+    }
+
+    fn try_pkg_config() -> Option<(PathBuf, PathBuf)> {
+        if let Ok(library) = pkg_config::Config::new()
+            .print_system_libs(false)
+            .probe("openssl")
+        {
+            // OpenSSL doesn't have multiple libs
+            if let (Some(lib_dir), Some(inc_dir)) =
+                (library.link_paths.first(), library.include_paths.first())
+            {
+                return Some((lib_dir.clone(), inc_dir.clone()));
+            }
+        }
+        None
     }
 }
 
