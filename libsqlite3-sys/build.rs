@@ -166,21 +166,17 @@ mod build_bundled {
 
                         use_openssl = true;
                         (lib_dir, inc_dir)
-                    } else {
-                        if is_windows {
-                            if cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
-                                (PathBuf::new(), PathBuf::new())
-                            } else {
-                                panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
-                            }
+                    } else if is_windows {
+                        if cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
+                            (PathBuf::new(), PathBuf::new())
                         } else {
-                            if let Some((lib_dir, inc_dir)) = try_pkg_config() {
-                                use_openssl = true;
-                                (lib_dir, inc_dir)
-                            } else {
-                                (PathBuf::new(), PathBuf::new())
-                            }
+                            panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
                         }
+                    } else if let Some((lib_dir, inc_dir)) = try_pkg_config() {
+                        use_openssl = true;
+                        (lib_dir, inc_dir)
+                    } else {
+                        (PathBuf::new(), PathBuf::new())
                     }
                 }
             };
