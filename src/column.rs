@@ -161,7 +161,7 @@ mod test {
         use super::Column;
 
         let db = Connection::open_in_memory()?;
-        let query = db.prepare("SELECT * FROM sqlite_master")?;
+        let query = db.prepare("SELECT * FROM sqlite_schema")?;
         let columns = query.columns();
         let column_names: Vec<&str> = columns.iter().map(Column::name).collect();
         assert_eq!(

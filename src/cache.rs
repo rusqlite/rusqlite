@@ -311,7 +311,7 @@ mod test {
     #[test]
     fn test_connection_close() -> Result<()> {
         let conn = Connection::open_in_memory()?;
-        conn.prepare_cached("SELECT * FROM sqlite_master;")?;
+        conn.prepare_cached("SELECT * FROM sqlite_schema;")?;
 
         conn.close().expect("connection not closed");
         Ok(())

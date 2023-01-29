@@ -58,7 +58,7 @@ pub enum DbConfig {
     #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_LEGACY_FILE_FORMAT = 1016, // 3.31.0
     /// Tells SQLite to assume that database schemas (the contents of the
-    /// sqlite_master tables) are untainted by malicious content.
+    /// sqlite_schema tables) are untainted by malicious content.
     #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_TRUSTED_SCHEMA = 1017, // 3.31.0
 }

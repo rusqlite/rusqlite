@@ -366,7 +366,7 @@ mod test {
     fn pragma() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let mut columns = Vec::new();
-        db.pragma(None, "table_info", "sqlite_master", |row| {
+        db.pragma(None, "table_info", "sqlite_schema", |row| {
             let column: String = row.get(1)?;
             columns.push(column);
             Ok(())
@@ -381,7 +381,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         let mut table_info = db.prepare("SELECT * FROM pragma_table_info(?1)")?;
         let mut columns = Vec::new();
-        let mut rows = table_info.query(["sqlite_master"])?;
+        let mut rows = table_info.query(["sqlite_schema"])?;
 
         while let Some(row) = rows.next()? {
             let row = row;
