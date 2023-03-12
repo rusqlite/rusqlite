@@ -62,7 +62,7 @@ use std::ffi::{CStr, CString};
 use std::fmt;
 use std::os::raw::{c_char, c_int};
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::result;
 use std::str;
 use std::sync::atomic::Ordering;
@@ -140,13 +140,6 @@ pub(crate) use util::SmallCString;
 
 // Number of cached prepared statements we'll hold on to.
 const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
-/// To be used when your statement has no [parameter][sqlite-varparam].
-///
-/// [sqlite-varparam]: https://sqlite.org/lang_expr.html#varparam
-///
-/// This is deprecated in favor of using an empty array literal.
-#[deprecated = "Use an empty array instead; `stmt.execute(NO_PARAMS)` => `stmt.execute([])`"]
-pub const NO_PARAMS: &[&dyn ToSql] = &[];
 
 /// A macro making it more convenient to longer lists of
 /// parameters as a `&[&dyn ToSql]`.
@@ -330,7 +323,6 @@ impl DatabaseName<'_> {
 pub struct Connection {
     db: RefCell<InnerConnection>,
     cache: StatementCache,
-    path: Option<PathBuf>,
 }
 
 unsafe impl Send for Connection {}
@@ -427,7 +419,6 @@ impl Connection {
         InnerConnection::open_with_flags(&c_path, flags, None).map(|db| Connection {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
-            path: Some(path.as_ref().to_path_buf()),
         })
     }
 
@@ -452,7 +443,6 @@ impl Connection {
         InnerConnection::open_with_flags(&c_path, flags, Some(&c_vfs)).map(|db| Connection {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
-            path: Some(path.as_ref().to_path_buf()),
         })
     }
 
@@ -580,12 +570,23 @@ impl Connection {
 
     /// Returns the path to the database file, if one exists and is known.
     ///
+    /// Returns `Some("")` for a temporary or in-memory database.
+    ///
     /// Note that in some cases [PRAGMA
     /// database_list](https://sqlite.org/pragma.html#pragma_database_list) is
     /// likely to be more robust.
     #[inline]
-    pub fn path(&self) -> Option<&Path> {
-        self.path.as_deref()
+    pub fn path(&self) -> Option<&str> {
+        unsafe {
+            let db = self.handle();
+            let db_name = DatabaseName::Main.as_cstring().unwrap();
+            let db_filename = ffi::sqlite3_db_filename(db, db_name.as_ptr());
+            if db_filename.is_null() {
+                None
+            } else {
+                CStr::from_ptr(db_filename).to_str().ok()
+            }
+        }
     }
 
     /// Attempts to free as much heap memory as possible from the database
@@ -596,26 +597,6 @@ impl Connection {
     #[cfg(feature = "release_memory")]
     pub fn release_memory(&self) -> Result<()> {
         self.db.borrow_mut().release_memory()
-    }
-
-    /// Convenience method to prepare and execute a single SQL statement with
-    /// named parameter(s).
-    ///
-    /// On success, returns the number of rows that were changed or inserted or
-    /// deleted (via `sqlite3_changes`).
-    ///
-    /// # Failure
-    ///
-    /// Will return `Err` if `sql` cannot be converted to a C-compatible string
-    /// or if the underlying SQLite call fails.
-    #[deprecated = "You can use `execute` with named params now."]
-    pub fn execute_named(&self, sql: &str, params: &[(&str, &dyn ToSql)]) -> Result<usize> {
-        // This function itself is deprecated, so it's fine
-        #![allow(deprecated)]
-        self.prepare(sql).and_then(|mut stmt| {
-            stmt.check_no_tail()
-                .and_then(|_| stmt.execute_named(params))
-        })
     }
 
     /// Get the SQLite rowid of the most recent successful INSERT.
@@ -669,28 +650,6 @@ impl Connection {
     #[cfg(test)]
     pub(crate) fn one_column<T: crate::types::FromSql>(&self, sql: &str) -> Result<T> {
         self.query_row(sql, [], |r| r.get(0))
-    }
-
-    /// Convenience method to execute a query with named parameter(s) that is
-    /// expected to return a single row.
-    ///
-    /// If the query returns more than one row, all rows except the first are
-    /// ignored.
-    ///
-    /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
-    /// query truly is optional, you can call `.optional()` on the result of
-    /// this to get a `Result<Option<T>>`.
-    ///
-    /// # Failure
-    ///
-    /// Will return `Err` if `sql` cannot be converted to a C-compatible string
-    /// or if the underlying SQLite call fails.
-    #[deprecated = "You can use `query_row` with named params now."]
-    pub fn query_row_named<T, F>(&self, sql: &str, params: &[(&str, &dyn ToSql)], f: F) -> Result<T>
-    where
-        F: FnOnce(&Row<'_>) -> Result<T>,
-    {
-        self.query_row(sql, params, f)
     }
 
     /// Convenience method to execute a query that is expected to return a
@@ -921,12 +880,30 @@ impl Connection {
     /// This function is unsafe because improper use may impact the Connection.
     #[inline]
     pub unsafe fn from_handle(db: *mut ffi::sqlite3) -> Result<Connection> {
-        let db_path = db_filename(db);
         let db = InnerConnection::new(db, false);
         Ok(Connection {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
-            path: db_path,
+        })
+    }
+
+    /// Create a `Connection` from a raw owned handle.
+    ///
+    /// The returned connection will attempt to close the inner connection
+    /// when dropped/closed. This function should only be called on connections
+    /// owned by the caller.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because improper use may impact the Connection.
+    /// In particular, it should only be called on connections created
+    /// and owned by the caller, e.g. as a result of calling ffi::sqlite3_open().
+    #[inline]
+    pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Connection> {
+        let db = InnerConnection::new(db, true);
+        Ok(Connection {
+            db: RefCell::new(db),
+            cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
         })
     }
 
@@ -979,7 +956,7 @@ impl Connection {
 impl fmt::Debug for Connection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Connection")
-            .field("path", &self.path)
+            .field("path", &self.path())
             .finish()
     }
 }
@@ -1170,16 +1147,6 @@ impl InterruptHandle {
     }
 }
 
-unsafe fn db_filename(db: *mut ffi::sqlite3) -> Option<PathBuf> {
-    let db_name = DatabaseName::Main.as_cstring().unwrap();
-    let db_filename = ffi::sqlite3_db_filename(db, db_name.as_ptr());
-    if db_filename.is_null() {
-        None
-    } else {
-        CStr::from_ptr(db_filename).to_str().ok().map(PathBuf::from)
-    }
-}
-
 #[cfg(doctest)]
 doc_comment::doctest!("../README.md");
 
@@ -1279,6 +1246,21 @@ mod test {
 
         let db = checked_memory_handle();
         db.close().unwrap();
+    }
+
+    #[test]
+    fn test_path() -> Result<()> {
+        let tmp = tempfile::tempdir().unwrap();
+        let db = Connection::open("")?;
+        assert_eq!(Some(""), db.path());
+        let db = Connection::open_in_memory()?;
+        assert_eq!(Some(""), db.path());
+        let db = Connection::open("file:dummy.db?mode=memory&cache=shared")?;
+        assert_eq!(Some(""), db.path());
+        let path = tmp.path().join("file.db");
+        let db = Connection::open(path)?;
+        assert!(db.path().map(|p| p.ends_with("file.db")).unwrap_or(false));
+        Ok(())
     }
 
     #[test]
@@ -1787,6 +1769,16 @@ mod test {
             db.execute_batch("PRAGMA VACUUM")?;
         }
         db.close().unwrap();
+        Ok(())
+    }
+
+    #[test]
+    fn test_from_handle_owned() -> Result<()> {
+        let mut handle: *mut ffi::sqlite3 = std::ptr::null_mut();
+        let r = unsafe { ffi::sqlite3_open(":memory:\0".as_ptr() as *const i8, &mut handle) };
+        assert_eq!(r, ffi::SQLITE_OK);
+        let db = unsafe { Connection::from_handle_owned(handle) }?;
+        db.execute_batch("PRAGMA VACUUM")?;
         Ok(())
     }
 
