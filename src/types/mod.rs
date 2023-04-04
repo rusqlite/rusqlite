@@ -26,7 +26,8 @@
 //! [`ToSql`] always succeeds except when storing a `u64` or `usize` value that
 //! cannot fit in an `INTEGER` (`i64`). Also note that SQLite ignores column
 //! types, so if you store an `i64` in a column with type `REAL` it will be
-//! stored as an `INTEGER`, not a `REAL`.
+//! stored as an `INTEGER`, not a `REAL` (unless the column is part of a
+//! [STRICT table](https://www.sqlite.org/stricttables.html)).
 //!
 //! If the `time` feature is enabled, implementations are
 //! provided for `time::OffsetDateTime` that use the RFC 3339 date/time format,
