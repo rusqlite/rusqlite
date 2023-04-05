@@ -462,6 +462,54 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "i128_blob")]
+    #[test]
+    fn test_non_zero_i128() -> crate::Result<()> {
+        use std::num::NonZeroI128;
+        macro_rules! nz {
+            ($x:expr) => {
+                NonZeroI128::new($x).unwrap()
+            };
+        }
+
+        let db = crate::Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE foo (i128 BLOB, desc TEXT)")?;
+        db.execute(
+            "INSERT INTO foo(i128, desc) VALUES
+                (?1, 'neg one'), (?2, 'neg two'),
+                (?3, 'pos one'), (?4, 'pos two'),
+                (?5, 'min'), (?6, 'max')",
+            [
+                nz!(-1),
+                nz!(-2),
+                nz!(1),
+                nz!(2),
+                nz!(i128::MIN),
+                nz!(i128::MAX),
+            ],
+        )?;
+        let mut stmt = db.prepare("SELECT i128, desc FROM foo ORDER BY i128 ASC")?;
+
+        let res = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<(NonZeroI128, String)>, _>>()?;
+
+        assert_eq!(
+            res,
+            &[
+                (nz!(i128::MIN), "min".to_owned()),
+                (nz!(-2), "neg two".to_owned()),
+                (nz!(-1), "neg one".to_owned()),
+                (nz!(1), "pos one".to_owned()),
+                (nz!(2), "pos two".to_owned()),
+                (nz!(i128::MAX), "max".to_owned()),
+            ]
+        );
+        let err = db.query_row("SELECT ?1", [0i128], |row| row.get::<_, NonZeroI128>(0));
+        assert_eq!(err, Err(crate::Error::IntegralValueOutOfRange(0, 0)));
+        Ok(())
+    }
+
     #[cfg(feature = "uuid")]
     #[test]
     fn test_uuid() -> crate::Result<()> {

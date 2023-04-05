@@ -298,4 +298,48 @@ mod test {
         check_ranges::<u32>(&db, &[-2, -1, 4_294_967_296], &[0, 1, 4_294_967_295]);
         Ok(())
     }
+
+    #[test]
+    fn test_nonzero_ranges() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+
+        macro_rules! check_ranges {
+            ($nz:ty, $out_of_range:expr, $in_range:expr) => {
+                for &n in $out_of_range {
+                    assert_eq!(
+                        db.query_row("SELECT ?1", [n], |r| r.get::<_, $nz>(0)),
+                        Err(Error::IntegralValueOutOfRange(0, n))
+                    );
+                }
+                for &n in $in_range {
+                    let non_zero = <$nz>::new(n).unwrap();
+                    assert_eq!(
+                        Ok(non_zero),
+                        db.query_row("SELECT ?1", [non_zero], |r| r.get::<_, $nz>(0))
+                    );
+                }
+            };
+        }
+
+        check_ranges!(std::num::NonZeroI8, &[0, -129, 128], &[-128, 1, 127]);
+        check_ranges!(
+            std::num::NonZeroI16,
+            &[0, -32769, 32768],
+            &[-32768, -1, 1, 32767]
+        );
+        check_ranges!(
+            std::num::NonZeroI32,
+            &[0, -2_147_483_649, 2_147_483_648],
+            &[-2_147_483_648, -1, 1, 2_147_483_647]
+        );
+        check_ranges!(std::num::NonZeroU8, &[0, -2, -1, 256], &[1, 255]);
+        check_ranges!(std::num::NonZeroU16, &[0, -2, -1, 65536], &[1, 65535]);
+        check_ranges!(
+            std::num::NonZeroU32,
+            &[0, -2, -1, 4_294_967_296],
+            &[1, 4_294_967_295]
+        );
+
+        Ok(())
+    }
 }
