@@ -267,9 +267,12 @@ mod test {
         is_to_sql::<i16>();
         is_to_sql::<i32>();
         is_to_sql::<i64>();
+        is_to_sql::<isize>();
         is_to_sql::<u8>();
         is_to_sql::<u16>();
         is_to_sql::<u32>();
+        is_to_sql::<u64>();
+        is_to_sql::<usize>();
     }
 
     #[test]
