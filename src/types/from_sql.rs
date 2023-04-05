@@ -96,6 +96,15 @@ macro_rules! from_sql_integral(
                 i.try_into().map_err(|_| FromSqlError::OutOfRange(i))
             }
         }
+    );
+    (non_zero $nz:ty, $z:ty) => (
+        impl FromSql for $nz {
+            #[inline]
+            fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                let i = <$z>::column_result(value)?;
+                <$nz>::new(i).ok_or(FromSqlError::OutOfRange(0))
+            }
+        }
     )
 );
 
@@ -109,6 +118,22 @@ from_sql_integral!(u16);
 from_sql_integral!(u32);
 from_sql_integral!(u64);
 from_sql_integral!(usize);
+
+from_sql_integral!(non_zero std::num::NonZeroIsize, isize);
+from_sql_integral!(non_zero std::num::NonZeroI8, i8);
+from_sql_integral!(non_zero std::num::NonZeroI16, i16);
+from_sql_integral!(non_zero std::num::NonZeroI32, i32);
+from_sql_integral!(non_zero std::num::NonZeroI64, i64);
+#[cfg(feature = "i128_blob")]
+#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
+from_sql_integral!(non_zero std::num::NonZeroI128, i128);
+
+from_sql_integral!(non_zero std::num::NonZeroUsize, usize);
+from_sql_integral!(non_zero std::num::NonZeroU8, u8);
+from_sql_integral!(non_zero std::num::NonZeroU16, u16);
+from_sql_integral!(non_zero std::num::NonZeroU32, u32);
+from_sql_integral!(non_zero std::num::NonZeroU64, u64);
+// std::num::NonZeroU128 is not supported since u128 isn't either
 
 impl FromSql for i64 {
     #[inline]
