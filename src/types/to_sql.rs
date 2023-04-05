@@ -51,6 +51,12 @@ macro_rules! from_value(
             #[inline]
             fn from(t: $t) -> Self { ToSqlOutput::Owned(t.into())}
         }
+    );
+    (non_zero $t:ty) => (
+        impl From<$t> for ToSqlOutput<'_> {
+            #[inline]
+            fn from(t: $t) -> Self { ToSqlOutput::Owned(t.get().into())}
+        }
     )
 );
 from_value!(String);
@@ -68,12 +74,25 @@ from_value!(f32);
 from_value!(f64);
 from_value!(Vec<u8>);
 
+from_value!(non_zero std::num::NonZeroI8);
+from_value!(non_zero std::num::NonZeroI16);
+from_value!(non_zero std::num::NonZeroI32);
+from_value!(non_zero std::num::NonZeroI64);
+from_value!(non_zero std::num::NonZeroIsize);
+from_value!(non_zero std::num::NonZeroU8);
+from_value!(non_zero std::num::NonZeroU16);
+from_value!(non_zero std::num::NonZeroU32);
+
 // It would be nice if we could avoid the heap allocation (of the `Vec`) that
 // `i128` needs in `Into<Value>`, but it's probably fine for the moment, and not
 // worth adding another case to Value.
 #[cfg(feature = "i128_blob")]
 #[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 from_value!(i128);
+
+#[cfg(feature = "i128_blob")]
+#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
+from_value!(non_zero std::num::NonZeroI128);
 
 #[cfg(feature = "uuid")]
 #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
@@ -165,9 +184,22 @@ to_sql_self!(u32);
 to_sql_self!(f32);
 to_sql_self!(f64);
 
+to_sql_self!(std::num::NonZeroI8);
+to_sql_self!(std::num::NonZeroI16);
+to_sql_self!(std::num::NonZeroI32);
+to_sql_self!(std::num::NonZeroI64);
+to_sql_self!(std::num::NonZeroIsize);
+to_sql_self!(std::num::NonZeroU8);
+to_sql_self!(std::num::NonZeroU16);
+to_sql_self!(std::num::NonZeroU32);
+
 #[cfg(feature = "i128_blob")]
 #[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 to_sql_self!(i128);
+
+#[cfg(feature = "i128_blob")]
+#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
+to_sql_self!(std::num::NonZeroI128);
 
 #[cfg(feature = "uuid")]
 #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
@@ -186,12 +218,27 @@ macro_rules! to_sql_self_fallible(
                 )))
             }
         }
+    );
+    (non_zero $t:ty) => (
+        impl ToSql for $t {
+            #[inline]
+            fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                Ok(ToSqlOutput::Owned(Value::Integer(
+                    i64::try_from(self.get()).map_err(
+                        // TODO: Include the values in the error message.
+                        |err| Error::ToSqlConversionFailure(err.into())
+                    )?
+                )))
+            }
+        }
     )
 );
 
 // Special implementations for usize and u64 because these conversions can fail.
 to_sql_self_fallible!(u64);
 to_sql_self_fallible!(usize);
+to_sql_self_fallible!(non_zero std::num::NonZeroU64);
+to_sql_self_fallible!(non_zero std::num::NonZeroUsize);
 
 impl<T: ?Sized> ToSql for &'_ T
 where
@@ -273,6 +320,20 @@ mod test {
         is_to_sql::<u32>();
         is_to_sql::<u64>();
         is_to_sql::<usize>();
+    }
+
+    #[test]
+    fn test_nonzero_types() {
+        is_to_sql::<std::num::NonZeroI8>();
+        is_to_sql::<std::num::NonZeroI16>();
+        is_to_sql::<std::num::NonZeroI32>();
+        is_to_sql::<std::num::NonZeroI64>();
+        is_to_sql::<std::num::NonZeroIsize>();
+        is_to_sql::<std::num::NonZeroU8>();
+        is_to_sql::<std::num::NonZeroU16>();
+        is_to_sql::<std::num::NonZeroU32>();
+        is_to_sql::<std::num::NonZeroU64>();
+        is_to_sql::<std::num::NonZeroUsize>();
     }
 
     #[test]
