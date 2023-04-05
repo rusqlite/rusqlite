@@ -308,7 +308,9 @@ mod test {
                 for &n in $out_of_range {
                     assert_eq!(
                         db.query_row("SELECT ?1", [n], |r| r.get::<_, $nz>(0)),
-                        Err(Error::IntegralValueOutOfRange(0, n))
+                        Err(Error::IntegralValueOutOfRange(0, n)),
+                        "{}",
+                        std::any::type_name::<$nz>()
                     );
                 }
                 for &n in $in_range {
@@ -332,11 +334,31 @@ mod test {
             &[0, -2_147_483_649, 2_147_483_648],
             &[-2_147_483_648, -1, 1, 2_147_483_647]
         );
+        check_ranges!(
+            std::num::NonZeroI64,
+            &[0],
+            &[-2_147_483_648, -1, 1, 2_147_483_647, i64::MAX, i64::MIN]
+        );
+        check_ranges!(
+            std::num::NonZeroIsize,
+            &[0],
+            &[-2_147_483_648, -1, 1, 2_147_483_647]
+        );
         check_ranges!(std::num::NonZeroU8, &[0, -2, -1, 256], &[1, 255]);
         check_ranges!(std::num::NonZeroU16, &[0, -2, -1, 65536], &[1, 65535]);
         check_ranges!(
             std::num::NonZeroU32,
             &[0, -2, -1, 4_294_967_296],
+            &[1, 4_294_967_295]
+        );
+        check_ranges!(
+            std::num::NonZeroU64,
+            &[0, -2, -1, -4_294_967_296],
+            &[1, 4_294_967_295, i64::MAX as u64]
+        );
+        check_ranges!(
+            std::num::NonZeroUsize,
+            &[0, -2, -1, -4_294_967_296],
             &[1, 4_294_967_295]
         );
 
