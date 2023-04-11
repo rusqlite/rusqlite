@@ -211,7 +211,7 @@ impl Connection {
     /// (e.g. `integrity_check`).
     ///
     /// Prefer [PRAGMA function](https://sqlite.org/pragma.html#pragfunc) introduced in SQLite 3.20:
-    /// `SELECT * FROM pragma_table_info(?);`
+    /// `SELECT * FROM pragma_table_info(?1);`
     pub fn pragma<F, V>(
         &self,
         schema_name: Option<DatabaseName<'_>>,
@@ -303,15 +303,15 @@ fn is_identifier(s: &str) -> bool {
 }
 
 fn is_identifier_start(c: char) -> bool {
-    ('A'..='Z').contains(&c) || c == '_' || ('a'..='z').contains(&c) || c > '\x7F'
+    c.is_ascii_uppercase() || c == '_' || c.is_ascii_lowercase() || c > '\x7F'
 }
 
 fn is_identifier_continue(c: char) -> bool {
     c == '$'
-        || ('0'..='9').contains(&c)
-        || ('A'..='Z').contains(&c)
+        || c.is_ascii_digit()
+        || c.is_ascii_uppercase()
         || c == '_'
-        || ('a'..='z').contains(&c)
+        || c.is_ascii_lowercase()
         || c > '\x7F'
 }
 
@@ -379,7 +379,7 @@ mod test {
     #[cfg(feature = "modern_sqlite")]
     fn pragma_func() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        let mut table_info = db.prepare("SELECT * FROM pragma_table_info(?)")?;
+        let mut table_info = db.prepare("SELECT * FROM pragma_table_info(?1)")?;
         let mut columns = Vec::new();
         let mut rows = table_info.query(["sqlite_master"])?;
 

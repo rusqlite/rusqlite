@@ -181,16 +181,10 @@ mod build_bundled {
                 cfg.include(env::var("DEP_OPENSSL_INCLUDE").unwrap());
                 // cargo will resolve downstream to the static lib in
                 // openssl-sys
-            } else if is_windows {
-                // Windows without `-vendored-openssl` takes this to link against a prebuilt
-                // OpenSSL lib
-                cfg.include(inc_dir.to_string_lossy().as_ref());
-                let lib = lib_dir.join("libcrypto.lib");
-                cfg.flag(lib.to_string_lossy().as_ref());
             } else if use_openssl {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
-                // branch not taken on Windows, just `crypto` is fine.
-                println!("cargo:rustc-link-lib=dylib=crypto");
+                let lib_name = if is_windows { "libcrypto" } else { "crypto" };
+                println!("cargo:rustc-link-lib=dylib={}", lib_name);
                 println!("cargo:rustc-link-search={}", lib_dir.to_string_lossy());
             } else if is_apple {
                 cfg.flag("-DSQLCIPHER_CRYPTO_CC");
@@ -503,6 +497,11 @@ mod bindings {
                 None
             }
         }
+        fn item_name(&self, original_item_name: &str) -> Option<String> {
+            original_item_name
+                .strip_prefix("sqlite3_index_info_")
+                .map(|s| s.to_owned())
+        }
     }
 
     // Are we generating the bundled bindings? Used to avoid emitting things
@@ -524,6 +523,34 @@ mod bindings {
             .trust_clang_mangling(false)
             .header(header.clone())
             .parse_callbacks(Box::new(SqliteTypeChooser))
+            .blocklist_function("sqlite3_auto_extension")
+            .raw_line(
+                r#"extern "C" {
+    pub fn sqlite3_auto_extension(
+        xEntryPoint: ::std::option::Option<
+            unsafe extern "C" fn(
+                db: *mut sqlite3,
+                pzErrMsg: *mut *const ::std::os::raw::c_char,
+                pThunk: *const sqlite3_api_routines,
+            ) -> ::std::os::raw::c_int,
+        >,
+    ) -> ::std::os::raw::c_int;
+}"#,
+            )
+            .blocklist_function("sqlite3_cancel_auto_extension")
+            .raw_line(
+                r#"extern "C" {
+    pub fn sqlite3_cancel_auto_extension(
+        xEntryPoint: ::std::option::Option<
+            unsafe extern "C" fn(
+                db: *mut sqlite3,
+                pzErrMsg: *mut *const ::std::os::raw::c_char,
+                pThunk: *const sqlite3_api_routines,
+            ) -> ::std::os::raw::c_int,
+        >,
+    ) -> ::std::os::raw::c_int;
+}"#,
+            )
             .rustfmt_bindings(true);
 
         if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {

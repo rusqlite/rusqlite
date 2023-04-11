@@ -1,7 +1,7 @@
 [package]
 name = "rusqlite"
 # Note: Update version in README.md when you change this.
-version = "0.28.0"
+version = "0.29.0"
 authors = ["The rusqlite developers"]
 edition = "2018"
 description = "Ergonomic wrapper for SQLite"
@@ -112,13 +112,12 @@ bundled-full = ["modern-full", "bundled"]
 
 [dependencies]
 time = { version = "0.3.0", features = ["formatting", "macros", "parsing"], optional = true }
-bitflags = "1.2"
+bitflags = "2.0"
 hashlink = "0.8"
 chrono = { version = "0.4", optional = true, default-features = false, features = ["clock"] }
 serde_json = { version = "1.0", optional = true }
 csv = { version = "1.1", optional = true }
 url = { version = "2.1", optional = true }
-lazy_static = { version = "1.4", optional = true }
 fallible-iterator = "0.2"
 fallible-streaming-iterator = "0.1"
 uuid = { version = "1.0", optional = true }
@@ -137,7 +136,7 @@ bencher = "0.1"
 
 [dependencies.libsqlite3-sys]
 path = "libsqlite3-sys"
-version = "0.25.0"
+version = "0.26.0"
 
 # FIXME optional
 [dependencies.rusqlite-macros]
