@@ -2120,7 +2120,11 @@ mod test {
         let name = "Lisa";
         let age = 8;
         let mut stmt = prepare_and_bind!(db, "SELECT $name, $age;");
-        let (v1, v2) = stmt.raw_query().get_expected_row().and_then(|r| Ok((r.get::<_,String>(0)?, r.get::<_,i64>(1)?)))?;
+        let (v1, v2) = stmt
+            .raw_query()
+            .next()
+            .and_then(|o| o.ok_or(Error::QueryReturnedNoRows))
+            .and_then(|r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
         assert_eq!((v1.as_str(), v2), (name, age));
         Ok(())
     }
