@@ -221,7 +221,7 @@ macro_rules! prepare_and_bind {
         #[cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)]
         format_args!($sql);
         let mut stmt = $conn.prepare($sql)?;
-        $crate::__bind!(stmt, $sql);
+        $crate::__bind!(stmt $sql);
         stmt
     }};
 }
@@ -233,7 +233,7 @@ macro_rules! prepare_cached_and_bind {
         #[cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)]
         format_args!($sql);
         let mut stmt = $conn.prepare_cached($sql)?;
-        $crate::__bind!(stmt, $sql);
+        $crate::__bind!(stmt $sql);
         stmt
     }};
 }
@@ -923,7 +923,8 @@ impl Connection {
     ///
     /// This function is unsafe because improper use may impact the Connection.
     /// In particular, it should only be called on connections created
-    /// and owned by the caller, e.g. as a result of calling ffi::sqlite3_open().
+    /// and owned by the caller, e.g. as a result of calling
+    /// ffi::sqlite3_open().
     #[inline]
     pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Connection> {
         let db = InnerConnection::new(db, true);

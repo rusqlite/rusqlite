@@ -16,7 +16,7 @@ fn test_literal() -> Result {
     let first_name = "El";
     let last_name = "Barto";
     let mut stmt = Stmt;
-    __bind!(stmt, "SELECT $first_name, $last_name");
+    __bind!(stmt "SELECT $first_name, $last_name");
     Ok(())
 }
 
@@ -24,13 +24,13 @@ fn test_literal() -> Result {
 #[test]
 fn test_raw_string() {
     let stmt = ();
-    __bind!((), r#"SELECT 1"#);
+    __bind!(stmt r#"SELECT 1"#);
 }
 
 #[test]
 fn test_const() {
     const SQL: &str = "SELECT 1";
     let stmt = ();
-    __bind!((), SQL);
+    __bind!(stmt SQL);
 }
 */

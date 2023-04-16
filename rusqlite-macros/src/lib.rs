@@ -21,7 +21,6 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
     let (stmt, literal) = {
         let mut iter = input.clone().into_iter();
         let stmt = iter.next().unwrap();
-        let _punct = iter.next().unwrap();
         let literal = iter.next().unwrap();
         assert!(iter.next().is_none());
         (stmt, literal)
