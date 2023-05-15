@@ -83,6 +83,9 @@ mod from_sql;
 #[cfg(feature = "serde_json")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde_json")))]
 mod serde_json;
+#[cfg(feature = "smallstr")]
+#[cfg_attr(docsrs, doc(cfg(feature = "smallstr")))]
+mod smallstr;
 #[cfg(feature = "time")]
 #[cfg_attr(docsrs, doc(cfg(feature = "time")))]
 mod time;
