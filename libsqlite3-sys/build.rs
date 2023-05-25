@@ -239,11 +239,16 @@ mod build_bundled {
         if !win_target() {
             cfg.flag("-DHAVE_LOCALTIME_R");
         }
-        // Target wasm32-wasi can't compile the default VFS
         if env::var("TARGET").map_or(false, |v| v == "wasm32-wasi") {
-            cfg.flag("-DSQLITE_OS_OTHER")
+            cfg.flag("-USQLITE_THREADSAFE")
+                .flag("-DSQLITE_THREADSAFE=0")
                 // https://github.com/rust-lang/rust/issues/74393
-                .flag("-DLONGDOUBLE_TYPE=double");
+                .flag("-DLONGDOUBLE_TYPE=double")
+                .flag("-D_WASI_EMULATED_MMAN")
+                .flag("-D_WASI_EMULATED_GETPID")
+                .flag("-D_WASI_EMULATED_SIGNAL")
+                .flag("-D_WASI_EMULATED_PROCESS_CLOCKS");
+
             if cfg!(feature = "wasm32-wasi-vfs") {
                 cfg.file("sqlite3/wasm32-wasi-vfs.c");
             }
