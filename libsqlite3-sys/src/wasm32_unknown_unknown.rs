@@ -12,7 +12,7 @@ pub unsafe extern "C" fn sqlite3_os_init() -> c_int {
         szOsFile: 0,
         mxPathname: 1024,
         pNext: null_mut(),
-        zName: "libsqlite3-sys".as_ptr() as *const c_char,
+        zName: "libsqlite3-sys\0".as_ptr() as *const c_char,
         pAppData: null_mut(),
         xOpen: Some(wasm_vfs_open),
         xDelete: Some(wasm_vfs_delete),
