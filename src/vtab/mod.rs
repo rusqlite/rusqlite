@@ -195,6 +195,8 @@ pub enum VTabConfig {
     Innocuous = 2,
     /// Equivalent to SQLITE_VTAB_DIRECTONLY
     DirectOnly = 3,
+    /// Equivalent to SQLITE_VTAB_USES_ALL_SCHEMAS
+    UsesAllSchemas = 4,
 }
 
 /// `feature = "vtab"`
