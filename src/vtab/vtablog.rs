@@ -1,4 +1,4 @@
-///! Port of C [vtablog](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/vtablog.c)
+//! Port of C [vtablog](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/vtablog.c)
 use std::default::Default;
 use std::marker::PhantomData;
 use std::os::raw::c_int;
