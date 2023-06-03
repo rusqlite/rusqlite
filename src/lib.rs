@@ -1123,7 +1123,7 @@ bitflags::bitflags! {
     /// [sqlite3_prepare_v3](https://sqlite.org/c3ref/c_prepare_normalize.html) for details.
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
     #[repr(C)]
-    pub struct PrepFlags: ::std::os::raw::c_int {
+    pub struct PrepFlags: ::std::os::raw::c_uint {
         /// A hint to the query planner that the prepared statement will be retained for a long time and probably reused many times.
         const SQLITE_PREPARE_PERSISTENT = 0x01;
         /// Causes the SQL compiler to return an error (error code SQLITE_ERROR) if the statement uses any virtual tables.
