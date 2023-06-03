@@ -884,7 +884,7 @@ pub fn dequote(s: &str) -> &str {
         return s;
     }
     match s.bytes().next() {
-        Some(b) if b == b'"' || b == b'\'' => match s.bytes().rev().next() {
+        Some(b) if b == b'"' || b == b'\'' => match s.bytes().next_back() {
             Some(e) if e == b => &s[1..s.len() - 1], // FIXME handle inner escaped quote(s)
             _ => s,
         },
