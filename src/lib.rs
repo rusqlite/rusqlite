@@ -711,7 +711,18 @@ impl Connection {
     /// or if the underlying SQLite call fails.
     #[inline]
     pub fn prepare(&self, sql: &str) -> Result<Statement<'_>> {
-        self.db.borrow_mut().prepare(self, sql)
+        self.prepare_with_flags(sql, PrepFlags::default())
+    }
+
+    /// Prepare a SQL statement for execution.
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if `sql` cannot be converted to a C-compatible string
+    /// or if the underlying SQLite call fails.
+    #[inline]
+    pub fn prepare_with_flags(&self, sql: &str, flags: PrepFlags) -> Result<Statement<'_>> {
+        self.db.borrow_mut().prepare(self, sql, flags)
     }
 
     /// Close the SQLite connection.
@@ -897,7 +908,8 @@ impl Connection {
     ///
     /// This function is unsafe because improper use may impact the Connection.
     /// In particular, it should only be called on connections created
-    /// and owned by the caller, e.g. as a result of calling ffi::sqlite3_open().
+    /// and owned by the caller, e.g. as a result of calling
+    /// ffi::sqlite3_open().
     #[inline]
     pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Connection> {
         let db = InnerConnection::new(db, true);
@@ -1103,6 +1115,19 @@ impl Default for OpenFlags {
             | OpenFlags::SQLITE_OPEN_CREATE
             | OpenFlags::SQLITE_OPEN_NO_MUTEX
             | OpenFlags::SQLITE_OPEN_URI
+    }
+}
+
+bitflags::bitflags! {
+    /// Prepare flags. See
+    /// [sqlite3_prepare_v3](https://sqlite.org/c3ref/c_prepare_normalize.html) for details.
+    #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+    #[repr(C)]
+    pub struct PrepFlags: ::std::os::raw::c_int {
+        /// A hint to the query planner that the prepared statement will be retained for a long time and probably reused many times.
+        const SQLITE_PREPARE_PERSISTENT = 0x01;
+        /// Causes the SQL compiler to return an error (error code SQLITE_ERROR) if the statement uses any virtual tables.
+        const SQLITE_PREPARE_NO_VTAB = 0x04;
     }
 }
 
