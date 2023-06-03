@@ -506,6 +506,7 @@ mod bindings {
                 None
             }
         }
+
         fn item_name(&self, original_item_name: &str) -> Option<String> {
             original_item_name
                 .strip_prefix("sqlite3_index_info_")
