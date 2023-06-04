@@ -77,6 +77,8 @@ column_decltype = []
 wasm32-wasi-vfs = ["libsqlite3-sys/wasm32-wasi-vfs"]
 # Note: doesn't support 32-bit.
 winsqlite3 = ["libsqlite3-sys/winsqlite3"]
+# 3.23.0
+serialize = ["modern_sqlite"]
 
 # Helper feature for enabling most non-build-related optional features
 # or dependencies (except `session`). This is useful for running tests / clippy
@@ -109,6 +111,7 @@ modern-full = [
 ]
 
 bundled-full = ["modern-full", "bundled"]
+default = ["serialize"]
 
 [dependencies]
 time = { version = "0.3.0", features = ["formatting", "macros", "parsing"], optional = true }
