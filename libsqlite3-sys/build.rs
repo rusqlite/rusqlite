@@ -499,8 +499,13 @@ mod bindings {
     struct SqliteTypeChooser;
 
     impl ParseCallbacks for SqliteTypeChooser {
-        fn int_macro(&self, _name: &str, value: i64) -> Option<IntKind> {
-            if value >= i32::MIN as i64 && value <= i32::MAX as i64 {
+        fn int_macro(&self, name: &str, value: i64) -> Option<IntKind> {
+            if name == "SQLITE_SERIALIZE_NOCOPY"
+                || name.starts_with("SQLITE_DESERIALIZE_")
+                || name.starts_with("SQLITE_PREPARE_")
+            {
+                Some(IntKind::UInt)
+            } else if value >= i32::MIN as i64 && value <= i32::MAX as i64 {
                 Some(IntKind::I32)
             } else {
                 None
