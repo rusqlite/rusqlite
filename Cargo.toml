@@ -111,7 +111,6 @@ modern-full = [
 ]
 
 bundled-full = ["modern-full", "bundled"]
-default = ["serialize"]
 
 [dependencies]
 time = { version = "0.3.0", features = ["formatting", "macros", "parsing"], optional = true }
