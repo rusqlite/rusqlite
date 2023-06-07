@@ -669,6 +669,24 @@ mod test {
     }
 
     #[test]
+    fn test_savepoint_drop_behavior_releases() -> Result<()> {
+        let mut db = checked_memory_handle()?;
+
+        {
+            let mut sp = db.savepoint()?;
+            sp.set_drop_behavior(DropBehavior::Commit);
+        }
+        assert!(db.is_autocommit());
+        {
+            let mut sp = db.savepoint()?;
+            sp.set_drop_behavior(DropBehavior::Rollback);
+        }
+        assert!(db.is_autocommit());
+
+        Ok(())
+    }
+
+    #[test]
     fn test_savepoint_names() -> Result<()> {
         let mut db = checked_memory_handle()?;
 
