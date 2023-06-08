@@ -75,7 +75,7 @@ use crate::types::ValueRef;
 
 pub use crate::cache::CachedStatement;
 pub use crate::column::Column;
-pub use crate::error::Error;
+pub use crate::error::{to_sqlite_error, Error};
 pub use crate::ffi::ErrorCode;
 #[cfg(feature = "load_extension")]
 pub use crate::load_extension_guard::LoadExtensionGuard;
