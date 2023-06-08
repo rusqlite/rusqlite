@@ -455,7 +455,7 @@ pub unsafe fn to_sqlite_error(
     match e {
         Error::SqliteFailure(err, s) => {
             if let Some(s) = s {
-                *err_msg = alloc(&s);
+                *err_msg = alloc(s);
             }
             err.extended_code
         }
