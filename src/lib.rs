@@ -215,11 +215,26 @@ macro_rules! named_params {
 }
 
 /// Captured identifiers in SQL
+///
+/// * only SQLite `$x` / `@x` / `:x` syntax works (Rust `&x` syntax does not
+///   work).
+/// * `$x.y` expression does not work.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// # use rusqlite::{prepare_and_bind, Connection, Result, Statement};
+///
+/// fn misc(db: &Connection) -> Result<Statement> {
+///     let name = "Lisa";
+///     let age = 8;
+///     let smart = true;
+///     Ok(prepare_and_bind!(db, "SELECT $name, @age, :smart;"))
+/// }
+/// ```
 #[macro_export]
 macro_rules! prepare_and_bind {
     ($conn:expr, $sql:literal) => {{
-        #[cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)]
-        format_args!($sql);
         let mut stmt = $conn.prepare($sql)?;
         $crate::__bind!(stmt $sql);
         stmt
@@ -227,11 +242,13 @@ macro_rules! prepare_and_bind {
 }
 
 /// Captured identifiers in SQL
+///
+/// * only SQLite `$x` / `@x` / `:x` syntax works (Rust `&x` syntax does not
+///   work).
+/// * `$x.y` expression does not work.
 #[macro_export]
 macro_rules! prepare_cached_and_bind {
     ($conn:expr, $sql:literal) => {{
-        #[cfg(trick_rust_analyzer_into_highlighting_interpolated_bits)]
-        format_args!($sql);
         let mut stmt = $conn.prepare_cached($sql)?;
         $crate::__bind!(stmt $sql);
         stmt

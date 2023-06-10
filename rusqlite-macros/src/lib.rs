@@ -1,6 +1,6 @@
 //! Private implementation details of `rusqlite`.
 
-use proc_macro::{Delimiter, Literal, TokenStream, TokenTree};
+use proc_macro::{Delimiter, Group, Literal, Span, TokenStream, TokenTree};
 
 use fallible_iterator::FallibleIterator;
 use sqlite3_parser::ast::{ParameterInfo, ToTokens};
@@ -58,15 +58,19 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
         return Err("Mixing named and numbered parameters is not supported.".to_string());
     }
 
+    let call_site = literal.span();
     let mut res = TokenStream::new();
     for (i, name) in info.names.iter().enumerate() {
         //eprintln!("(i: {}, name: {})", i + 1, &name[1..]);
         res.extend(Some(stmt.clone()));
-        res.extend(parse_ts(&format!(
-            ".raw_bind_parameter({}, &{})?;",
-            i + 1,
-            &name[1..]
-        )));
+        res.extend(respan(
+            parse_ts(&format!(
+                ".raw_bind_parameter({}, &{})?;",
+                i + 1,
+                &name[1..]
+            )),
+            call_site,
+        ));
     }
 
     Ok(res)
@@ -91,6 +95,24 @@ fn strip_matches<'a>(s: &'a str, pattern: &str) -> &'a str {
         .unwrap_or(s)
         .strip_suffix(pattern)
         .unwrap_or(s)
+}
+
+fn respan(ts: TokenStream, span: Span) -> TokenStream {
+    let mut res = TokenStream::new();
+    for tt in ts {
+        let tt = match tt {
+            TokenTree::Ident(mut ident) => {
+                ident.set_span(ident.span().resolved_at(span).located_at(span));
+                TokenTree::Ident(ident)
+            }
+            TokenTree::Group(group) => {
+                TokenTree::Group(Group::new(group.delimiter(), respan(group.stream(), span)))
+            }
+            _ => tt,
+        };
+        res.extend(Some(tt))
+    }
+    res
 }
 
 fn parse_ts(s: &str) -> TokenStream {
