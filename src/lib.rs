@@ -2137,6 +2137,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "rusqlite-macros")]
     fn prepare_and_bind() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let name = "Lisa";

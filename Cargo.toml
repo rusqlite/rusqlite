@@ -134,7 +134,6 @@ unicase = "2.6.0"
 # Use `bencher` over criterion because it builds much faster and we don't have
 # many benchmarks
 bencher = "0.1"
-rusqlite-macros = { path = "rusqlite-macros", version = "0.1.0" }
 
 [dependencies.libsqlite3-sys]
 path = "libsqlite3-sys"
@@ -159,7 +158,7 @@ name = "exec"
 harness = false
 
 [package.metadata.docs.rs]
-features = ["modern-full"]
+features = ["modern-full", "rusqlite-macros"]
 all-features = false
 no-default-features = true
 default-target = "x86_64-unknown-linux-gnu"
