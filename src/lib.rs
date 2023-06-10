@@ -85,6 +85,7 @@ pub use crate::statement::{Statement, StatementStatus};
 pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
 pub use crate::types::ToSql;
 pub use crate::version::*;
+#[cfg(feature = "rusqlite-macros")]
 #[doc(hidden)]
 pub use rusqlite_macros::__bind;
 
@@ -232,6 +233,8 @@ macro_rules! named_params {
 ///     Ok(prepare_and_bind!(db, "SELECT $name, @age, :smart;"))
 /// }
 /// ```
+#[cfg(feature = "rusqlite-macros")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
 #[macro_export]
 macro_rules! prepare_and_bind {
     ($conn:expr, $sql:literal) => {{
@@ -246,6 +249,8 @@ macro_rules! prepare_and_bind {
 /// * only SQLite `$x` / `@x` / `:x` syntax works (Rust `&x` syntax does not
 ///   work).
 /// * `$x.y` expression does not work.
+#[cfg(feature = "rusqlite-macros")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
 #[macro_export]
 macro_rules! prepare_cached_and_bind {
     ($conn:expr, $sql:literal) => {{

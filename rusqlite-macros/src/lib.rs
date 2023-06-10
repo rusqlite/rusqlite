@@ -17,7 +17,6 @@ pub fn __bind(input: TokenStream) -> TokenStream {
 type Result<T> = std::result::Result<T, String>;
 
 fn try_bind(input: TokenStream) -> Result<TokenStream> {
-    //eprintln!("INPUT: {:#?}", input);
     let (stmt, literal) = {
         let mut iter = input.clone().into_iter();
         let stmt = iter.next().unwrap();
@@ -35,7 +34,6 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
         return Err("expected a plain string literal".to_string());
     }
     let sql = strip_matches(&sql, "\"");
-    //eprintln!("SQL: {}", sql);
 
     let mut parser = Parser::new(sql.as_bytes());
     let ast = match parser.next() {
@@ -52,8 +50,6 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
     if info.count == 0 {
         return Ok(input);
     }
-    //eprintln!("ParameterInfo.count: {:#?}", info.count);
-    //eprintln!("ParameterInfo.names: {:#?}", info.names);
     if info.count as usize != info.names.len() {
         return Err("Mixing named and numbered parameters is not supported.".to_string());
     }
@@ -61,7 +57,6 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
     let call_site = literal.span();
     let mut res = TokenStream::new();
     for (i, name) in info.names.iter().enumerate() {
-        //eprintln!("(i: {}, name: {})", i + 1, &name[1..]);
         res.extend(Some(stmt.clone()));
         res.extend(respan(
             parse_ts(&format!(
