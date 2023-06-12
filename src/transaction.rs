@@ -344,7 +344,9 @@ impl Savepoint<'_> {
             return Ok(());
         }
         match self.drop_behavior() {
-            DropBehavior::Commit => self.commit_().or_else(|_| self.rollback().and_then(|_| self.commit_())),
+            DropBehavior::Commit => self
+                .commit_()
+                .or_else(|_| self.rollback().and_then(|_| self.commit_())),
             DropBehavior::Rollback => self.rollback().and_then(|_| self.commit_()),
             DropBehavior::Ignore => Ok(()),
             DropBehavior::Panic => panic!("Savepoint dropped unexpectedly."),
