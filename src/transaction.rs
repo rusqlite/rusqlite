@@ -687,6 +687,22 @@ mod test {
     }
 
     #[test]
+    fn test_savepoint_release_error() -> Result<()> {
+        let mut db = checked_memory_handle()?;
+
+        db.pragma_update(None, "foreign_keys", true)?;
+        db.execute_batch("CREATE TABLE r(n INTEGER PRIMARY KEY NOT NULL); CREATE TABLE f(n REFERENCES r(n) DEFERRABLE INITIALLY DEFERRED);")?;
+        {
+            let mut sp = db.savepoint()?;
+            sp.execute("INSERT INTO f VALUES (0)", [])?;
+            sp.set_drop_behavior(DropBehavior::Commit);
+        }
+        assert!(db.is_autocommit());
+
+        Ok(())
+    }
+
+    #[test]
     fn test_savepoint_names() -> Result<()> {
         let mut db = checked_memory_handle()?;
 
