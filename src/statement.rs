@@ -1081,12 +1081,12 @@ mod test {
         assert_eq!(stmt.insert([2i32])?, 2);
         match stmt.insert([1i32]).unwrap_err() {
             Error::StatementChangedRows(0) => (),
-            err => panic!("Unexpected error {}", err),
+            err => panic!("Unexpected error {err}"),
         }
         let mut multi = db.prepare("INSERT INTO foo (x) SELECT 3 UNION ALL SELECT 4")?;
         match multi.insert([]).unwrap_err() {
             Error::StatementChangedRows(2) => (),
-            err => panic!("Unexpected error {}", err),
+            err => panic!("Unexpected error {err}"),
         }
         Ok(())
     }
@@ -1349,7 +1349,7 @@ mod test {
                 assert_eq!(error.code, ErrorCode::Unknown);
                 assert_eq!(offset, 7);
             }
-            err => panic!("Unexpected error {}", err),
+            err => panic!("Unexpected error {err}"),
         }
         Ok(())
     }

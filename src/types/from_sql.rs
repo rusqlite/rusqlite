@@ -59,8 +59,7 @@ impl fmt::Display for FromSqlError {
             } => {
                 write!(
                     f,
-                    "Cannot read {} byte value out of {} byte blob",
-                    expected_size, blob_size
+                    "Cannot read {expected_size} byte value out of {blob_size} byte blob"
                 )
             }
             FromSqlError::Other(ref err) => err.fmt(f),
@@ -273,7 +272,7 @@ mod test {
                     .unwrap_err();
                 match err {
                     Error::IntegralValueOutOfRange(_, value) => assert_eq!(*n, value),
-                    _ => panic!("unexpected error: {}", err),
+                    _ => panic!("unexpected error: {err}"),
                 }
             }
             for n in in_range {
