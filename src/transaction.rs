@@ -344,7 +344,9 @@ impl Savepoint<'_> {
             return Ok(());
         }
         match self.drop_behavior() {
-            DropBehavior::Commit => self.commit_().or_else(|_| self.rollback()),
+            DropBehavior::Commit => self
+                .commit_()
+                .or_else(|_| self.rollback().and_then(|_| self.commit_())),
             DropBehavior::Rollback => self.rollback().and_then(|_| self.commit_()),
             DropBehavior::Ignore => Ok(()),
             DropBehavior::Panic => panic!("Savepoint dropped unexpectedly."),
@@ -680,6 +682,22 @@ mod test {
         {
             let mut sp = db.savepoint()?;
             sp.set_drop_behavior(DropBehavior::Rollback);
+        }
+        assert!(db.is_autocommit());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_savepoint_release_error() -> Result<()> {
+        let mut db = checked_memory_handle()?;
+
+        db.pragma_update(None, "foreign_keys", true)?;
+        db.execute_batch("CREATE TABLE r(n INTEGER PRIMARY KEY NOT NULL); CREATE TABLE f(n REFERENCES r(n) DEFERRABLE INITIALLY DEFERRED);")?;
+        {
+            let mut sp = db.savepoint()?;
+            sp.execute("INSERT INTO f VALUES (0)", [])?;
+            sp.set_drop_behavior(DropBehavior::Commit);
         }
         assert!(db.is_autocommit());
 
