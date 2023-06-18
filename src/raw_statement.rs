@@ -70,6 +70,24 @@ impl RawStatement {
     }
 
     #[inline]
+    pub fn column_table_name(&self, idx: usize) -> Option<&CStr> {
+        let idx = idx as c_int;
+        if idx < 0 || idx >= self.column_count() as c_int {
+            return None;
+        }
+
+        unsafe {
+            let ptr = ffi::sqlite3_column_table_name(self.ptr, idx);
+
+            assert!(
+                !ptr.is_null(),
+                "Null pointer from sqlite3_column_table_name: Out of memory?"
+            );
+            Some(CStr::from_ptr(ptr))
+        }
+    }
+
+    #[inline]
     #[cfg(feature = "column_decltype")]
     pub fn column_decltype(&self, idx: usize) -> Option<&CStr> {
         unsafe {

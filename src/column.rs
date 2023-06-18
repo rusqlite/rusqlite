@@ -102,6 +102,30 @@ impl Statement<'_> {
             })
     }
 
+    /// Returns the name of the table assigned to a particular column in the result set
+    /// returned by the prepared statement.
+    ///
+    /// If associated DB schema can be altered concurrently, you should make
+    /// sure that current statement has already been stepped once before
+    /// calling this method.
+    ///
+    /// ## Failure
+    ///
+    /// Returns an `Error::InvalidColumnIndex` if `idx` is outside the valid
+    /// column range for this row.
+    ///
+    /// Panics when table name is not valid UTF-8.
+    #[inline]
+    pub fn column_table_name(&self, col: usize) -> Result<&str> {
+        self.stmt
+            .column_table_name(col)
+            // clippy::or_fun_call (nightly) vs clippy::unnecessary-lazy-evaluations (stable)
+            .ok_or(Error::InvalidColumnIndex(col))
+            .map(|slice| {
+                str::from_utf8(slice.to_bytes()).expect("Invalid UTF-8 sequence in column name")
+            })
+    }
+
     /// Returns the column index in the result set for a given column name.
     ///
     /// If there is no AS clause then the name of the column is unspecified and
