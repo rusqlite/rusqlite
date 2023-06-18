@@ -2881,7 +2881,6 @@ pub struct sqlite3_rtree_query_info {
 pub const NOT_WITHIN: i32 = 0;
 pub const PARTLY_WITHIN: i32 = 1;
 pub const FULLY_WITHIN: i32 = 2;
-pub const __SQLITESESSION_H_: i32 = 1;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct sqlite3_session {

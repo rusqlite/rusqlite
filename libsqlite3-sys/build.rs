@@ -487,8 +487,7 @@ mod bindings {
     use super::HeaderLocation;
     use bindgen::callbacks::{IntKind, ParseCallbacks};
 
-    use std::fs::OpenOptions;
-    use std::io::Write;
+    use std::fs;
     use std::path::Path;
 
     use super::win_target;
@@ -625,10 +624,7 @@ mod bindings {
                 .blocklist_function("sqlite3_vsnprintf")
                 .blocklist_function("sqlite3_str_vappendf")
                 .blocklist_type("va_list")
-                .blocklist_type("__builtin_va_list")
-                .blocklist_type("__gnuc_va_list")
-                .blocklist_type("__va_list_tag")
-                .blocklist_item("__GNUC_VA_LIST");
+                .blocklist_item("__.*");
         }
 
         bindings
@@ -649,14 +645,7 @@ mod bindings {
             output.push_str("\npub const SQLITE_DETERMINISTIC: i32 = 2048;\n");
         }
 
-        let mut file = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .create(true)
-            .open(out_path)
-            .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
-
-        file.write_all(output.as_bytes())
+        fs::write(out_path, output.as_bytes())
             .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
     }
 }
