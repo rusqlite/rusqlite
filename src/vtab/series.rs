@@ -316,6 +316,16 @@ mod test {
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(vec![30, 25, 20, 15, 10, 5, 0], series);
 
+        let mut s = db.prepare("SELECT * FROM generate_series(NULL)")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(Vec::<i32>::new(), series);
+        let mut s = db.prepare("SELECT * FROM generate_series(5,NULL)")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(Vec::<i32>::new(), series);
+        let mut s = db.prepare("SELECT * FROM generate_series(5,10,NULL)")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(Vec::<i32>::new(), series);
+
         Ok(())
     }
 }
