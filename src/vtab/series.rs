@@ -328,13 +328,23 @@ mod test {
 
         let mut s = db.prepare("SELECT * FROM generate_series(NULL)")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
-        assert_eq!(Vec::<i32>::new(), series);
+        let empty = Vec::<i32>::new();
+        assert_eq!(empty, series);
         let mut s = db.prepare("SELECT * FROM generate_series(5,NULL)")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
-        assert_eq!(Vec::<i32>::new(), series);
+        assert_eq!(empty, series);
         let mut s = db.prepare("SELECT * FROM generate_series(5,10,NULL)")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
-        assert_eq!(Vec::<i32>::new(), series);
+        assert_eq!(empty, series);
+        let mut s = db.prepare("SELECT * FROM generate_series(NULL,10,2)")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(empty, series);
+        let mut s = db.prepare("SELECT * FROM generate_series(5,NULL,2)")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(empty, series);
+        let mut s = db.prepare("SELECT * FROM generate_series(NULL) ORDER BY value DESC")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(empty, series);
 
         Ok(())
     }
