@@ -487,7 +487,6 @@ mod bindings {
     use super::HeaderLocation;
     use bindgen::callbacks::{IntKind, ParseCallbacks};
 
-    use std::fs;
     use std::path::Path;
 
     use super::win_target;
