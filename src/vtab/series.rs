@@ -8,6 +8,7 @@ use std::marker::PhantomData;
 use std::os::raw::c_int;
 
 use crate::ffi;
+use crate::types::Type;
 use crate::vtab::{
     eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConfig, VTabConnection,
     VTabCursor, Values,
@@ -197,34 +198,21 @@ impl SeriesTabCursor<'_> {
 unsafe impl VTabCursor for SeriesTabCursor<'_> {
     fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
         let mut idx_num = QueryPlanFlags::from_bits_truncate(idx_num);
-        let mut any_null = false;
         let mut i = 0;
         if idx_num.contains(QueryPlanFlags::START) {
-            if let Some(min_value) = args.get(i)? {
-                self.min_value = min_value;
-            } else {
-                any_null = true;
-            }
+            self.min_value = args.get(i)?;
             i += 1;
         } else {
             self.min_value = 0;
         }
         if idx_num.contains(QueryPlanFlags::STOP) {
-            if let Some(max_value) = args.get(i)? {
-                self.max_value = max_value;
-            } else {
-                any_null = true;
-            }
+            self.max_value = args.get(i)?;
             i += 1;
         } else {
             self.max_value = 0xffff_ffff;
         }
         if idx_num.contains(QueryPlanFlags::STEP) {
-            if let Some(step) = args.get(i)? {
-                self.step = step;
-            } else {
-                any_null = true;
-            }
+            self.step = args.get(i)?;
             if self.step == 0 {
                 self.step = 1;
             } else if self.step < 0 {
@@ -236,11 +224,13 @@ unsafe impl VTabCursor for SeriesTabCursor<'_> {
         } else {
             self.step = 1;
         };
-        if any_null {
-            // If any of the constraints have a NULL value, then
-            // return no rows.
-            self.min_value = 1;
-            self.max_value = 0;
+        for arg in args.iter() {
+            if arg.data_type() == Type::Null {
+                // If any of the constraints have a NULL value, then return no rows.
+                self.min_value = 1;
+                self.max_value = 0;
+                break;
+            }
         }
         self.is_desc = idx_num.contains(QueryPlanFlags::DESC);
         if self.is_desc {
