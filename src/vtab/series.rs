@@ -200,19 +200,19 @@ unsafe impl VTabCursor for SeriesTabCursor<'_> {
         let mut idx_num = QueryPlanFlags::from_bits_truncate(idx_num);
         let mut i = 0;
         if idx_num.contains(QueryPlanFlags::START) {
-            self.min_value = args.get(i)?;
+            self.min_value = args.get::<Option<_>>(i)?.unwrap_or_default();
             i += 1;
         } else {
             self.min_value = 0;
         }
         if idx_num.contains(QueryPlanFlags::STOP) {
-            self.max_value = args.get(i)?;
+            self.max_value = args.get::<Option<_>>(i)?.unwrap_or_default();
             i += 1;
         } else {
             self.max_value = 0xffff_ffff;
         }
         if idx_num.contains(QueryPlanFlags::STEP) {
-            self.step = args.get(i)?;
+            self.step = args.get::<Option<_>>(i)?.unwrap_or_default();
             if self.step == 0 {
                 self.step = 1;
             } else if self.step < 0 {
