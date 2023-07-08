@@ -211,10 +211,10 @@ mod test {
     fn test_option() -> Result<()> {
         let db = checked_memory_handle()?;
 
-        let s = Some("hello, world!");
+        let s = "hello, world!";
         let b = Some(vec![1u8, 2, 3, 4]);
 
-        db.execute("INSERT INTO foo(t) VALUES (?1)", [&s])?;
+        db.execute("INSERT INTO foo(t) VALUES (?1)", [Some(s)])?;
         db.execute("INSERT INTO foo(b) VALUES (?1)", [&b])?;
 
         let mut stmt = db.prepare("SELECT t, b FROM foo ORDER BY ROWID ASC")?;
@@ -224,7 +224,7 @@ mod test {
             let row1 = rows.next()?.unwrap();
             let s1: Option<String> = row1.get_unwrap(0);
             let b1: Option<Vec<u8>> = row1.get_unwrap(1);
-            assert_eq!(s.unwrap(), s1.unwrap());
+            assert_eq!(s, s1.unwrap());
             assert!(b1.is_none());
         }
 
