@@ -71,21 +71,13 @@ use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
 use crate::{str_to_cstring, Connection, Error, InnerConnection, Result};
 
 unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
-    // Extended constraint error codes were added in SQLite 3.7.16. We don't have
-    // an explicit feature check for that, and this doesn't really warrant one.
-    // We'll use the extended code if we're on the bundled version (since it's
-    // at least 3.17.0) and the normal constraint error code if not.
-    fn constraint_error_code() -> i32 {
-        ffi::SQLITE_CONSTRAINT_FUNCTION
-    }
-
     if let Error::SqliteFailure(ref err, ref s) = *err {
         ffi::sqlite3_result_error_code(ctx, err.extended_code);
         if let Some(Ok(cstr)) = s.as_ref().map(|s| str_to_cstring(s)) {
             ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
         }
     } else {
-        ffi::sqlite3_result_error_code(ctx, constraint_error_code());
+        ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_CONSTRAINT_FUNCTION);
         if let Ok(cstr) = str_to_cstring(&err.to_string()) {
             ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
         }
