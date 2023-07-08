@@ -522,7 +522,6 @@ mod bindings {
 
     pub fn write_to_out_dir(header: HeaderLocation, out_path: &Path) {
         let header: String = header.into();
-        let mut output = Vec::new();
         let mut bindings = bindgen::builder()
             .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
             .disable_nested_struct_naming()
@@ -631,21 +630,7 @@ mod bindings {
             .layout_tests(false)
             .generate()
             .unwrap_or_else(|_| panic!("could not run bindgen on header {}", header))
-            .write(Box::new(&mut output))
-            .expect("could not write output of bindgen");
-        let mut output = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
-
-        // rusqlite's functions feature ors in the SQLITE_DETERMINISTIC flag when it
-        // can. This flag was added in SQLite 3.8.3, but oring it in in prior
-        // versions of SQLite is harmless. We don't want to not build just
-        // because this flag is missing (e.g., if we're linking against
-        // SQLite 3.7.x), so append the flag manually if it isn't present in bindgen's
-        // output.
-        if !output.contains("pub const SQLITE_DETERMINISTIC") {
-            output.push_str("\npub const SQLITE_DETERMINISTIC: i32 = 2048;\n");
-        }
-
-        fs::write(out_path, output.as_bytes())
+            .write_to_file(out_path)
             .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
     }
 }
