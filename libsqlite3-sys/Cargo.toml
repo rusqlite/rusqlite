@@ -23,7 +23,7 @@ min_sqlite_version_3_14_0 = ["pkg-config", "vcpkg"]
 # Bundle only the bindings file. Note that this does nothing if
 # `buildtime_bindgen` is enabled.
 bundled_bindings = []
-loadable_extension = ["atomic", "prettyplease", "quote", "regex", "syn"]
+loadable_extension = ["atomic", "prettyplease", "quote", "syn"]
 # sqlite3_unlock_notify >= 3.6.12
 unlock_notify = []
 # 3.13.0
@@ -54,7 +54,5 @@ vcpkg = { version = "0.2", optional = true }
 prettyplease = {version = "0.2", optional = true }
 # like bindgen
 quote = { version = "1", optional = true, default-features = false }
-# like bindgen
-regex = { version = "1.5", optional = true, default-features = false, features = ["std", "unicode"] }
 # like bindgen
 syn = { version = "2.0", optional = true, features = ["full", "extra-traits", "visit-mut"] }

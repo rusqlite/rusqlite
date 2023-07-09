@@ -659,31 +659,30 @@ mod bindings {
             .generate()
             .unwrap_or_else(|_| panic!("could not run bindgen on header {}", header));
 
-        if cfg!(feature = "loadable_extension") {
+        #[cfg(feature = "loadable_extension")]
+        {
             let mut output = Vec::new();
             bindings
                 .write(Box::new(&mut output))
                 .expect("could not write output of bindgen");
             let mut output = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
-            super::loadable_extension::generate_functions(&header, &mut output);
+            super::loadable_extension::generate_functions(&mut output);
             std::fs::write(out_path, output.as_bytes())
-        } else {
-            bindings.write_to_file(out_path)
+                .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
         }
-        .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
+        #[cfg(not(feature = "loadable_extension"))]
+        bindings
+            .write_to_file(out_path)
+            .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
     }
 }
 
 #[cfg(all(feature = "buildtime_bindgen", feature = "loadable_extension"))]
 mod loadable_extension {
-    use std::collections::HashMap;
-
     /// try to generate similar rust code for all `#define sqlite3_xyz
     /// sqlite3_api->abc` macros` in sqlite3ext.h
-    pub fn generate_functions(header: &str, output: &mut String) {
-        // (1) parse macros in sqlite3ext.h
-        let mappings = parse_macros(header);
-        // (2) parse sqlite3_api_routines fields from bindgen output
+    pub fn generate_functions(output: &mut String) {
+        // (1) parse sqlite3_api_routines fields from bindgen output
         let ast: syn::File = syn::parse_str(output).expect("could not parse bindgen output");
         let sqlite3_api_routines: syn::ItemStruct = ast
             .items
@@ -703,7 +702,7 @@ mod loadable_extension {
         let sqlite3_api_routines_ident = sqlite3_api_routines.ident;
         let p_api = quote::format_ident!("p_api");
         let mut stores = Vec::new();
-        // (3) `#define sqlite3_xyz sqlite3_api->abc` => `pub unsafe fn
+        // (2) `#define sqlite3_xyz sqlite3_api->abc` => `pub unsafe fn
         // sqlite3_xyz(args) -> ty {...}` for each `abc` field:
         for field in sqlite3_api_routines.fields {
             let ident = field.ident.expect("unamed field");
@@ -712,12 +711,16 @@ mod loadable_extension {
             if name == "vmprintf" || name == "xvsnprintf" || name == "str_vappendf" {
                 continue; // skip va_list
             }
-            let sqlite3_name = mappings
-                .get(&name)
-                .unwrap_or_else(|| panic!("no mapping for {name}"));
+            let sqlite3_name = match name.as_ref() {
+                "xthreadsafe" => "sqlite3_threadsafe".to_owned(),
+                "interruptx" => "sqlite3_interrupt".to_owned(),
+                _ => {
+                    format!("sqlite3_{name}")
+                }
+            };
             let ptr_name =
                 syn::Ident::new(format!("__{}", sqlite3_name.to_uppercase()).as_ref(), span);
-            let sqlite3_fn_name = syn::Ident::new(sqlite3_name, span);
+            let sqlite3_fn_name = syn::Ident::new(&sqlite3_name, span);
             let method =
                 extract_method(&field.ty).unwrap_or_else(|| panic!("unexpected type for {name}"));
             let arg_names: syn::punctuated::Punctuated<&syn::Ident, syn::token::Comma> = method
@@ -768,7 +771,7 @@ mod loadable_extension {
                 );
             });
         }
-        // (4) generate rust code similar to SQLITE_EXTENSION_INIT2 macro
+        // (3) generate rust code similar to SQLITE_EXTENSION_INIT2 macro
         let tokens = quote::quote! {
             /// Loadable extension initialization error
             #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -811,29 +814,6 @@ mod loadable_extension {
             &syn::parse2(tokens).expect("could not parse quote output"),
         ));
         output.push('\n');
-    }
-
-    // Load all `#define sqlite3_xyz sqlite3_api->abc` in sqlite3ext.h
-    // as a map `{abc => sqlite3_xyz}`
-    // See https://github.com/rust-lang/rust-bindgen/issues/2544
-    fn parse_macros(header: &str) -> HashMap<String, String> {
-        use regex::Regex;
-        use std::fs::File;
-        use std::io::{BufRead, BufReader};
-        let re = Regex::new(r"^#define\s+(sqlite3_\w+)\s+sqlite3_api->(\w+)").unwrap();
-        let f = File::open(header).expect("could not read sqlite3ext.h");
-        let f = BufReader::new(f);
-        let mut mappings = HashMap::new();
-        for line in f.lines() {
-            let line = line.expect("could not read line");
-            if let Some(caps) = re.captures(&line) {
-                mappings.insert(
-                    caps.get(2).unwrap().as_str().to_owned(),
-                    caps.get(1).unwrap().as_str().to_owned(),
-                );
-            }
-        }
-        mappings
     }
 
     fn extract_method(ty: &syn::Type) -> Option<&syn::TypeBareFn> {
