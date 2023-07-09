@@ -4,7 +4,7 @@ use std::os::raw::{c_char, c_int};
 use std::path::Path;
 use std::ptr;
 use std::str;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use super::ffi;
@@ -390,7 +390,7 @@ impl Drop for InnerConnection {
     }
 }
 
-#[cfg(not(any(target_arch = "wasm32")))]
+#[cfg(not(any(target_arch = "wasm32", feature = "loadable_extension")))]
 static SQLITE_INIT: std::sync::Once = std::sync::Once::new();
 
 pub static BYPASS_SQLITE_INIT: AtomicBool = AtomicBool::new(false);
@@ -440,7 +440,9 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
             Ok(())
         }
     } else {
+        #[cfg(not(feature = "loadable_extension"))]
         SQLITE_INIT.call_once(|| {
+            use std::sync::atomic::Ordering;
             if BYPASS_SQLITE_INIT.load(Ordering::Relaxed) {
                 return;
             }
