@@ -141,6 +141,10 @@ pub enum Error {
         /// byte offset of the start of invalid token
         offset: c_int,
     },
+    /// Loadable extension initialization error
+    #[cfg(feature = "loadable_extension")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "loadable_extension")))]
+    InitError(ffi::InitError),
 }
 
 impl PartialEq for Error {
@@ -200,6 +204,8 @@ impl PartialEq for Error {
                     offset: o2,
                 },
             ) => e1 == e2 && m1 == m2 && s1 == s2 && o1 == o2,
+            #[cfg(feature = "loadable_extension")]
+            (Error::InitError(e1), Error::InitError(e2)) => e1 == e2,
             (..) => false,
         }
     }
@@ -238,6 +244,14 @@ impl From<FromSqlError> for Error {
             }
             _ => Error::FromSqlConversionFailure(UNKNOWN_COLUMN, Type::Null, Box::new(err)),
         }
+    }
+}
+
+#[cfg(feature = "loadable_extension")]
+impl From<ffi::InitError> for Error {
+    #[cold]
+    fn from(err: ffi::InitError) -> Error {
+        Error::InitError(err)
     }
 }
 
@@ -311,6 +325,8 @@ impl fmt::Display for Error {
                 ref sql,
                 ..
             } => write!(f, "{msg} in {sql} at offset {offset}"),
+            #[cfg(feature = "loadable_extension")]
+            Error::InitError(ref err) => err.fmt(f),
         }
     }
 }
@@ -360,6 +376,8 @@ impl error::Error for Error {
             Error::BlobSizeError => None,
             #[cfg(feature = "modern_sqlite")]
             Error::SqlInputError { ref error, .. } => Some(error),
+            #[cfg(feature = "loadable_extension")]
+            Error::InitError(ref err) => Some(err),
         }
     }
 }

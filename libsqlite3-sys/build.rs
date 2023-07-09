@@ -773,38 +773,18 @@ mod loadable_extension {
         }
         // (3) generate rust code similar to SQLITE_EXTENSION_INIT2 macro
         let tokens = quote::quote! {
-            /// Loadable extension initialization error
-            #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-            #[non_exhaustive]
-            pub enum InitError {
-                /// Invalid sqlite3_api_routines pointer
-                NullApiPointer,
-                /// Version mismatch between the extension and the SQLite3 library
-                VersionMismatch{compile_time: i32, runtime: i32},
-                /// Invalid function pointer in one of sqlite3_api_routines fields
-                NullFunctionPointer,
-            }
-            impl ::std::fmt::Display for InitError {
-                fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-                    match *self {
-                        InitError::NullApiPointer => write!(f, "Invalid sqlite3_api_routines pointer"),
-                        InitError::VersionMismatch{compile_time, runtime} => write!(f, "SQLite version mismatch: {runtime} < {compile_time}"),
-                        InitError::NullFunctionPointer => write!(f, "Some sqlite3_api_routines fields are null"),
-                    }
-                }
-            }
             /// Like SQLITE_EXTENSION_INIT2 macro
-            pub unsafe fn rusqlite_extension_init2(#p_api: *mut #sqlite3_api_routines_ident) -> ::std::result::Result<(),InitError> {
+            pub unsafe fn rusqlite_extension_init2(#p_api: *mut #sqlite3_api_routines_ident) -> ::std::result::Result<(),crate::InitError> {
                 if #p_api.is_null() {
-                    return Err(InitError::NullApiPointer);
+                    return Err(crate::InitError::NullApiPointer);
                 }
                 if let Some(fun) = (*#p_api).libversion_number {
                     let version = fun();
                     if SQLITE_VERSION_NUMBER > version {
-                        return Err(InitError::VersionMismatch{compile_time: SQLITE_VERSION_NUMBER, runtime: version});
+                        return Err(crate::InitError::VersionMismatch{compile_time: SQLITE_VERSION_NUMBER, runtime: version});
                     }
                 } else {
-                    return Err(InitError::NullFunctionPointer);
+                    return Err(crate::InitError::NullFunctionPointer);
                 }
                 #(#stores)*
                 Ok(())
