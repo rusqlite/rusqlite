@@ -26,14 +26,19 @@ fn is_compiler(compiler_name: &str) -> bool {
     env::var("CARGO_CFG_TARGET_ENV").map_or(false, |v| v == compiler_name)
 }
 
+/// Copy bindgen file from `dir` to `out_path`.
+fn copy_bindings<T: AsRef<Path>>(dir: &str, bindgen_name: &str, out_path: T) {
+    std::fs::copy(format!("{dir}/{bindgen_name}"), out_path)
+        .expect("Could not copy bindings to output directory");
+}
+
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let out_path = Path::new(&out_dir).join("bindgen.rs");
     if cfg!(feature = "in_gecko") {
         // When inside mozilla-central, we are included into the build with
         // sqlite3.o directly, so we don't want to provide any linker arguments.
-        std::fs::copy("sqlite3/bindgen_bundled_version.rs", out_path)
-            .expect("Could not copy bindings to output directory");
+        copy_bindings("sqlite3", "bindgen_bundled_version.rs", out_path);
         return;
     }
 
@@ -96,14 +101,12 @@ mod build_bundled {
         #[cfg(feature = "buildtime_bindgen")]
         {
             use super::{bindings, HeaderLocation};
-            let header = HeaderLocation::FromPath(format!("{}/sqlite3.h", lib_name));
+            let header = HeaderLocation::FromPath(lib_name.to_owned());
             bindings::write_to_out_dir(header, out_path);
         }
         #[cfg(not(feature = "buildtime_bindgen"))]
         {
-            use std::fs;
-            fs::copy(format!("{lib_name}/bindgen_bundled_version.rs"), out_path)
-                .expect("Could not copy bindings to output directory");
+            super::copy_bindings(lib_name, "bindgen_bundled_version.rs", out_path);
         }
         println!("cargo:rerun-if-changed={lib_name}/sqlite3.c");
         println!("cargo:rerun-if-changed=sqlite3/wasm32-wasi-vfs.c");
@@ -345,7 +348,7 @@ impl From<HeaderLocation> for String {
                 header
             }
             HeaderLocation::Wrapper => "wrapper.h".into(),
-            HeaderLocation::FromPath(path) => path,
+            HeaderLocation::FromPath(path) => format!("{}/sqlite3.h", path),
         }
     }
 }
@@ -372,11 +375,7 @@ mod build_linked {
             // on buildtime_bindgen instead, but this is still supported as we
             // have runtime version checks and there are good reasons to not
             // want to run bindgen.
-            std::fs::copy(
-                format!("{}/bindgen_bundled_version.rs", lib_name()),
-                out_path,
-            )
-            .expect("Could not copy bindings to output directory");
+            super::copy_bindings(lib_name(), "bindgen_bundled_version.rs", out_path);
         } else {
             bindings::write_to_out_dir(header, out_path);
         }
@@ -434,8 +433,7 @@ mod build_linked {
             .print_system_libs(false)
             .probe(link_lib)
         {
-            if let Some(mut header) = lib.include_paths.pop() {
-                header.push("sqlite3.h");
+            if let Some(header) = lib.include_paths.pop() {
                 HeaderLocation::FromPath(header.to_string_lossy().into())
             } else {
                 HeaderLocation::Wrapper
@@ -454,8 +452,7 @@ mod build_linked {
         if cfg!(feature = "vcpkg") && is_compiler("msvc") {
             // See if vcpkg can find it.
             if let Ok(mut lib) = vcpkg::Config::new().probe(lib_name()) {
-                if let Some(mut header) = lib.include_paths.pop() {
-                    header.push("sqlite3.h");
+                if let Some(header) = lib.include_paths.pop() {
                     return Some(HeaderLocation::FromPath(header.to_string_lossy().into()));
                 }
             }
@@ -471,14 +468,13 @@ mod bindings {
     #![allow(dead_code)]
     use super::HeaderLocation;
 
-    use std::fs;
     use std::path::Path;
 
-    static PREBUILT_BINDGEN_PATHS: &[&str] = &["bindgen-bindings/bindgen_3.14.0.rs"];
+    static PREBUILT_BINDGENS: &[&str] = &["bindgen_3.14.0.rs"];
 
     pub fn write_to_out_dir(_header: HeaderLocation, out_path: &Path) {
-        let in_path = PREBUILT_BINDGEN_PATHS[PREBUILT_BINDGEN_PATHS.len() - 1];
-        fs::copy(in_path, out_path).expect("Could not copy bindings to output directory");
+        let name = PREBUILT_BINDGENS[PREBUILT_BINDGENS.len() - 1];
+        super::copy_bindings("bindgen-bindings", name, out_path);
     }
 }
 
