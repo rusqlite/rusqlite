@@ -67,6 +67,7 @@ jobs:
 
       - name: loadable extension
         run: cargo build --example loadable_extension --features "loadable_extension modern_sqlite functions vtab trace"
+        run: cargo run --example load_extension --features "load_extension bundled functions vtab trace"
 
       # TODO: move into own action for better caching
       - name: Static build
