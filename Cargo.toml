@@ -157,6 +157,11 @@ harness = false
 name = "exec"
 harness = false
 
+[[example]]
+name = "loadable_extension"
+crate-type = ["cdylib"]
+required-features = ["loadable_extension", "modern_sqlite", "functions", "vtab", "trace"]
+
 [package.metadata.docs.rs]
 features = ["modern-full"]
 all-features = false
