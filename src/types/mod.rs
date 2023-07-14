@@ -81,6 +81,9 @@ use std::fmt;
 #[cfg_attr(docsrs, doc(cfg(feature = "chrono")))]
 mod chrono;
 mod from_sql;
+// #[cfg(feature = "pathbuf")]
+// #[cfg_attr(docsrs, doc(cfg(feature = "pathbuf")))]
+mod pathbuf;
 #[cfg(feature = "serde_json")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde_json")))]
 mod serde_json;
