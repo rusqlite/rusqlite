@@ -106,9 +106,16 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
   requires SQLite 3.7.4 or later.
 * [`limits`](https://docs.rs/rusqlite/~0/rusqlite/struct.Connection.html#method.limit)
   allows you to set and retrieve SQLite's per connection limits.
+* `camino` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
+  and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for
+  the [`Utf8PathBuf` type](https://docs.rs/camino/1.1.6/camino/struct.Utf8PathBuf.html) from
+  the [`camino` crate](https://crates.io/crates/camino).
 * `chrono` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for various
   types from the [`chrono` crate](https://crates.io/crates/chrono).
+* `pathbuf` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
+  and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for
+  the [`PathBuf` type](https://doc.rust-lang.org/std/path/struct.PathBuf.html).
 * `serde_json` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
   `Value` type from the [`serde_json` crate](https://crates.io/crates/serde_json).

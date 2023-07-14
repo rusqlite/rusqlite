@@ -77,10 +77,16 @@ pub use self::value_ref::ValueRef;
 
 use std::fmt;
 
+#[cfg(feature = "camino")]
+#[cfg_attr(docsrs, doc(cfg(feature = "camino")))]
+mod camino;
 #[cfg(feature = "chrono")]
 #[cfg_attr(docsrs, doc(cfg(feature = "chrono")))]
 mod chrono;
 mod from_sql;
+#[cfg(feature = "pathbuf")]
+#[cfg_attr(docsrs, doc(cfg(feature = "pathbuf")))]
+mod pathbuf;
 #[cfg(feature = "serde_json")]
 #[cfg_attr(docsrs, doc(cfg(feature = "serde_json")))]
 mod serde_json;
