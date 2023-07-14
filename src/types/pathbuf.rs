@@ -37,8 +37,8 @@ impl ToSql for PathBuf {
 impl FromSql for PathBuf {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Text(s) => {
-                let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
+            ValueRef::Text(text) => {
+                let s = std::str::from_utf8(text).map_err(|e| FromSqlError::Other(Box::new(e)))?;
                 Ok(PathBuf::from(s))
             }
             _ => Err(FromSqlError::InvalidType),
@@ -59,8 +59,7 @@ mod test {
         use std::{ffi::OsStr, os::unix::prelude::OsStrExt};
 
         let inval = OsStr::from_bytes(b"foo\xFF\xFFbar");
-        let oss = OsStr::new(inval);
-        let path = PathBuf::from(oss);
+        let path = PathBuf::from(inval);
         let sql = path.to_sql();
         assert!(sql.is_err());
         Ok(())
