@@ -702,6 +702,7 @@ mod loadable_extension {
         let sqlite3_api_routines_ident = sqlite3_api_routines.ident;
         let p_api = quote::format_ident!("p_api");
         let mut stores = Vec::new();
+        let mut malloc = Vec::new();
         // (2) `#define sqlite3_xyz sqlite3_api->abc` => `pub unsafe fn
         // sqlite3_xyz(args) -> ty {...}` for each `abc` field:
         for field in sqlite3_api_routines.fields {
@@ -764,7 +765,12 @@ mod loadable_extension {
                 &syn::parse2(tokens).expect("could not parse quote output"),
             ));
             output.push('\n');
-            stores.push(quote::quote! {
+            if name == "malloc" {
+                &mut malloc
+            } else {
+                &mut stores
+            }
+            .push(quote::quote! {
                 #ptr_name.store(
                     (*#p_api).#ident,
                     ::atomic::Ordering::Release,
@@ -775,9 +781,7 @@ mod loadable_extension {
         let tokens = quote::quote! {
             /// Like SQLITE_EXTENSION_INIT2 macro
             pub unsafe fn rusqlite_extension_init2(#p_api: *mut #sqlite3_api_routines_ident) -> ::std::result::Result<(),crate::InitError> {
-                if #p_api.is_null() {
-                    return Err(crate::InitError::NullApiPointer);
-                }
+                #(#malloc)* // sqlite3_malloc needed by to_sqlite_error
                 if let Some(fun) = (*#p_api).libversion_number {
                     let version = fun();
                     if SQLITE_VERSION_NUMBER > version {

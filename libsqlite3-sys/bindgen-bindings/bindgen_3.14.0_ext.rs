@@ -6267,9 +6267,7 @@ pub unsafe fn sqlite3_expanded_sql(
 pub unsafe fn rusqlite_extension_init2(
     p_api: *mut sqlite3_api_routines,
 ) -> ::std::result::Result<(), crate::InitError> {
-    if p_api.is_null() {
-        return Err(crate::InitError::NullApiPointer);
-    }
+    __SQLITE3_MALLOC.store((*p_api).malloc, ::atomic::Ordering::Release);
     if let Some(fun) = (*p_api).libversion_number {
         let version = fun();
         if SQLITE_VERSION_NUMBER > version {
@@ -6371,7 +6369,6 @@ pub unsafe fn rusqlite_extension_init2(
     __SQLITE3_LIBVERSION.store((*p_api).libversion, ::atomic::Ordering::Release);
     __SQLITE3_LIBVERSION_NUMBER
         .store((*p_api).libversion_number, ::atomic::Ordering::Release);
-    __SQLITE3_MALLOC.store((*p_api).malloc, ::atomic::Ordering::Release);
     __SQLITE3_OPEN.store((*p_api).open, ::atomic::Ordering::Release);
     __SQLITE3_OPEN16.store((*p_api).open16, ::atomic::Ordering::Release);
     __SQLITE3_PREPARE.store((*p_api).prepare, ::atomic::Ordering::Release);

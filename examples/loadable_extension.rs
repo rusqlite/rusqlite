@@ -25,7 +25,9 @@ pub extern "C" fn sqlite3_extension_init(
     pz_err_msg: *mut *mut c_char,
     p_api: *mut ffi::sqlite3_api_routines,
 ) -> c_int {
-    if let Err(err) = extension_init(db, p_api) {
+    if p_api.is_null() {
+        return ffi::SQLITE_ERROR;
+    } else if let Err(err) = extension_init(db, p_api) {
         return unsafe { to_sqlite_error(&err, pz_err_msg) };
     }
     ffi::SQLITE_OK

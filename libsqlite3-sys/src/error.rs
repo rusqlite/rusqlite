@@ -275,8 +275,6 @@ pub fn code_to_str(code: c_int) -> &'static str {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum InitError {
-    /// Invalid sqlite3_api_routines pointer
-    NullApiPointer,
     /// Version mismatch between the extension and the SQLite3 library
     VersionMismatch { compile_time: i32, runtime: i32 },
     /// Invalid function pointer in one of sqlite3_api_routines fields
@@ -286,9 +284,6 @@ pub enum InitError {
 impl ::std::fmt::Display for InitError {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         match *self {
-            InitError::NullApiPointer => {
-                write!(f, "Invalid sqlite3_api_routines pointer")
-            }
             InitError::VersionMismatch {
                 compile_time,
                 runtime,
