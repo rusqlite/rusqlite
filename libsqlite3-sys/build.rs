@@ -711,6 +711,13 @@ mod loadable_extension {
             let name = ident.to_string();
             if name == "vmprintf" || name == "xvsnprintf" || name == "str_vappendf" {
                 continue; // skip va_list
+            } else if name == "aggregate_count"
+                || name == "expired"
+                || name == "global_recover"
+                || name == "thread_cleanup"
+                || name == "transfer_bindings"
+            {
+                continue; // omit deprecated
             }
             let sqlite3_name = match name.as_ref() {
                 "xthreadsafe" => "sqlite3_threadsafe".to_owned(),

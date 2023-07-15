@@ -2890,18 +2890,6 @@ pub unsafe fn sqlite3_aggregate_context(
     (fun)(arg1, nBytes)
 }
 
-static __SQLITE3_AGGREGATE_COUNT: ::atomic::Atomic<
-    Option<unsafe extern "C" fn(arg1: *mut sqlite3_context) -> ::std::os::raw::c_int>,
-> = ::atomic::Atomic::new(None);
-pub unsafe fn sqlite3_aggregate_count(
-    arg1: *mut sqlite3_context,
-) -> ::std::os::raw::c_int {
-    let fun = __SQLITE3_AGGREGATE_COUNT
-        .load(::atomic::Ordering::Acquire)
-        .expect("SQLite API not initialized or SQLite feature omitted");
-    (fun)(arg1)
-}
-
 static __SQLITE3_BIND_BLOB: ::atomic::Atomic<
     Option<
         unsafe extern "C" fn(
@@ -4001,16 +3989,6 @@ pub unsafe fn sqlite3_exec(
     (fun)(arg1, arg2, arg3, arg4, arg5)
 }
 
-static __SQLITE3_EXPIRED: ::atomic::Atomic<
-    Option<unsafe extern "C" fn(arg1: *mut sqlite3_stmt) -> ::std::os::raw::c_int>,
-> = ::atomic::Atomic::new(None);
-pub unsafe fn sqlite3_expired(arg1: *mut sqlite3_stmt) -> ::std::os::raw::c_int {
-    let fun = __SQLITE3_EXPIRED
-        .load(::atomic::Ordering::Acquire)
-        .expect("SQLite API not initialized or SQLite feature omitted");
-    (fun)(arg1)
-}
-
 static __SQLITE3_FINALIZE: ::atomic::Atomic<
     Option<unsafe extern "C" fn(pStmt: *mut sqlite3_stmt) -> ::std::os::raw::c_int>,
 > = ::atomic::Atomic::new(None);
@@ -4093,16 +4071,6 @@ pub unsafe fn sqlite3_get_table(
         .load(::atomic::Ordering::Acquire)
         .expect("SQLite API not initialized or SQLite feature omitted");
     (fun)(arg1, arg2, arg3, arg4, arg5, arg6)
-}
-
-static __SQLITE3_GLOBAL_RECOVER: ::atomic::Atomic<
-    Option<unsafe extern "C" fn() -> ::std::os::raw::c_int>,
-> = ::atomic::Atomic::new(None);
-pub unsafe fn sqlite3_global_recover() -> ::std::os::raw::c_int {
-    let fun = __SQLITE3_GLOBAL_RECOVER
-        .load(::atomic::Ordering::Acquire)
-        .expect("SQLite API not initialized or SQLite feature omitted");
-    (fun)()
 }
 
 static __SQLITE3_INTERRUPT: ::atomic::Atomic<
@@ -4673,16 +4641,6 @@ pub unsafe fn sqlite3_table_column_metadata(
     (fun)(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
 }
 
-static __SQLITE3_THREAD_CLEANUP: ::atomic::Atomic<Option<unsafe extern "C" fn()>> = ::atomic::Atomic::new(
-    None,
-);
-pub unsafe fn sqlite3_thread_cleanup() {
-    let fun = __SQLITE3_THREAD_CLEANUP
-        .load(::atomic::Ordering::Acquire)
-        .expect("SQLite API not initialized or SQLite feature omitted");
-    (fun)()
-}
-
 static __SQLITE3_TOTAL_CHANGES: ::atomic::Atomic<
     Option<unsafe extern "C" fn(arg1: *mut sqlite3) -> ::std::os::raw::c_int>,
 > = ::atomic::Atomic::new(None);
@@ -4721,24 +4679,6 @@ pub unsafe fn sqlite3_trace(
         .load(::atomic::Ordering::Acquire)
         .expect("SQLite API not initialized or SQLite feature omitted");
     (fun)(arg1, xTrace, arg2)
-}
-
-static __SQLITE3_TRANSFER_BINDINGS: ::atomic::Atomic<
-    Option<
-        unsafe extern "C" fn(
-            arg1: *mut sqlite3_stmt,
-            arg2: *mut sqlite3_stmt,
-        ) -> ::std::os::raw::c_int,
-    >,
-> = ::atomic::Atomic::new(None);
-pub unsafe fn sqlite3_transfer_bindings(
-    arg1: *mut sqlite3_stmt,
-    arg2: *mut sqlite3_stmt,
-) -> ::std::os::raw::c_int {
-    let fun = __SQLITE3_TRANSFER_BINDINGS
-        .load(::atomic::Ordering::Acquire)
-        .expect("SQLite API not initialized or SQLite feature omitted");
-    (fun)(arg1, arg2)
 }
 
 static __SQLITE3_UPDATE_HOOK: ::atomic::Atomic<
@@ -7477,8 +7417,6 @@ pub unsafe fn rusqlite_extension_init2(
     }
     __SQLITE3_AGGREGATE_CONTEXT
         .store((*p_api).aggregate_context, ::atomic::Ordering::Release);
-    __SQLITE3_AGGREGATE_COUNT
-        .store((*p_api).aggregate_count, ::atomic::Ordering::Release);
     __SQLITE3_BIND_BLOB.store((*p_api).bind_blob, ::atomic::Ordering::Release);
     __SQLITE3_BIND_DOUBLE.store((*p_api).bind_double, ::atomic::Ordering::Release);
     __SQLITE3_BIND_INT.store((*p_api).bind_int, ::atomic::Ordering::Release);
@@ -7551,14 +7489,12 @@ pub unsafe fn rusqlite_extension_init2(
     __SQLITE3_ERRMSG.store((*p_api).errmsg, ::atomic::Ordering::Release);
     __SQLITE3_ERRMSG16.store((*p_api).errmsg16, ::atomic::Ordering::Release);
     __SQLITE3_EXEC.store((*p_api).exec, ::atomic::Ordering::Release);
-    __SQLITE3_EXPIRED.store((*p_api).expired, ::atomic::Ordering::Release);
     __SQLITE3_FINALIZE.store((*p_api).finalize, ::atomic::Ordering::Release);
     __SQLITE3_FREE.store((*p_api).free, ::atomic::Ordering::Release);
     __SQLITE3_FREE_TABLE.store((*p_api).free_table, ::atomic::Ordering::Release);
     __SQLITE3_GET_AUTOCOMMIT.store((*p_api).get_autocommit, ::atomic::Ordering::Release);
     __SQLITE3_GET_AUXDATA.store((*p_api).get_auxdata, ::atomic::Ordering::Release);
     __SQLITE3_GET_TABLE.store((*p_api).get_table, ::atomic::Ordering::Release);
-    __SQLITE3_GLOBAL_RECOVER.store((*p_api).global_recover, ::atomic::Ordering::Release);
     __SQLITE3_INTERRUPT.store((*p_api).interruptx, ::atomic::Ordering::Release);
     __SQLITE3_LAST_INSERT_ROWID
         .store((*p_api).last_insert_rowid, ::atomic::Ordering::Release);
@@ -7594,11 +7530,8 @@ pub unsafe fn rusqlite_extension_init2(
     __SQLITE3_STEP.store((*p_api).step, ::atomic::Ordering::Release);
     __SQLITE3_TABLE_COLUMN_METADATA
         .store((*p_api).table_column_metadata, ::atomic::Ordering::Release);
-    __SQLITE3_THREAD_CLEANUP.store((*p_api).thread_cleanup, ::atomic::Ordering::Release);
     __SQLITE3_TOTAL_CHANGES.store((*p_api).total_changes, ::atomic::Ordering::Release);
     __SQLITE3_TRACE.store((*p_api).trace, ::atomic::Ordering::Release);
-    __SQLITE3_TRANSFER_BINDINGS
-        .store((*p_api).transfer_bindings, ::atomic::Ordering::Release);
     __SQLITE3_UPDATE_HOOK.store((*p_api).update_hook, ::atomic::Ordering::Release);
     __SQLITE3_USER_DATA.store((*p_api).user_data, ::atomic::Ordering::Release);
     __SQLITE3_VALUE_BLOB.store((*p_api).value_blob, ::atomic::Ordering::Release);
