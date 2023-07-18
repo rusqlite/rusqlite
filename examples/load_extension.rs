@@ -7,7 +7,10 @@ fn main() -> Result<()> {
 
     unsafe {
         db.load_extension_enable()?;
+        #[cfg(not(windows))]
         db.load_extension("target/debug/examples/libloadable_extension", None)?;
+        #[cfg(windows)]
+        db.load_extension("target/debug/examples/loadable_extension", None)?;
         db.load_extension_disable()?;
     }
 
