@@ -102,6 +102,7 @@ impl Transaction<'_> {
     /// Even though we don't mutate the connection, we take a `&mut Connection`
     /// so as to prevent nested transactions on the same connection. For cases
     /// where this is unacceptable, [`Transaction::new_unchecked`] is available.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     #[inline]
     pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction<'_>> {
         Self::new_unchecked(conn, behavior)
@@ -265,12 +266,14 @@ impl Savepoint<'_> {
     }
 
     /// Begin a new savepoint. Can be nested.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     #[inline]
     pub fn new(conn: &mut Connection) -> Result<Savepoint<'_>> {
         Savepoint::new_(conn)
     }
 
     /// Begin a new savepoint with a user-provided savepoint name.
+    #[allow(clippy::needless_pass_by_ref_mut)]
     #[inline]
     pub fn with_name<T: Into<String>>(conn: &mut Connection, name: T) -> Result<Savepoint<'_>> {
         Savepoint::with_name_(conn, name)
