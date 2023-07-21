@@ -119,6 +119,9 @@ mod params;
 mod pragma;
 mod raw_statement;
 mod row;
+#[cfg(feature = "serialize")]
+#[cfg_attr(docsrs, doc(cfg(feature = "serialize")))]
+pub mod serialize;
 #[cfg(feature = "session")]
 #[cfg_attr(docsrs, doc(cfg(feature = "session")))]
 pub mod session;
