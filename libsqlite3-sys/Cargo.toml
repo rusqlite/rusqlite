@@ -11,15 +11,18 @@ build = "build.rs"
 keywords = ["sqlite", "sqlcipher", "ffi"]
 categories = ["external-ffi-bindings"]
 
+# The Cargo.toml "dep:" syntax was added in Rust 1.60.0.
+rust-version = "1.60.0"
+
 [features]
 default = ["min_sqlite_version_3_14_0"]
-bundled = ["cc", "bundled_bindings"]
-bundled-windows = ["cc", "bundled_bindings"]
+bundled = ["dep:cc", "bundled_bindings"]
+bundled-windows = ["dep:cc", "bundled_bindings"]
 bundled-sqlcipher = ["bundled"]
-bundled-sqlcipher-vendored-openssl = ["bundled-sqlcipher", "openssl-sys/vendored"]
-buildtime_bindgen = ["bindgen", "pkg-config", "vcpkg"]
+bundled-sqlcipher-vendored-openssl = ["bundled-sqlcipher", "openssl-sys?/vendored"]
+buildtime_bindgen = ["dep:bindgen", "dep:pkg-config", "dep:vcpkg"]
 sqlcipher = []
-min_sqlite_version_3_14_0 = ["pkg-config", "vcpkg"]
+min_sqlite_version_3_14_0 = ["dep:pkg-config", "dep:vcpkg"]
 # Bundle only the bindings file. Note that this does nothing if
 # `buildtime_bindgen` is enabled.
 bundled_bindings = []

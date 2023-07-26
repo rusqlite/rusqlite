@@ -5,7 +5,7 @@ use std::path::Path;
 /// `cfg!(windows)`, since the latter does not properly handle cross-compilation
 ///
 /// Note that there is no way to know at compile-time which system we'll be
-/// targetting, and this test must be made at run-time (of the build script) See
+/// targeting, and this test must be made at run-time (of the build script) See
 /// https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
 fn win_target() -> bool {
     env::var("CARGO_CFG_WINDOWS").is_ok()
@@ -195,7 +195,7 @@ mod build_bundled {
             } else if use_openssl {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 let lib_name = if is_windows { "libcrypto" } else { "crypto" };
-                println!("cargo:rustc-link-lib=dylib={}", lib_name);
+                println!("cargo:rustc-link-lib=dylib={lib_name}");
                 println!("cargo:rustc-link-search={}", lib_dir.to_string_lossy());
             } else if is_apple {
                 cfg.flag("-DSQLCIPHER_CRYPTO_CC");
@@ -292,7 +292,7 @@ mod build_bundled {
                 } else if extra.starts_with("SQLITE_") {
                     cfg.flag(&format!("-D{extra}"));
                 } else {
-                    panic!("Don't understand {} in LIBSQLITE3_FLAGS", extra);
+                    panic!("Don't understand {extra} in LIBSQLITE3_FLAGS");
                 }
             }
         }
@@ -350,10 +350,7 @@ impl From<HeaderLocation> for String {
             HeaderLocation::FromEnvironment => {
                 let prefix = env_prefix();
                 let mut header = env::var(format!("{prefix}_INCLUDE_DIR")).unwrap_or_else(|_| {
-                    panic!(
-                        "{}_INCLUDE_DIR must be set if {}_LIB_DIR is set",
-                        prefix, prefix
-                    )
+                    panic!("{prefix}_INCLUDE_DIR must be set if {prefix}_LIB_DIR is set")
                 });
                 header.push_str(if cfg!(feature = "loadable_extension") {
                     "/sqlite3ext.h"
@@ -418,6 +415,7 @@ mod build_linked {
             _ => "dylib",
         }
     }
+
     // Prints the necessary cargo link commands and returns the path to the header.
     fn find_sqlite() -> HeaderLocation {
         let link_lib = lib_name();
@@ -678,7 +676,7 @@ mod bindings {
         #[cfg(not(feature = "loadable_extension"))]
         bindings
             .write_to_file(out_path)
-            .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
+            .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
     }
 }
 
