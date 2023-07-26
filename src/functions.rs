@@ -839,7 +839,7 @@ mod test {
     // This implementation of a regexp scalar function uses SQLite's auxiliary data
     // (https://www.sqlite.org/c3ref/get_auxdata.html) to avoid recompiling the regular
     // expression multiple times within one query.
-    fn regexp_with_auxilliary(ctx: &Context<'_>) -> Result<bool> {
+    fn regexp_with_auxiliary(ctx: &Context<'_>) -> Result<bool> {
         assert_eq!(ctx.len(), 2, "called with unexpected number of arguments");
         type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
         let regexp: std::sync::Arc<Regex> = ctx
@@ -860,7 +860,7 @@ mod test {
     }
 
     #[test]
-    fn test_function_regexp_with_auxilliary() -> Result<()> {
+    fn test_function_regexp_with_auxiliary() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch(
             "BEGIN;
@@ -874,7 +874,7 @@ mod test {
             "regexp",
             2,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
-            regexp_with_auxilliary,
+            regexp_with_auxiliary,
         )?;
 
         let result: bool = db.one_column("SELECT regexp('l.s[aeiouy]', 'lisa')")?;
