@@ -1,78 +1,74 @@
 //! [`ToSql`] and [`FromSql`] implementation for [`time::OffsetDateTime`].
+
 use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use crate::{Error, Result};
-use time::format_description::well_known::Rfc3339;
 use time::format_description::FormatItem;
 use time::macros::format_description;
-use time::{Date, OffsetDateTime, PrimitiveDateTime, Time, UtcOffset};
+use time::{Date, OffsetDateTime, PrimitiveDateTime, Time};
 
-const PRIMITIVE_SHORT_DATE_TIME_FORMAT: &[FormatItem<'_>] =
-    format_description!("[year]-[month]-[day] [hour]:[minute]:[second]");
-const PRIMITIVE_DATE_TIME_Z_FORMAT: &[FormatItem<'_>] =
-    format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond]Z");
-const OFFSET_SHORT_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
-    "[year]-[month]-[day] [hour]:[minute]:[second][offset_hour sign:mandatory]:[offset_minute]"
-);
-const OFFSET_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+const OFFSET_DATE_TIME_ENCODING: &[FormatItem<'_>] = format_description!(
+    version = 2,
     "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond][offset_hour sign:mandatory]:[offset_minute]"
 );
+const PRIMITIVE_DATE_TIME_ENCODING: &[FormatItem<'_>] = format_description!(
+    version = 2,
+    "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond]"
+);
+const TIME_ENCODING: &[FormatItem<'_>] =
+    format_description!(version = 2, "[hour]:[minute]:[second].[subsecond]");
+
+const DATE_FORMAT: &[FormatItem<'_>] = format_description!(version = 2, "[year]-[month]-[day]");
+const TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+    version = 2,
+    "[hour]:[minute][optional [:[second][optional [.[subsecond]]]]]"
+);
+const PRIMITIVE_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+    version = 2,
+    "[year]-[month]-[day][first [ ][T]][hour]:[minute][optional [:[second][optional [.[subsecond]]]]]"
+);
+const UTC_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+    version = 2,
+    "[year]-[month]-[day][first [ ][T]][hour]:[minute][optional [:[second][optional [.[subsecond]]]]][optional [Z]]"
+);
+const OFFSET_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+    version = 2,
+    "[year]-[month]-[day][first [ ][T]][hour]:[minute][optional [:[second][optional [.[subsecond]]]]][offset_hour sign:mandatory]:[offset_minute]"
+);
 const LEGACY_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
+    version = 2,
     "[year]-[month]-[day] [hour]:[minute]:[second]:[subsecond] [offset_hour sign:mandatory]:[offset_minute]"
 );
 
-const PRIMITIVE_DATE_TIME_FORMAT: &[FormatItem<'_>] =
-    format_description!("[year]-[month]-[day] [hour]:[minute]:[second].[subsecond]");
-const PRIMITIVE_SHORT_DATE_TIME_FORMAT_T: &[FormatItem<'_>] =
-    format_description!("[year]-[month]-[day]T[hour]:[minute]:[second]");
-const PRIMITIVE_DATE_TIME_FORMAT_T: &[FormatItem<'_>] =
-    format_description!("[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond]");
-
-const DATE_FORMAT: &[FormatItem<'_>] = format_description!("[year]-[month]-[day]");
-const TIME_FORMAT: &[FormatItem<'_>] = format_description!("[hour]:[minute]");
-const TIME_FORMAT_SECONDS: &[FormatItem<'_>] = format_description!("[hour]:[minute]:[second]");
-const TIME_FORMAT_SECONDS_SUBSECONDS: &[FormatItem<'_>] =
-    format_description!("[hour]:[minute]:[second].[subsecond]");
-
+/// OffsetDatetime => RFC3339 format ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM")
 impl ToSql for OffsetDateTime {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        // FIXME keep original offset
         let time_string = self
-            .to_offset(UtcOffset::UTC)
-            .format(&PRIMITIVE_DATE_TIME_Z_FORMAT)
+            .format(&OFFSET_DATE_TIME_ENCODING)
             .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
         Ok(ToSqlOutput::from(time_string))
     }
 }
 
+// Supports parsing formats 2-7 from https://www.sqlite.org/lang_datefunc.html
+// Formats 2-7 without a timezone assumes UTC
 impl FromSql for OffsetDateTime {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value.as_str().and_then(|s| {
-            if s.len() > 10 && s.as_bytes()[10] == b'T' {
-                // YYYY-MM-DDTHH:MM:SS.SSS[+-]HH:MM
-                return OffsetDateTime::parse(s, &Rfc3339)
+            if let Some(b' ') = s.as_bytes().get(23) {
+                // legacy
+                return OffsetDateTime::parse(s, &LEGACY_DATE_TIME_FORMAT)
                     .map_err(|err| FromSqlError::Other(Box::new(err)));
             }
-            let s = s.strip_suffix('Z').unwrap_or(s);
-            match s.len() {
-                len if len <= 19 => {
-                    // TODO YYYY-MM-DDTHH:MM:SS
-                    PrimitiveDateTime::parse(s, &PRIMITIVE_SHORT_DATE_TIME_FORMAT)
-                        .map(PrimitiveDateTime::assume_utc)
-                }
-                _ if s.as_bytes()[19] == b':' => {
-                    // legacy
-                    OffsetDateTime::parse(s, &LEGACY_DATE_TIME_FORMAT)
-                }
-                _ if s.as_bytes()[19] == b'.' => OffsetDateTime::parse(s, &OFFSET_DATE_TIME_FORMAT)
-                    .or_else(|err| {
-                        PrimitiveDateTime::parse(s, &PRIMITIVE_DATE_TIME_FORMAT)
-                            .map(PrimitiveDateTime::assume_utc)
-                            .map_err(|_| err)
-                    }),
-                _ => OffsetDateTime::parse(s, &OFFSET_SHORT_DATE_TIME_FORMAT),
+            if s[8..].contains('+') || s[8..].contains('-') {
+                // Formats 2-7 with timezone
+                return OffsetDateTime::parse(s, &OFFSET_DATE_TIME_FORMAT)
+                    .map_err(|err| FromSqlError::Other(Box::new(err)));
             }
-            .map_err(|err| FromSqlError::Other(Box::new(err)))
+            // Formats 2-7 without timezone
+            PrimitiveDateTime::parse(s, &UTC_DATE_TIME_FORMAT)
+                .map(|p| p.assume_utc())
+                .map_err(|err| FromSqlError::Other(Box::new(err)))
         })
     }
 }
@@ -103,7 +99,7 @@ impl ToSql for Time {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         let time_str = self
-            .format(&TIME_FORMAT_SECONDS_SUBSECONDS)
+            .format(&TIME_ENCODING)
             .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
         Ok(ToSqlOutput::from(time_str))
     }
@@ -114,70 +110,44 @@ impl FromSql for Time {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value.as_str().and_then(|s| {
-            let fmt = match s.len() {
-                5 => Ok(&TIME_FORMAT),
-                8 => Ok(&TIME_FORMAT_SECONDS),
-                len if len > 9 => Ok(&TIME_FORMAT_SECONDS_SUBSECONDS),
-                _ => Err(FromSqlError::Other(
-                    format!("Unknown time format: {}", s).into(),
-                )),
-            }?;
-
-            Time::parse(s, fmt).map_err(|err| FromSqlError::Other(err.into()))
+            Time::parse(s, &TIME_FORMAT).map_err(|err| FromSqlError::Other(err.into()))
         })
     }
 }
 
-/// ISO 8601 combined date and time without timezone =>
-/// "YYYY-MM-DD HH:MM:SS.SSS"
+/// ISO 8601 combined date and time without timezone => "YYYY-MM-DD HH:MM:SS.SSS"
 impl ToSql for PrimitiveDateTime {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         let date_time_str = self
-            .format(&PRIMITIVE_DATE_TIME_FORMAT)
+            .format(&PRIMITIVE_DATE_TIME_ENCODING)
             .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
         Ok(ToSqlOutput::from(date_time_str))
     }
 }
 
-/// Parse a `PrimitiveDateTime` in one of the following formats:
-/// YYYY-MM-DD HH:MM:SS.SSS
-/// YYYY-MM-DDTHH:MM:SS.SSS
+/// YYYY-MM-DD HH:MM
+/// YYYY-MM-DDTHH:MM
 /// YYYY-MM-DD HH:MM:SS
 /// YYYY-MM-DDTHH:MM:SS
+/// YYYY-MM-DD HH:MM:SS.SSS
+/// YYYY-MM-DDTHH:MM:SS.SSS
+/// => ISO 8601 combined date and time with timezone
 impl FromSql for PrimitiveDateTime {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value.as_str().and_then(|s| {
-            let has_t = s.len() > 10 && s.as_bytes()[10] == b'T';
-
-            let fmt = match (s.len(), has_t) {
-                (19, true) => Ok(&PRIMITIVE_SHORT_DATE_TIME_FORMAT_T),
-                (19, false) => Ok(&PRIMITIVE_SHORT_DATE_TIME_FORMAT),
-                (l, true) if l > 19 => Ok(&PRIMITIVE_DATE_TIME_FORMAT_T),
-                (l, false) if l > 19 => Ok(&PRIMITIVE_DATE_TIME_FORMAT),
-                _ => Err(FromSqlError::Other(
-                    format!("Unknown date format: {}", s).into(),
-                )),
-            }?;
-
-            PrimitiveDateTime::parse(s, fmt).map_err(|err| FromSqlError::Other(err.into()))
+            PrimitiveDateTime::parse(s, &PRIMITIVE_DATE_TIME_FORMAT)
+                .map_err(|err| FromSqlError::Other(err.into()))
         })
     }
 }
 
 #[cfg(test)]
 mod test {
-
-    use crate::types::time::{PRIMITIVE_DATE_TIME_FORMAT, PRIMITIVE_DATE_TIME_FORMAT_T};
-
     use crate::{Connection, Result};
-
-    use time::format_description::well_known::Rfc3339;
-    use time::macros::{date, time};
+    use time::macros::{date, datetime, time};
     use time::{Date, OffsetDateTime, PrimitiveDateTime, Time};
-
-    use super::{PRIMITIVE_SHORT_DATE_TIME_FORMAT, PRIMITIVE_SHORT_DATE_TIME_FORMAT_T};
 
     fn checked_memory_handle() -> Result<Connection> {
         let db = Connection::open_in_memory()?;
@@ -196,10 +166,10 @@ mod test {
         };
 
         ts_vec.push(make_datetime(10_000, 0)); //January 1, 1970 2:46:40 AM
-                                               // ts_vec.push(make_datetime(10_000, 1000)); //January 1, 1970 2:46:40 AM (and one microsecond)
+        ts_vec.push(make_datetime(10_000, 1000)); //January 1, 1970 2:46:40 AM (and one microsecond)
         ts_vec.push(make_datetime(1_500_391_124, 1_000_000)); //July 18, 2017
         ts_vec.push(make_datetime(2_000_000_000, 2_000_000)); //May 18, 2033
-        ts_vec.push(make_datetime(3_000_000_000, 999)); //January 24, 2065
+        ts_vec.push(make_datetime(3_000_000_000, 999_999_999)); //January 24, 2065
         ts_vec.push(make_datetime(10_000_000_000, 0)); //November 20, 2286
 
         for ts in ts_vec {
@@ -218,41 +188,67 @@ mod test {
     fn test_offset_date_time_parsing() -> Result<()> {
         let db = checked_memory_handle()?;
         let tests = vec![
+            // Rfc3339
             (
-                "2013-10-07 08:23:19",
-                OffsetDateTime::parse("2013-10-07T08:23:19Z", &Rfc3339).unwrap(),
+                "2013-10-07T08:23:19.123456789Z",
+                datetime!(2013-10-07 8:23:19.123456789 UTC),
             ),
             (
-                "2013-10-07 08:23:19Z",
-                OffsetDateTime::parse("2013-10-07T08:23:19Z", &Rfc3339).unwrap(),
+                "2013-10-07 08:23:19.123456789Z",
+                datetime!(2013-10-07 8:23:19.123456789 UTC),
+            ),
+            // Format 2
+            ("2013-10-07 08:23", datetime!(2013-10-07 8:23 UTC)),
+            ("2013-10-07 08:23Z", datetime!(2013-10-07 8:23 UTC)),
+            ("2013-10-07 08:23+04:00", datetime!(2013-10-07 8:23 +4)),
+            // Format 3
+            ("2013-10-07 08:23:19", datetime!(2013-10-07 8:23:19 UTC)),
+            ("2013-10-07 08:23:19Z", datetime!(2013-10-07 8:23:19 UTC)),
+            (
+                "2013-10-07 08:23:19+04:00",
+                datetime!(2013-10-07 8:23:19 +4),
+            ),
+            // Format 4
+            (
+                "2013-10-07 08:23:19.123",
+                datetime!(2013-10-07 8:23:19.123 UTC),
             ),
             (
-                "2013-10-07T08:23:19Z",
-                OffsetDateTime::parse("2013-10-07T08:23:19Z", &Rfc3339).unwrap(),
+                "2013-10-07 08:23:19.123Z",
+                datetime!(2013-10-07 8:23:19.123 UTC),
             ),
             (
-                "2013-10-07 08:23:19.120",
-                OffsetDateTime::parse("2013-10-07T08:23:19.120Z", &Rfc3339).unwrap(),
+                "2013-10-07 08:23:19.123+04:00",
+                datetime!(2013-10-07 8:23:19.123 +4),
+            ),
+            // Format 5
+            ("2013-10-07T08:23", datetime!(2013-10-07 8:23 UTC)),
+            ("2013-10-07T08:23Z", datetime!(2013-10-07 8:23 UTC)),
+            ("2013-10-07T08:23+04:00", datetime!(2013-10-07 8:23 +4)),
+            // Format 6
+            ("2013-10-07T08:23:19", datetime!(2013-10-07 8:23:19 UTC)),
+            ("2013-10-07T08:23:19Z", datetime!(2013-10-07 8:23:19 UTC)),
+            (
+                "2013-10-07T08:23:19+04:00",
+                datetime!(2013-10-07 8:23:19 +4),
+            ),
+            // Format 7
+            (
+                "2013-10-07T08:23:19.123",
+                datetime!(2013-10-07 8:23:19.123 UTC),
             ),
             (
-                "2013-10-07 08:23:19.120Z",
-                OffsetDateTime::parse("2013-10-07T08:23:19.120Z", &Rfc3339).unwrap(),
+                "2013-10-07T08:23:19.123Z",
+                datetime!(2013-10-07 8:23:19.123 UTC),
             ),
             (
-                "2013-10-07T08:23:19.120Z",
-                OffsetDateTime::parse("2013-10-07T08:23:19.120Z", &Rfc3339).unwrap(),
+                "2013-10-07T08:23:19.123+04:00",
+                datetime!(2013-10-07 8:23:19.123 +4),
             ),
+            // Legacy
             (
-                "2013-10-07 04:23:19-04:00",
-                OffsetDateTime::parse("2013-10-07T04:23:19-04:00", &Rfc3339).unwrap(),
-            ),
-            (
-                "2013-10-07 04:23:19.120-04:00",
-                OffsetDateTime::parse("2013-10-07T04:23:19.120-04:00", &Rfc3339).unwrap(),
-            ),
-            (
-                "2013-10-07T04:23:19.120-04:00",
-                OffsetDateTime::parse("2013-10-07T04:23:19.120-04:00", &Rfc3339).unwrap(),
+                "2013-10-07 08:23:12:987 -07:00",
+                datetime!(2013-10-07 8:23:12.987 -7),
             ),
         ];
 
@@ -336,29 +332,12 @@ mod test {
         let db = checked_memory_handle()?;
 
         let tests = vec![
-            (
-                "2013-10-07T08:23:19",
-                PrimitiveDateTime::parse(
-                    "2013-10-07T08:23:19",
-                    &PRIMITIVE_SHORT_DATE_TIME_FORMAT_T,
-                )
-                .unwrap(),
-            ),
-            (
-                "2013-10-07T08:23:19.111",
-                PrimitiveDateTime::parse("2013-10-07T08:23:19.111", &PRIMITIVE_DATE_TIME_FORMAT_T)
-                    .unwrap(),
-            ),
-            (
-                "2013-10-07 08:23:19",
-                PrimitiveDateTime::parse("2013-10-07 08:23:19", &PRIMITIVE_SHORT_DATE_TIME_FORMAT)
-                    .unwrap(),
-            ),
-            (
-                "2013-10-07 08:23:19.111",
-                PrimitiveDateTime::parse("2013-10-07 08:23:19.111", &PRIMITIVE_DATE_TIME_FORMAT)
-                    .unwrap(),
-            ),
+            ("2013-10-07T08:23", datetime!(2013-10-07 8:23)),
+            ("2013-10-07T08:23:19", datetime!(2013-10-07 8:23:19)),
+            ("2013-10-07T08:23:19.111", datetime!(2013-10-07 8:23:19.111)),
+            ("2013-10-07 08:23", datetime!(2013-10-07 8:23)),
+            ("2013-10-07 08:23:19", datetime!(2013-10-07 8:23:19)),
+            ("2013-10-07 08:23:19.111", datetime!(2013-10-07 8:23:19.111)),
         ];
 
         for (s, t) in tests {
@@ -413,7 +392,11 @@ mod test {
             OffsetDateTime::now_utc().date(),
             OffsetDateTime::now_utc().time(),
         );
-        let result: Result<bool> = db.query_row("SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')", [now], |r| r.get(0));
+        let result: Result<bool> = db.query_row(
+            "SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')",
+            [now],
+            |r| r.get(0),
+        );
         result.unwrap();
         Ok(())
     }
@@ -421,7 +404,11 @@ mod test {
     #[test]
     fn test_offset_date_time_param() -> Result<()> {
         let db = checked_memory_handle()?;
-        let result: Result<bool> = db.query_row("SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')", [OffsetDateTime::now_utc()], |r| r.get(0));
+        let result: Result<bool> = db.query_row(
+            "SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')",
+            [OffsetDateTime::now_utc()],
+            |r| r.get(0),
+        );
         result.unwrap();
         Ok(())
     }
