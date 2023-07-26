@@ -205,7 +205,7 @@ mod build_bundled {
             } else if use_openssl {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 let lib_name = if is_windows { "libcrypto" } else { "crypto" };
-                println!("cargo:rustc-link-lib=dylib={}", lib_name);
+                println!("cargo:rustc-link-lib=dylib={lib_name}");
                 for lib_dir_item in lib_dir.iter() {
                     println!("cargo:rustc-link-search={}", lib_dir_item.to_string_lossy());
                 }
@@ -285,7 +285,7 @@ mod build_bundled {
                 } else if extra.starts_with("SQLITE_") {
                     cfg.flag(format!("-D{extra}"));
                 } else {
-                    panic!("Don't understand {} in LIBSQLITE3_FLAGS", extra);
+                    panic!("Don't understand {extra} in LIBSQLITE3_FLAGS");
                 }
             }
         }
@@ -406,6 +406,7 @@ mod build_linked {
             _ => "dylib",
         }
     }
+
     // Prints the necessary cargo link commands and returns the path to the header.
     fn find_sqlite() -> HeaderLocation {
         let link_lib = lib_name();
@@ -633,7 +634,7 @@ mod bindings {
         #[cfg(not(feature = "loadable_extension"))]
         bindings
             .write_to_file(out_path)
-            .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
+            .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
     }
 }
 
