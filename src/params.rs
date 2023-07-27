@@ -381,8 +381,7 @@ impl_for_array_ref!(
 ///
 ///     let sql = format!(
 ///         // In practice this would probably be better as an `EXISTS` query.
-///         "SELECT 1 FROM user WHERE is_active AND name IN ({}) LIMIT 1",
-///         vars,
+///         "SELECT 1 FROM user WHERE is_active AND name IN ({vars}) LIMIT 1",
 ///     );
 ///     let mut stmt = conn.prepare(&sql)?;
 ///     stmt.exists(rusqlite::params_from_iter(usernames))
