@@ -15,7 +15,7 @@ For version 0.15.0 and above, see [Releases](https://github.com/rusqlite/rusqlit
 * Add DropBehavior::Panic to enforce intentional commit or rollback.
 * Implement `sqlite3_update_hook` (#260, #328), `sqlite3_commit_hook` and `sqlite3_rollback_hook`.
 * Add support to unlock notification behind `unlock_notify` feature (#294, #331).
-* Make `Statement::column_index` case insensitive (#330).
+* Make `Statement::column_index` case-insensitive (#330).
 * Add comment to justify `&mut Connection` in `Transaction`.
 * Fix `tyvar_behind_raw_pointer` warnings.
 * Fix handful of clippy warnings.
@@ -29,7 +29,7 @@ For version 0.15.0 and above, see [Releases](https://github.com/rusqlite/rusqlit
 # Version 0.13.0 (2017-11-13)
 
 * Added ToSqlConversionFailure case to Error enum.
-* Now depends on chrono 0.4, bitflats 1.0, and (optionally) cc 1.0 / bindgen 0.31.
+* Now depends on chrono 0.4, bitflags 1.0, and (optionally) cc 1.0 / bindgen 0.31.
 * The ToSql/FromSql implementations for time::Timespec now include
   and expect fractional seconds and timezone in the serialized string.
 * The RowIndex type used in Row::get is now publicly exported.
@@ -61,18 +61,18 @@ For version 0.15.0 and above, see [Releases](https://github.com/rusqlite/rusqlit
 * Adds `version()` and `version_number()` functions for querying the version of SQLite in use.
 * Adds the `limits` feature, exposing `limit()` and `set_limit()` methods on `Connection`.
 * Updates to `libsqlite3-sys` 0.7.0, which runs rust-bindgen at build-time instead of assuming the
-  precense of all expected SQLite constants and functions.
+  presence of all expected SQLite constants and functions.
 * Clarifies supported SQLite versions. Running with SQLite older than 3.6.8 now panics, and
   some features will not compile unless a sufficiently-recent SQLite version is used. See
   the README for requirements of particular features.
 * When running with SQLite 3.6.x, rusqlite attempts to perform SQLite initialization. If it fails,
-  rusqlite will panic since it cannot ensure the threading mode for SQLite. This check can by
+  rusqlite will panic since it cannot ensure the threading mode for SQLite. This check can be
   skipped by calling the unsafe function `rusqlite::bypass_sqlite_initialization()`. This is
   technically a breaking change but is unlikely to affect anyone in practice, since prior to this
   version the check that rusqlite was using would cause a segfault if linked against a SQLite
   older than 3.7.0.
 * rusqlite now performs a one-time check (prior to the first connection attempt) that the runtime
-  SQLite version is at least as new as the SQLite version found at buildtime. This check can by
+  SQLite version is at least as new as the SQLite version found at buildtime. This check can be
   skipped by calling the unsafe function `rusqlite::bypass_sqlite_version_check()`.
 * Removes the `libc` dependency in favor of using `std::os::raw`
 
@@ -137,7 +137,7 @@ For version 0.15.0 and above, see [Releases](https://github.com/rusqlite/rusqlit
   This behavior is more correct. Previously there were runtime checks to prevent misuse, but
   other changes in this release to reset statements as soon as possible introduced yet another
   hazard related to the lack of these lifetime connections. We were already recommending the
-  use of `query_map` and `query_and_then` over raw `query`; both of theose still return handles
+  use of `query_map` and `query_and_then` over raw `query`; both of those still return handles
   that implement `Iterator`.
 * BREAKING CHANGE: `Transaction::savepoint()` now returns a `Savepoint` instead of another
   `Transaction`. Unlike `Transaction`, `Savepoint`s can be rolled back while keeping the current
@@ -239,7 +239,7 @@ For version 0.15.0 and above, see [Releases](https://github.com/rusqlite/rusqlit
 
 * Add `column_names()` to `SqliteStatement`.
 * By default, include `SQLITE_OPEN_NO_MUTEX` and `SQLITE_OPEN_URI` flags when opening a
-  new conneciton.
+  new connection.
 * Fix generated bindings (e.g., `sqlite3_exec` was wrong).
 * Use now-generated `sqlite3_destructor_type` to define `SQLITE_STATIC` and `SQLITE_TRANSIENT`.
 
