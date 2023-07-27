@@ -11,9 +11,6 @@ build = "build.rs"
 keywords = ["sqlite", "sqlcipher", "ffi"]
 categories = ["external-ffi-bindings"]
 
-# The Cargo.toml "dep:" syntax was added in Rust 1.60.0.
-rust-version = "1.60.0"
-
 [features]
 default = ["min_sqlite_version_3_14_0"]
 bundled = ["dep:cc", "bundled_bindings"]
