@@ -34,7 +34,7 @@ fn main() -> Result<()> {
     for person in rows {
         match person {
             Ok(p) => println!("ID: {}, Name: {}", p.id, p.name),
-            Err(e) => eprintln!("Error: {:?}", e),
+            Err(e) => eprintln!("Error: {e:?}"),
         }
     }
 
