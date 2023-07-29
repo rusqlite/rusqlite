@@ -113,8 +113,8 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
   `Value` type from the [`serde_json` crate](https://crates.io/crates/serde_json).
 * `time` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
-   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
-   `time::OffsetDateTime` type from the [`time` crate](https://crates.io/crates/time).
+  and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for various
+  types from the [`time` crate](https://crates.io/crates/time).
 * `url` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
   `Url` type from the [`url` crate](https://crates.io/crates/url).

@@ -1,4 +1,15 @@
+//! Convert formats 1-10 in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) to time types.
 //! [`ToSql`] and [`FromSql`] implementation for [`time::OffsetDateTime`].
+//! [`ToSql`] and [`FromSql`] implementation for [`time::PrimitiveDateTime`].
+//! [`ToSql`] and [`FromSql`] implementation for [`time::Date`].
+//! [`ToSql`] and [`FromSql`] implementation for [`time::Time`].
+//! Time Strings in:
+//!  - Format 2: "YYYY-MM-DD HH:MM"
+//!  - Format 5: "YYYY-MM-DDTHH:MM"
+//!  - Format 8: "HH:MM"
+//! without an explicit second value will assume 0 seconds.
+//! Time String that contain an optional timezone without an explicit date are unsupported.
+//! All other assumptions described in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) section are unsupported.
 
 use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use crate::{Error, Result};
