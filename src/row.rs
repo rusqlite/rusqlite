@@ -7,12 +7,12 @@ use crate::types::{FromSql, FromSqlError, ValueRef};
 
 /// An handle for the resulting rows of a query.
 #[must_use = "Rows is lazy and will do nothing unless consumed"]
-pub struct Rows<'stmt> {
-    pub(crate) stmt: Option<&'stmt Statement<'stmt>>,
-    row: Option<Row<'stmt>>,
+pub struct Rows<'conn> {
+    stmt: Option<Statement<'conn>>,
+    row: Option<Row<'conn>>,
 }
 
-impl<'stmt> Rows<'stmt> {
+impl<'conn> Rows<'conn> {
     #[inline]
     fn reset(&mut self) {
         if let Some(stmt) = self.stmt.take() {
@@ -34,7 +34,7 @@ impl<'stmt> Rows<'stmt> {
     /// return types that implement `Iterator`.
     #[allow(clippy::should_implement_trait)] // cannot implement Iterator
     #[inline]
-    pub fn next(&mut self) -> Result<Option<&Row<'stmt>>> {
+    pub fn next(&mut self) -> Result<Option<&Row<'conn>>> {
         self.advance()?;
         Ok((*self).get())
     }
@@ -44,14 +44,14 @@ impl<'stmt> Rows<'stmt> {
     /// ```rust,no_run
     /// use fallible_iterator::FallibleIterator;
     /// # use rusqlite::{Result, Statement};
-    /// fn query(stmt: &mut Statement) -> Result<Vec<i64>> {
+    /// fn query(stmt: Statement) -> Result<Vec<i64>> {
     ///     let rows = stmt.query([])?;
     ///     rows.map(|r| r.get(0)).collect()
     /// }
     /// ```
     // FIXME Hide FallibleStreamingIterator::map
     #[inline]
-    pub fn map<F, B>(self, f: F) -> Map<'stmt, F>
+    pub fn map<F, B>(self, f: F) -> Map<'conn, F>
     where
         F: FnMut(&Row<'_>) -> Result<B>,
     {
@@ -61,7 +61,7 @@ impl<'stmt> Rows<'stmt> {
     /// Map over this `Rows`, converting it to a [`MappedRows`], which
     /// implements `Iterator`.
     #[inline]
-    pub fn mapped<F, B>(self, f: F) -> MappedRows<'stmt, F>
+    pub fn mapped<F, B>(self, f: F) -> MappedRows<'conn, F>
     where
         F: FnMut(&Row<'_>) -> Result<B>,
     {
@@ -72,7 +72,7 @@ impl<'stmt> Rows<'stmt> {
     /// [`AndThenRows`], which implements `Iterator` (instead of
     /// `FallibleStreamingIterator`).
     #[inline]
-    pub fn and_then<F, T, E>(self, f: F) -> AndThenRows<'stmt, F>
+    pub fn and_then<F, T, E>(self, f: F) -> AndThenRows<'conn, F>
     where
         F: FnMut(&Row<'_>) -> Result<T, E>,
     {
@@ -81,14 +81,14 @@ impl<'stmt> Rows<'stmt> {
 
     /// Give access to the underlying statement
     #[must_use]
-    pub fn as_ref(&self) -> Option<&Statement<'stmt>> {
-        self.stmt
+    pub fn as_ref(&self) -> Option<&Statement<'conn>> {
+        self.stmt.as_ref()
     }
 }
 
-impl<'stmt> Rows<'stmt> {
+impl<'conn> Rows<'conn> {
     #[inline]
-    pub(crate) fn new(stmt: &'stmt Statement<'stmt>) -> Rows<'stmt> {
+    pub(crate) fn new(stmt: Statement<'conn>) -> Rows<'conn> {
         Rows {
             stmt: Some(stmt),
             row: None,
@@ -96,7 +96,7 @@ impl<'stmt> Rows<'stmt> {
     }
 
     #[inline]
-    pub(crate) fn get_expected_row(&mut self) -> Result<&Row<'stmt>> {
+    pub(crate) fn get_expected_row(&mut self) -> Result<&Row<'conn>> {
         match self.next()? {
             Some(row) => Ok(row),
             None => Err(Error::QueryReturnedNoRows),
@@ -114,8 +114,8 @@ impl Drop for Rows<'_> {
 /// `F` is used to transform the _streaming_ iterator into a _fallible_
 /// iterator.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
-pub struct Map<'stmt, F> {
-    rows: Rows<'stmt>,
+pub struct Map<'conn, F> {
+    rows: Rows<'conn>,
     f: F,
 }
 
@@ -140,8 +140,8 @@ where
 /// `F` is used to transform the _streaming_ iterator into a _standard_
 /// iterator.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
-pub struct MappedRows<'stmt, F> {
-    rows: Rows<'stmt>,
+pub struct MappedRows<'conn, F> {
+    rows: Rows<'conn>,
     map: F,
 }
 
@@ -164,8 +164,8 @@ where
 /// An iterator over the mapped resulting rows of a query, with an Error type
 /// unifying with Error.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
-pub struct AndThenRows<'stmt, F> {
-    rows: Rows<'stmt>,
+pub struct AndThenRows<'conn, F> {
+    rows: Rows<'conn>,
     map: F,
 }
 
@@ -196,7 +196,7 @@ where
 /// loops offer a similar level of ergonomics:
 /// ```rust,no_run
 /// # use rusqlite::{Result, Statement};
-/// fn query(stmt: &mut Statement) -> Result<()> {
+/// fn query(stmt: Statement) -> Result<()> {
 ///     let mut rows = stmt.query([])?;
 ///     while let Some(row) = rows.next()? {
 ///         // scan columns value
@@ -204,25 +204,29 @@ where
 ///     Ok(())
 /// }
 /// ```
-impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
+impl<'conn> FallibleStreamingIterator for Rows<'conn> {
     type Error = Error;
-    type Item = Row<'stmt>;
+    type Item = Row<'conn>;
 
     #[inline]
     fn advance(&mut self) -> Result<()> {
-        if let Some(stmt) = self.stmt {
+        if let Some(stmt) = self.row.take().map(|x| x.stmt) {
+            self.stmt = Some(stmt);
+        }
+
+        if let Some(stmt) = self.stmt.take() {
             match stmt.step() {
                 Ok(true) => {
                     self.row = Some(Row { stmt });
                     Ok(())
                 }
                 Ok(false) => {
-                    self.reset();
+                    stmt.reset();
                     self.row = None;
                     Ok(())
                 }
                 Err(e) => {
-                    self.reset();
+                    stmt.reset();
                     self.row = None;
                     Err(e)
                 }
@@ -234,17 +238,17 @@ impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
     }
 
     #[inline]
-    fn get(&self) -> Option<&Row<'stmt>> {
+    fn get(&self) -> Option<&Row<'conn>> {
         self.row.as_ref()
     }
 }
 
 /// A single result row of a query.
-pub struct Row<'stmt> {
-    pub(crate) stmt: &'stmt Statement<'stmt>,
+pub struct Row<'conn> {
+    pub(crate) stmt: Statement<'conn>,
 }
 
-impl<'stmt> Row<'stmt> {
+impl<'conn> Row<'conn> {
     /// Get the value of a particular column of the result row.
     ///
     /// ## Failure
@@ -280,7 +284,7 @@ impl<'stmt> Row<'stmt> {
     /// 16 bytes, `Error::InvalidColumnType` will also be returned.
     #[track_caller]
     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
-        let idx = idx.idx(self.stmt)?;
+        let idx = idx.idx(&self.stmt)?;
         let value = self.stmt.value_ref(idx);
         FromSql::column_result(value).map_err(|err| match err {
             FromSqlError::InvalidType => Error::InvalidColumnType(
@@ -314,7 +318,7 @@ impl<'stmt> Row<'stmt> {
     /// Returns an `Error::InvalidColumnName` if `idx` is not a valid column
     /// name for this row.
     pub fn get_ref<I: RowIndex>(&self, idx: I) -> Result<ValueRef<'_>> {
-        let idx = idx.idx(self.stmt)?;
+        let idx = idx.idx(&self.stmt)?;
         // Narrowing from `ValueRef<'stmt>` (which `self.stmt.value_ref(idx)`
         // returns) to `ValueRef<'a>` is needed because it's only valid until
         // the next call to sqlite3_step.
@@ -343,16 +347,16 @@ impl<'stmt> Row<'stmt> {
     }
 }
 
-impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> {
-    fn as_ref(&self) -> &Statement<'stmt> {
-        self.stmt
+impl<'conn> AsRef<Statement<'conn>> for Row<'conn> {
+    fn as_ref(&self) -> &Statement<'conn> {
+        &self.stmt
     }
 }
 
 /// Debug `Row` like an ordered `Map<Result<&str>, Result<(Type, ValueRef)>>`
 /// with column name as key except that for `Type::Blob` only its size is
 /// printed (not its content).
-impl<'stmt> std::fmt::Debug for Row<'stmt> {
+impl<'conn> std::fmt::Debug for Row<'conn> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dm = f.debug_map();
         for c in 0..self.stmt.column_count() {
@@ -426,13 +430,13 @@ impl RowIndex for &'_ str {
 
 macro_rules! tuple_try_from_row {
     ($($field:ident),*) => {
-        impl<'a, $($field,)*> convert::TryFrom<&'a Row<'a>> for ($($field,)*) where $($field: FromSql,)* {
+        impl<'a, 'conn, $($field,)*> convert::TryFrom<&'a Row<'conn>> for ($($field,)*) where $($field: FromSql,)* {
             type Error = crate::Error;
 
             // we end with index += 1, which rustc warns about
             // unused_variables and unused_mut are allowed for ()
             #[allow(unused_assignments, unused_variables, unused_mut)]
-            fn try_from(row: &'a Row<'a>) -> Result<Self> {
+            fn try_from(row: &'a Row<'conn>) -> Result<Self> {
                 let mut index = 0;
                 $(
                     #[allow(non_snake_case)]

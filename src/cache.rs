@@ -4,7 +4,7 @@ use crate::raw_statement::RawStatement;
 use crate::{Connection, PrepFlags, Result, Statement};
 use hashlink::LruCache;
 use std::cell::RefCell;
-use std::ops::{Deref, DerefMut};
+
 use std::sync::Arc;
 
 impl Connection {
@@ -35,7 +35,7 @@ impl Connection {
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string
     /// or if the underlying SQLite call fails.
     #[inline]
-    pub fn prepare_cached(&self, sql: &str) -> Result<CachedStatement<'_>> {
+    pub fn prepare_cached(&self, sql: &str) -> Result<Statement<'_>> {
         self.cache.get(self, sql)
     }
 
@@ -63,59 +63,6 @@ pub struct StatementCache(RefCell<LruCache<Arc<str>, RawStatement>>);
 #[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl Send for StatementCache {}
 
-/// Cacheable statement.
-///
-/// Statement will return automatically to the cache by default.
-/// If you want the statement to be discarded, call
-/// [`discard()`](CachedStatement::discard) on it.
-pub struct CachedStatement<'conn> {
-    stmt: Option<Statement<'conn>>,
-    cache: &'conn StatementCache,
-}
-
-impl<'conn> Deref for CachedStatement<'conn> {
-    type Target = Statement<'conn>;
-
-    #[inline]
-    fn deref(&self) -> &Statement<'conn> {
-        self.stmt.as_ref().unwrap()
-    }
-}
-
-impl<'conn> DerefMut for CachedStatement<'conn> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Statement<'conn> {
-        self.stmt.as_mut().unwrap()
-    }
-}
-
-impl Drop for CachedStatement<'_> {
-    #[allow(unused_must_use)]
-    #[inline]
-    fn drop(&mut self) {
-        if let Some(stmt) = self.stmt.take() {
-            self.cache.cache_stmt(unsafe { stmt.into_raw() });
-        }
-    }
-}
-
-impl CachedStatement<'_> {
-    #[inline]
-    fn new<'conn>(stmt: Statement<'conn>, cache: &'conn StatementCache) -> CachedStatement<'conn> {
-        CachedStatement {
-            stmt: Some(stmt),
-            cache,
-        }
-    }
-
-    /// Discard the statement, preventing it from being returned to its
-    /// [`Connection`]'s collection of cached statements.
-    #[inline]
-    pub fn discard(mut self) {
-        self.stmt = None;
-    }
-}
-
 impl StatementCache {
     /// Create a statement cache.
     #[inline]
@@ -135,11 +82,7 @@ impl StatementCache {
     //
     // Will return `Err` if no cached statement can be found and the underlying
     // SQLite prepare call fails.
-    fn get<'conn>(
-        &'conn self,
-        conn: &'conn Connection,
-        sql: &str,
-    ) -> Result<CachedStatement<'conn>> {
+    fn get<'conn>(&'conn self, conn: &'conn Connection, sql: &str) -> Result<Statement<'conn>> {
         let trimmed = sql.trim();
         let mut cache = self.0.borrow_mut();
         let stmt = match cache.remove(trimmed) {
@@ -148,12 +91,12 @@ impl StatementCache {
         };
         stmt.map(|mut stmt| {
             stmt.stmt.set_statement_cache_key(trimmed);
-            CachedStatement::new(stmt, self)
+            stmt
         })
     }
 
     // Return a statement to the cache.
-    fn cache_stmt(&self, stmt: RawStatement) {
+    pub(crate) fn cache_stmt(&self, stmt: RawStatement) {
         if stmt.is_null() {
             return;
         }
@@ -206,14 +149,14 @@ mod test {
 
         let sql = "PRAGMA schema_version";
         {
-            let mut stmt = db.prepare_cached(sql)?;
+            let stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
             assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
         }
         assert_eq!(1, cache.len());
 
         {
-            let mut stmt = db.prepare_cached(sql)?;
+            let stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
             assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
         }
@@ -232,7 +175,7 @@ mod test {
 
         let sql = "PRAGMA schema_version";
         {
-            let mut stmt = db.prepare_cached(sql)?;
+            let stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
             assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
         }
@@ -242,7 +185,7 @@ mod test {
         assert_eq!(0, cache.len());
 
         {
-            let mut stmt = db.prepare_cached(sql)?;
+            let stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
             assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
         }
@@ -250,7 +193,7 @@ mod test {
 
         db.set_prepared_statement_cache_capacity(8);
         {
-            let mut stmt = db.prepare_cached(sql)?;
+            let stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
             assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
         }
@@ -267,8 +210,8 @@ mod test {
         {
             let mut stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
-            assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
             stmt.discard();
+            assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
         }
         assert_eq!(0, cache.len());
         Ok(())
@@ -287,7 +230,7 @@ mod test {
         let sql = "SELECT * FROM foo";
 
         {
-            let mut stmt = db.prepare_cached(sql)?;
+            let stmt = db.prepare_cached(sql)?;
             assert_eq!(Ok(Some(1i32)), stmt.query([])?.map(|r| r.get(0)).next());
         }
 
@@ -299,7 +242,7 @@ mod test {
         )?;
 
         {
-            let mut stmt = db.prepare_cached(sql)?;
+            let stmt = db.prepare_cached(sql)?;
             assert_eq!(
                 Ok(Some((1i32, 2i32))),
                 stmt.query([])?.map(|r| Ok((r.get(0)?, r.get(1)?))).next()
@@ -326,14 +269,14 @@ mod test {
         //let sql = " PRAGMA schema_version; -- comment";
         let sql = "PRAGMA schema_version; ";
         {
-            let mut stmt = db.prepare_cached(sql)?;
+            let stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
             assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
         }
         assert_eq!(1, cache.len());
 
         {
-            let mut stmt = db.prepare_cached(sql)?;
+            let stmt = db.prepare_cached(sql)?;
             assert_eq!(0, cache.len());
             assert_eq!(0, stmt.query_row([], |r| r.get::<_, i64>(0))?);
         }

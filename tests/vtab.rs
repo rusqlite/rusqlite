@@ -92,7 +92,7 @@ fn test_dummy_module() -> rusqlite::Result<()> {
         return Ok(());
     }
 
-    let mut s = db.prepare("SELECT * FROM dummy()")?;
+    let s = db.prepare("SELECT * FROM dummy()")?;
 
     let dummy = s.query_row([], |row| row.get::<_, i32>(0))?;
     assert_eq!(1, dummy);

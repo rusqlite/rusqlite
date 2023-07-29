@@ -192,7 +192,7 @@ mod test {
              INSERT INTO foo (bar) VALUES ('Maße');
              INSERT INTO foo (bar) VALUES ('MASSE');",
         )?;
-        let mut stmt = db.prepare("SELECT DISTINCT bar COLLATE unicase FROM foo ORDER BY 1")?;
+        let stmt = db.prepare("SELECT DISTINCT bar COLLATE unicase FROM foo ORDER BY 1")?;
         let rows = stmt.query([])?;
         assert_eq!(rows.count()?, 1);
         Ok(())

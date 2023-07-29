@@ -73,7 +73,6 @@ use crate::inner_connection::{InnerConnection, BYPASS_SQLITE_INIT};
 use crate::raw_statement::RawStatement;
 use crate::types::ValueRef;
 
-pub use crate::cache::CachedStatement;
 pub use crate::column::Column;
 pub use crate::error::{to_sqlite_error, Error};
 pub use crate::ffi::ErrorCode;
@@ -644,7 +643,7 @@ impl Connection {
         P: Params,
         F: FnOnce(&Row<'_>) -> Result<T>,
     {
-        let mut stmt = self.prepare(sql)?;
+        let stmt = self.prepare(sql)?;
         stmt.check_no_tail()?;
         stmt.query_row(params, f)
     }
@@ -687,7 +686,7 @@ impl Connection {
         F: FnOnce(&Row<'_>) -> Result<T, E>,
         E: From<Error>,
     {
-        let mut stmt = self.prepare(sql)?;
+        let stmt = self.prepare(sql)?;
         stmt.check_no_tail()?;
         let mut rows = stmt.query(params)?;
 
@@ -1504,7 +1503,7 @@ mod test {
         assert_eq!(insert_stmt.execute([2i32])?, 1);
         assert_eq!(insert_stmt.execute([3i32])?, 1);
 
-        let mut query = db.prepare("SELECT x FROM foo WHERE x < ?1 ORDER BY x DESC")?;
+        let query = db.prepare("SELECT x FROM foo WHERE x < ?1 ORDER BY x DESC")?;
         {
             let mut rows = query.query([4i32])?;
             let mut v = Vec::<i32>::new();
@@ -1516,6 +1515,7 @@ mod test {
             assert_eq!(v, [3i32, 2, 1]);
         }
 
+        let query = db.prepare("SELECT x FROM foo WHERE x < ?1 ORDER BY x DESC")?;
         {
             let mut rows = query.query([3i32])?;
             let mut v = Vec::<i32>::new();
@@ -1541,7 +1541,7 @@ mod test {
                    END;";
         db.execute_batch(sql)?;
 
-        let mut query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
+        let query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
         let results: Result<Vec<String>> = query.query([])?.map(|row| row.get(1)).collect();
 
         assert_eq!(results?.concat(), "hello, world!");
@@ -1663,7 +1663,7 @@ mod test {
     fn test_is_busy() -> Result<()> {
         let db = Connection::open_in_memory()?;
         assert!(!db.is_busy());
-        let mut stmt = db.prepare("PRAGMA schema_version")?;
+        let stmt = db.prepare("PRAGMA schema_version")?;
         assert!(!db.is_busy());
         {
             let mut rows = stmt.query([])?;
@@ -1736,7 +1736,7 @@ mod test {
             },
         )?;
 
-        let mut stmt =
+        let stmt =
             db.prepare("SELECT interrupt() FROM (SELECT 1 UNION SELECT 2 UNION SELECT 3)")?;
 
         let result: Result<Vec<i32>> = stmt.query([])?.map(|r| r.get(0)).collect();
@@ -1775,7 +1775,7 @@ mod test {
             assert_eq!(insert_stmt.execute(params![i_to_insert, v])?, 1);
         }
 
-        let mut query = db.prepare("SELECT i, x FROM foo")?;
+        let query = db.prepare("SELECT i, x FROM foo")?;
         let mut rows = query.query([])?;
 
         while let Some(row) = rows.next()? {
@@ -1785,7 +1785,7 @@ mod test {
             assert_eq!(x, expect);
         }
 
-        let mut query = db.prepare("SELECT x FROM foo")?;
+        let query = db.prepare("SELECT x FROM foo")?;
         let rows = query.query_map([], |row| {
             let x = row.get_ref(0)?.as_str()?; // check From<FromSqlError> for Error
             Ok(x[..].to_owned())
@@ -1871,7 +1871,7 @@ mod test {
                        END;";
             db.execute_batch(sql)?;
 
-            let mut query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
+            let query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
             let results: Result<Vec<String>> =
                 query.query_and_then([], |row| row.get(1))?.collect();
 
@@ -1891,7 +1891,7 @@ mod test {
                        END;";
             db.execute_batch(sql)?;
 
-            let mut query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
+            let query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
             let bad_type: Result<Vec<f64>> = query.query_and_then([], |row| row.get(1))?.collect();
 
             match bad_type.unwrap_err() {
@@ -1899,6 +1899,7 @@ mod test {
                 err => panic!("Unexpected error {err}"),
             }
 
+            let query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
             let bad_idx: Result<Vec<String>> =
                 query.query_and_then([], |row| row.get(3))?.collect();
 
@@ -1921,7 +1922,7 @@ mod test {
                        END;";
             db.execute_batch(sql)?;
 
-            let mut query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
+            let query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
             let results: CustomResult<Vec<String>> = query
                 .query_and_then([], |row| row.get(1).map_err(CustomError::Sqlite))?
                 .collect();
@@ -1942,7 +1943,7 @@ mod test {
                        END;";
             db.execute_batch(sql)?;
 
-            let mut query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
+            let query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
             let bad_type: CustomResult<Vec<f64>> = query
                 .query_and_then([], |row| row.get(1).map_err(CustomError::Sqlite))?
                 .collect();
@@ -1952,6 +1953,7 @@ mod test {
                 err => panic!("Unexpected error {err}"),
             }
 
+            let query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
             let bad_idx: CustomResult<Vec<String>> = query
                 .query_and_then([], |row| row.get(3).map_err(CustomError::Sqlite))?
                 .collect();
@@ -1961,6 +1963,7 @@ mod test {
                 err => panic!("Unexpected error {err}"),
             }
 
+            let query = db.prepare("SELECT x, y FROM foo ORDER BY x DESC")?;
             let non_sqlite_err: CustomResult<Vec<String>> = query
                 .query_and_then([], |_| Err(CustomError::SomeError))?
                 .collect();

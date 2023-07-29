@@ -1051,7 +1051,7 @@ mod test {
                      ('e', 1);",
         )?;
 
-        let mut stmt = db.prepare(
+        let stmt = db.prepare(
             "SELECT x, sumint(y) OVER (
                    ORDER BY x ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING
                  ) AS sum_y

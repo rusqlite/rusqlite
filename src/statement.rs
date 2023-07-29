@@ -20,7 +20,7 @@ pub struct Statement<'conn> {
     pub(crate) stmt: RawStatement,
 }
 
-impl Statement<'_> {
+impl<'conn> Statement<'conn> {
     /// Execute the prepared statement.
     ///
     /// On success, returns the number of rows that were changed or inserted or
@@ -224,8 +224,8 @@ impl Statement<'_> {
     ///
     /// Will return `Err` if binding parameters fails.
     #[inline]
-    pub fn query<P: Params>(&mut self, params: P) -> Result<Rows<'_>> {
-        params.__bind_in(self)?;
+    pub fn query<P: Params>(mut self, params: P) -> Result<Rows<'conn>> {
+        params.__bind_in(&mut self)?;
         Ok(Rows::new(self))
     }
 
@@ -275,7 +275,7 @@ impl Statement<'_> {
     /// ## Failure
     ///
     /// Will return `Err` if binding parameters fails.
-    pub fn query_map<T, P, F>(&mut self, params: P, f: F) -> Result<MappedRows<'_, F>>
+    pub fn query_map<T, P, F>(self, params: P, f: F) -> Result<MappedRows<'conn, F>>
     where
         P: Params,
         F: FnMut(&Row<'_>) -> Result<T>,
@@ -338,7 +338,7 @@ impl Statement<'_> {
     ///
     /// Will return `Err` if binding parameters fails.
     #[inline]
-    pub fn query_and_then<T, E, P, F>(&mut self, params: P, f: F) -> Result<AndThenRows<'_, F>>
+    pub fn query_and_then<T, E, P, F>(self, params: P, f: F) -> Result<AndThenRows<'conn, F>>
     where
         P: Params,
         E: From<Error>,
@@ -350,7 +350,7 @@ impl Statement<'_> {
     /// Return `true` if a query in the SQL statement it executes returns one
     /// or more rows and `false` if the SQL returns an empty set.
     #[inline]
-    pub fn exists<P: Params>(&mut self, params: P) -> Result<bool> {
+    pub fn exists<P: Params>(self, params: P) -> Result<bool> {
         let mut rows = self.query(params)?;
         let exists = rows.next()?.is_some();
         Ok(exists)
@@ -371,7 +371,7 @@ impl Statement<'_> {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn query_row<T, P, F>(&mut self, params: P, f: F) -> Result<T>
+    pub fn query_row<T, P, F>(self, params: P, f: F) -> Result<T>
     where
         P: Params,
         F: FnOnce(&Row<'_>) -> Result<T>,
@@ -582,8 +582,15 @@ impl Statement<'_> {
     /// Note that if the SQL does not return results, [`Statement::raw_execute`]
     /// should be used instead.
     #[inline]
-    pub fn raw_query(&mut self) -> Rows<'_> {
+    pub fn raw_query(self) -> Rows<'conn> {
         Rows::new(self)
+    }
+
+    /// Discard the statement, preventing it from being returned to its
+    /// [`Connection`]'s collection of cached statements.
+    #[inline]
+    pub fn discard(&mut self) {
+        self.stmt.clear_statement_cache_key();
     }
 
     // generic because many of these branches can constant fold away.
@@ -652,6 +659,16 @@ impl Statement<'_> {
             ffi::SQLITE_ROW => Err(Error::ExecuteReturnedResults),
             _ => Err(self.conn.decode_result(r).unwrap_err()),
         }
+    }
+
+    /// Safety: This is unsafe, because using `sqlite3_stmt` after the
+    /// connection has closed is illegal, but `RawStatement` does not enforce
+    /// this, as it loses our protective `'conn` lifetime bound.
+    #[inline]
+    pub(crate) unsafe fn clone_raw(&mut self) -> RawStatement {
+        let mut stmt = RawStatement::new(ptr::null_mut(), 0);
+        mem::swap(&mut stmt, &mut self.stmt);
+        stmt
     }
 
     #[inline]
@@ -732,16 +749,6 @@ impl Statement<'_> {
         Ok(())
     }
 
-    /// Safety: This is unsafe, because using `sqlite3_stmt` after the
-    /// connection has closed is illegal, but `RawStatement` does not enforce
-    /// this, as it loses our protective `'conn` lifetime bound.
-    #[inline]
-    pub(crate) unsafe fn into_raw(mut self) -> RawStatement {
-        let mut stmt = RawStatement::new(ptr::null_mut(), 0);
-        mem::swap(&mut stmt, &mut self.stmt);
-        stmt
-    }
-
     /// Reset all bindings
     pub fn clear_bindings(&mut self) {
         self.stmt.clear_bindings()
@@ -767,13 +774,18 @@ impl Drop for Statement<'_> {
     #[allow(unused_must_use)]
     #[inline]
     fn drop(&mut self) {
-        self.finalize_();
+        if self.stmt.is_cached() {
+            self.stmt.reset();
+            self.conn.cache.cache_stmt(unsafe { self.clone_raw() });
+        } else {
+            self.finalize_();
+        }
     }
 }
 
-impl Statement<'_> {
+impl<'conn> Statement<'conn> {
     #[inline]
-    pub(super) fn new(conn: &Connection, stmt: RawStatement) -> Statement<'_> {
+    pub(super) fn new(conn: &'conn Connection, stmt: RawStatement) -> Statement<'conn> {
         Statement { conn, stmt }
     }
 
@@ -934,7 +946,7 @@ mod test {
         let mut stmt = db.prepare("INSERT INTO test (name) VALUES (:name)")?;
         stmt.execute(&[(":name", &"one")])?;
 
-        let mut stmt = db.prepare("SELECT COUNT(*) FROM test WHERE name = :name")?;
+        let stmt = db.prepare("SELECT COUNT(*) FROM test WHERE name = :name")?;
         assert_eq!(
             1i32,
             stmt.query_row::<i32, _, _>(&[(":name", "one")], |r| r.get(0))?
@@ -951,7 +963,7 @@ mod test {
         "#;
         db.execute_batch(sql)?;
 
-        let mut stmt = db.prepare("SELECT id FROM test where name = :name")?;
+        let stmt = db.prepare("SELECT id FROM test where name = :name")?;
         let mut rows = stmt.query(&[(":name", "one")])?;
         let id: Result<i32> = rows.next()?.unwrap().get(0);
         assert_eq!(Ok(1), id);
@@ -967,7 +979,7 @@ mod test {
         "#;
         db.execute_batch(sql)?;
 
-        let mut stmt = db.prepare("SELECT id FROM test where name = :name")?;
+        let stmt = db.prepare("SELECT id FROM test where name = :name")?;
         let mut rows = stmt.query_map(&[(":name", "one")], |row| {
             let id: Result<i32> = row.get(0);
             id.map(|i| 2 * i)
@@ -988,7 +1000,7 @@ mod test {
         "#;
         db.execute_batch(sql)?;
 
-        let mut stmt = db.prepare("SELECT id FROM test where name = :name ORDER BY id ASC")?;
+        let stmt = db.prepare("SELECT id FROM test where name = :name ORDER BY id ASC")?;
         let mut rows = stmt.query_and_then(&[(":name", "one")], |row| {
             let id: i32 = row.get(0)?;
             if id == 1 {
@@ -1116,9 +1128,11 @@ mod test {
                    INSERT INTO foo VALUES(2);
                    END;";
         db.execute_batch(sql)?;
-        let mut stmt = db.prepare("SELECT 1 FROM foo WHERE x = ?1")?;
+        let stmt = db.prepare("SELECT 1 FROM foo WHERE x = ?1")?;
         assert!(stmt.exists([1i32])?);
+        let stmt = db.prepare("SELECT 1 FROM foo WHERE x = ?1")?;
         assert!(stmt.exists([2i32])?);
+        let stmt = db.prepare("SELECT 1 FROM foo WHERE x = ?1")?;
         assert!(!stmt.exists([0i32])?);
         Ok(())
     }
@@ -1167,7 +1181,7 @@ mod test {
                    INSERT INTO foo VALUES(2, 4);
                    END;";
         db.execute_batch(sql)?;
-        let mut stmt = db.prepare("SELECT y FROM foo WHERE x = ?1")?;
+        let stmt = db.prepare("SELECT y FROM foo WHERE x = ?1")?;
         let y: Result<i64> = stmt.query_row([1i32], |r| r.get(0));
         assert_eq!(3i64, y?);
         Ok(())
@@ -1181,7 +1195,7 @@ mod test {
                    INSERT INTO foo VALUES(1, 3);
                    END;";
         db.execute_batch(sql)?;
-        let mut stmt = db.prepare("SELECT y FROM foo")?;
+        let stmt = db.prepare("SELECT y FROM foo")?;
         let y: Result<i64> = stmt.query_row([], |r| r.get("y"));
         assert_eq!(3i64, y?);
         Ok(())
@@ -1195,7 +1209,7 @@ mod test {
                    INSERT INTO foo VALUES(1, 3);
                    END;";
         db.execute_batch(sql)?;
-        let mut stmt = db.prepare("SELECT y as Y FROM foo")?;
+        let stmt = db.prepare("SELECT y as Y FROM foo")?;
         let y: Result<i64> = stmt.query_row([], |r| r.get("y"));
         assert_eq!(3i64, y?);
         Ok(())

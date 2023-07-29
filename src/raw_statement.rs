@@ -44,6 +44,16 @@ impl RawStatement {
     }
 
     #[inline]
+    pub(crate) fn is_cached(&self) -> bool {
+        self.statement_cache_key.is_some()
+    }
+
+    #[inline]
+    pub(crate) fn clear_statement_cache_key(&mut self) {
+        self.statement_cache_key = None;
+    }
+
+    #[inline]
     pub(crate) fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
         self.statement_cache_key = Some(p.into());
     }

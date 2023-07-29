@@ -280,7 +280,7 @@ mod test {
                     rows=25
                 );",
         )?;
-        let mut stmt = db.prepare("SELECT * FROM log;")?;
+        let stmt = db.prepare("SELECT * FROM log;")?;
         let mut rows = stmt.query([])?;
         while rows.next()?.is_some() {}
         db.execute("DELETE FROM log WHERE a = ?1", ["a1"])?;

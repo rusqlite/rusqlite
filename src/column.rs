@@ -193,7 +193,7 @@ mod test {
              INSERT INTO foo VALUES(4, NULL);
              END;",
         )?;
-        let mut stmt = db.prepare("SELECT x as renamed, y FROM foo")?;
+        let stmt = db.prepare("SELECT x as renamed, y FROM foo")?;
         let mut rows = stmt.query([])?;
         let row = rows.next()?.unwrap();
         match row.get::<_, String>(0).unwrap_err() {

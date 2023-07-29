@@ -295,7 +295,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         series::load_module(&db)?;
 
-        let mut s = db.prepare("SELECT * FROM generate_series(0,20,5)")?;
+        let s = db.prepare("SELECT * FROM generate_series(0,20,5)")?;
 
         let series = s.query_map([], |row| row.get::<_, i32>(0))?;
 
@@ -305,34 +305,33 @@ mod test {
             expected += 5;
         }
 
-        let mut s =
-            db.prepare("SELECT * FROM generate_series WHERE start=1 AND stop=9 AND step=2")?;
+        let s = db.prepare("SELECT * FROM generate_series WHERE start=1 AND stop=9 AND step=2")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(vec![1, 3, 5, 7, 9], series);
-        let mut s = db.prepare("SELECT * FROM generate_series LIMIT 5")?;
+        let s = db.prepare("SELECT * FROM generate_series LIMIT 5")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(vec![0, 1, 2, 3, 4], series);
-        let mut s = db.prepare("SELECT * FROM generate_series(0,32,5) ORDER BY value DESC")?;
+        let s = db.prepare("SELECT * FROM generate_series(0,32,5) ORDER BY value DESC")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(vec![30, 25, 20, 15, 10, 5, 0], series);
 
-        let mut s = db.prepare("SELECT * FROM generate_series(NULL)")?;
+        let s = db.prepare("SELECT * FROM generate_series(NULL)")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         let empty = Vec::<i32>::new();
         assert_eq!(empty, series);
-        let mut s = db.prepare("SELECT * FROM generate_series(5,NULL)")?;
+        let s = db.prepare("SELECT * FROM generate_series(5,NULL)")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(empty, series);
-        let mut s = db.prepare("SELECT * FROM generate_series(5,10,NULL)")?;
+        let s = db.prepare("SELECT * FROM generate_series(5,10,NULL)")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(empty, series);
-        let mut s = db.prepare("SELECT * FROM generate_series(NULL,10,2)")?;
+        let s = db.prepare("SELECT * FROM generate_series(NULL,10,2)")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(empty, series);
-        let mut s = db.prepare("SELECT * FROM generate_series(5,NULL,2)")?;
+        let s = db.prepare("SELECT * FROM generate_series(5,NULL,2)")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(empty, series);
-        let mut s = db.prepare("SELECT * FROM generate_series(NULL) ORDER BY value DESC")?;
+        let s = db.prepare("SELECT * FROM generate_series(NULL) ORDER BY value DESC")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(empty, series);
 

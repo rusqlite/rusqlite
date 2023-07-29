@@ -353,7 +353,7 @@ mod test {
         db.execute_batch("CREATE VIRTUAL TABLE vtab USING csv(filename='test.csv', header=yes)")?;
 
         {
-            let mut s = db.prepare("SELECT rowid, * FROM vtab")?;
+            let s = db.prepare("SELECT rowid, * FROM vtab")?;
             {
                 let headers = s.column_names();
                 assert_eq!(vec!["rowid", "colA", "colB", "colC"], headers);
@@ -373,7 +373,7 @@ mod test {
         db.execute_batch("CREATE VIRTUAL TABLE vtab USING csv(filename='test.csv', header=yes)")?;
 
         {
-            let mut s = db.prepare(
+            let s = db.prepare(
                 "SELECT v1.rowid, v1.* FROM vtab v1 NATURAL JOIN vtab v2 WHERE \
                      v1.rowid < v2.rowid",
             )?;

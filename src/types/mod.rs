@@ -217,7 +217,7 @@ mod test {
         db.execute("INSERT INTO foo(t) VALUES (?1)", [Some(s)])?;
         db.execute("INSERT INTO foo(b) VALUES (?1)", [&b])?;
 
-        let mut stmt = db.prepare("SELECT t, b FROM foo ORDER BY ROWID ASC")?;
+        let stmt = db.prepare("SELECT t, b FROM foo ORDER BY ROWID ASC")?;
         let mut rows = stmt.query([])?;
 
         {
@@ -252,7 +252,7 @@ mod test {
             [],
         )?;
 
-        let mut stmt = db.prepare("SELECT b, t, i, f, n FROM foo")?;
+        let stmt = db.prepare("SELECT b, t, i, f, n FROM foo")?;
         let mut rows = stmt.query([])?;
 
         let row = rows.next()?.unwrap();
@@ -344,7 +344,7 @@ mod test {
             [],
         )?;
 
-        let mut stmt = db.prepare("SELECT b, t, i, f, n FROM foo")?;
+        let stmt = db.prepare("SELECT b, t, i, f, n FROM foo")?;
         let mut rows = stmt.query([])?;
 
         let row = rows.next()?.unwrap();
@@ -361,23 +361,23 @@ mod test {
 
     macro_rules! test_conversion {
         ($db_etc:ident, $insert_value:expr, $get_type:ty,expect $expected_value:expr) => {
-            $db_etc.insert_statement.execute(params![$insert_value])?;
-            let res = $db_etc
+            $db_etc().insert_statement.execute(params![$insert_value])?;
+            let res = $db_etc()
                 .query_statement
                 .query_row([], |row| row.get::<_, $get_type>(0));
             assert_eq!(res?, $expected_value);
-            $db_etc.delete_statement.execute([])?;
+            $db_etc().delete_statement.execute([])?;
         };
         ($db_etc:ident, $insert_value:expr, $get_type:ty,expect_from_sql_error) => {
-            $db_etc.insert_statement.execute(params![$insert_value])?;
-            let res = $db_etc
+            $db_etc().insert_statement.execute(params![$insert_value])?;
+            let res = $db_etc()
                 .query_statement
                 .query_row([], |row| row.get::<_, $get_type>(0));
             res.unwrap_err();
-            $db_etc.delete_statement.execute([])?;
+            $db_etc().delete_statement.execute([])?;
         };
         ($db_etc:ident, $insert_value:expr, $get_type:ty,expect_to_sql_error) => {
-            $db_etc
+            $db_etc()
                 .insert_statement
                 .execute(params![$insert_value])
                 .unwrap_err();
@@ -401,10 +401,10 @@ mod test {
             delete_statement: Statement<'conn>,
         }
 
-        let mut db_etc = DbEtc {
-            insert_statement: db.prepare("INSERT INTO foo VALUES (?1)")?,
-            query_statement: db.prepare("SELECT x FROM foo")?,
-            delete_statement: db.prepare("DELETE FROM foo")?,
+        let db_etc = || DbEtc {
+            insert_statement: db.prepare("INSERT INTO foo VALUES (?1)").unwrap(),
+            query_statement: db.prepare("SELECT x FROM foo").unwrap(),
+            delete_statement: db.prepare("DELETE FROM foo").unwrap(),
         };
 
         // Basic non-converting test.

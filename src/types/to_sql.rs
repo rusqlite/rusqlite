@@ -439,7 +439,7 @@ mod test {
             [0i128, -1i128, -2i128, 1i128, 2i128, i128::MIN, i128::MAX],
         )?;
 
-        let mut stmt = db.prepare("SELECT i128, desc FROM foo ORDER BY i128 ASC")?;
+        let stmt = db.prepare("SELECT i128, desc FROM foo ORDER BY i128 ASC")?;
 
         let res = stmt
             .query_map([], |row| {
@@ -488,7 +488,7 @@ mod test {
                 nz!(i128::MAX),
             ],
         )?;
-        let mut stmt = db.prepare("SELECT i128, desc FROM foo ORDER BY i128 ASC")?;
+        let stmt = db.prepare("SELECT i128, desc FROM foo ORDER BY i128 ASC")?;
 
         let res = stmt
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -526,7 +526,7 @@ mod test {
             params![id, "target"],
         )?;
 
-        let mut stmt = db.prepare("SELECT id, label FROM foo WHERE id = ?1")?;
+        let stmt = db.prepare("SELECT id, label FROM foo WHERE id = ?1")?;
 
         let mut rows = stmt.query(params![id])?;
         let row = rows.next()?.unwrap();
