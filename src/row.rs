@@ -257,6 +257,7 @@ impl<'stmt> Row<'stmt> {
     /// * If the underlying SQLite integral value is outside the range
     ///   representable by `T`
     /// * If `idx` is outside the range of columns in the returned query
+    #[track_caller]
     pub fn get_unwrap<I: RowIndex, T: FromSql>(&self, idx: I) -> T {
         self.get(idx).unwrap()
     }
@@ -277,6 +278,7 @@ impl<'stmt> Row<'stmt> {
     /// If the result type is i128 (which requires the `i128_blob` feature to be
     /// enabled), and the underlying SQLite column is a blob whose size is not
     /// 16 bytes, `Error::InvalidColumnType` will also be returned.
+    #[track_caller]
     pub fn get<I: RowIndex, T: FromSql>(&self, idx: I) -> Result<T> {
         let idx = idx.idx(self.stmt)?;
         let value = self.stmt.value_ref(idx);
@@ -335,28 +337,55 @@ impl<'stmt> Row<'stmt> {
     ///
     /// * If `idx` is outside the range of columns in the returned query.
     /// * If `idx` is not a valid column name for this row.
+    #[track_caller]
     pub fn get_ref_unwrap<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
         self.get_ref(idx).unwrap()
-    }
-
-    /// Renamed to [`get_ref`](Row::get_ref).
-    #[deprecated = "Use [`get_ref`](Row::get_ref) instead."]
-    #[inline]
-    pub fn get_raw_checked<I: RowIndex>(&self, idx: I) -> Result<ValueRef<'_>> {
-        self.get_ref(idx)
-    }
-
-    /// Renamed to [`get_ref_unwrap`](Row::get_ref_unwrap).
-    #[deprecated = "Use [`get_ref_unwrap`](Row::get_ref_unwrap) instead."]
-    #[inline]
-    pub fn get_raw<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
-        self.get_ref_unwrap(idx)
     }
 }
 
 impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> {
     fn as_ref(&self) -> &Statement<'stmt> {
         self.stmt
+    }
+}
+
+/// Debug `Row` like an ordered `Map<Result<&str>, Result<(Type, ValueRef)>>`
+/// with column name as key except that for `Type::Blob` only its size is
+/// printed (not its content).
+impl<'stmt> std::fmt::Debug for Row<'stmt> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut dm = f.debug_map();
+        for c in 0..self.stmt.column_count() {
+            let name = self.stmt.column_name(c);
+            dm.key(&name);
+            let value = self.get_ref(c);
+            match value {
+                Ok(value) => {
+                    let dt = value.data_type();
+                    match value {
+                        ValueRef::Null => {
+                            dm.value(&(dt, ()));
+                        }
+                        ValueRef::Integer(i) => {
+                            dm.value(&(dt, i));
+                        }
+                        ValueRef::Real(f) => {
+                            dm.value(&(dt, f));
+                        }
+                        ValueRef::Text(s) => {
+                            dm.value(&(dt, String::from_utf8_lossy(s)));
+                        }
+                        ValueRef::Blob(b) => {
+                            dm.value(&(dt, b.len()));
+                        }
+                    }
+                }
+                Err(ref _err) => {
+                    dm.value(&value);
+                }
+            }
+        }
+        dm.finish()
     }
 }
 

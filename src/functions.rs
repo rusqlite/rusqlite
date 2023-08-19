@@ -71,21 +71,13 @@ use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
 use crate::{str_to_cstring, Connection, Error, InnerConnection, Result};
 
 unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
-    // Extended constraint error codes were added in SQLite 3.7.16. We don't have
-    // an explicit feature check for that, and this doesn't really warrant one.
-    // We'll use the extended code if we're on the bundled version (since it's
-    // at least 3.17.0) and the normal constraint error code if not.
-    fn constraint_error_code() -> i32 {
-        ffi::SQLITE_CONSTRAINT_FUNCTION
-    }
-
     if let Error::SqliteFailure(ref err, ref s) = *err {
         ffi::sqlite3_result_error_code(ctx, err.extended_code);
         if let Some(Ok(cstr)) = s.as_ref().map(|s| str_to_cstring(s)) {
             ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
         }
     } else {
-        ffi::sqlite3_result_error_code(ctx, constraint_error_code());
+        ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_CONSTRAINT_FUNCTION);
         if let Ok(cstr) = str_to_cstring(&err.to_string()) {
             ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
         }
@@ -833,9 +825,9 @@ mod test {
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             half,
         )?;
-        let result: Result<f64> = db.query_row("SELECT half(6)", [], |r| r.get(0));
+        let result: f64 = db.one_column("SELECT half(6)")?;
 
-        assert!((3f64 - result?).abs() < f64::EPSILON);
+        assert!((3f64 - result).abs() < f64::EPSILON);
         Ok(())
     }
 
@@ -848,11 +840,11 @@ mod test {
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             half,
         )?;
-        let result: Result<f64> = db.query_row("SELECT half(6)", [], |r| r.get(0));
-        assert!((3f64 - result?).abs() < f64::EPSILON);
+        let result: f64 = db.one_column("SELECT half(6)")?;
+        assert!((3f64 - result).abs() < f64::EPSILON);
 
         db.remove_function("half", 1)?;
-        let result: Result<f64> = db.query_row("SELECT half(6)", [], |r| r.get(0));
+        let result: Result<f64> = db.one_column("SELECT half(6)");
         result.unwrap_err();
         Ok(())
     }
@@ -860,7 +852,7 @@ mod test {
     // This implementation of a regexp scalar function uses SQLite's auxiliary data
     // (https://www.sqlite.org/c3ref/get_auxdata.html) to avoid recompiling the regular
     // expression multiple times within one query.
-    fn regexp_with_auxilliary(ctx: &Context<'_>) -> Result<(bool, SubType)> {
+    fn regexp_with_auxiliary(ctx: &Context<'_>) -> Result<(bool, SubType)> {
         assert_eq!(ctx.len(), 2, "called with unexpected number of arguments");
         type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
         let regexp: std::sync::Arc<Regex> = ctx
@@ -881,7 +873,7 @@ mod test {
     }
 
     #[test]
-    fn test_function_regexp_with_auxilliary() -> Result<()> {
+    fn test_function_regexp_with_auxiliary() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch(
             "BEGIN;
@@ -895,21 +887,17 @@ mod test {
             "regexp",
             2,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
-            regexp_with_auxilliary,
+            regexp_with_auxiliary,
         )?;
 
-        let result: Result<bool> =
-            db.query_row("SELECT regexp('l.s[aeiouy]', 'lisa')", [], |r| r.get(0));
+        let result: bool = db.one_column("SELECT regexp('l.s[aeiouy]', 'lisa')")?;
 
-        assert!(result?);
+        assert!(result);
 
-        let result: Result<i64> = db.query_row(
-            "SELECT COUNT(*) FROM foo WHERE regexp('l.s[aeiouy]', x) == 1",
-            [],
-            |r| r.get(0),
-        );
+        let result: i64 =
+            db.one_column("SELECT COUNT(*) FROM foo WHERE regexp('l.s[aeiouy]', x) == 1")?;
 
-        assert_eq!(2, result?);
+        assert_eq!(2, result);
         Ok(())
     }
 
@@ -937,7 +925,7 @@ mod test {
             ("onetwo", "SELECT my_concat('one', 'two')"),
             ("abc", "SELECT my_concat('a', 'b', 'c')"),
         ] {
-            let result: String = db.query_row(query, [], |r| r.get(0))?;
+            let result: String = db.one_column(query)?;
             assert_eq!(expected, result);
         }
         Ok(())
@@ -956,11 +944,8 @@ mod test {
             Ok((true, None))
         })?;
 
-        let res: bool = db.query_row(
-            "SELECT example(0, i) FROM (SELECT 0 as i UNION SELECT 1)",
-            [],
-            |r| r.get(0),
-        )?;
+        let res: bool =
+            db.one_column("SELECT example(0, i) FROM (SELECT 0 as i UNION SELECT 1)")?;
         // Doesn't actually matter, we'll assert in the function if there's a problem.
         assert!(res);
         Ok(())
@@ -1015,11 +1000,11 @@ mod test {
 
         // sum should return NULL when given no columns (contrast with count below)
         let no_result = "SELECT my_sum(i) FROM (SELECT 2 AS i WHERE 1 <> 1)";
-        let result: Option<i64> = db.query_row(no_result, [], |r| r.get(0))?;
+        let result: Option<i64> = db.one_column(no_result)?;
         assert!(result.is_none());
 
         let single_sum = "SELECT my_sum(i) FROM (SELECT 2 AS i UNION ALL SELECT 2)";
-        let result: i64 = db.query_row(single_sum, [], |r| r.get(0))?;
+        let result: i64 = db.one_column(single_sum)?;
         assert_eq!(4, result);
 
         let dual_sum = "SELECT my_sum(i), my_sum(j) FROM (SELECT 2 AS i, 1 AS j UNION ALL SELECT \
@@ -1041,11 +1026,11 @@ mod test {
 
         // count should return 0 when given no columns (contrast with sum above)
         let no_result = "SELECT my_count(i) FROM (SELECT 2 AS i WHERE 1 <> 1)";
-        let result: i64 = db.query_row(no_result, [], |r| r.get(0))?;
+        let result: i64 = db.one_column(no_result)?;
         assert_eq!(result, 0);
 
         let single_sum = "SELECT my_count(i) FROM (SELECT 2 AS i UNION ALL SELECT 2)";
-        let result: i64 = db.query_row(single_sum, [], |r| r.get(0))?;
+        let result: i64 = db.one_column(single_sum)?;
         assert_eq!(2, result);
         Ok(())
     }
