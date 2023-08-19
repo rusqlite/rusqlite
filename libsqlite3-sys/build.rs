@@ -26,17 +26,26 @@ fn is_compiler(compiler_name: &str) -> bool {
     env::var("CARGO_CFG_TARGET_ENV").map_or(false, |v| v == compiler_name)
 }
 
+/// Copy bindgen file from `dir` to `out_path`.
+fn copy_bindings<T: AsRef<Path>>(dir: &str, bindgen_name: &str, out_path: T) {
+    std::fs::copy(format!("{dir}/{bindgen_name}"), out_path)
+        .expect("Could not copy bindings to output directory");
+}
+
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let out_path = Path::new(&out_dir).join("bindgen.rs");
     if cfg!(feature = "in_gecko") {
         // When inside mozilla-central, we are included into the build with
         // sqlite3.o directly, so we don't want to provide any linker arguments.
-        std::fs::copy("sqlite3/bindgen_bundled_version.rs", out_path)
-            .expect("Could not copy bindings to output directory");
+        copy_bindings("sqlite3", "bindgen_bundled_version.rs", out_path);
         return;
     }
-    if cfg!(all(
+
+    println!("cargo:rerun-if-env-changed=LIBSQLITE3_SYS_USE_PKG_CONFIG");
+    if env::var_os("LIBSQLITE3_SYS_USE_PKG_CONFIG").map_or(false, |s| s != "0") {
+        build_linked::main(&out_dir, &out_path);
+    } else if cfg!(all(
         feature = "sqlcipher",
         not(feature = "bundled-sqlcipher")
     )) {
@@ -92,17 +101,13 @@ mod build_bundled {
         #[cfg(feature = "buildtime_bindgen")]
         {
             use super::{bindings, HeaderLocation};
-            let header = HeaderLocation::FromPath(format!("{}/sqlite3.h", lib_name));
+            let header = HeaderLocation::FromPath(lib_name.to_owned());
             bindings::write_to_out_dir(header, out_path);
         }
         #[cfg(not(feature = "buildtime_bindgen"))]
         {
-            use std::fs;
-            fs::copy(format!("{lib_name}/bindgen_bundled_version.rs"), out_path)
-                .expect("Could not copy bindings to output directory");
+            super::copy_bindings(lib_name, "bindgen_bundled_version.rs", out_path);
         }
-        // println!("cargo:rerun-if-changed=sqlite3/sqlite3.c");
-        // println!("cargo:rerun-if-changed=sqlcipher/sqlite3.c");
         println!("cargo:rerun-if-changed={lib_name}/sqlite3.c");
         println!("cargo:rerun-if-changed=sqlite3/wasm32-wasi-vfs.c");
         let mut cfg = cc::Build::new();
@@ -236,7 +241,7 @@ mod build_bundled {
             cfg.flag("-DHAVE_LOCALTIME_R");
         }
         // Target wasm32-wasi can't compile the default VFS
-        if is_compiler("wasm32-wasi") {
+        if env::var("TARGET").map_or(false, |v| v == "wasm32-wasi") {
             cfg.flag("-DSQLITE_OS_OTHER")
                 // https://github.com/rust-lang/rust/issues/74393
                 .flag("-DLONGDOUBLE_TYPE=double");
@@ -263,6 +268,11 @@ mod build_bundled {
             cfg.flag(&format!("-DSQLITE_MAX_EXPR_DEPTH={limit}"));
         }
         println!("cargo:rerun-if-env-changed=SQLITE_MAX_EXPR_DEPTH");
+
+        if let Ok(limit) = env::var("SQLITE_MAX_COLUMN") {
+            cfg.flag(&format!("-DSQLITE_MAX_COLUMN={limit}"));
+        }
+        println!("cargo:rerun-if-env-changed=SQLITE_MAX_COLUMN");
 
         if let Ok(extras) = env::var("LIBSQLITE3_FLAGS") {
             for extra in extras.split_whitespace() {
@@ -338,7 +348,7 @@ impl From<HeaderLocation> for String {
                 header
             }
             HeaderLocation::Wrapper => "wrapper.h".into(),
-            HeaderLocation::FromPath(path) => path,
+            HeaderLocation::FromPath(path) => format!("{}/sqlite3.h", path),
         }
     }
 }
@@ -365,11 +375,7 @@ mod build_linked {
             // on buildtime_bindgen instead, but this is still supported as we
             // have runtime version checks and there are good reasons to not
             // want to run bindgen.
-            std::fs::copy(
-                format!("{}/bindgen_bundled_version.rs", lib_name()),
-                out_path,
-            )
-            .expect("Could not copy bindings to output directory");
+            super::copy_bindings(lib_name(), "bindgen_bundled_version.rs", out_path);
         } else {
             bindings::write_to_out_dir(header, out_path);
         }
@@ -427,8 +433,7 @@ mod build_linked {
             .print_system_libs(false)
             .probe(link_lib)
         {
-            if let Some(mut header) = lib.include_paths.pop() {
-                header.push("sqlite3.h");
+            if let Some(header) = lib.include_paths.pop() {
                 HeaderLocation::FromPath(header.to_string_lossy().into())
             } else {
                 HeaderLocation::Wrapper
@@ -447,8 +452,7 @@ mod build_linked {
         if cfg!(feature = "vcpkg") && is_compiler("msvc") {
             // See if vcpkg can find it.
             if let Ok(mut lib) = vcpkg::Config::new().probe(lib_name()) {
-                if let Some(mut header) = lib.include_paths.pop() {
-                    header.push("sqlite3.h");
+                if let Some(header) = lib.include_paths.pop() {
                     return Some(HeaderLocation::FromPath(header.to_string_lossy().into()));
                 }
             }
@@ -464,14 +468,13 @@ mod bindings {
     #![allow(dead_code)]
     use super::HeaderLocation;
 
-    use std::fs;
     use std::path::Path;
 
-    static PREBUILT_BINDGEN_PATHS: &[&str] = &["bindgen-bindings/bindgen_3.14.0.rs"];
+    static PREBUILT_BINDGENS: &[&str] = &["bindgen_3.14.0.rs"];
 
     pub fn write_to_out_dir(_header: HeaderLocation, out_path: &Path) {
-        let in_path = PREBUILT_BINDGEN_PATHS[PREBUILT_BINDGEN_PATHS.len() - 1];
-        fs::copy(in_path, out_path).expect("Could not copy bindings to output directory");
+        let name = PREBUILT_BINDGENS[PREBUILT_BINDGENS.len() - 1];
+        super::copy_bindings("bindgen-bindings", name, out_path);
     }
 }
 
@@ -480,8 +483,6 @@ mod bindings {
     use super::HeaderLocation;
     use bindgen::callbacks::{IntKind, ParseCallbacks};
 
-    use std::fs::OpenOptions;
-    use std::io::Write;
     use std::path::Path;
 
     use super::win_target;
@@ -490,18 +491,15 @@ mod bindings {
     struct SqliteTypeChooser;
 
     impl ParseCallbacks for SqliteTypeChooser {
-        fn int_macro(&self, _name: &str, value: i64) -> Option<IntKind> {
-            if value >= i32::MIN as i64 && value <= i32::MAX as i64 {
-                Some(IntKind::I32)
+        fn int_macro(&self, name: &str, _value: i64) -> Option<IntKind> {
+            if name == "SQLITE_SERIALIZE_NOCOPY"
+                || name.starts_with("SQLITE_DESERIALIZE_")
+                || name.starts_with("SQLITE_PREPARE_")
+            {
+                Some(IntKind::UInt)
             } else {
                 None
             }
-        }
-
-        fn item_name(&self, original_item_name: &str) -> Option<String> {
-            original_item_name
-                .strip_prefix("sqlite3_index_info_")
-                .map(|s| s.to_owned())
         }
     }
 
@@ -519,8 +517,9 @@ mod bindings {
 
     pub fn write_to_out_dir(header: HeaderLocation, out_path: &Path) {
         let header: String = header.into();
-        let mut output = Vec::new();
         let mut bindings = bindgen::builder()
+            .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
+            .disable_nested_struct_naming()
             .trust_clang_mangling(false)
             .header(header.clone())
             .parse_callbacks(Box::new(SqliteTypeChooser))
@@ -551,8 +550,7 @@ mod bindings {
         >,
     ) -> ::std::os::raw::c_int;
 }"#,
-            )
-            .rustfmt_bindings(true);
+            );
 
         if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
             bindings = bindings.clang_arg("-DSQLITE_HAS_CODEC");
@@ -620,38 +618,14 @@ mod bindings {
                 .blocklist_function("sqlite3_vsnprintf")
                 .blocklist_function("sqlite3_str_vappendf")
                 .blocklist_type("va_list")
-                .blocklist_type("__builtin_va_list")
-                .blocklist_type("__gnuc_va_list")
-                .blocklist_type("__va_list_tag")
-                .blocklist_item("__GNUC_VA_LIST");
+                .blocklist_item("__.*");
         }
 
         bindings
             .layout_tests(false)
             .generate()
             .unwrap_or_else(|_| panic!("could not run bindgen on header {}", header))
-            .write(Box::new(&mut output))
-            .expect("could not write output of bindgen");
-        let mut output = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
-
-        // rusqlite's functions feature ors in the SQLITE_DETERMINISTIC flag when it
-        // can. This flag was added in SQLite 3.8.3, but oring it in in prior
-        // versions of SQLite is harmless. We don't want to not build just
-        // because this flag is missing (e.g., if we're linking against
-        // SQLite 3.7.x), so append the flag manually if it isn't present in bindgen's
-        // output.
-        if !output.contains("pub const SQLITE_DETERMINISTIC") {
-            output.push_str("\npub const SQLITE_DETERMINISTIC: i32 = 2048;\n");
-        }
-
-        let mut file = OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .create(true)
-            .open(out_path)
-            .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
-
-        file.write_all(output.as_bytes())
+            .write_to_file(out_path)
             .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
     }
 }

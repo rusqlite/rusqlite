@@ -203,7 +203,7 @@ mod test {
                 assert_eq!(ty, Type::Integer);
             }
             e => {
-                panic!("Unexpected error type: {:?}", e);
+                panic!("Unexpected error type: {e:?}");
             }
         }
         match row.get::<_, String>("y").unwrap_err() {
@@ -213,7 +213,7 @@ mod test {
                 assert_eq!(ty, Type::Null);
             }
             e => {
-                panic!("Unexpected error type: {:?}", e);
+                panic!("Unexpected error type: {e:?}");
             }
         }
         Ok(())

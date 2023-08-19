@@ -75,7 +75,7 @@ use crate::types::ValueRef;
 
 pub use crate::cache::CachedStatement;
 pub use crate::column::Column;
-pub use crate::error::Error;
+pub use crate::error::{to_sqlite_error, Error};
 pub use crate::ffi::ErrorCode;
 #[cfg(feature = "load_extension")]
 pub use crate::load_extension_guard::LoadExtensionGuard;
@@ -122,6 +122,9 @@ mod params;
 mod pragma;
 mod raw_statement;
 mod row;
+#[cfg(feature = "serialize")]
+#[cfg_attr(docsrs, doc(cfg(feature = "serialize")))]
+pub mod serialize;
 #[cfg(feature = "session")]
 #[cfg_attr(docsrs, doc(cfg(feature = "session")))]
 pub mod session;
@@ -759,7 +762,18 @@ impl Connection {
     /// or if the underlying SQLite call fails.
     #[inline]
     pub fn prepare(&self, sql: &str) -> Result<Statement<'_>> {
-        self.db.borrow_mut().prepare(self, sql)
+        self.prepare_with_flags(sql, PrepFlags::default())
+    }
+
+    /// Prepare a SQL statement for execution.
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if `sql` cannot be converted to a C-compatible string
+    /// or if the underlying SQLite call fails.
+    #[inline]
+    pub fn prepare_with_flags(&self, sql: &str, flags: PrepFlags) -> Result<Statement<'_>> {
+        self.db.borrow_mut().prepare(self, sql, flags)
     }
 
     /// Close the SQLite connection.
@@ -1073,7 +1087,7 @@ impl<'conn> Iterator for Batch<'conn, '_> {
 
 bitflags::bitflags! {
     /// Flags for opening SQLite database connections. See
-    /// [sqlite3_open_v2](http://www.sqlite.org/c3ref/open.html) for details.
+    /// [sqlite3_open_v2](https://www.sqlite.org/c3ref/open.html) for details.
     ///
     /// The default open flags are `SQLITE_OPEN_READ_WRITE | SQLITE_OPEN_CREATE
     /// | SQLITE_OPEN_URI | SQLITE_OPEN_NO_MUTEX`. See [`Connection::open`] for
@@ -1155,6 +1169,19 @@ impl Default for OpenFlags {
     }
 }
 
+bitflags::bitflags! {
+    /// Prepare flags. See
+    /// [sqlite3_prepare_v3](https://sqlite.org/c3ref/c_prepare_normalize.html) for details.
+    #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+    #[repr(C)]
+    pub struct PrepFlags: ::std::os::raw::c_uint {
+        /// A hint to the query planner that the prepared statement will be retained for a long time and probably reused many times.
+        const SQLITE_PREPARE_PERSISTENT = 0x01;
+        /// Causes the SQL compiler to return an error (error code SQLITE_ERROR) if the statement uses any virtual tables.
+        const SQLITE_PREPARE_NO_VTAB = 0x04;
+    }
+}
+
 /// rusqlite's check for a safe SQLite threading mode requires SQLite 3.7.0 or
 /// later. If you are running against a SQLite older than that, rusqlite
 /// attempts to ensure safety by performing configuration and initialization of
@@ -1211,13 +1238,21 @@ mod test {
     // this function is never called, but is still type checked; in
     // particular, calls with specific instantiations will require
     // that those types are `Send`.
-    #[allow(dead_code, unconditional_recursion)]
+    #[allow(
+        dead_code,
+        unconditional_recursion,
+        clippy::extra_unused_type_parameters
+    )]
     fn ensure_send<T: Send>() {
         ensure_send::<Connection>();
         ensure_send::<InterruptHandle>();
     }
 
-    #[allow(dead_code, unconditional_recursion)]
+    #[allow(
+        dead_code,
+        unconditional_recursion,
+        clippy::extra_unused_type_parameters
+    )]
     fn ensure_sync<T: Sync>() {
         ensure_sync::<InterruptHandle>();
     }
@@ -1323,9 +1358,7 @@ mod test {
             assert_eq!(ffi::SQLITE_CANTOPEN, e.extended_code);
             assert!(
                 msg.contains(filename),
-                "error message '{}' does not contain '{}'",
-                msg,
-                filename
+                "error message '{msg}' does not contain '{filename}'"
             );
         } else {
             panic!("SqliteFailure expected");
@@ -1453,8 +1486,7 @@ mod test {
         assert_eq!(
             err,
             Error::ExecuteReturnedResults,
-            "Unexpected error: {}",
-            err
+            "Unexpected error: {err}"
         );
     }
 
@@ -1470,7 +1502,7 @@ mod test {
             .unwrap_err();
         match err {
             Error::MultipleStatement => (),
-            _ => panic!("Unexpected error: {}", err),
+            _ => panic!("Unexpected error: {err}"),
         }
     }
 
@@ -1581,7 +1613,7 @@ mod test {
         let result: Result<i64> = db.one_column("SELECT x FROM foo WHERE x > 5");
         match result.unwrap_err() {
             Error::QueryReturnedNoRows => (),
-            err => panic!("Unexpected error {}", err),
+            err => panic!("Unexpected error {err}"),
         }
 
         let bad_query_result = db.query_row("NOT A PROPER QUERY; test123", [], |_| Ok(()));
@@ -1633,7 +1665,7 @@ mod test {
             // > MEMORY or OFF and can not be changed to a different value. An
             // > attempt to change the journal_mode of an in-memory database to
             // > any setting other than MEMORY or OFF is ignored.
-            assert!(mode == "memory" || mode == "off", "Got mode {:?}", mode);
+            assert!(mode == "memory" || mode == "off", "Got mode {mode:?}");
         }
 
         Ok(())
@@ -1720,7 +1752,7 @@ mod test {
                 assert_eq!(err.code, ErrorCode::ConstraintViolation);
                 check_extended_code(err.extended_code);
             }
-            err => panic!("Unexpected error {}", err),
+            err => panic!("Unexpected error {err}"),
         }
         Ok(())
     }
@@ -1912,7 +1944,7 @@ mod test {
 
             match bad_type.unwrap_err() {
                 Error::InvalidColumnType(..) => (),
-                err => panic!("Unexpected error {}", err),
+                err => panic!("Unexpected error {err}"),
             }
 
             let bad_idx: Result<Vec<String>> =
@@ -1920,7 +1952,7 @@ mod test {
 
             match bad_idx.unwrap_err() {
                 Error::InvalidColumnIndex(_) => (),
-                err => panic!("Unexpected error {}", err),
+                err => panic!("Unexpected error {err}"),
             }
             Ok(())
         }
@@ -1965,7 +1997,7 @@ mod test {
 
             match bad_type.unwrap_err() {
                 CustomError::Sqlite(Error::InvalidColumnType(..)) => (),
-                err => panic!("Unexpected error {}", err),
+                err => panic!("Unexpected error {err}"),
             }
 
             let bad_idx: CustomResult<Vec<String>> = query
@@ -1974,7 +2006,7 @@ mod test {
 
             match bad_idx.unwrap_err() {
                 CustomError::Sqlite(Error::InvalidColumnIndex(_)) => (),
-                err => panic!("Unexpected error {}", err),
+                err => panic!("Unexpected error {err}"),
             }
 
             let non_sqlite_err: CustomResult<Vec<String>> = query
@@ -1983,7 +2015,7 @@ mod test {
 
             match non_sqlite_err.unwrap_err() {
                 CustomError::SomeError => (),
-                err => panic!("Unexpected error {}", err),
+                err => panic!("Unexpected error {err}"),
             }
             Ok(())
         }
@@ -2020,7 +2052,7 @@ mod test {
 
             match bad_type.unwrap_err() {
                 CustomError::Sqlite(Error::InvalidColumnType(..)) => (),
-                err => panic!("Unexpected error {}", err),
+                err => panic!("Unexpected error {err}"),
             }
 
             let bad_idx: CustomResult<String> =
@@ -2028,7 +2060,7 @@ mod test {
 
             match bad_idx.unwrap_err() {
                 CustomError::Sqlite(Error::InvalidColumnIndex(_)) => (),
-                err => panic!("Unexpected error {}", err),
+                err => panic!("Unexpected error {err}"),
             }
 
             let non_sqlite_err: CustomResult<String> =
@@ -2036,7 +2068,7 @@ mod test {
 
             match non_sqlite_err.unwrap_err() {
                 CustomError::SomeError => (),
-                err => panic!("Unexpected error {}", err),
+                err => panic!("Unexpected error {err}"),
             }
             Ok(())
         }
