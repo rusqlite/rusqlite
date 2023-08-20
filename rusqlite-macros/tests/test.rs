@@ -16,7 +16,30 @@ fn test_literal() -> Result {
     let first_name = "El";
     let last_name = "Barto";
     let mut stmt = Stmt;
-    __bind!(stmt "SELECT $first_name, $last_name");
+    __bind!(stmt "SELECT $first_name, {last_name}");
+    Ok(())
+}
+
+#[test]
+fn test_tuple() -> Result {
+    let names = ("El", "Barto");
+    let mut stmt = Stmt;
+    __bind!(stmt "SELECT {names.0}, {names.1}");
+    Ok(())
+}
+
+#[test]
+fn test_struct() -> Result {
+    struct Person<'s> {
+        first_name: &'s str,
+        last_name: &'s str,
+    }
+    let p = Person {
+        first_name: "El",
+        last_name: "Barto",
+    };
+    let mut stmt = Stmt;
+    __bind!(stmt "SELECT {p.first_name}, {p.last_name}");
     Ok(())
 }
 

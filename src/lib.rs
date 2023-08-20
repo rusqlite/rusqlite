@@ -220,9 +220,9 @@ macro_rules! named_params {
 
 /// Captured identifiers in SQL
 ///
-/// * only SQLite `$x` / `@x` / `:x` syntax works (Rust `&x` syntax does not
-///   work).
+/// * SQLite `$x` / `@x` / `:x` syntax works (Rust `&x` syntax does not work).
 /// * `$x.y` expression does not work.
+/// * `{x}` and `{x.y}` work
 ///
 /// # Example
 ///
@@ -249,9 +249,9 @@ macro_rules! prepare_and_bind {
 
 /// Captured identifiers in SQL
 ///
-/// * only SQLite `$x` / `@x` / `:x` syntax works (Rust `&x` syntax does not
-///   work).
+/// * SQLite `$x` / `@x` / `:x` syntax works (Rust `&x` syntax does not work).
 /// * `$x.y` expression does not work.
+/// * `{x}` and `{x.y}` work
 #[cfg(feature = "rusqlite-macros")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
 #[macro_export]
