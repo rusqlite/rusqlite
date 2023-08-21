@@ -58,15 +58,11 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
     let mut res = TokenStream::new();
     for (i, name) in info.names.iter().enumerate() {
         res.extend(Some(stmt.clone()));
-        let offset = match name.as_bytes()[0] {
-            b'$' | b'@' | b'#' | b':' => 1,
-            _ => 0, // captured identifier: {...}
-        };
         res.extend(respan(
             parse_ts(&format!(
                 ".raw_bind_parameter({}, &{})?;",
                 i + 1,
-                &name[offset..]
+                &name[1..]
             )),
             call_site,
         ));
