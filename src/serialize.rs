@@ -142,7 +142,9 @@ mod test {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
         let data = db.serialize(DatabaseName::Main)?;
-        let Data::Owned(data) = data else { panic!("expected OwnedData")};
+        let Data::Owned(data) = data else {
+            panic!("expected OwnedData")
+        };
         assert!(data.sz > 0);
         Ok(())
     }
@@ -152,7 +154,9 @@ mod test {
         let src = Connection::open_in_memory()?;
         src.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
         let data = src.serialize(DatabaseName::Main)?;
-        let Data::Owned(data) = data else { panic!("expected OwnedData")};
+        let Data::Owned(data) = data else {
+            panic!("expected OwnedData")
+        };
 
         let mut dst = Connection::open_in_memory()?;
         dst.deserialize(DatabaseName::Main, data, false)?;
