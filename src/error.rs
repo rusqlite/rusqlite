@@ -367,6 +367,7 @@ impl error::Error for Error {
 impl Error {
     /// Returns the underlying SQLite error if this is [`Error::SqliteFailure`].
     #[inline]
+    #[must_use]
     pub fn sqlite_error(&self) -> Option<&ffi::Error> {
         match self {
             Self::SqliteFailure(error, _) => Some(error),
@@ -377,6 +378,7 @@ impl Error {
     /// Returns the underlying SQLite error code if this is
     /// [`Error::SqliteFailure`].
     #[inline]
+    #[must_use]
     pub fn sqlite_error_code(&self) -> Option<ffi::ErrorCode> {
         self.sqlite_error().map(|error| error.code)
     }
@@ -439,10 +441,7 @@ pub fn check(code: c_int) -> Result<()> {
 /// Transform Rust error to SQLite error (message and code).
 /// # Safety
 /// This function is unsafe because it uses raw pointer
-pub unsafe fn to_sqlite_error(
-    e: &Error,
-    err_msg: *mut *mut std::os::raw::c_char,
-) -> std::os::raw::c_int {
+pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut std::os::raw::c_char) -> c_int {
     use crate::util::alloc;
     match e {
         Error::SqliteFailure(err, s) => {

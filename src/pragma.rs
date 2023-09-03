@@ -384,7 +384,6 @@ mod test {
         let mut rows = table_info.query(["sqlite_master"])?;
 
         while let Some(row) = rows.next()? {
-            let row = row;
             let column: String = row.get(1)?;
             columns.push(column);
         }

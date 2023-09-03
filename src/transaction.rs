@@ -122,7 +122,7 @@ impl Transaction<'_> {
             TransactionBehavior::Immediate => "BEGIN IMMEDIATE",
             TransactionBehavior::Exclusive => "BEGIN EXCLUSIVE",
         };
-        conn.execute_batch(query).map(move |_| Transaction {
+        conn.execute_batch(query).map(move |()| Transaction {
             conn,
             drop_behavior: DropBehavior::Rollback,
         })
@@ -251,7 +251,7 @@ impl Savepoint<'_> {
     fn with_name_<T: Into<String>>(conn: &Connection, name: T) -> Result<Savepoint<'_>> {
         let name = name.into();
         conn.execute_batch(&format!("SAVEPOINT {name}"))
-            .map(|_| Savepoint {
+            .map(|()| Savepoint {
                 conn,
                 name,
                 drop_behavior: DropBehavior::Rollback,
@@ -346,8 +346,8 @@ impl Savepoint<'_> {
         match self.drop_behavior() {
             DropBehavior::Commit => self
                 .commit_()
-                .or_else(|_| self.rollback().and_then(|_| self.commit_())),
-            DropBehavior::Rollback => self.rollback().and_then(|_| self.commit_()),
+                .or_else(|_| self.rollback().and_then(|()| self.commit_())),
+            DropBehavior::Rollback => self.rollback().and_then(|()| self.commit_()),
             DropBehavior::Ignore => Ok(()),
             DropBehavior::Panic => panic!("Savepoint dropped unexpectedly."),
         }
@@ -471,8 +471,7 @@ impl Connection {
     ///
     /// The savepoint defaults to rolling back when it is dropped. If you want
     /// the savepoint to commit, you must call [`commit`](Savepoint::commit) or
-    /// [`set_drop_behavior(DropBehavior::Commit)`](Savepoint::
-    /// set_drop_behavior).
+    /// [`set_drop_behavior(DropBehavior::Commit)`](Savepoint::set_drop_behavior).
     ///
     /// ## Example
     ///
