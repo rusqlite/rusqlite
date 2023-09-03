@@ -90,6 +90,8 @@ impl Statement<'_> {
     /// Returns an `Error::InvalidColumnIndex` if `idx` is outside the valid
     /// column range for this row.
     ///
+    /// # Panics
+    ///
     /// Panics when column name is not valid UTF-8.
     #[inline]
     pub fn column_name(&self, col: usize) -> Result<&str> {
