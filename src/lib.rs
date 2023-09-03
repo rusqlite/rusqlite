@@ -82,7 +82,9 @@ pub use crate::load_extension_guard::LoadExtensionGuard;
 pub use crate::params::{params_from_iter, Params, ParamsFromIter};
 pub use crate::row::{AndThenRows, Map, MappedRows, Row, RowIndex, Rows};
 pub use crate::statement::{Statement, StatementStatus};
-pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior, TransactionState};
+pub use crate::transaction::{
+    DropBehavior, Savepoint, Transaction, TransactionBehavior, TransactionState,
+};
 pub use crate::types::ToSql;
 pub use crate::version::*;
 
