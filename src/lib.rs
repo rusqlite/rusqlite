@@ -74,6 +74,7 @@ use crate::raw_statement::RawStatement;
 use crate::types::ValueRef;
 
 pub use crate::cache::CachedStatement;
+#[cfg(feature = "column_decltype")]
 pub use crate::column::Column;
 pub use crate::error::{to_sqlite_error, Error};
 pub use crate::ffi::ErrorCode;
