@@ -15,6 +15,13 @@ pub enum TransactionBehavior {
     /// EXCLUSIVE prevents other database connections from reading the database
     /// while the transaction is underway.
     Exclusive,
+    /// CONCURRENT is only available in "wal" or "wal2" mode, and allows multiple
+    /// writers to process write transactions simultaneously by deferring database
+    /// locking to when a COMMIT is executed.
+    ///
+    /// See <https://www.sqlite.org/cgi/src/doc/begin-concurrent/doc/begin_concurrent.md>
+    /// for more information.
+    Concurrent,
 }
 
 /// Options for how a Transaction or Savepoint should behave when it is dropped.
@@ -121,6 +128,7 @@ impl Transaction<'_> {
             TransactionBehavior::Deferred => "BEGIN DEFERRED",
             TransactionBehavior::Immediate => "BEGIN IMMEDIATE",
             TransactionBehavior::Exclusive => "BEGIN EXCLUSIVE",
+            TransactionBehavior::Concurrent => "BEGIN CONCURRENT",
         };
         conn.execute_batch(query).map(move |()| Transaction {
             conn,
