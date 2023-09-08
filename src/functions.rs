@@ -480,13 +480,15 @@ impl InnerConnection {
             T: ToSql,
         {
             let r = catch_unwind(|| {
-                let boxed_f: *mut F = ffi::sqlite3_user_data(ctx).cast::<F>();
-                assert!(!boxed_f.is_null(), "Internal error - null function pointer");
+                let boxed_f: &F = ffi::sqlite3_user_data(ctx)
+                    .cast::<F>()
+                    .as_ref()
+                    .expect("Internal error - null function pointer");
                 let ctx = Context {
                     ctx,
                     args: slice::from_raw_parts(argv, argc as usize),
                 };
-                (*boxed_f)(&ctx)
+                (boxed_f)(&ctx)
             });
             let t = match r {
                 Err(_) => {
