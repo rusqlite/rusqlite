@@ -468,7 +468,7 @@ impl InnerConnection {
         x_func: F,
     ) -> Result<()>
     where
-        F: FnMut(&Context<'_>) -> Result<T> + Send + UnwindSafe + 'static,
+        F: Fn(&Context<'_>) -> Result<T> + Send + UnwindSafe + 'static,
         T: ToSql,
     {
         unsafe extern "C" fn call_boxed_closure<F, T>(
@@ -476,7 +476,7 @@ impl InnerConnection {
             argc: c_int,
             argv: *mut *mut sqlite3_value,
         ) where
-            F: FnMut(&Context<'_>) -> Result<T>,
+            F: Fn(&Context<'_>) -> Result<T>,
             T: ToSql,
         {
             let r = catch_unwind(|| {
