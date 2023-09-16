@@ -34,6 +34,10 @@ impl OwnedData {
         std::mem::forget(self);
         raw
     }
+
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.sz) }
+    }
 }
 
 impl Drop for OwnedData {
@@ -100,19 +104,25 @@ impl Connection {
     pub fn deserialize(
         &mut self,
         schema: DatabaseName<'_>,
-        data: OwnedData,
+        data: &[u8],
         read_only: bool,
     ) -> Result<()> {
         let schema = schema.as_cstring()?;
-        let (data, sz) = data.into_raw();
-        let sz = sz.try_into().unwrap();
+        let sz = data.len().try_into().unwrap();
         let flags = if read_only {
-            ffi::SQLITE_DESERIALIZE_FREEONCLOSE | ffi::SQLITE_DESERIALIZE_READONLY
+            ffi::SQLITE_DESERIALIZE_READONLY
         } else {
-            ffi::SQLITE_DESERIALIZE_FREEONCLOSE | ffi::SQLITE_DESERIALIZE_RESIZEABLE
+            ffi::SQLITE_DESERIALIZE_RESIZEABLE
         };
         let rc = unsafe {
-            ffi::sqlite3_deserialize(self.handle(), schema.as_ptr(), data, sz, sz, flags)
+            ffi::sqlite3_deserialize(
+                self.handle(),
+                schema.as_ptr(),
+                data.as_ptr() as *mut u8,
+                sz,
+                sz,
+                flags,
+            )
         };
         if rc != ffi::SQLITE_OK {
             // TODO sqlite3_free(data) ?
@@ -160,7 +170,7 @@ mod test {
         };
 
         let mut dst = Connection::open_in_memory()?;
-        dst.deserialize(DatabaseName::Main, data, false)?;
+        dst.deserialize(DatabaseName::Main, data.as_slice(), false)?;
         dst.execute("DELETE FROM x", [])?;
         Ok(())
     }
