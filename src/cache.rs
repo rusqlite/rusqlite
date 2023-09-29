@@ -1,7 +1,7 @@
 //! Prepared statements cache for faster execution.
 
 use crate::raw_statement::RawStatement;
-use crate::{Connection, Result, Statement};
+use crate::{Connection, PrepFlags, Result, Statement};
 use hashlink::LruCache;
 use std::cell::RefCell;
 use std::ops::{Deref, DerefMut};
@@ -17,13 +17,13 @@ impl Connection {
     /// # use rusqlite::{Connection, Result};
     /// fn insert_new_people(conn: &Connection) -> Result<()> {
     ///     {
-    ///         let mut stmt = conn.prepare_cached("INSERT INTO People (name) VALUES (?)")?;
+    ///         let mut stmt = conn.prepare_cached("INSERT INTO People (name) VALUES (?1)")?;
     ///         stmt.execute(["Joe Smith"])?;
     ///     }
     ///     {
     ///         // This will return the same underlying SQLite statement handle without
     ///         // having to prepare it again.
-    ///         let mut stmt = conn.prepare_cached("INSERT INTO People (name) VALUES (?)")?;
+    ///         let mut stmt = conn.prepare_cached("INSERT INTO People (name) VALUES (?1)")?;
     ///         stmt.execute(["Bob Jones"])?;
     ///     }
     ///     Ok(())
@@ -144,7 +144,7 @@ impl StatementCache {
         let mut cache = self.0.borrow_mut();
         let stmt = match cache.remove(trimmed) {
             Some(raw_stmt) => Ok(Statement::new(conn, raw_stmt)),
-            None => conn.prepare(trimmed),
+            None => conn.prepare_with_flags(trimmed, PrepFlags::SQLITE_PREPARE_PERSISTENT),
         };
         stmt.map(|mut stmt| {
             stmt.stmt.set_statement_cache_key(trimmed);

@@ -34,7 +34,7 @@ pub enum Error {
 
     /// Error converting a string to a C-compatible string because it contained
     /// an embedded nul.
-    NulError(::std::ffi::NulError),
+    NulError(std::ffi::NulError),
 
     /// Error when using SQL named parameters and passing a parameter name not
     /// present in the SQL.
@@ -128,6 +128,19 @@ pub enum Error {
     #[cfg(feature = "blob")]
     #[cfg_attr(docsrs, doc(cfg(feature = "blob")))]
     BlobSizeError,
+    /// Error referencing a specific token in the input SQL
+    #[cfg(feature = "modern_sqlite")] // 3.38.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    SqlInputError {
+        /// error code
+        error: ffi::Error,
+        /// error message
+        msg: String,
+        /// SQL input
+        sql: String,
+        /// byte offset of the start of invalid token
+        offset: c_int,
+    },
 }
 
 impl PartialEq for Error {
@@ -172,6 +185,21 @@ impl PartialEq for Error {
             }
             #[cfg(feature = "blob")]
             (Error::BlobSizeError, Error::BlobSizeError) => true,
+            #[cfg(feature = "modern_sqlite")]
+            (
+                Error::SqlInputError {
+                    error: e1,
+                    msg: m1,
+                    sql: s1,
+                    offset: o1,
+                },
+                Error::SqlInputError {
+                    error: e2,
+                    msg: m2,
+                    sql: s2,
+                    offset: o2,
+                },
+            ) => e1 == e2 && m1 == m2 && s1 == s2 && o1 == o2,
             (..) => false,
         }
     }
@@ -184,14 +212,14 @@ impl From<str::Utf8Error> for Error {
     }
 }
 
-impl From<::std::ffi::NulError> for Error {
+impl From<std::ffi::NulError> for Error {
     #[cold]
-    fn from(err: ::std::ffi::NulError) -> Error {
+    fn from(err: std::ffi::NulError) -> Error {
         Error::NulError(err)
     }
 }
 
-const UNKNOWN_COLUMN: usize = std::usize::MAX;
+const UNKNOWN_COLUMN: usize = usize::MAX;
 
 /// The conversion isn't precise, but it's convenient to have it
 /// to allow use of `get_raw(…).as_…()?` in callbacks that take `Error`.
@@ -217,73 +245,72 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Error::SqliteFailure(ref err, None) => err.fmt(f),
-            Error::SqliteFailure(_, Some(ref s)) => write!(f, "{}", s),
+            Error::SqliteFailure(_, Some(ref s)) => write!(f, "{s}"),
             Error::SqliteSingleThreadedMode => write!(
                 f,
                 "SQLite was compiled or configured for single-threaded use only"
             ),
             Error::FromSqlConversionFailure(i, ref t, ref err) => {
                 if i != UNKNOWN_COLUMN {
-                    write!(
-                        f,
-                        "Conversion error from type {} at index: {}, {}",
-                        t, i, err
-                    )
+                    write!(f, "Conversion error from type {t} at index: {i}, {err}")
                 } else {
                     err.fmt(f)
                 }
             }
             Error::IntegralValueOutOfRange(col, val) => {
                 if col != UNKNOWN_COLUMN {
-                    write!(f, "Integer {} out of range at index {}", val, col)
+                    write!(f, "Integer {val} out of range at index {col}")
                 } else {
-                    write!(f, "Integer {} out of range", val)
+                    write!(f, "Integer {val} out of range")
                 }
             }
             Error::Utf8Error(ref err) => err.fmt(f),
             Error::NulError(ref err) => err.fmt(f),
-            Error::InvalidParameterName(ref name) => write!(f, "Invalid parameter name: {}", name),
+            Error::InvalidParameterName(ref name) => write!(f, "Invalid parameter name: {name}"),
             Error::InvalidPath(ref p) => write!(f, "Invalid path: {}", p.to_string_lossy()),
             Error::ExecuteReturnedResults => {
                 write!(f, "Execute returned results - did you mean to call query?")
             }
             Error::QueryReturnedNoRows => write!(f, "Query returned no rows"),
-            Error::InvalidColumnIndex(i) => write!(f, "Invalid column index: {}", i),
-            Error::InvalidColumnName(ref name) => write!(f, "Invalid column name: {}", name),
-            Error::InvalidColumnType(i, ref name, ref t) => write!(
-                f,
-                "Invalid column type {} at index: {}, name: {}",
-                t, i, name
-            ),
+            Error::InvalidColumnIndex(i) => write!(f, "Invalid column index: {i}"),
+            Error::InvalidColumnName(ref name) => write!(f, "Invalid column name: {name}"),
+            Error::InvalidColumnType(i, ref name, ref t) => {
+                write!(f, "Invalid column type {t} at index: {i}, name: {name}")
+            }
             Error::InvalidParameterCount(i1, n1) => write!(
                 f,
-                "Wrong number of parameters passed to query. Got {}, needed {}",
-                i1, n1
+                "Wrong number of parameters passed to query. Got {i1}, needed {n1}"
             ),
-            Error::StatementChangedRows(i) => write!(f, "Query changed {} rows", i),
+            Error::StatementChangedRows(i) => write!(f, "Query changed {i} rows"),
 
             #[cfg(feature = "functions")]
             Error::InvalidFunctionParameterType(i, ref t) => {
-                write!(f, "Invalid function parameter type {} at index {}", t, i)
+                write!(f, "Invalid function parameter type {t} at index {i}")
             }
             #[cfg(feature = "vtab")]
             Error::InvalidFilterParameterType(i, ref t) => {
-                write!(f, "Invalid filter parameter type {} at index {}", t, i)
+                write!(f, "Invalid filter parameter type {t} at index {i}")
             }
             #[cfg(feature = "functions")]
             Error::UserFunctionError(ref err) => err.fmt(f),
             Error::ToSqlConversionFailure(ref err) => err.fmt(f),
             Error::InvalidQuery => write!(f, "Query is not read-only"),
             #[cfg(feature = "vtab")]
-            Error::ModuleError(ref desc) => write!(f, "{}", desc),
+            Error::ModuleError(ref desc) => write!(f, "{desc}"),
             #[cfg(feature = "functions")]
             Error::UnwindingPanic => write!(f, "unwinding panic"),
             #[cfg(feature = "functions")]
             Error::GetAuxWrongType => write!(f, "get_aux called with wrong type"),
             Error::MultipleStatement => write!(f, "Multiple statements provided"),
-
             #[cfg(feature = "blob")]
             Error::BlobSizeError => "Blob size is insufficient".fmt(f),
+            #[cfg(feature = "modern_sqlite")]
+            Error::SqlInputError {
+                ref msg,
+                offset,
+                ref sql,
+                ..
+            } => write!(f, "{msg} in {sql} at offset {offset}"),
         }
     }
 }
@@ -331,7 +358,29 @@ impl error::Error for Error {
 
             #[cfg(feature = "blob")]
             Error::BlobSizeError => None,
+            #[cfg(feature = "modern_sqlite")]
+            Error::SqlInputError { ref error, .. } => Some(error),
         }
+    }
+}
+
+impl Error {
+    /// Returns the underlying SQLite error if this is [`Error::SqliteFailure`].
+    #[inline]
+    #[must_use]
+    pub fn sqlite_error(&self) -> Option<&ffi::Error> {
+        match self {
+            Self::SqliteFailure(error, _) => Some(error),
+            _ => None,
+        }
+    }
+
+    /// Returns the underlying SQLite error code if this is
+    /// [`Error::SqliteFailure`].
+    #[inline]
+    #[must_use]
+    pub fn sqlite_error_code(&self) -> Option<ffi::ErrorCode> {
+        self.sqlite_error().map(|error| error.code)
     }
 }
 
@@ -352,10 +401,58 @@ pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     error_from_sqlite_code(code, message)
 }
 
+#[cold]
+#[cfg(not(feature = "modern_sqlite"))] // SQLite >= 3.38.0
+pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, _sql: &str) -> Error {
+    error_from_handle(db, code)
+}
+
+#[cold]
+#[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
+pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, sql: &str) -> Error {
+    if db.is_null() {
+        error_from_sqlite_code(code, None)
+    } else {
+        let error = ffi::Error::new(code);
+        let msg = errmsg_to_string(ffi::sqlite3_errmsg(db));
+        if ffi::ErrorCode::Unknown == error.code {
+            let offset = ffi::sqlite3_error_offset(db);
+            if offset >= 0 {
+                return Error::SqlInputError {
+                    error,
+                    msg,
+                    sql: sql.to_owned(),
+                    offset,
+                };
+            }
+        }
+        Error::SqliteFailure(error, Some(msg))
+    }
+}
+
 pub fn check(code: c_int) -> Result<()> {
     if code != crate::ffi::SQLITE_OK {
-        Err(crate::error::error_from_sqlite_code(code, None))
+        Err(error_from_sqlite_code(code, None))
     } else {
         Ok(())
+    }
+}
+
+/// Transform Rust error to SQLite error (message and code).
+/// # Safety
+/// This function is unsafe because it uses raw pointer
+pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut std::os::raw::c_char) -> c_int {
+    use crate::util::alloc;
+    match e {
+        Error::SqliteFailure(err, s) => {
+            if let Some(s) = s {
+                *err_msg = alloc(s);
+            }
+            err.extended_code
+        }
+        err => {
+            *err_msg = alloc(&err.to_string());
+            ffi::SQLITE_ERROR
+        }
     }
 }

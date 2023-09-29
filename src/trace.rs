@@ -119,6 +119,8 @@ impl Connection {
             None => unsafe { ffi::sqlite3_profile(c.db(), None, ptr::null_mut()) },
         };
     }
+
+    // TODO sqlite3_trace_v2 (https://sqlite.org/c3ref/trace_v2.html) // 3.14.0, #977
 }
 
 #[cfg(test)]
@@ -142,13 +144,13 @@ mod test {
         let mut db = Connection::open_in_memory()?;
         db.trace(Some(tracer));
         {
-            let _ = db.query_row("SELECT ?", [1i32], |_| Ok(()));
-            let _ = db.query_row("SELECT ?", ["hello"], |_| Ok(()));
+            let _ = db.query_row("SELECT ?1", [1i32], |_| Ok(()));
+            let _ = db.query_row("SELECT ?1", ["hello"], |_| Ok(()));
         }
         db.trace(None);
         {
-            let _ = db.query_row("SELECT ?", [2i32], |_| Ok(()));
-            let _ = db.query_row("SELECT ?", ["goodbye"], |_| Ok(()));
+            let _ = db.query_row("SELECT ?1", [2i32], |_| Ok(()));
+            let _ = db.query_row("SELECT ?1", ["goodbye"], |_| Ok(()));
         }
 
         let traced_stmts = TRACED_STMTS.lock().unwrap();

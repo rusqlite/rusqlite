@@ -11,7 +11,7 @@
 //!     // Note: This should be done once (usually when opening the DB).
 //!     let db = Connection::open_in_memory()?;
 //!     rusqlite::vtab::csvtab::load_module(&db)?;
-//!     // Assum3e my_csv.csv
+//!     // Assume my_csv.csv
 //!     let schema = "
 //!         CREATE VIRTUAL TABLE my_csv_data
 //!         USING csv(filename = 'my_csv.csv')
@@ -30,8 +30,8 @@ use std::str;
 use crate::ffi;
 use crate::types::Null;
 use crate::vtab::{
-    dequote, escape_double_quote, parse_boolean, read_only_module, Context, CreateVTab, IndexInfo,
-    VTab, VTabConnection, VTabCursor, Values,
+    escape_double_quote, parse_boolean, read_only_module, Context, CreateVTab, IndexInfo, VTab,
+    VTabConfig, VTabConnection, VTabCursor, VTabKind, Values,
 };
 use crate::{Connection, Error, Result};
 
@@ -74,19 +74,6 @@ impl CsvTab {
             .from_path(&self.filename)
     }
 
-    fn parameter(c_slice: &[u8]) -> Result<(&str, &str)> {
-        let arg = str::from_utf8(c_slice)?.trim();
-        let mut split = arg.split('=');
-        if let Some(key) = split.next() {
-            if let Some(value) = split.next() {
-                let param = key.trim();
-                let value = dequote(value);
-                return Ok((param, value));
-            }
-        }
-        Err(Error::ModuleError(format!("illegal argument: '{}'", arg)))
-    }
-
     fn parse_byte(arg: &str) -> Option<u8> {
         if arg.len() == 1 {
             arg.bytes().next()
@@ -101,7 +88,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
     type Cursor = CsvTabCursor<'vtab>;
 
     fn connect(
-        _: &mut VTabConnection,
+        db: &mut VTabConnection,
         _aux: Option<&()>,
         args: &[&[u8]],
     ) -> Result<(String, CsvTab)> {
@@ -122,14 +109,11 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
 
         let args = &args[3..];
         for c_slice in args {
-            let (param, value) = CsvTab::parameter(c_slice)?;
+            let (param, value) = super::parameter(c_slice)?;
             match param {
                 "filename" => {
                     if !Path::new(value).exists() {
-                        return Err(Error::ModuleError(format!(
-                            "file '{}' does not exist",
-                            value
-                        )));
+                        return Err(Error::ModuleError(format!("file '{value}' does not exist")));
                     }
                     vtab.filename = value.to_owned();
                 }
@@ -150,8 +134,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                         n_col = Some(n);
                     } else {
                         return Err(Error::ModuleError(format!(
-                            "unrecognized argument to 'columns': {}",
-                            value
+                            "unrecognized argument to 'columns': {value}"
                         )));
                     }
                 }
@@ -160,8 +143,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                         vtab.has_headers = b;
                     } else {
                         return Err(Error::ModuleError(format!(
-                            "unrecognized argument to 'header': {}",
-                            value
+                            "unrecognized argument to 'header': {value}"
                         )));
                     }
                 }
@@ -170,8 +152,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                         vtab.delimiter = b;
                     } else {
                         return Err(Error::ModuleError(format!(
-                            "unrecognized argument to 'delimiter': {}",
-                            value
+                            "unrecognized argument to 'delimiter': {value}"
                         )));
                     }
                 }
@@ -184,15 +165,13 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                         }
                     } else {
                         return Err(Error::ModuleError(format!(
-                            "unrecognized argument to 'quote': {}",
-                            value
+                            "unrecognized argument to 'quote': {value}"
                         )));
                     }
                 }
                 _ => {
                     return Err(Error::ModuleError(format!(
-                        "unrecognized parameter '{}'",
-                        param
+                        "unrecognized parameter '{param}'"
                     )));
                 }
             }
@@ -221,13 +200,13 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                 let mut record = csv::ByteRecord::new();
                 if reader.read_byte_record(&mut record)? {
                     for (i, _) in record.iter().enumerate() {
-                        cols.push(format!("c{}", i));
+                        cols.push(format!("c{i}"));
                     }
                 }
             }
         } else if let Some(n_col) = n_col {
             for i in 0..n_col {
-                cols.push(format!("c{}", i));
+                cols.push(format!("c{i}"));
             }
         }
 
@@ -249,7 +228,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
             }
             schema = Some(sql);
         }
-
+        db.config(VTabConfig::DirectOnly)?;
         Ok((schema.unwrap(), vtab))
     }
 
@@ -259,12 +238,14 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
         Ok(())
     }
 
-    fn open(&self) -> Result<CsvTabCursor<'_>> {
+    fn open(&mut self) -> Result<CsvTabCursor<'_>> {
         Ok(CsvTabCursor::new(self.reader()?))
     }
 }
 
-impl CreateVTab<'_> for CsvTab {}
+impl CreateVTab<'_> for CsvTab {
+    const KIND: VTabKind = VTabKind::Default;
+}
 
 /// A cursor for the CSV virtual table
 #[repr(C)]
@@ -337,8 +318,7 @@ unsafe impl VTabCursor for CsvTabCursor<'_> {
     fn column(&self, ctx: &mut Context, col: c_int) -> Result<()> {
         if col < 0 || col as usize >= self.cols.len() {
             return Err(Error::ModuleError(format!(
-                "column index out of bounds: {}",
-                col
+                "column index out of bounds: {col}"
             )));
         }
         if self.cols.is_empty() {

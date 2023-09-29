@@ -26,7 +26,8 @@
 //! [`ToSql`] always succeeds except when storing a `u64` or `usize` value that
 //! cannot fit in an `INTEGER` (`i64`). Also note that SQLite ignores column
 //! types, so if you store an `i64` in a column with type `REAL` it will be
-//! stored as an `INTEGER`, not a `REAL`.
+//! stored as an `INTEGER`, not a `REAL` (unless the column is part of a
+//! [STRICT table](https://www.sqlite.org/stricttables.html)).
 //!
 //! If the `time` feature is enabled, implementations are
 //! provided for `time::OffsetDateTime` that use the RFC 3339 date/time format,
@@ -102,7 +103,7 @@ mod value_ref;
 /// # use rusqlite::types::{Null};
 ///
 /// fn insert_null(conn: &Connection) -> Result<usize> {
-///     conn.execute("INSERT INTO people (name) VALUES (?)", [Null])
+///     conn.execute("INSERT INTO people (name) VALUES (?1)", [Null])
 /// }
 /// ```
 #[derive(Copy, Clone)]
@@ -110,7 +111,7 @@ pub struct Null;
 
 /// SQLite data types.
 /// See [Fundamental Datatypes](https://sqlite.org/c3ref/c_blob.html).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     /// NULL
     Null,
@@ -140,7 +141,6 @@ impl fmt::Display for Type {
 mod test {
     use super::Value;
     use crate::{params, Connection, Error, Result, Statement};
-    use std::f64::EPSILON;
     use std::os::raw::{c_double, c_int};
 
     fn checked_memory_handle() -> Result<Connection> {
@@ -154,9 +154,9 @@ mod test {
         let db = checked_memory_handle()?;
 
         let v1234 = vec![1u8, 2, 3, 4];
-        db.execute("INSERT INTO foo(b) VALUES (?)", &[&v1234])?;
+        db.execute("INSERT INTO foo(b) VALUES (?1)", [&v1234])?;
 
-        let v: Vec<u8> = db.query_row("SELECT b FROM foo", [], |r| r.get(0))?;
+        let v: Vec<u8> = db.one_column("SELECT b FROM foo")?;
         assert_eq!(v, v1234);
         Ok(())
     }
@@ -166,9 +166,9 @@ mod test {
         let db = checked_memory_handle()?;
 
         let empty = vec![];
-        db.execute("INSERT INTO foo(b) VALUES (?)", &[&empty])?;
+        db.execute("INSERT INTO foo(b) VALUES (?1)", [&empty])?;
 
-        let v: Vec<u8> = db.query_row("SELECT b FROM foo", [], |r| r.get(0))?;
+        let v: Vec<u8> = db.one_column("SELECT b FROM foo")?;
         assert_eq!(v, empty);
         Ok(())
     }
@@ -178,9 +178,9 @@ mod test {
         let db = checked_memory_handle()?;
 
         let s = "hello, world!";
-        db.execute("INSERT INTO foo(t) VALUES (?)", &[&s])?;
+        db.execute("INSERT INTO foo(t) VALUES (?1)", [&s])?;
 
-        let from: String = db.query_row("SELECT t FROM foo", [], |r| r.get(0))?;
+        let from: String = db.one_column("SELECT t FROM foo")?;
         assert_eq!(from, s);
         Ok(())
     }
@@ -190,9 +190,9 @@ mod test {
         let db = checked_memory_handle()?;
 
         let s = "hello, world!";
-        db.execute("INSERT INTO foo(t) VALUES (?)", [s.to_owned()])?;
+        db.execute("INSERT INTO foo(t) VALUES (?1)", [s.to_owned()])?;
 
-        let from: String = db.query_row("SELECT t FROM foo", [], |r| r.get(0))?;
+        let from: String = db.one_column("SELECT t FROM foo")?;
         assert_eq!(from, s);
         Ok(())
     }
@@ -201,12 +201,9 @@ mod test {
     fn test_value() -> Result<()> {
         let db = checked_memory_handle()?;
 
-        db.execute("INSERT INTO foo(i) VALUES (?)", [Value::Integer(10)])?;
+        db.execute("INSERT INTO foo(i) VALUES (?1)", [Value::Integer(10)])?;
 
-        assert_eq!(
-            10i64,
-            db.query_row::<i64, _, _>("SELECT i FROM foo", [], |r| r.get(0))?
-        );
+        assert_eq!(10i64, db.one_column::<i64>("SELECT i FROM foo")?);
         Ok(())
     }
 
@@ -214,11 +211,11 @@ mod test {
     fn test_option() -> Result<()> {
         let db = checked_memory_handle()?;
 
-        let s = Some("hello, world!");
+        let s = "hello, world!";
         let b = Some(vec![1u8, 2, 3, 4]);
 
-        db.execute("INSERT INTO foo(t) VALUES (?)", &[&s])?;
-        db.execute("INSERT INTO foo(b) VALUES (?)", &[&b])?;
+        db.execute("INSERT INTO foo(t) VALUES (?1)", [Some(s)])?;
+        db.execute("INSERT INTO foo(b) VALUES (?1)", [&b])?;
 
         let mut stmt = db.prepare("SELECT t, b FROM foo ORDER BY ROWID ASC")?;
         let mut rows = stmt.query([])?;
@@ -227,7 +224,7 @@ mod test {
             let row1 = rows.next()?.unwrap();
             let s1: Option<String> = row1.get_unwrap(0);
             let b1: Option<Vec<u8>> = row1.get_unwrap(1);
-            assert_eq!(s.unwrap(), s1.unwrap());
+            assert_eq!(s, s1.unwrap());
             assert!(b1.is_none());
         }
 
@@ -264,7 +261,7 @@ mod test {
         assert_eq!(vec![1, 2], row.get::<_, Vec<u8>>(0)?);
         assert_eq!("text", row.get::<_, String>(1)?);
         assert_eq!(1, row.get::<_, c_int>(2)?);
-        assert!((1.5 - row.get::<_, c_double>(3)?).abs() < EPSILON);
+        assert!((1.5 - row.get::<_, c_double>(3)?).abs() < f64::EPSILON);
         assert_eq!(row.get::<_, Option<c_int>>(4)?, None);
         assert_eq!(row.get::<_, Option<c_double>>(4)?, None);
         assert_eq!(row.get::<_, Option<String>>(4)?, None);
@@ -272,85 +269,67 @@ mod test {
         // check some invalid types
 
         // 0 is actually a blob (Vec<u8>)
-        assert!(is_invalid_column_type(
-            row.get::<_, c_int>(0).err().unwrap()
-        ));
-        assert!(is_invalid_column_type(
-            row.get::<_, c_int>(0).err().unwrap()
-        ));
+        assert!(is_invalid_column_type(row.get::<_, c_int>(0).unwrap_err()));
+        assert!(is_invalid_column_type(row.get::<_, c_int>(0).unwrap_err()));
         assert!(is_invalid_column_type(row.get::<_, i64>(0).err().unwrap()));
         assert!(is_invalid_column_type(
-            row.get::<_, c_double>(0).err().unwrap()
+            row.get::<_, c_double>(0).unwrap_err()
         ));
-        assert!(is_invalid_column_type(
-            row.get::<_, String>(0).err().unwrap()
-        ));
+        assert!(is_invalid_column_type(row.get::<_, String>(0).unwrap_err()));
         #[cfg(feature = "time")]
         assert!(is_invalid_column_type(
-            row.get::<_, time::OffsetDateTime>(0).err().unwrap()
+            row.get::<_, time::OffsetDateTime>(0).unwrap_err()
         ));
         assert!(is_invalid_column_type(
-            row.get::<_, Option<c_int>>(0).err().unwrap()
+            row.get::<_, Option<c_int>>(0).unwrap_err()
         ));
 
         // 1 is actually a text (String)
-        assert!(is_invalid_column_type(
-            row.get::<_, c_int>(1).err().unwrap()
-        ));
+        assert!(is_invalid_column_type(row.get::<_, c_int>(1).unwrap_err()));
         assert!(is_invalid_column_type(row.get::<_, i64>(1).err().unwrap()));
         assert!(is_invalid_column_type(
-            row.get::<_, c_double>(1).err().unwrap()
+            row.get::<_, c_double>(1).unwrap_err()
         ));
         assert!(is_invalid_column_type(
-            row.get::<_, Vec<u8>>(1).err().unwrap()
+            row.get::<_, Vec<u8>>(1).unwrap_err()
         ));
         assert!(is_invalid_column_type(
-            row.get::<_, Option<c_int>>(1).err().unwrap()
+            row.get::<_, Option<c_int>>(1).unwrap_err()
         ));
 
         // 2 is actually an integer
+        assert!(is_invalid_column_type(row.get::<_, String>(2).unwrap_err()));
         assert!(is_invalid_column_type(
-            row.get::<_, String>(2).err().unwrap()
+            row.get::<_, Vec<u8>>(2).unwrap_err()
         ));
         assert!(is_invalid_column_type(
-            row.get::<_, Vec<u8>>(2).err().unwrap()
-        ));
-        assert!(is_invalid_column_type(
-            row.get::<_, Option<String>>(2).err().unwrap()
+            row.get::<_, Option<String>>(2).unwrap_err()
         ));
 
         // 3 is actually a float (c_double)
-        assert!(is_invalid_column_type(
-            row.get::<_, c_int>(3).err().unwrap()
-        ));
+        assert!(is_invalid_column_type(row.get::<_, c_int>(3).unwrap_err()));
         assert!(is_invalid_column_type(row.get::<_, i64>(3).err().unwrap()));
+        assert!(is_invalid_column_type(row.get::<_, String>(3).unwrap_err()));
         assert!(is_invalid_column_type(
-            row.get::<_, String>(3).err().unwrap()
+            row.get::<_, Vec<u8>>(3).unwrap_err()
         ));
         assert!(is_invalid_column_type(
-            row.get::<_, Vec<u8>>(3).err().unwrap()
-        ));
-        assert!(is_invalid_column_type(
-            row.get::<_, Option<c_int>>(3).err().unwrap()
+            row.get::<_, Option<c_int>>(3).unwrap_err()
         ));
 
         // 4 is actually NULL
-        assert!(is_invalid_column_type(
-            row.get::<_, c_int>(4).err().unwrap()
-        ));
+        assert!(is_invalid_column_type(row.get::<_, c_int>(4).unwrap_err()));
         assert!(is_invalid_column_type(row.get::<_, i64>(4).err().unwrap()));
         assert!(is_invalid_column_type(
-            row.get::<_, c_double>(4).err().unwrap()
+            row.get::<_, c_double>(4).unwrap_err()
         ));
+        assert!(is_invalid_column_type(row.get::<_, String>(4).unwrap_err()));
         assert!(is_invalid_column_type(
-            row.get::<_, String>(4).err().unwrap()
-        ));
-        assert!(is_invalid_column_type(
-            row.get::<_, Vec<u8>>(4).err().unwrap()
+            row.get::<_, Vec<u8>>(4).unwrap_err()
         ));
         #[cfg(feature = "time")]
         assert!(is_invalid_column_type(
-            row.get::<_, time::OffsetDateTime>(4).err().unwrap()
+            row.get::<_, time::OffsetDateTime>(4).unwrap_err()
         ));
         Ok(())
     }
@@ -373,8 +352,8 @@ mod test {
         assert_eq!(Value::Text(String::from("text")), row.get::<_, Value>(1)?);
         assert_eq!(Value::Integer(1), row.get::<_, Value>(2)?);
         match row.get::<_, Value>(3)? {
-            Value::Real(val) => assert!((1.5 - val).abs() < EPSILON),
-            x => panic!("Invalid Value {:?}", x),
+            Value::Real(val) => assert!((1.5 - val).abs() < f64::EPSILON),
+            x => panic!("Invalid Value {x:?}"),
         }
         assert_eq!(Value::Null, row.get::<_, Value>(4)?);
         Ok(())

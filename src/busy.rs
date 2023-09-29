@@ -1,4 +1,4 @@
-///! Busy handler (when the database is locked)
+//! Busy handler (when the database is locked)
 use std::convert::TryInto;
 use std::mem;
 use std::os::raw::{c_int, c_void};
@@ -58,11 +58,7 @@ impl Connection {
     pub fn busy_handler(&self, callback: Option<fn(i32) -> bool>) -> Result<()> {
         unsafe extern "C" fn busy_handler_callback(p_arg: *mut c_void, count: c_int) -> c_int {
             let handler_fn: fn(i32) -> bool = mem::transmute(p_arg);
-            if let Ok(true) = catch_unwind(|| handler_fn(count)) {
-                1
-            } else {
-                0
-            }
+            c_int::from(catch_unwind(|| handler_fn(count)).unwrap_or_default())
         }
         let c = self.db.borrow_mut();
         let r = match callback {
@@ -90,7 +86,7 @@ mod test {
     use std::thread;
     use std::time::Duration;
 
-    use crate::{Connection, Error, ErrorCode, Result, TransactionBehavior};
+    use crate::{Connection, ErrorCode, Result, TransactionBehavior};
 
     #[test]
     fn test_default_busy() -> Result<()> {
@@ -101,12 +97,10 @@ mod test {
         let tx1 = db1.transaction_with_behavior(TransactionBehavior::Exclusive)?;
         let db2 = Connection::open(&path)?;
         let r: Result<()> = db2.query_row("PRAGMA schema_version", [], |_| unreachable!());
-        match r.unwrap_err() {
-            Error::SqliteFailure(err, _) => {
-                assert_eq!(err.code, ErrorCode::DatabaseBusy);
-            }
-            err => panic!("Unexpected error {}", err),
-        }
+        assert_eq!(
+            r.unwrap_err().sqlite_error_code(),
+            Some(ErrorCode::DatabaseBusy)
+        );
         tx1.rollback()
     }
 

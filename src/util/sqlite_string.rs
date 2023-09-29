@@ -1,14 +1,17 @@
 // This is used when either vtab or modern-sqlite is on. Different methods are
 // used in each feature. Avoid having to track this for each function. We will
 // still warn for anything that's not used by either, though.
-#![cfg_attr(
-    not(all(feature = "vtab", feature = "modern-sqlite")),
-    allow(dead_code)
-)]
+#![cfg_attr(not(feature = "vtab"), allow(dead_code))]
 use crate::ffi;
 use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int};
 use std::ptr::NonNull;
+
+// Space to hold this string must be obtained
+// from an SQLite memory allocation function
+pub(crate) fn alloc(s: &str) -> *mut c_char {
+    SqliteMallocString::from_str(s).into_raw()
+}
 
 /// A string we own that's allocated on the SQLite heap. Automatically calls
 /// `sqlite3_free` when dropped, unless `into_raw` (or `into_inner`) is called
@@ -95,15 +98,14 @@ impl SqliteMallocString {
     /// If `s` contains internal NULs, we'll replace them with
     /// `NUL_REPLACE_CHAR`.
     ///
-    /// Except for `debug_assert`s which may trigger during testing, this function
-    /// never panics. If we hit integer overflow or the allocation fails, we
-    /// call `handle_alloc_error` which aborts the program after calling a
-    /// global hook.
+    /// Except for `debug_assert`s which may trigger during testing, this
+    /// function never panics. If we hit integer overflow or the allocation
+    /// fails, we call `handle_alloc_error` which aborts the program after
+    /// calling a global hook.
     ///
     /// This means it's safe to use in extern "C" functions even outside of
     /// `catch_unwind`.
     pub(crate) fn from_str(s: &str) -> Self {
-        use std::convert::TryFrom;
         let s = if s.as_bytes().contains(&0) {
             std::borrow::Cow::Owned(make_nonnull(s))
         } else {
@@ -134,7 +136,8 @@ impl SqliteMallocString {
                     //   (everything is aligned to 1)
                     // - `size` is also never zero, although this function doesn't actually require
                     //   it now.
-                    let layout = Layout::from_size_align_unchecked(s.len().saturating_add(1), 1);
+                    let len = s.len().saturating_add(1).min(isize::MAX as usize);
+                    let layout = Layout::from_size_align_unchecked(len, 1);
                     // Note: This call does not return.
                     handle_alloc_error(layout);
                 });
@@ -214,7 +217,7 @@ mod test {
         let mut v = vec![];
         for i in 0..1000 {
             v.push(SqliteMallocString::from_str(&i.to_string()).into_raw());
-            v.push(SqliteMallocString::from_str(&format!("abc {} 😀", i)).into_raw());
+            v.push(SqliteMallocString::from_str(&format!("abc {i} 😀")).into_raw());
         }
         unsafe {
             for (i, s) in v.chunks_mut(2).enumerate() {
@@ -226,7 +229,7 @@ mod test {
                 );
                 assert_eq!(
                     std::ffi::CStr::from_ptr(s1).to_str().unwrap(),
-                    &format!("abc {} 😀", i)
+                    &format!("abc {i} 😀")
                 );
                 let _ = SqliteMallocString::from_raw(s0).unwrap();
                 let _ = SqliteMallocString::from_raw(s1).unwrap();

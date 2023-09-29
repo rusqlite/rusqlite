@@ -51,6 +51,12 @@ macro_rules! from_value(
             #[inline]
             fn from(t: $t) -> Self { ToSqlOutput::Owned(t.into())}
         }
+    );
+    (non_zero $t:ty) => (
+        impl From<$t> for ToSqlOutput<'_> {
+            #[inline]
+            fn from(t: $t) -> Self { ToSqlOutput::Owned(t.get().into())}
+        }
     )
 );
 from_value!(String);
@@ -68,12 +74,25 @@ from_value!(f32);
 from_value!(f64);
 from_value!(Vec<u8>);
 
+from_value!(non_zero std::num::NonZeroI8);
+from_value!(non_zero std::num::NonZeroI16);
+from_value!(non_zero std::num::NonZeroI32);
+from_value!(non_zero std::num::NonZeroI64);
+from_value!(non_zero std::num::NonZeroIsize);
+from_value!(non_zero std::num::NonZeroU8);
+from_value!(non_zero std::num::NonZeroU16);
+from_value!(non_zero std::num::NonZeroU32);
+
 // It would be nice if we could avoid the heap allocation (of the `Vec`) that
 // `i128` needs in `Into<Value>`, but it's probably fine for the moment, and not
 // worth adding another case to Value.
 #[cfg(feature = "i128_blob")]
 #[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 from_value!(i128);
+
+#[cfg(feature = "i128_blob")]
+#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
+from_value!(non_zero std::num::NonZeroI128);
 
 #[cfg(feature = "uuid")]
 #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
@@ -165,9 +184,22 @@ to_sql_self!(u32);
 to_sql_self!(f32);
 to_sql_self!(f64);
 
+to_sql_self!(std::num::NonZeroI8);
+to_sql_self!(std::num::NonZeroI16);
+to_sql_self!(std::num::NonZeroI32);
+to_sql_self!(std::num::NonZeroI64);
+to_sql_self!(std::num::NonZeroIsize);
+to_sql_self!(std::num::NonZeroU8);
+to_sql_self!(std::num::NonZeroU16);
+to_sql_self!(std::num::NonZeroU32);
+
 #[cfg(feature = "i128_blob")]
 #[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 to_sql_self!(i128);
+
+#[cfg(feature = "i128_blob")]
+#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
+to_sql_self!(std::num::NonZeroI128);
 
 #[cfg(feature = "uuid")]
 #[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
@@ -186,12 +218,27 @@ macro_rules! to_sql_self_fallible(
                 )))
             }
         }
+    );
+    (non_zero $t:ty) => (
+        impl ToSql for $t {
+            #[inline]
+            fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+                Ok(ToSqlOutput::Owned(Value::Integer(
+                    i64::try_from(self.get()).map_err(
+                        // TODO: Include the values in the error message.
+                        |err| Error::ToSqlConversionFailure(err.into())
+                    )?
+                )))
+            }
+        }
     )
 );
 
 // Special implementations for usize and u64 because these conversions can fail.
 to_sql_self_fallible!(u64);
 to_sql_self_fallible!(usize);
+to_sql_self_fallible!(non_zero std::num::NonZeroU64);
+to_sql_self_fallible!(non_zero std::num::NonZeroUsize);
 
 impl<T: ?Sized> ToSql for &'_ T
 where
@@ -267,9 +314,26 @@ mod test {
         is_to_sql::<i16>();
         is_to_sql::<i32>();
         is_to_sql::<i64>();
+        is_to_sql::<isize>();
         is_to_sql::<u8>();
         is_to_sql::<u16>();
         is_to_sql::<u32>();
+        is_to_sql::<u64>();
+        is_to_sql::<usize>();
+    }
+
+    #[test]
+    fn test_nonzero_types() {
+        is_to_sql::<std::num::NonZeroI8>();
+        is_to_sql::<std::num::NonZeroI16>();
+        is_to_sql::<std::num::NonZeroI32>();
+        is_to_sql::<std::num::NonZeroI64>();
+        is_to_sql::<std::num::NonZeroIsize>();
+        is_to_sql::<std::num::NonZeroU8>();
+        is_to_sql::<std::num::NonZeroU16>();
+        is_to_sql::<std::num::NonZeroU32>();
+        is_to_sql::<std::num::NonZeroU64>();
+        is_to_sql::<std::num::NonZeroUsize>();
     }
 
     #[test]
@@ -278,7 +342,7 @@ mod test {
         let _a: &[&dyn ToSql] = crate::params![a];
         let r = ToSql::to_sql(&a);
 
-        assert!(r.is_ok());
+        r.unwrap();
     }
 
     #[test]
@@ -287,10 +351,10 @@ mod test {
         let s = "str";
         let cow: Cow<str> = Cow::Borrowed(s);
         let r = cow.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
         let cow: Cow<str> = Cow::Owned::<str>(String::from(s));
         let r = cow.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
         // Ensure this compiles.
         let _p: &[&dyn ToSql] = crate::params![cow];
     }
@@ -301,7 +365,7 @@ mod test {
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = ToSql::to_sql(&s);
 
-        assert!(r.is_ok());
+        r.unwrap();
     }
 
     #[test]
@@ -310,7 +374,7 @@ mod test {
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
 
-        assert!(r.is_ok());
+        r.unwrap();
     }
 
     #[test]
@@ -319,7 +383,7 @@ mod test {
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = ToSql::to_sql(&s);
 
-        assert!(r.is_ok());
+        r.unwrap();
     }
 
     #[test]
@@ -331,48 +395,47 @@ mod test {
         let s: Rc<Box<str>> = Rc::new(source_str.clone());
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
 
         let s: Arc<Box<str>> = Arc::new(source_str.clone());
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
 
         let s: Arc<str> = Arc::from(&*source_str);
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
 
         let s: Arc<dyn ToSql> = Arc::new(source_str.clone());
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
 
         let s: Rc<str> = Rc::from(&*source_str);
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
 
         let s: Rc<dyn ToSql> = Rc::new(source_str);
         let _s: &[&dyn ToSql] = crate::params![s];
         let r = s.to_sql();
-        assert!(r.is_ok());
+        r.unwrap();
     }
 
     #[cfg(feature = "i128_blob")]
     #[test]
     fn test_i128() -> crate::Result<()> {
         use crate::Connection;
-        use std::i128;
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo (i128 BLOB, desc TEXT)")?;
         db.execute(
             "
             INSERT INTO foo(i128, desc) VALUES
-                (?, 'zero'),
-                (?, 'neg one'), (?, 'neg two'),
-                (?, 'pos one'), (?, 'pos two'),
-                (?, 'min'), (?, 'max')",
+                (?1, 'zero'),
+                (?2, 'neg one'), (?3, 'neg two'),
+                (?4, 'pos one'), (?5, 'pos two'),
+                (?6, 'min'), (?7, 'max')",
             [0i128, -1i128, -2i128, 1i128, 2i128, i128::MIN, i128::MAX],
         )?;
 
@@ -399,6 +462,54 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "i128_blob")]
+    #[test]
+    fn test_non_zero_i128() -> crate::Result<()> {
+        use std::num::NonZeroI128;
+        macro_rules! nz {
+            ($x:expr) => {
+                NonZeroI128::new($x).unwrap()
+            };
+        }
+
+        let db = crate::Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE foo (i128 BLOB, desc TEXT)")?;
+        db.execute(
+            "INSERT INTO foo(i128, desc) VALUES
+                (?1, 'neg one'), (?2, 'neg two'),
+                (?3, 'pos one'), (?4, 'pos two'),
+                (?5, 'min'), (?6, 'max')",
+            [
+                nz!(-1),
+                nz!(-2),
+                nz!(1),
+                nz!(2),
+                nz!(i128::MIN),
+                nz!(i128::MAX),
+            ],
+        )?;
+        let mut stmt = db.prepare("SELECT i128, desc FROM foo ORDER BY i128 ASC")?;
+
+        let res = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<(NonZeroI128, String)>, _>>()?;
+
+        assert_eq!(
+            res,
+            &[
+                (nz!(i128::MIN), "min".to_owned()),
+                (nz!(-2), "neg two".to_owned()),
+                (nz!(-1), "neg one".to_owned()),
+                (nz!(1), "pos one".to_owned()),
+                (nz!(2), "pos two".to_owned()),
+                (nz!(i128::MAX), "max".to_owned()),
+            ]
+        );
+        let err = db.query_row("SELECT ?1", [0i128], |row| row.get::<_, NonZeroI128>(0));
+        assert_eq!(err, Err(crate::Error::IntegralValueOutOfRange(0, 0)));
+        Ok(())
+    }
+
     #[cfg(feature = "uuid")]
     #[test]
     fn test_uuid() -> crate::Result<()> {
@@ -411,11 +522,11 @@ mod test {
         let id = Uuid::new_v4();
 
         db.execute(
-            "INSERT INTO foo (id, label) VALUES (?, ?)",
+            "INSERT INTO foo (id, label) VALUES (?1, ?2)",
             params![id, "target"],
         )?;
 
-        let mut stmt = db.prepare("SELECT id, label FROM foo WHERE id = ?")?;
+        let mut stmt = db.prepare("SELECT id, label FROM foo WHERE id = ?1")?;
 
         let mut rows = stmt.query(params![id])?;
         let row = rows.next()?.unwrap();

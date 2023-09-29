@@ -3,12 +3,16 @@ use std::str;
 use crate::{Error, Result, Statement};
 
 /// Information about a column of a SQLite query.
+#[cfg(feature = "column_decltype")]
+#[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
 #[derive(Debug)]
 pub struct Column<'stmt> {
     name: &'stmt str,
     decl_type: Option<&'stmt str>,
 }
 
+#[cfg(feature = "column_decltype")]
+#[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
 impl Column<'_> {
     /// Returns the name of the column.
     #[inline]
@@ -33,7 +37,7 @@ impl Statement<'_> {
     /// calling this method.
     pub fn column_names(&self) -> Vec<&str> {
         let n = self.column_count();
-        let mut cols = Vec::with_capacity(n as usize);
+        let mut cols = Vec::with_capacity(n);
         for i in 0..n {
             let s = self.column_name_unwrap(i);
             cols.push(s);
@@ -90,11 +94,14 @@ impl Statement<'_> {
     /// Returns an `Error::InvalidColumnIndex` if `idx` is outside the valid
     /// column range for this row.
     ///
+    /// # Panics
+    ///
     /// Panics when column name is not valid UTF-8.
     #[inline]
     pub fn column_name(&self, col: usize) -> Result<&str> {
         self.stmt
             .column_name(col)
+            // clippy::or_fun_call (nightly) vs clippy::unnecessary-lazy-evaluations (stable)
             .ok_or(Error::InvalidColumnIndex(col))
             .map(|slice| {
                 str::from_utf8(slice.to_bytes()).expect("Invalid UTF-8 sequence in column name")
@@ -137,7 +144,7 @@ impl Statement<'_> {
     #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
     pub fn columns(&self) -> Vec<Column> {
         let n = self.column_count();
-        let mut cols = Vec::with_capacity(n as usize);
+        let mut cols = Vec::with_capacity(n);
         for i in 0..n {
             let name = self.column_name_unwrap(i);
             let slice = self.stmt.column_decltype(i);
@@ -202,7 +209,7 @@ mod test {
                 assert_eq!(ty, Type::Integer);
             }
             e => {
-                panic!("Unexpected error type: {:?}", e);
+                panic!("Unexpected error type: {e:?}");
             }
         }
         match row.get::<_, String>("y").unwrap_err() {
@@ -212,7 +219,7 @@ mod test {
                 assert_eq!(ty, Type::Null);
             }
             e => {
-                panic!("Unexpected error type: {:?}", e);
+                panic!("Unexpected error type: {e:?}");
             }
         }
         Ok(())

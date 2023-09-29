@@ -1,7 +1,6 @@
 use super::ffi;
 use super::StatementStatus;
 use crate::util::ParamIndexCache;
-#[cfg(feature = "modern_sqlite")]
 use crate::util::SqliteMallocString;
 use std::ffi::CStr;
 use std::os::raw::c_int;
@@ -110,7 +109,7 @@ impl RawStatement {
     #[cfg(feature = "unlock_notify")]
     pub fn step(&self) -> c_int {
         use crate::unlock_notify;
-        let mut db = core::ptr::null_mut::<ffi::sqlite3>();
+        let mut db = ptr::null_mut::<ffi::sqlite3>();
         loop {
             unsafe {
                 let mut rc = ffi::sqlite3_step(self.ptr);
@@ -170,8 +169,10 @@ impl RawStatement {
     }
 
     #[inline]
-    pub fn clear_bindings(&self) -> c_int {
-        unsafe { ffi::sqlite3_clear_bindings(self.ptr) }
+    pub fn clear_bindings(&self) {
+        unsafe {
+            ffi::sqlite3_clear_bindings(self.ptr);
+        } // rc is always SQLITE_OK
     }
 
     #[inline]
@@ -197,13 +198,11 @@ impl RawStatement {
 
     // does not work for PRAGMA
     #[inline]
-    #[cfg(all(feature = "extra_check", feature = "modern_sqlite"))] // 3.7.4
     pub fn readonly(&self) -> bool {
         unsafe { ffi::sqlite3_stmt_readonly(self.ptr) != 0 }
     }
 
     #[inline]
-    #[cfg(feature = "modern_sqlite")] // 3.14.0
     pub(crate) fn expanded_sql(&self) -> Option<SqliteMallocString> {
         unsafe { SqliteMallocString::from_raw(ffi::sqlite3_expanded_sql(self.ptr)) }
     }
@@ -224,6 +223,14 @@ impl RawStatement {
     pub fn tail(&self) -> usize {
         self.tail
     }
+
+    #[inline]
+    #[cfg(feature = "modern_sqlite")] // 3.28.0
+    pub fn is_explain(&self) -> i32 {
+        unsafe { ffi::sqlite3_stmt_isexplain(self.ptr) }
+    }
+
+    // TODO sqlite3_normalized_sql (https://sqlite.org/c3ref/expanded_sql.html) // 3.27.0 + SQLITE_ENABLE_NORMALIZE
 }
 
 impl Drop for RawStatement {
