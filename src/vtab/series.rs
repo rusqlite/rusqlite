@@ -28,7 +28,7 @@ const SERIES_COLUMN_STOP: c_int = 2;
 const SERIES_COLUMN_STEP: c_int = 3;
 
 bitflags::bitflags! {
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Debug)]
     #[repr(C)]
     struct QueryPlanFlags: ::std::os::raw::c_int {
         // start = $value  -- constraint exists

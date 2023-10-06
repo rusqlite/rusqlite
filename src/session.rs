@@ -655,7 +655,7 @@ impl Connection {
 /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_CONFLICT) for details.
 #[allow(missing_docs)]
 #[repr(i32)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 #[allow(clippy::upper_case_acronyms)]
 pub enum ConflictType {
