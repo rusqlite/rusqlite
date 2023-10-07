@@ -776,9 +776,10 @@ mod test {
             .unwrap();
 
         let authorizer = move |ctx: AuthContext<'_>| match ctx.action {
-            AuthAction::Read { column_name, .. } if column_name == "private" => {
-                Authorization::Ignore
-            }
+            AuthAction::Read {
+                column_name: "private",
+                ..
+            } => Authorization::Ignore,
             AuthAction::DropTable { .. } => Authorization::Deny,
             AuthAction::Pragma { .. } => panic!("shouldn't be called"),
             _ => Authorization::Allow,
