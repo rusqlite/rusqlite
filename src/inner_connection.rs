@@ -3,9 +3,10 @@ use std::os::raw::{c_char, c_int};
 #[cfg(feature = "load_extension")]
 use std::path::Path;
 use std::ptr;
+use std::rc::Rc;
 use std::str;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use super::ffi;
 use super::str_for_sqlite;
@@ -23,7 +24,7 @@ pub struct InnerConnection {
     // cleared on closing), however the main copy, `db`, is unprotected.
     // Otherwise, a long running query would prevent calling interrupt, as
     // interrupt would only acquire the lock after the query's completion.
-    interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
+    interrupt_lock: Rc<Mutex<*mut ffi::sqlite3>>,
     #[cfg(feature = "hooks")]
     pub free_commit_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
     #[cfg(feature = "hooks")]
@@ -45,7 +46,7 @@ impl InnerConnection {
     pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> InnerConnection {
         InnerConnection {
             db,
-            interrupt_lock: Arc::new(Mutex::new(db)),
+            interrupt_lock: Rc::new(Mutex::new(db)),
             #[cfg(feature = "hooks")]
             free_commit_hook: None,
             #[cfg(feature = "hooks")]
@@ -179,7 +180,7 @@ impl InnerConnection {
     #[inline]
     pub fn get_interrupt_handle(&self) -> InterruptHandle {
         InterruptHandle {
-            db_lock: Arc::clone(&self.interrupt_lock),
+            db_lock: Rc::clone(&self.interrupt_lock),
         }
     }
 

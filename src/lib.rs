@@ -63,10 +63,11 @@ use std::fmt;
 use std::os::raw::{c_char, c_int};
 
 use std::path::Path;
+use std::rc::Rc;
 use std::result;
 use std::str;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use crate::cache::StatementCache;
 use crate::inner_connection::{InnerConnection, BYPASS_SQLITE_INIT};
@@ -1162,7 +1163,7 @@ pub unsafe fn bypass_sqlite_initialization() {
 
 /// Allows interrupting a long-running computation.
 pub struct InterruptHandle {
-    db_lock: Arc<Mutex<*mut ffi::sqlite3>>,
+    db_lock: Rc<Mutex<*mut ffi::sqlite3>>,
 }
 
 unsafe impl Send for InterruptHandle {}
