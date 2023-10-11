@@ -45,6 +45,7 @@ impl InnerConnection {
     pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> InnerConnection {
         InnerConnection {
             db,
+            #[allow(clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
             interrupt_lock: Arc::new(Mutex::new(db)),
             #[cfg(feature = "hooks")]
             free_commit_hook: None,
