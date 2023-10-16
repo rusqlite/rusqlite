@@ -435,6 +435,10 @@ impl Statement<'_> {
     ///
     /// Will return `None` if the column index is out of bounds or if the
     /// parameter is positional.
+    ///
+    /// # Panics
+    ///
+    /// Panics when parameter name is not valid UTF-8.
     #[inline]
     pub fn parameter_name(&self, index: usize) -> Option<&'_ str> {
         self.stmt.bind_parameter_name(index as i32).map(|name| {
@@ -450,7 +454,7 @@ impl Statement<'_> {
     {
         let expected = self.stmt.bind_parameter_count();
         let mut index = 0;
-        for p in params.into_iter() {
+        for p in params {
             index += 1; // The leftmost SQL parameter has an index of 1.
             if index > expected {
                 break;
@@ -744,7 +748,7 @@ impl Statement<'_> {
 
     /// Reset all bindings
     pub fn clear_bindings(&mut self) {
-        self.stmt.clear_bindings()
+        self.stmt.clear_bindings();
     }
 }
 
