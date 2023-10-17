@@ -272,11 +272,11 @@ where
     /// call to [`step()`](Aggregate::step) to set up the context for an
     /// invocation of the function. (Note: `init()` will not be called if
     /// there are no rows.)
-    fn init(&self, _: &mut Context<'_>) -> Result<A>;
+    fn init(&self, ctx: &mut Context<'_>) -> Result<A>;
 
     /// "step" function called once for each row in an aggregate group. May be
     /// called 0 times if there are no rows.
-    fn step(&self, _: &mut Context<'_>, _: &mut A) -> Result<()>;
+    fn step(&self, ctx: &mut Context<'_>, acc: &mut A) -> Result<()>;
 
     /// Computes and returns the final result. Will be called exactly once for
     /// each invocation of the function. If [`step()`](Aggregate::step) was
@@ -287,7 +287,7 @@ where
     /// given `None`.
     ///
     /// The passed context will have no arguments.
-    fn finalize(&self, _: &mut Context<'_>, _: Option<A>) -> Result<T>;
+    fn finalize(&self, ctx: &mut Context<'_>, acc: Option<A>) -> Result<T>;
 }
 
 /// `WindowAggregate` is the callback interface for
@@ -301,10 +301,10 @@ where
 {
     /// Returns the current value of the aggregate. Unlike xFinal, the
     /// implementation should not delete any context.
-    fn value(&self, _: Option<&A>) -> Result<T>;
+    fn value(&self, acc: Option<&A>) -> Result<T>;
 
     /// Removes a row from the current window.
-    fn inverse(&self, _: &mut Context<'_>, _: &mut A) -> Result<()>;
+    fn inverse(&self, ctx: &mut Context<'_>, acc: &mut A) -> Result<()>;
 }
 
 bitflags::bitflags! {
@@ -638,6 +638,7 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
             args: slice::from_raw_parts(argv, argc as usize),
         };
 
+        #[allow(clippy::unnecessary_cast)]
         if (*pac as *mut A).is_null() {
             *pac = Box::into_raw(Box::new((*boxed_aggr).init(&mut ctx)?));
         }
@@ -708,7 +709,9 @@ where
     // Within the xFinal callback, it is customary to set N=0 in calls to
     // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
     let a: Option<A> = match aggregate_context(ctx, 0) {
-        Some(pac) => {
+        Some(pac) =>
+        {
+            #[allow(clippy::unnecessary_cast)]
             if (*pac as *mut A).is_null() {
                 None
             } else {
@@ -753,7 +756,9 @@ where
     // Within the xValue callback, it is customary to set N=0 in calls to
     // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
     let a: Option<&A> = match aggregate_context(ctx, 0) {
-        Some(pac) => {
+        Some(pac) =>
+        {
+            #[allow(clippy::unnecessary_cast)]
             if (*pac as *mut A).is_null() {
                 None
             } else {
