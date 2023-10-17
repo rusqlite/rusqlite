@@ -279,6 +279,7 @@ mod build_bundled {
             cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strlen.c");
             cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strncmp.c");
             cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strrchr.c");
+            cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strspn.c");
         }
         if cfg!(feature = "unlock_notify") {
             cfg.flag("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
