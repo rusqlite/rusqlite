@@ -132,6 +132,8 @@ const SQLITE_IOERR_BEGIN_ATOMIC: c_int = super::SQLITE_IOERR | (29 << 8);
 const SQLITE_IOERR_COMMIT_ATOMIC: c_int = super::SQLITE_IOERR | (30 << 8);
 const SQLITE_IOERR_ROLLBACK_ATOMIC: c_int = super::SQLITE_IOERR | (31 << 8);
 const SQLITE_IOERR_DATA: c_int = super::SQLITE_IOERR | (32 << 8);
+const SQLITE_IOERR_CORRUPTFS: c_int = super::SQLITE_IOERR | (33 << 8);
+const SQLITE_IOERR_IN_PAGE: c_int = super::SQLITE_IOERR | (34 << 8);
 
 const SQLITE_LOCKED_VTAB: c_int = super::SQLITE_LOCKED | (2 << 8);
 
@@ -219,6 +221,8 @@ pub fn code_to_str(code: c_int) -> &'static str {
         SQLITE_IOERR_COMMIT_ATOMIC     => "SQLITE_IOERR_COMMIT_ATOMIC",
         SQLITE_IOERR_ROLLBACK_ATOMIC   => "SQLITE_IOERR_ROLLBACK_ATOMIC",
         SQLITE_IOERR_DATA   => "SQLITE_IOERR_DATA",
+        SQLITE_IOERR_CORRUPTFS   => "SQLITE_IOERR_CORRUPTFS",
+        SQLITE_IOERR_IN_PAGE   => "SQLITE_IOERR_IN_PAGE",
 
         super::SQLITE_LOCKED_SHAREDCACHE      => "Locking conflict due to another connection with a shared cache",
         SQLITE_LOCKED_VTAB             => "SQLITE_LOCKED_VTAB",
