@@ -221,6 +221,8 @@ pub fn code_to_str(code: c_int) -> &'static str {
         SQLITE_IOERR_COMMIT_ATOMIC     => "SQLITE_IOERR_COMMIT_ATOMIC",
         SQLITE_IOERR_ROLLBACK_ATOMIC   => "SQLITE_IOERR_ROLLBACK_ATOMIC",
         SQLITE_IOERR_DATA   => "SQLITE_IOERR_DATA",
+        SQLITE_IOERR_CORRUPTFS   => "SQLITE_IOERR_CORRUPTFS",
+        SQLITE_IOERR_IN_PAGE   => "SQLITE_IOERR_IN_PAGE",
 
         super::SQLITE_LOCKED_SHAREDCACHE      => "Locking conflict due to another connection with a shared cache",
         SQLITE_LOCKED_VTAB             => "SQLITE_LOCKED_VTAB",
