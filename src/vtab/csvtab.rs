@@ -344,10 +344,12 @@ impl From<csv::Error> for Error {
 mod test {
     use crate::vtab::csvtab;
     use crate::{Connection, Result};
-    use fallible_iterator::FallibleIterator;
 
+    #[cfg(feature = "fallible-iterator")]
     #[test]
     fn test_csv_module() -> Result<()> {
+        use fallible_iterator::FallibleIterator;
+
         let db = Connection::open_in_memory()?;
         csvtab::load_module(&db)?;
         db.execute_batch("CREATE VIRTUAL TABLE vtab USING csv(filename='test.csv', header=yes)")?;

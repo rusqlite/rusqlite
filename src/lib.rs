@@ -81,7 +81,9 @@ pub use crate::ffi::ErrorCode;
 #[cfg(feature = "load_extension")]
 pub use crate::load_extension_guard::LoadExtensionGuard;
 pub use crate::params::{params_from_iter, Params, ParamsFromIter};
-pub use crate::row::{AndThenRows, Map, MappedRows, Row, RowIndex, Rows};
+pub use crate::row::{AndThenRows, MappedRows, Row, RowIndex, Rows};
+#[cfg(feature = "fallible-iterator")]
+pub use crate::row::Map;
 pub use crate::statement::{Statement, StatementStatus};
 #[cfg(feature = "modern_sqlite")]
 pub use crate::transaction::TransactionState;
@@ -1245,7 +1247,6 @@ doc_comment::doctest!("../README.md");
 mod test {
     use super::*;
     use crate::ffi;
-    use fallible_iterator::FallibleIterator;
     use std::error::Error as StdError;
     use std::fmt;
 
@@ -1598,8 +1599,11 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "fallible-iterator")]
     #[test]
     fn test_query_map() -> Result<()> {
+        use fallible_iterator::FallibleIterator;
+
         let db = Connection::open_in_memory()?;
         let sql = "BEGIN;
                    CREATE TABLE foo(x INTEGER, y TEXT);
@@ -1789,8 +1793,10 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "functions")]
+    #[cfg(all(feature = "functions", feature = "fallible-iterator"))]
     fn test_interrupt() -> Result<()> {
+        use fallible_iterator::FallibleIterator;
+
         let db = Connection::open_in_memory()?;
 
         let interrupt_handle = db.get_interrupt_handle();

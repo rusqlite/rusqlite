@@ -283,10 +283,12 @@ mod test {
     use crate::ffi;
     use crate::vtab::series;
     use crate::{Connection, Result};
-    use fallible_iterator::FallibleIterator;
 
+    #[cfg(feature = "fallible-iterator")]
     #[test]
     fn test_series_module() -> Result<()> {
+        use fallible_iterator::FallibleIterator;
+
         let version = unsafe { ffi::sqlite3_libversion_number() };
         if version < 3_008_012 {
             return Ok(());

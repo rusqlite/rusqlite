@@ -1027,7 +1027,7 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "window")]
+    #[cfg(all(feature = "window", feature = "fallible-iterator"))]
     fn test_window() -> Result<()> {
         use fallible_iterator::FallibleIterator;
 

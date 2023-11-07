@@ -180,7 +180,6 @@ impl StatementCache {
 mod test {
     use super::StatementCache;
     use crate::{Connection, Result};
-    use fallible_iterator::FallibleIterator;
 
     impl StatementCache {
         fn clear(&self) {
@@ -274,8 +273,11 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "fallible-iterator")]
     #[test]
     fn test_ddl() -> Result<()> {
+        use fallible_iterator::FallibleIterator;
+
         let db = Connection::open_in_memory()?;
         db.execute_batch(
             r#"

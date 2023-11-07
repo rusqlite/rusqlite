@@ -1,3 +1,4 @@
+#[cfg(feature = "fallible-iterator")]
 use fallible_iterator::FallibleIterator;
 use fallible_streaming_iterator::FallibleStreamingIterator;
 use std::convert;
@@ -52,6 +53,7 @@ impl<'stmt> Rows<'stmt> {
     /// }
     /// ```
     // FIXME Hide FallibleStreamingIterator::map
+    #[cfg(feature = "fallible-iterator")]
     #[inline]
     pub fn map<F, B>(self, f: F) -> Map<'stmt, F>
     where
@@ -117,11 +119,13 @@ impl Drop for Rows<'_> {
 /// `F` is used to transform the _streaming_ iterator into a _fallible_
 /// iterator.
 #[must_use = "iterators are lazy and do nothing unless consumed"]
+#[cfg(feature = "fallible-iterator")]
 pub struct Map<'stmt, F> {
     rows: Rows<'stmt>,
     f: F,
 }
 
+#[cfg(feature = "fallible-iterator")]
 impl<F, B> FallibleIterator for Map<'_, F>
 where
     F: FnMut(&Row<'_>) -> Result<B>,
@@ -608,9 +612,12 @@ mod tests {
         {
             let iterator_last = stmt.query_map([], |_| Ok(()))?.last();
             assert!(iterator_last.is_some()); // should be none
-            use fallible_iterator::FallibleIterator;
-            let fallible_iterator_last = stmt.query([])?.map(|_| Ok(())).last();
-            assert!(fallible_iterator_last.is_err());
+            #[cfg(feature = "fallible-iterator")]
+            {
+                use fallible_iterator::FallibleIterator;
+                let fallible_iterator_last = stmt.query([])?.map(|_| Ok(())).last();
+                assert!(fallible_iterator_last.is_err());
+            }
         }
         Ok(())
     }
