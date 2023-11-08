@@ -33,6 +33,7 @@ name = "rusqlite"
 members = ["libsqlite3-sys"]
 
 [features]
+default = ["fallible-streaming-iterator"]
 load_extension = []
 # hot-backup interface: 3.6.11 (2009-02-18)
 backup = []
@@ -108,7 +109,8 @@ modern-full = [
     "uuid",
     "vtab",
     "window",
-    "fallible-iterator"
+    "fallible-iterator",
+    "fallible-streaming-iterator",
 ]
 
 bundled-full = ["modern-full", "bundled"]
@@ -122,7 +124,7 @@ serde_json = { version = "1.0", optional = true }
 csv = { version = "1.1", optional = true }
 url = { version = "2.1", optional = true }
 fallible-iterator = { version = "0.3", default-features = false, optional = true }
-fallible-streaming-iterator = "0.1"
+fallible-streaming-iterator = { version = "0.1", default-features = false, optional = true }
 uuid = { version = "1.0", optional = true }
 smallvec = "1.6.1"
 rusqlite-macros = { path = "rusqlite-macros", version = "0.1.0", optional = true }

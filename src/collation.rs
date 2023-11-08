@@ -167,6 +167,7 @@ impl InnerConnection {
 }
 
 #[cfg(test)]
+#[cfg(feature = "fallible-streaming-iterator")]
 mod test {
     use crate::{Connection, Result};
     use fallible_streaming_iterator::FallibleStreamingIterator;

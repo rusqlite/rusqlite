@@ -9,6 +9,7 @@ use std::panic::{catch_unwind, RefUnwindSafe};
 use std::ptr;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 
+#[cfg(feature = "fallible-streaming-iterator")]
 use fallible_streaming_iterator::FallibleStreamingIterator;
 
 use crate::error::{check, error_from_sqlite_code};
@@ -335,6 +336,7 @@ impl ChangesetIter<'_> {
     }
 }
 
+#[cfg(feature = "fallible-streaming-iterator")]
 impl FallibleStreamingIterator for ChangesetIter<'_> {
     type Error = crate::error::Error;
     type Item = ChangesetItem;
@@ -763,6 +765,7 @@ unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_in
 
 #[cfg(test)]
 mod test {
+    #[cfg(feature = "fallible-streaming-iterator")]
     use fallible_streaming_iterator::FallibleStreamingIterator;
     use std::io::Read;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -799,6 +802,7 @@ mod test {
         Ok(output)
     }
 
+    #[cfg(feature = "fallible-streaming-iterator")]
     #[test]
     fn test_changeset() -> Result<()> {
         let changeset = one_changeset()?;
@@ -821,6 +825,7 @@ mod test {
         Ok(())
     }
 
+    #[cfg(feature = "fallible-streaming-iterator")]
     #[test]
     fn test_changeset_strm() -> Result<()> {
         let output = one_changeset_strm()?;

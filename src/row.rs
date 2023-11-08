@@ -1,5 +1,6 @@
 #[cfg(feature = "fallible-iterator")]
 use fallible_iterator::FallibleIterator;
+#[cfg(feature = "fallible-streaming-iterator")]
 use fallible_streaming_iterator::FallibleStreamingIterator;
 use std::convert;
 
@@ -38,8 +39,8 @@ impl<'stmt> Rows<'stmt> {
     #[allow(clippy::should_implement_trait)] // cannot implement Iterator
     #[inline]
     pub fn next(&mut self) -> Result<Option<&Row<'stmt>>> {
-        self.advance()?;
-        Ok((*self).get())
+        self.advance_iter()?;
+        Ok((*self).get_row())
     }
 
     /// Map over this `Rows`, converting it to a [`Map`], which
@@ -105,6 +106,36 @@ impl<'stmt> Rows<'stmt> {
             Some(row) => Ok(row),
             None => Err(Error::QueryReturnedNoRows),
         }
+    }
+
+    #[inline]
+    fn advance_iter(&mut self) -> Result<()> {
+        if let Some(stmt) = self.stmt {
+            match stmt.step() {
+                Ok(true) => {
+                    self.row = Some(Row { stmt });
+                    Ok(())
+                }
+                Ok(false) => {
+                    let r = self.reset();
+                    self.row = None;
+                    r
+                }
+                Err(e) => {
+                    let _ = self.reset(); // prevents infinite loop on error
+                    self.row = None;
+                    Err(e)
+                }
+            }
+        } else {
+            self.row = None;
+            Ok(())
+        }
+    }
+
+    #[inline]
+    fn get_row(&self) -> Option<&Row<'stmt>> {
+        self.row.as_ref()
     }
 }
 
@@ -211,38 +242,19 @@ where
 ///     Ok(())
 /// }
 /// ```
+#[cfg(feature = "fallible-streaming-iterator")]
 impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
     type Error = Error;
     type Item = Row<'stmt>;
 
     #[inline]
     fn advance(&mut self) -> Result<()> {
-        if let Some(stmt) = self.stmt {
-            match stmt.step() {
-                Ok(true) => {
-                    self.row = Some(Row { stmt });
-                    Ok(())
-                }
-                Ok(false) => {
-                    let r = self.reset();
-                    self.row = None;
-                    r
-                }
-                Err(e) => {
-                    let _ = self.reset(); // prevents infinite loop on error
-                    self.row = None;
-                    Err(e)
-                }
-            }
-        } else {
-            self.row = None;
-            Ok(())
-        }
+        self.advance_iter()
     }
 
     #[inline]
     fn get(&self) -> Option<&Row<'stmt>> {
-        self.row.as_ref()
+        self.get_row()
     }
 }
 
@@ -602,12 +614,16 @@ mod tests {
         CREATE TRIGGER oops BEFORE INSERT ON foo BEGIN SELECT RAISE(FAIL, 'Boom'); END;",
         )?;
         let mut stmt = conn.prepare("INSERT INTO foo VALUES (0) RETURNING rowid;")?;
+        #[cfg(feature = "fallible-streaming-iterator")]
         {
             let iterator_count = stmt.query_map([], |_| Ok(()))?.count();
             assert_eq!(1, iterator_count); // should be 0
-            use fallible_streaming_iterator::FallibleStreamingIterator;
-            let fallible_iterator_count = stmt.query([])?.count().unwrap_or(0);
-            assert_eq!(0, fallible_iterator_count);
+            #[cfg(feature = "fallible-iterator")]
+            {
+                use fallible_streaming_iterator::FallibleStreamingIterator;
+                let fallible_iterator_count = stmt.query([])?.count().unwrap_or(0);
+                assert_eq!(0, fallible_iterator_count);
+            }
         }
         {
             let iterator_last = stmt.query_map([], |_| Ok(()))?.last();
