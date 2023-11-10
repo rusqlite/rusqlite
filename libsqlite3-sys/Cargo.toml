@@ -46,7 +46,7 @@ openssl-sys = { version = "0.9", optional = true }
 atomic = { version = "0.5", optional = true }
 
 [build-dependencies]
-bindgen = { version = "0.68", optional = true, default-features = false, features = ["runtime"] }
+bindgen = { version = "0.69", optional = true, default-features = false, features = ["runtime"] }
 pkg-config = { version = "0.3.19", optional = true }
 cc = { version = "1.0", optional = true }
 vcpkg = { version = "0.2", optional = true }
