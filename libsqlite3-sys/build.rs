@@ -745,25 +745,31 @@ mod loadable_extension {
             let ty = &method.output;
             let tokens = if "db_config" == name {
                 quote::quote! {
-                    static #ptr_name: ::atomic::Atomic<Option<unsafe extern "C" fn(#args #varargs) #ty>> = ::atomic::Atomic::new(None);
+                    static #ptr_name: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(::std::ptr::null_mut());
                     pub unsafe fn #sqlite3_fn_name(#args arg3: ::std::os::raw::c_int, arg4: *mut ::std::os::raw::c_int) #ty {
-                        let fun = #ptr_name.load(::atomic::Ordering::Acquire).expect("SQLite API not initialized");
+                        let ptr = #ptr_name.load(::std::sync::atomic::Ordering::Acquire);
+                        assert!(!ptr.is_null(), "SQLite API not initialized");
+                        let fun: unsafe extern "C" fn(#args #varargs) #ty = ::std::mem::transmute(ptr);
                         (fun)(#arg_names, arg3, arg4)
                     }
                 }
             } else if "log" == name {
                 quote::quote! {
-                    static #ptr_name: ::atomic::Atomic<Option<unsafe extern "C" fn(#args #varargs) #ty>> = ::atomic::Atomic::new(None);
+                    static #ptr_name: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(::std::ptr::null_mut());
                     pub unsafe fn #sqlite3_fn_name(#args arg3: *const ::std::os::raw::c_char) #ty {
-                        let fun = #ptr_name.load(::atomic::Ordering::Acquire).expect("SQLite API not initialized");
+                        let ptr = #ptr_name.load(::std::sync::atomic::Ordering::Acquire);
+                        assert!(!ptr.is_null(), "SQLite API not initialized");
+                        let fun: unsafe extern "C" fn(#args #varargs) #ty = ::std::mem::transmute(ptr);
                         (fun)(#arg_names, arg3)
                     }
                 }
             } else {
                 quote::quote! {
-                    static #ptr_name: ::atomic::Atomic<Option<unsafe extern "C" fn(#args #varargs) #ty>> = ::atomic::Atomic::new(None);
+                    static #ptr_name: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(::std::ptr::null_mut());
                     pub unsafe fn #sqlite3_fn_name(#args) #ty {
-                        let fun = #ptr_name.load(::atomic::Ordering::Acquire).expect("SQLite API not initialized or SQLite feature omitted");
+                        let ptr = #ptr_name.load(::std::sync::atomic::Ordering::Acquire);
+                        assert!(!ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
+                        let fun: unsafe extern "C" fn(#args #varargs) #ty = ::std::mem::transmute(ptr);
                         (fun)(#arg_names)
                     }
                 }
@@ -778,10 +784,12 @@ mod loadable_extension {
                 &mut stores
             }
             .push(quote::quote! {
-                #ptr_name.store(
-                    (*#p_api).#ident,
-                    ::atomic::Ordering::Release,
-                );
+                if let Some(fun) = (*#p_api).#ident {
+                    #ptr_name.store(
+                        fun as usize as *mut (),
+                        ::std::sync::atomic::Ordering::Release,
+                    );
+                }
             });
         }
         // (3) generate rust code similar to SQLITE_EXTENSION_INIT2 macro

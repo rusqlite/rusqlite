@@ -23,7 +23,7 @@ min_sqlite_version_3_14_0 = ["pkg-config", "vcpkg"]
 # Bundle only the bindings file. Note that this does nothing if
 # `buildtime_bindgen` is enabled.
 bundled_bindings = []
-loadable_extension = ["atomic", "prettyplease", "quote", "syn"]
+loadable_extension = ["prettyplease", "quote", "syn"]
 # sqlite3_unlock_notify >= 3.6.12
 unlock_notify = []
 # 3.13.0
@@ -43,7 +43,6 @@ winsqlite3 = []
 
 [dependencies]
 openssl-sys = { version = "0.9", optional = true }
-atomic = { version = "0.6", optional = true }
 
 [build-dependencies]
 bindgen = { version = "0.69", optional = true, default-features = false, features = ["runtime"] }

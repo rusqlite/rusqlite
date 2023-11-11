@@ -28,12 +28,13 @@ find "$TARGET_DIR" -type f -name bindgen.rs -exec mv {} "$SQLITE3_LIB_DIR/bindge
 # Regenerate bindgen file for sqlite3ext.h
 # some sqlite3_api_routines fields are function pointers with va_list arg but currently stable Rust doesn't support this type.
 # FIXME how to generate portable bindings without :
-sed -i'' -e 's/va_list/void*/' "$SQLITE3_LIB_DIR/sqlite3ext.h"
+sed -i.bk -e 's/va_list/void*/' "$SQLITE3_LIB_DIR/sqlite3ext.h"
 rm -f "$SQLITE3_LIB_DIR/bindgen_bundled_version_ext.rs"
 find "$TARGET_DIR" -type f -name bindgen.rs -exec rm {} \;
 env LIBSQLITE3_SYS_BUNDLING=1 cargo build --features "buildtime_bindgen loadable_extension" --no-default-features
 find "$TARGET_DIR" -type f -name bindgen.rs -exec mv {} "$SQLITE3_LIB_DIR/bindgen_bundled_version_ext.rs" \;
 git checkout "$SQLITE3_LIB_DIR/sqlite3ext.h"
+rm -f "$SQLITE3_LIB_DIR/sqlite3ext.h.bk"
 
 # Sanity checks
 cd "$SCRIPT_DIR/.." || { echo "fatal error" >&2; exit 1; }
