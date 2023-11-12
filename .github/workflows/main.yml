@@ -65,6 +65,11 @@ jobs:
       - run: cargo test --features 'bundled-full session buildtime_bindgen' --all-targets --workspace --verbose
       - run: cargo test --features 'bundled-full session buildtime_bindgen' --doc --workspace --verbose
 
+      - name: loadable extension
+        run: |
+          cargo build --example loadable_extension --features "loadable_extension modern_sqlite functions vtab trace"
+          cargo run --example load_extension --features "load_extension bundled functions vtab trace"
+
       # TODO: move into own action for better caching
       - name: Static build
         # Do we expect this to work / should we test with gnu toolchain?

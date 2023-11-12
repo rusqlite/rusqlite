@@ -952,6 +952,17 @@ impl Connection {
         })
     }
 
+    /// Like SQLITE_EXTENSION_INIT2 macro
+    #[cfg(feature = "loadable_extension")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "loadable_extension")))]
+    pub unsafe fn extension_init2(
+        db: *mut ffi::sqlite3,
+        p_api: *mut ffi::sqlite3_api_routines,
+    ) -> Result<Connection> {
+        ffi::rusqlite_extension_init2(p_api)?;
+        Connection::from_handle(db)
+    }
+
     /// Create a `Connection` from a raw owned handle.
     ///
     /// The returned connection will attempt to close the inner connection

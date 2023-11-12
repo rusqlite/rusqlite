@@ -50,6 +50,7 @@ bundled-sqlcipher = ["libsqlite3-sys/bundled-sqlcipher", "bundled"]
 bundled-sqlcipher-vendored-openssl = ["libsqlite3-sys/bundled-sqlcipher-vendored-openssl", "bundled-sqlcipher"]
 buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
 limits = []
+loadable_extension = ["libsqlite3-sys/loadable_extension"]
 hooks = []
 i128_blob = []
 sqlcipher = ["libsqlite3-sys/sqlcipher"]
@@ -158,6 +159,15 @@ harness = false
 [[bench]]
 name = "exec"
 harness = false
+
+[[example]]
+name = "loadable_extension"
+crate-type = ["cdylib"]
+required-features = ["loadable_extension", "modern_sqlite", "functions", "vtab", "trace"]
+
+[[example]]
+name = "load_extension"
+required-features = ["load_extension", "bundled", "functions", "vtab", "trace"]
 
 [package.metadata.docs.rs]
 features = ["modern-full", "rusqlite-macros"]

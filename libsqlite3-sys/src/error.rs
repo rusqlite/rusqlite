@@ -273,3 +273,32 @@ pub fn code_to_str(code: c_int) -> &'static str {
         _ => "Unknown error code",
     }
 }
+
+/// Loadable extension initialization error
+#[cfg(feature = "loadable_extension")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum InitError {
+    /// Version mismatch between the extension and the SQLite3 library
+    VersionMismatch { compile_time: i32, runtime: i32 },
+    /// Invalid function pointer in one of sqlite3_api_routines fields
+    NullFunctionPointer,
+}
+#[cfg(feature = "loadable_extension")]
+impl ::std::fmt::Display for InitError {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+        match *self {
+            InitError::VersionMismatch {
+                compile_time,
+                runtime,
+            } => {
+                write!(f, "SQLite version mismatch: {runtime} < {compile_time}")
+            }
+            InitError::NullFunctionPointer => {
+                write!(f, "Some sqlite3_api_routines fields are null")
+            }
+        }
+    }
+}
+#[cfg(feature = "loadable_extension")]
+impl error::Error for InitError {}
