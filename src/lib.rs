@@ -81,7 +81,7 @@ pub use crate::ffi::ErrorCode;
 #[cfg(feature = "load_extension")]
 pub use crate::load_extension_guard::LoadExtensionGuard;
 pub use crate::params::{params_from_iter, Params, ParamsFromIter};
-pub use crate::row::{AndThenRows, Map, MappedRows, Row, RowIndex, Rows};
+pub use crate::row::{AndThenRows, MappedRows, Row, RowIndex, Rows};
 pub use crate::statement::{Statement, StatementStatus};
 #[cfg(feature = "modern_sqlite")]
 pub use crate::transaction::TransactionState;

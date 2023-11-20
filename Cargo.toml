@@ -121,7 +121,6 @@ chrono = { version = "0.4", optional = true, default-features = false, features 
 serde_json = { version = "1.0", optional = true }
 csv = { version = "1.1", optional = true }
 url = { version = "2.1", optional = true }
-fallible-iterator = "0.3"
 fallible-streaming-iterator = "0.1"
 uuid = { version = "1.0", optional = true }
 smallvec = "1.6.1"
@@ -130,6 +129,7 @@ rusqlite-macros = { path = "rusqlite-macros", version = "0.1.0", optional = true
 [dev-dependencies]
 doc-comment = "0.3"
 tempfile = "3.1.0"
+fallible-iterator = "0.3"
 lazy_static = "1.4"
 regex = "1.5.5"
 uuid = { version = "1.0", features = ["v4"] }

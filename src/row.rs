@@ -1,3 +1,4 @@
+#[cfg(test)]
 use fallible_iterator::FallibleIterator;
 use fallible_streaming_iterator::FallibleStreamingIterator;
 use std::convert;
@@ -50,6 +51,7 @@ impl<'stmt> Rows<'stmt> {
     /// }
     /// ```
     // FIXME Hide FallibleStreamingIterator::map
+    #[cfg(test)]
     #[inline]
     pub fn map<F, B>(self, f: F) -> Map<'stmt, F>
     where
@@ -113,12 +115,14 @@ impl Drop for Rows<'_> {
 
 /// `F` is used to transform the _streaming_ iterator into a _fallible_
 /// iterator.
+#[cfg(test)]
 #[must_use = "iterators are lazy and do nothing unless consumed"]
 pub struct Map<'stmt, F> {
     rows: Rows<'stmt>,
     f: F,
 }
 
+#[cfg(test)]
 impl<F, B> FallibleIterator for Map<'_, F>
 where
     F: FnMut(&Row<'_>) -> Result<B>,
