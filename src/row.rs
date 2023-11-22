@@ -585,4 +585,24 @@ mod tests {
         // We don't test one bigger because it's unimplemented
         Ok(())
     }
+
+    #[test]
+    #[cfg(feature = "bundled")]
+    fn pathological_case() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch(
+            "CREATE TABLE foo(x);
+        CREATE TRIGGER oops BEFORE INSERT ON foo BEGIN SELECT RAISE(FAIL, 'Boom'); END;",
+        )?;
+        let mut stmt = conn.prepare("INSERT INTO foo VALUES (0) RETURNING rowid;")?;
+        {
+            let n = stmt.query_map([], |_| Ok(()))?.count();
+            assert_eq!(1, n); // should be 0
+        }
+        {
+            let last = stmt.query_map([], |_| Ok(()))?.last();
+            assert!(last.is_some()); // should be none
+        }
+        Ok(())
+    }
 }
