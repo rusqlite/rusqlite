@@ -596,12 +596,18 @@ mod tests {
         )?;
         let mut stmt = conn.prepare("INSERT INTO foo VALUES (0) RETURNING rowid;")?;
         {
-            let n = stmt.query_map([], |_| Ok(()))?.count();
-            assert_eq!(1, n); // should be 0
+            let iterator_count = stmt.query_map([], |_| Ok(()))?.count();
+            assert_eq!(1, iterator_count); // should be 0
+            use fallible_streaming_iterator::FallibleStreamingIterator;
+            let fallible_iterator_count = stmt.query([])?.count().unwrap_or(0);
+            assert_eq!(0, fallible_iterator_count);
         }
         {
-            let last = stmt.query_map([], |_| Ok(()))?.last();
-            assert!(last.is_some()); // should be none
+            let iterator_last = stmt.query_map([], |_| Ok(()))?.last();
+            assert!(iterator_last.is_some()); // should be none
+            use fallible_iterator::FallibleIterator;
+            let fallible_iterator_last = stmt.query([])?.map(|_| Ok(())).last();
+            assert!(fallible_iterator_last.is_err());
         }
         Ok(())
     }
