@@ -19,11 +19,11 @@ fn android_target() -> bool {
 }
 
 /// Tells whether a given compiler will be used `compiler_name` is compared to
-/// the content of `CARGO_CFG_TARGET_ENV` (and is always lowercase)
+/// the content of `TARGET` (and is always lowercase)
 ///
 /// See [`win_target`]
 fn is_compiler(compiler_name: &str) -> bool {
-    env::var("CARGO_CFG_TARGET_ENV").map_or(false, |v| v == compiler_name)
+    env::var("TARGET").map_or(false, |v| v == compiler_name)
 }
 
 /// Copy bindgen file from `dir` to `out_path`.
@@ -249,6 +249,7 @@ mod build_bundled {
         // Target wasm32-wasi can't compile the default VFS
         if env::var("TARGET").map_or(false, |v| v == "wasm32-wasi") {
             cfg.flag("-DSQLITE_OS_OTHER")
+                .flag("-DSQLITE_THREADSAFE=0")
                 // https://github.com/rust-lang/rust/issues/74393
                 .flag("-DLONGDOUBLE_TYPE=double");
             if cfg!(feature = "wasm32-wasi-vfs") {
