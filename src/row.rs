@@ -588,4 +588,30 @@ mod tests {
         // We don't test one bigger because it's unimplemented
         Ok(())
     }
+
+    #[test]
+    #[cfg(feature = "bundled")]
+    fn pathological_case() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch(
+            "CREATE TABLE foo(x);
+        CREATE TRIGGER oops BEFORE INSERT ON foo BEGIN SELECT RAISE(FAIL, 'Boom'); END;",
+        )?;
+        let mut stmt = conn.prepare("INSERT INTO foo VALUES (0) RETURNING rowid;")?;
+        {
+            let iterator_count = stmt.query_map([], |_| Ok(()))?.count();
+            assert_eq!(1, iterator_count); // should be 0
+            use fallible_streaming_iterator::FallibleStreamingIterator;
+            let fallible_iterator_count = stmt.query([])?.count().unwrap_or(0);
+            assert_eq!(0, fallible_iterator_count);
+        }
+        {
+            let iterator_last = stmt.query_map([], |_| Ok(()))?.last();
+            assert!(iterator_last.is_some()); // should be none
+            use fallible_iterator::FallibleIterator;
+            let fallible_iterator_last = stmt.query([])?.map(|_| Ok(())).last();
+            assert!(fallible_iterator_last.is_err());
+        }
+        Ok(())
+    }
 }
