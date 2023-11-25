@@ -14,9 +14,11 @@ pub struct Rows<'stmt> {
 
 impl<'stmt> Rows<'stmt> {
     #[inline]
-    fn reset(&mut self) {
+    fn reset(&mut self) -> Result<()> {
         if let Some(stmt) = self.stmt.take() {
-            stmt.reset();
+            stmt.reset()
+        } else {
+            Ok(())
         }
     }
 
@@ -105,6 +107,7 @@ impl<'stmt> Rows<'stmt> {
 }
 
 impl Drop for Rows<'_> {
+    #[allow(unused_must_use)]
     #[inline]
     fn drop(&mut self) {
         self.reset();
@@ -217,12 +220,12 @@ impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
                     Ok(())
                 }
                 Ok(false) => {
-                    self.reset();
+                    let r = self.reset();
                     self.row = None;
-                    Ok(())
+                    r
                 }
                 Err(e) => {
-                    self.reset();
+                    let _ = self.reset(); // prevents infinite loop on error
                     self.row = None;
                     Err(e)
                 }
