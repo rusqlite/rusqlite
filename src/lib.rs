@@ -1494,9 +1494,20 @@ mod test {
 
     #[test]
     #[cfg(feature = "extra_check")]
-    fn test_execute_select() {
+    fn test_execute_select_with_no_row() {
         let db = checked_memory_handle();
         let err = db.execute("SELECT 1 WHERE 1 < ?1", [1i32]).unwrap_err();
+        assert_eq!(
+            err,
+            Error::ExecuteReturnedResults,
+            "Unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_execute_select_with_row() {
+        let db = checked_memory_handle();
+        let err = db.execute("SELECT 1", []).unwrap_err();
         assert_eq!(
             err,
             Error::ExecuteReturnedResults,
