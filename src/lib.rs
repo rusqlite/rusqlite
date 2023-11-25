@@ -1508,11 +1508,7 @@ mod test {
     fn test_execute_select_with_row() {
         let db = checked_memory_handle();
         let err = db.execute("SELECT 1", []).unwrap_err();
-        assert_eq!(
-            err,
-            Error::ExecuteReturnedResults,
-            "Unexpected error: {err}"
-        );
+        assert_eq!(err, Error::ExecuteReturnedResults);
     }
 
     #[test]
