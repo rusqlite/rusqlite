@@ -292,7 +292,10 @@ impl ::std::fmt::Display for InitError {
                 compile_time,
                 runtime,
             } => {
-                write!(f, "SQLite version mismatch: {runtime} < {compile_time}")
+                write!(
+                    f,
+                    "SQLite version mismatch:  runtime v{runtime}  <  compiled v{compile_time}"
+                )
             }
             InitError::NullFunctionPointer => {
                 write!(f, "Some sqlite3_api_routines fields are null")
