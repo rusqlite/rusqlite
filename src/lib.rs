@@ -1241,6 +1241,7 @@ impl InterruptHandle {
 /// Adds an entrypoint implementation for a SQLite extension.
 /// This macro must be used once in the root of a crate that implements a SQLite extension.
 ///
+/// Optionally, the second parameter can be used to specify the name of the public entry point function.
 /// See [Loading extension](https://sqlite.org/loadext.html#loading_an_extension) for more details
 /// on the recommended entry point names to support autodiscovery.
 ///
