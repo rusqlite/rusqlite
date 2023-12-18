@@ -1278,7 +1278,7 @@ macro_rules! sqlite3_extension_init {
     ($func: ident, $entry_point: ident) => {
         #[allow(clippy::not_unsafe_ptr_arg_deref)]
         #[no_mangle]
-        pub extern "C" fn sqlite3_extension_init(
+        pub extern "C" fn $entry_point(
             db: *mut ::rusqlite::ffi::sqlite3,
             pz_err_msg: *mut *mut std::os::raw::c_char,
             p_api: *mut ::rusqlite::ffi::sqlite3_api_routines,
