@@ -1241,6 +1241,9 @@ impl InterruptHandle {
 /// Adds an entrypoint implementation for a SQLite extension.
 /// This macro must be used once in the root of a crate that implements a SQLite extension.
 ///
+/// See [Loading extension](https://sqlite.org/loadext.html#loading_an_extension) for more details
+/// on the recommended entry point names to support autodiscovery.
+///
 /// # Example
 /// ```
 /// use rusqlite::Connection;
@@ -1270,6 +1273,9 @@ impl InterruptHandle {
 #[macro_export]
 macro_rules! sqlite3_extension_init {
     ($func: ident) => {
+        sqlite3_extension_init!($func, sqlite3_extension_init);
+    };
+    ($func: ident, $entry_point: ident) => {
         #[allow(clippy::not_unsafe_ptr_arg_deref)]
         #[no_mangle]
         pub extern "C" fn sqlite3_extension_init(
