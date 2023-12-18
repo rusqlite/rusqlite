@@ -1238,6 +1238,60 @@ impl InterruptHandle {
     }
 }
 
+/// Adds an entrypoint implementation for a SQLite extension.
+/// This macro must be used once in the root of a crate that implements a SQLite extension.
+///
+/// # Example
+/// ```
+/// use rusqlite::Connection;
+/// use rusqlite::ffi::SQLITE_NOTICE;
+/// use rusqlite::sqlite3_extension_init;
+/// use rusqlite::trace::log;
+///
+/// sqlite3_extension_init!(init_loadable_extension);
+///
+/// fn init_loadable_extension(db: Connection) -> ::rusqlite::Result<()> {
+///    db.create_scalar_function(
+///         "rusqlite_test_function",
+///         0,
+///         FunctionFlags::SQLITE_DETERMINISTIC,
+///         |_ctx| {
+///             Ok(ToSqlOutput::Owned(Value::Text(
+///                 "Rusqlite extension loaded correctly!".to_string(),
+///             )))
+///         },
+///     )?;
+///     log(SQLITE_NOTICE, "Rusqlite extension initialized");
+///     Ok(())
+/// }
+///```
+#[cfg(feature = "loadable_extension")]
+#[cfg_attr(docsrs, doc(cfg(feature = "loadable_extension")))]
+#[macro_export]
+macro_rules! sqlite3_extension_init {
+    ($func: ident) => {
+        #[allow(clippy::not_unsafe_ptr_arg_deref)]
+        #[no_mangle]
+        pub extern "C" fn sqlite3_extension_init(
+            db: *mut ::rusqlite::ffi::sqlite3,
+            pz_err_msg: *mut *mut std::os::raw::c_char,
+            p_api: *mut ::rusqlite::ffi::sqlite3_api_routines,
+        ) -> std::os::raw::c_int {
+            if p_api.is_null() {
+                return ::rusqlite::ffi::SQLITE_ERROR;
+            }
+
+            let res = unsafe { ::rusqlite::Connection::extension_init2(db, p_api) }.and_then($func);
+
+            if let Err(err) = res {
+                return unsafe { ::rusqlite::to_sqlite_error(&err, pz_err_msg) };
+            }
+
+            ::rusqlite::ffi::SQLITE_OK
+        }
+    };
+}
+
 #[cfg(doctest)]
 doc_comment::doctest!("../README.md");
 
