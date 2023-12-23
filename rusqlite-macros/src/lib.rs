@@ -48,7 +48,7 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
         return Err(err.to_string());
     }
     if info.count == 0 {
-        return Ok(input);
+        return Ok(TokenStream::new());
     }
     if info.count as usize != info.names.len() {
         return Err("Mixing named and numbered parameters is not supported.".to_string());

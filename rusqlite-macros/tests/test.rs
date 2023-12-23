@@ -20,6 +20,13 @@ fn test_literal() -> Result {
     Ok(())
 }
 
+#[test]
+fn test_no_placeholder() -> Result {
+    let _stmt = Stmt;
+    __bind!(_stmt "SELECT 1");
+    Ok(())
+}
+
 /* FIXME
 #[test]
 fn test_raw_string() {
