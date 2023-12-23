@@ -12,7 +12,7 @@ use sqlite3_parser::lexer::sql::Parser;
 #[doc(hidden)]
 #[proc_macro]
 pub fn __bind(input: TokenStream) -> TokenStream {
-    try_bind(input).unwrap_or_else(|msg| parse_ts(&format!("compile_error!({:?})", msg)))
+    try_bind(input).unwrap_or_else(|msg| parse_ts(&format!("compile_error!({msg:?})")))
 }
 
 type Result<T> = std::result::Result<T, String>;
