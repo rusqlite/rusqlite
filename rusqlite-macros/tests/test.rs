@@ -21,19 +21,19 @@ fn test_literal() -> Result {
 }
 
 #[test]
-fn test_no_placeholder() -> Result {
+fn test_no_placeholder() {
     let _stmt = Stmt;
     __bind!(_stmt "SELECT 1");
-    Ok(())
+}
+
+#[test]
+fn test_raw_string() {
+    let _stmt = Stmt;
+    __bind!(_stmt r"SELECT 1");
+    __bind!(_stmt r#"SELECT 1"#);
 }
 
 /* FIXME
-#[test]
-fn test_raw_string() {
-    let stmt = ();
-    __bind!(stmt r#"SELECT 1"#);
-}
-
 #[test]
 fn test_const() {
     const SQL: &str = "SELECT 1";
