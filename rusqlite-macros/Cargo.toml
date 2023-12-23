@@ -14,3 +14,4 @@ proc-macro = true
 [dependencies]
 sqlite3-parser = { version = "0.12", default-features = false, features = ["YYNOERRORRECOVERY"] }
 fallible-iterator = "0.3"
+litrs = { version = "0.4", default-features = false }

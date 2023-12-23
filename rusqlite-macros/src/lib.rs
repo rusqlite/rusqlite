@@ -1,6 +1,7 @@
 //! Private implementation details of `rusqlite`.
 
-use proc_macro::{Delimiter, Group, Literal, Span, TokenStream, TokenTree};
+use litrs::StringLit;
+use proc_macro::{Group, Span, TokenStream, TokenTree};
 
 use fallible_iterator::FallibleIterator;
 use sqlite3_parser::ast::{ParameterInfo, ToTokens};
@@ -25,15 +26,12 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
         (stmt, literal)
     };
 
-    let literal = match into_literal(&literal) {
-        Some(it) => it,
-        None => return Err("expected a plain string literal".to_string()),
+    let call_site = literal.span();
+    let string_lit = match StringLit::try_from(literal) {
+        Ok(string_lit) => string_lit,
+        Err(e) => return Ok(e.to_compile_error()),
     };
-    let sql = literal.to_string();
-    if !sql.starts_with('"') {
-        return Err("expected a plain string literal".to_string());
-    }
-    let sql = strip_matches(&sql, "\"");
+    let sql = string_lit.value();
 
     let mut parser = Parser::new(sql.as_bytes());
     let ast = match parser.next() {
@@ -48,13 +46,12 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
         return Err(err.to_string());
     }
     if info.count == 0 {
-        return Ok(input);
+        return Ok(TokenStream::new());
     }
     if info.count as usize != info.names.len() {
         return Err("Mixing named and numbered parameters is not supported.".to_string());
     }
 
-    let call_site = literal.span();
     let mut res = TokenStream::new();
     for (i, name) in info.names.iter().enumerate() {
         res.extend(Some(stmt.clone()));
@@ -69,27 +66,6 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
     }
 
     Ok(res)
-}
-
-fn into_literal(ts: &TokenTree) -> Option<Literal> {
-    match ts {
-        TokenTree::Literal(l) => Some(l.clone()),
-        TokenTree::Group(g) => match g.delimiter() {
-            Delimiter::None => match g.stream().into_iter().collect::<Vec<_>>().as_slice() {
-                [TokenTree::Literal(l)] => Some(l.clone()),
-                _ => None,
-            },
-            Delimiter::Parenthesis | Delimiter::Brace | Delimiter::Bracket => None,
-        },
-        _ => None,
-    }
-}
-
-fn strip_matches<'a>(s: &'a str, pattern: &str) -> &'a str {
-    s.strip_prefix(pattern)
-        .unwrap_or(s)
-        .strip_suffix(pattern)
-        .unwrap_or(s)
 }
 
 fn respan(ts: TokenStream, span: Span) -> TokenStream {
