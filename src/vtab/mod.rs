@@ -59,7 +59,6 @@ use crate::{str_to_cstring, Connection, Error, InnerConnection, Result};
 // ffi::sqlite3_vtab_cursor => VTabCursor
 
 /// Virtual table kind
-#[derive(Copy, Clone, Debug)]
 pub enum VTabKind {
     /// Non-eponymous
     Default,
@@ -323,7 +322,7 @@ pub trait UpdateVTab<'vtab>: CreateVTab<'vtab> {
 
 /// Index constraint operator.
 /// See [Virtual Table Constraint Operator Codes](https://sqlite.org/c3ref/c_index_constraint_eq.html) for details.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 #[allow(non_snake_case, non_camel_case_types, missing_docs)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum IndexConstraintOp {
