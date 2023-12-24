@@ -350,10 +350,7 @@ impl From<HeaderLocation> for String {
             HeaderLocation::FromEnvironment => {
                 let prefix = env_prefix();
                 let mut header = env::var(format!("{prefix}_INCLUDE_DIR")).unwrap_or_else(|_| {
-                    panic!(
-                        "{}_INCLUDE_DIR must be set if {}_LIB_DIR is set",
-                        prefix, prefix
-                    )
+                    panic!("{prefix}_INCLUDE_DIR must be set if {prefix}_LIB_DIR is set")
                 });
                 header.push_str(if cfg!(feature = "loadable_extension") {
                     "/sqlite3ext.h"
