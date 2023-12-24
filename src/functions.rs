@@ -311,6 +311,7 @@ bitflags::bitflags! {
     /// Function Flags.
     /// See [sqlite3_create_function](https://sqlite.org/c3ref/create_function.html)
     /// and [Function Flags](https://sqlite.org/c3ref/c_deterministic.html) for details.
+    #[derive(Clone, Copy, Debug)]
     #[repr(C)]
     pub struct FunctionFlags: ::std::os::raw::c_int {
         /// Specifies UTF-8 as the text encoding this SQL function prefers for its parameters.
