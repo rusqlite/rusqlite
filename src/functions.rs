@@ -301,7 +301,7 @@ where
 {
     /// Returns the current value of the aggregate. Unlike xFinal, the
     /// implementation should not delete any context.
-    fn value(&self, acc: Option<&A>) -> Result<T>;
+    fn value(&self, acc: Option<&mut A>) -> Result<T>;
 
     /// Removes a row from the current window.
     fn inverse(&self, ctx: &mut Context<'_>, acc: &mut A) -> Result<()>;
@@ -756,19 +756,10 @@ where
 {
     // Within the xValue callback, it is customary to set N=0 in calls to
     // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
-    let a: Option<&A> = match aggregate_context(ctx, 0) {
-        Some(pac) =>
-        {
-            #[allow(clippy::unnecessary_cast)]
-            if (*pac as *mut A).is_null() {
-                None
-            } else {
-                let a = &**pac;
-                Some(a)
-            }
-        }
-        None => None,
-    };
+    let pac = aggregate_context(ctx, 0).filter(|&pac| {
+        #[allow(clippy::unnecessary_cast)]
+        !(*pac as *mut A).is_null()
+    });
 
     let r = catch_unwind(|| {
         let boxed_aggr: *mut W = ffi::sqlite3_user_data(ctx).cast::<W>();
@@ -776,7 +767,7 @@ where
             !boxed_aggr.is_null(),
             "Internal error - null aggregate pointer"
         );
-        (*boxed_aggr).value(a)
+        (*boxed_aggr).value(pac.map(|pac| &mut **pac))
     });
     let t = match r {
         Err(_) => {
@@ -1031,7 +1022,7 @@ mod test {
             Ok(())
         }
 
-        fn value(&self, sum: Option<&i64>) -> Result<Option<i64>> {
+        fn value(&self, sum: Option<&mut i64>) -> Result<Option<i64>> {
             Ok(sum.copied())
         }
     }
