@@ -506,9 +506,6 @@ mod bindings {
     use bindgen::callbacks::{IntKind, ParseCallbacks};
 
     use std::path::Path;
-
-    use super::win_target;
-
     #[derive(Debug)]
     struct SqliteTypeChooser;
 
