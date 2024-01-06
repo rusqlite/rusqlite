@@ -1,7 +1,7 @@
 //! Private implementation details of `rusqlite`.
 
 use litrs::StringLit;
-use proc_macro::{Group, Span, TokenStream, TokenTree};
+use proc_macro::{Delimiter, Group, Literal, Span, TokenStream, TokenTree};
 
 use fallible_iterator::FallibleIterator;
 use sqlite3_parser::ast::{ParameterInfo, ToTokens};
@@ -26,6 +26,10 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
         (stmt, literal)
     };
 
+    let literal = match into_literal(&literal) {
+        Some(it) => it,
+        None => return Err("expected a plain string literal".to_string()),
+    };
     let call_site = literal.span();
     let string_lit = match StringLit::try_from(literal) {
         Ok(string_lit) => string_lit,
@@ -66,6 +70,20 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
     }
 
     Ok(res)
+}
+
+fn into_literal(ts: &TokenTree) -> Option<Literal> {
+    match ts {
+        TokenTree::Literal(l) => Some(l.clone()),
+        TokenTree::Group(g) => match g.delimiter() {
+            Delimiter::None => match g.stream().into_iter().collect::<Vec<_>>().as_slice() {
+                [TokenTree::Literal(l)] => Some(l.clone()),
+                _ => None,
+            },
+            Delimiter::Parenthesis | Delimiter::Brace | Delimiter::Bracket => None,
+        },
+        _ => None,
+    }
 }
 
 fn respan(ts: TokenStream, span: Span) -> TokenStream {
