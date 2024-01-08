@@ -1,8 +1,8 @@
 [package]
 name = "libsqlite3-sys"
-version = "0.26.0"
+version = "0.27.0"
 authors = ["The rusqlite developers"]
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/rusqlite/rusqlite"
 description = "Native bindings to the libsqlite3 library"
 license = "MIT"
@@ -23,6 +23,7 @@ min_sqlite_version_3_14_0 = ["pkg-config", "vcpkg"]
 # Bundle only the bindings file. Note that this does nothing if
 # `buildtime_bindgen` is enabled.
 bundled_bindings = []
+loadable_extension = ["prettyplease", "quote", "syn"]
 # sqlite3_unlock_notify >= 3.6.12
 unlock_notify = []
 # 3.13.0
@@ -48,7 +49,13 @@ getrandom = { version = "0.2", features = ["js"] }
 js-sys = "0.3"
 
 [build-dependencies]
-bindgen = { version = "0.68", optional = true, default-features = false, features = ["runtime"] }
+bindgen = { version = "0.69", optional = true, default-features = false, features = ["runtime"] }
 pkg-config = { version = "0.3.19", optional = true }
 cc = { version = "1.0", optional = true }
 vcpkg = { version = "0.2", optional = true }
+# for loadable_extension:
+prettyplease = {version = "0.2", optional = true }
+# like bindgen
+quote = { version = "1", optional = true, default-features = false }
+# like bindgen
+syn = { version = "2.0", optional = true, features = ["full", "extra-traits", "visit-mut"] }

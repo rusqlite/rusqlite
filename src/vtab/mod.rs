@@ -373,6 +373,7 @@ bitflags::bitflags! {
     /// Virtual table scan flags
     /// See [Function Flags](https://sqlite.org/c3ref/c_index_scan_unique.html) for details.
     #[repr(C)]
+    #[derive(Copy, Clone, Debug)]
     pub struct IndexFlags: ::std::os::raw::c_int {
         /// Default
         const NONE     = 0;

@@ -1,7 +1,7 @@
 [package]
 name = "rusqlite"
 # Note: Update version in README.md when you change this.
-version = "0.29.0"
+version = "0.30.0"
 authors = ["The rusqlite developers"]
 edition = "2021"
 description = "Ergonomic wrapper for SQLite"
@@ -50,6 +50,7 @@ bundled-sqlcipher = ["libsqlite3-sys/bundled-sqlcipher", "bundled"]
 bundled-sqlcipher-vendored-openssl = ["libsqlite3-sys/bundled-sqlcipher-vendored-openssl", "bundled-sqlcipher"]
 buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
 limits = []
+loadable_extension = ["libsqlite3-sys/loadable_extension"]
 hooks = []
 i128_blob = []
 sqlcipher = ["libsqlite3-sys/sqlcipher"]
@@ -140,7 +141,7 @@ bencher = "0.1"
 
 [dependencies.libsqlite3-sys]
 path = "libsqlite3-sys"
-version = "0.26.0"
+version = "0.27.0"
 
 [[test]]
 name = "config_log"
@@ -159,6 +160,15 @@ harness = false
 [[bench]]
 name = "exec"
 harness = false
+
+[[example]]
+name = "loadable_extension"
+crate-type = ["cdylib"]
+required-features = ["loadable_extension", "functions", "trace"]
+
+[[example]]
+name = "load_extension"
+required-features = ["load_extension", "bundled", "functions", "trace"]
 
 [package.metadata.docs.rs]
 features = ["modern-full", "rusqlite-macros"]
