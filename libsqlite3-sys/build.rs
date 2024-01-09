@@ -281,16 +281,12 @@ mod build_bundled {
             cfg.flag("-DSQLITE_OS_OTHER")
                 .flag("-DSQLITE_TEMP_STORE=3")
                 .flag("-DSQLITE_OMIT_LOCALTIME");
-            cfg.include("sqlite3/wasm32-unknown-unknown/include");
-            cfg.file("sqlite3/wasm32-unknown-unknown/libc/stdlib/qsort.c");
-            cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strcmp.c");
-            cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strcspn.c");
-            cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strlen.c");
-            cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strncmp.c");
-            cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strrchr.c");
-            cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strspn.c");
+
+            #[cfg(feature = "wasm32-unknown-unknown-openbsd-libc")]
+            cfg.includes(wasm32_unknown_unknown_openbsd_libc::includes());
 
             println!("cargo:rustc-link-lib=compiler-rt-builtins");
+            println!("cargo:rustc-link-lib=wasm32-unknown-unknown-openbsd-libc");
         }
         if cfg!(feature = "unlock_notify") {
             cfg.flag("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
