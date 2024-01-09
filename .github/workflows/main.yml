@@ -100,7 +100,7 @@ jobs:
           rust-version: stable${{ matrix.host }}
           targets: ${{ matrix.target }}
 
-      - name: Install Homebrew llvm
+      - name: Install Homebrew llvm on macOS
         if: matrix.os == 'macos-latest'
         run: brew install llvm
 
@@ -108,14 +108,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # https://github.com/rustwasm/wasm-pack/issues/1097
-      - name: Install wasm-pack on Windows
-        if: matrix.os == 'windows-latest'
-        run: npm install -g wasm-pack@0.10.1
-
-      - name: Install wasm-pack on others
-        if: matrix.os != 'windows-latest'
-        run: npm install -g wasm-pack
+      - run: npm install -g wasm-pack
 
       - name: Test wasm-pack ${{ matrix.host }}
         run: wasm-pack test --node --features bundled
