@@ -4,7 +4,6 @@ use std::os::raw::{c_char, c_int};
 use std::path::Path;
 use std::ptr;
 use std::str;
-#[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
