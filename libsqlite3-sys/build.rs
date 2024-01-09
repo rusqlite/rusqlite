@@ -280,8 +280,6 @@ mod build_bundled {
 
             cfg.flag("-DSQLITE_OS_OTHER")
                 .flag("-DSQLITE_TEMP_STORE=3")
-                // https://github.com/rust-lang/rust/issues/74393
-                .flag("-DLONGDOUBLE_TYPE=double")
                 .flag("-DSQLITE_OMIT_LOCALTIME");
             cfg.include("sqlite3/wasm32-unknown-unknown/include");
             cfg.file("sqlite3/wasm32-unknown-unknown/libc/stdlib/qsort.c");
@@ -291,6 +289,8 @@ mod build_bundled {
             cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strncmp.c");
             cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strrchr.c");
             cfg.file("sqlite3/wasm32-unknown-unknown/libc/string/strspn.c");
+
+            println!("cargo:rustc-link-lib=compiler-rt-builtins");
         }
         if cfg!(feature = "unlock_notify") {
             cfg.flag("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
