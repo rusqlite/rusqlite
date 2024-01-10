@@ -13,8 +13,6 @@ use super::{Connection, InterruptHandle, OpenFlags, PrepFlags, Result};
 use crate::error::{error_from_handle, error_from_sqlite_code, error_with_offset, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
-#[cfg_attr(target_arch = "wasm32", allow(unused_imports))]
-use crate::version::version_number;
 
 pub struct InnerConnection {
     pub db: *mut ffi::sqlite3,
@@ -427,7 +425,7 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
     //    mode. This will fail if someone else has already initialized SQLite
     //    even if they initialized it safely. That's not ideal either, which is
     //    why we expose bypass_sqlite_initialization    above.
-    if version_number() >= 3_007_000 {
+    if crate::version::version_number() >= 3_007_000 {
         const SQLITE_SINGLETHREADED_MUTEX_MAGIC: usize = 8;
         let is_singlethreaded = unsafe {
             let mutex_ptr = ffi::sqlite3_mutex_alloc(0);
