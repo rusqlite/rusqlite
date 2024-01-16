@@ -22,8 +22,9 @@ pub struct OwnedData {
 }
 
 impl OwnedData {
-    /// SAFETY: Caller must be certain that `ptr` is allocated by
-    /// `sqlite3_malloc`.
+    /// # Safety
+    ///
+    /// Caller must be certain that `ptr` is allocated by `sqlite3_malloc`.
     pub unsafe fn from_raw_nonnull(ptr: NonNull<u8>, sz: usize) -> Self {
         Self { ptr, sz }
     }
@@ -65,7 +66,7 @@ impl<'conn> Deref for Data<'conn> {
 
 impl Connection {
     /// Serialize a database.
-    pub fn serialize<'conn>(&'conn self, schema: DatabaseName<'_>) -> Result<Data<'conn>> {
+    pub fn serialize(&self, schema: DatabaseName) -> Result<Data> {
         let schema = schema.as_cstring()?;
         let mut sz = 0;
         let mut ptr: *mut u8 = unsafe {
@@ -142,7 +143,9 @@ mod test {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
         let data = db.serialize(DatabaseName::Main)?;
-        let Data::Owned(data) = data else { panic!("expected OwnedData")};
+        let Data::Owned(data) = data else {
+            panic!("expected OwnedData")
+        };
         assert!(data.sz > 0);
         Ok(())
     }
@@ -152,7 +155,9 @@ mod test {
         let src = Connection::open_in_memory()?;
         src.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
         let data = src.serialize(DatabaseName::Main)?;
-        let Data::Owned(data) = data else { panic!("expected OwnedData")};
+        let Data::Owned(data) = data else {
+            panic!("expected OwnedData")
+        };
 
         let mut dst = Connection::open_in_memory()?;
         dst.deserialize(DatabaseName::Main, data, false)?;

@@ -270,11 +270,11 @@ where
     /// call to [`step()`](Aggregate::step) to set up the context for an
     /// invocation of the function. (Note: `init()` will not be called if
     /// there are no rows.)
-    fn init(&self, _: &mut Context<'_>) -> Result<A>;
+    fn init(&self, ctx: &mut Context<'_>) -> Result<A>;
 
     /// "step" function called once for each row in an aggregate group. May be
     /// called 0 times if there are no rows.
-    fn step(&self, _: &mut Context<'_>, _: &mut A) -> Result<()>;
+    fn step(&self, ctx: &mut Context<'_>, acc: &mut A) -> Result<()>;
 
     /// Computes and returns the final result. Will be called exactly once for
     /// each invocation of the function. If [`step()`](Aggregate::step) was
@@ -285,7 +285,7 @@ where
     /// given `None`.
     ///
     /// The passed context will have no arguments.
-    fn finalize(&self, _: &mut Context<'_>, _: Option<A>) -> Result<(T, SubType)>;
+    fn finalize(&self, ctx: &mut Context<'_>, acc: Option<A>) -> Result<(T, SubType)>;
 }
 
 /// `WindowAggregate` is the callback interface for
@@ -299,16 +299,17 @@ where
 {
     /// Returns the current value of the aggregate. Unlike xFinal, the
     /// implementation should not delete any context.
-    fn value(&self, _: Option<&A>) -> Result<(T, SubType)>;
+    fn value(&self, acc: Option<&mut A>) -> Result<(T, SubType)>;
 
     /// Removes a row from the current window.
-    fn inverse(&self, _: &mut Context<'_>, _: &mut A) -> Result<()>;
+    fn inverse(&self, ctx: &mut Context<'_>, acc: &mut A) -> Result<()>;
 }
 
 bitflags::bitflags! {
     /// Function Flags.
     /// See [sqlite3_create_function](https://sqlite.org/c3ref/create_function.html)
     /// and [Function Flags](https://sqlite.org/c3ref/c_deterministic.html) for details.
+    #[derive(Clone, Copy, Debug)]
     #[repr(C)]
     pub struct FunctionFlags: ::std::os::raw::c_int {
         /// Specifies UTF-8 as the text encoding this SQL function prefers for its parameters.
@@ -327,6 +328,8 @@ bitflags::bitflags! {
         const SQLITE_SUBTYPE       = 0x0000_0010_0000; // 3.30.0
         /// Means that the function is unlikely to cause problems even if misused.
         const SQLITE_INNOCUOUS     = 0x0000_0020_0000; // 3.31.0
+        /// Indicates to SQLite that a function might call `sqlite3_result_subtype()` to cause a sub-type to be associated with its result.
+        const SQLITE_RESULT_SUBTYPE     = 0x0000_0100_0000; // 3.45.0
     }
 }
 
@@ -641,6 +644,7 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
             args: slice::from_raw_parts(argv, argc as usize),
         };
 
+        #[allow(clippy::unnecessary_cast)]
         if (*pac as *mut A).is_null() {
             *pac = Box::into_raw(Box::new((*boxed_aggr).init(&mut ctx)?));
         }
@@ -711,7 +715,9 @@ where
     // Within the xFinal callback, it is customary to set N=0 in calls to
     // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
     let a: Option<A> = match aggregate_context(ctx, 0) {
-        Some(pac) => {
+        Some(pac) =>
+        {
+            #[allow(clippy::unnecessary_cast)]
             if (*pac as *mut A).is_null() {
                 None
             } else {
@@ -760,17 +766,10 @@ where
 {
     // Within the xValue callback, it is customary to set N=0 in calls to
     // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
-    let a: Option<&A> = match aggregate_context(ctx, 0) {
-        Some(pac) => {
-            if (*pac as *mut A).is_null() {
-                None
-            } else {
-                let a = &**pac;
-                Some(a)
-            }
-        }
-        None => None,
-    };
+    let pac = aggregate_context(ctx, 0).filter(|&pac| {
+        #[allow(clippy::unnecessary_cast)]
+        !(*pac as *mut A).is_null()
+    });
 
     let r = catch_unwind(|| {
         let boxed_aggr: *mut W = ffi::sqlite3_user_data(ctx).cast::<W>();
@@ -778,7 +777,7 @@ where
             !boxed_aggr.is_null(),
             "Internal error - null aggregate pointer"
         );
-        (*boxed_aggr).value(a)
+        (*boxed_aggr).value(pac.map(|pac| &mut **pac))
     });
     let t = match r {
         Err(_) => {
@@ -1042,7 +1041,7 @@ mod test {
             Ok(())
         }
 
-        fn value(&self, sum: Option<&i64>) -> Result<(Option<i64>, SubType)> {
+        fn value(&self, sum: Option<&mut i64>) -> Result<(Option<i64>, SubType)> {
             Ok((sum.copied(), None))
         }
     }

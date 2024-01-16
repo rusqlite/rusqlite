@@ -435,6 +435,10 @@ impl Statement<'_> {
     ///
     /// Will return `None` if the column index is out of bounds or if the
     /// parameter is positional.
+    ///
+    /// # Panics
+    ///
+    /// Panics when parameter name is not valid UTF-8.
     #[inline]
     pub fn parameter_name(&self, index: usize) -> Option<&'_ str> {
         self.stmt.bind_parameter_name(index as i32).map(|name| {
@@ -450,7 +454,7 @@ impl Statement<'_> {
     {
         let expected = self.stmt.bind_parameter_count();
         let mut index = 0;
-        for p in params.into_iter() {
+        for p in params {
             index += 1; // The leftmost SQL parameter has an index of 1.
             if index > expected {
                 break;
@@ -646,9 +650,12 @@ impl Statement<'_> {
     fn execute_with_bound_parameters(&mut self) -> Result<usize> {
         self.check_update()?;
         let r = self.stmt.step();
-        self.stmt.reset();
+        let rr = self.stmt.reset();
         match r {
-            ffi::SQLITE_DONE => Ok(self.conn.changes() as usize),
+            ffi::SQLITE_DONE => match rr {
+                ffi::SQLITE_OK => Ok(self.conn.changes() as usize),
+                _ => Err(self.conn.decode_result(rr).unwrap_err()),
+            },
             ffi::SQLITE_ROW => Err(Error::ExecuteReturnedResults),
             _ => Err(self.conn.decode_result(r).unwrap_err()),
         }
@@ -744,7 +751,7 @@ impl Statement<'_> {
 
     /// Reset all bindings
     pub fn clear_bindings(&mut self) {
-        self.stmt.clear_bindings()
+        self.stmt.clear_bindings();
     }
 }
 
@@ -843,8 +850,11 @@ impl Statement<'_> {
     }
 
     #[inline]
-    pub(super) fn reset(&self) -> c_int {
-        self.stmt.reset()
+    pub(super) fn reset(&self) -> Result<()> {
+        match self.stmt.reset() {
+            ffi::SQLITE_OK => Ok(()),
+            code => Err(self.conn.decode_result(code).unwrap_err()),
+        }
     }
 }
 
@@ -1270,7 +1280,7 @@ mod test {
         assert_eq!(0, stmt.column_count());
         stmt.parameter_index("test").unwrap();
         stmt.step().unwrap_err();
-        stmt.reset();
+        stmt.reset().unwrap(); // SQLITE_OMIT_AUTORESET = false
         stmt.execute([]).unwrap_err();
         Ok(())
     }

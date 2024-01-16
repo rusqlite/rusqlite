@@ -14,9 +14,11 @@ pub struct Rows<'stmt> {
 
 impl<'stmt> Rows<'stmt> {
     #[inline]
-    fn reset(&mut self) {
+    fn reset(&mut self) -> Result<()> {
         if let Some(stmt) = self.stmt.take() {
-            stmt.reset();
+            stmt.reset()
+        } else {
+            Ok(())
         }
     }
 
@@ -29,8 +31,8 @@ impl<'stmt> Rows<'stmt> {
     /// This interface is not compatible with Rust's `Iterator` trait, because
     /// the lifetime of the returned row is tied to the lifetime of `self`.
     /// This is a fallible "streaming iterator". For a more natural interface,
-    /// consider using [`query_map`](crate::Statement::query_map) or
-    /// [`query_and_then`](crate::Statement::query_and_then) instead, which
+    /// consider using [`query_map`](Statement::query_map) or
+    /// [`query_and_then`](Statement::query_and_then) instead, which
     /// return types that implement `Iterator`.
     #[allow(clippy::should_implement_trait)] // cannot implement Iterator
     #[inline]
@@ -105,6 +107,7 @@ impl<'stmt> Rows<'stmt> {
 }
 
 impl Drop for Rows<'_> {
+    #[allow(unused_must_use)]
     #[inline]
     fn drop(&mut self) {
         self.reset();
@@ -217,12 +220,12 @@ impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
                     Ok(())
                 }
                 Ok(false) => {
-                    self.reset();
+                    let r = self.reset();
                     self.row = None;
-                    Ok(())
+                    r
                 }
                 Err(e) => {
-                    self.reset();
+                    let _ = self.reset(); // prevents infinite loop on error
                     self.row = None;
                     Err(e)
                 }
@@ -247,7 +250,7 @@ pub struct Row<'stmt> {
 impl<'stmt> Row<'stmt> {
     /// Get the value of a particular column of the result row.
     ///
-    /// ## Failure
+    /// # Panics
     ///
     /// Panics if calling [`row.get(idx)`](Row::get) would return an error,
     /// including:
@@ -330,7 +333,7 @@ impl<'stmt> Row<'stmt> {
     /// it can be difficult to use, and most callers will be better served by
     /// [`get`](Row::get) or [`get_unwrap`](Row::get_unwrap).
     ///
-    /// ## Failure
+    /// # Panics
     ///
     /// Panics if calling [`row.get_ref(idx)`](Row::get_ref) would return an
     /// error, including:
@@ -583,6 +586,32 @@ mod tests {
         assert_eq!(val.15, 15);
 
         // We don't test one bigger because it's unimplemented
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "bundled")]
+    fn pathological_case() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute_batch(
+            "CREATE TABLE foo(x);
+        CREATE TRIGGER oops BEFORE INSERT ON foo BEGIN SELECT RAISE(FAIL, 'Boom'); END;",
+        )?;
+        let mut stmt = conn.prepare("INSERT INTO foo VALUES (0) RETURNING rowid;")?;
+        {
+            let iterator_count = stmt.query_map([], |_| Ok(()))?.count();
+            assert_eq!(1, iterator_count); // should be 0
+            use fallible_streaming_iterator::FallibleStreamingIterator;
+            let fallible_iterator_count = stmt.query([])?.count().unwrap_or(0);
+            assert_eq!(0, fallible_iterator_count);
+        }
+        {
+            let iterator_last = stmt.query_map([], |_| Ok(()))?.last();
+            assert!(iterator_last.is_some()); // should be none
+            use fallible_iterator::FallibleIterator;
+            let fallible_iterator_last = stmt.query([])?.map(|_| Ok(())).last();
+            assert!(fallible_iterator_last.is_err());
+        }
         Ok(())
     }
 }

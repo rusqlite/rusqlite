@@ -74,6 +74,7 @@ use crate::raw_statement::RawStatement;
 use crate::types::ValueRef;
 
 pub use crate::cache::CachedStatement;
+#[cfg(feature = "column_decltype")]
 pub use crate::column::Column;
 pub use crate::error::{to_sqlite_error, Error};
 pub use crate::ffi::ErrorCode;
@@ -82,9 +83,14 @@ pub use crate::load_extension_guard::LoadExtensionGuard;
 pub use crate::params::{params_from_iter, Params, ParamsFromIter};
 pub use crate::row::{AndThenRows, Map, MappedRows, Row, RowIndex, Rows};
 pub use crate::statement::{Statement, StatementStatus};
+#[cfg(feature = "modern_sqlite")]
+pub use crate::transaction::TransactionState;
 pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
 pub use crate::types::ToSql;
 pub use crate::version::*;
+#[cfg(feature = "rusqlite-macros")]
+#[doc(hidden)]
+pub use rusqlite_macros::__bind;
 
 mod error;
 
@@ -213,6 +219,51 @@ macro_rules! named_params {
     ($($param_name:literal: $param_val:expr),+ $(,)?) => {
         &[$(($param_name, &$param_val as &dyn $crate::ToSql)),+] as &[(&str, &dyn $crate::ToSql)]
     };
+}
+
+/// Captured identifiers in SQL
+///
+/// * only SQLite `$x` / `@x` / `:x` syntax works (Rust `&x` syntax does not
+///   work).
+/// * `$x.y` expression does not work.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// # use rusqlite::{prepare_and_bind, Connection, Result, Statement};
+///
+/// fn misc(db: &Connection) -> Result<Statement> {
+///     let name = "Lisa";
+///     let age = 8;
+///     let smart = true;
+///     Ok(prepare_and_bind!(db, "SELECT $name, @age, :smart;"))
+/// }
+/// ```
+#[cfg(feature = "rusqlite-macros")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
+#[macro_export]
+macro_rules! prepare_and_bind {
+    ($conn:expr, $sql:literal) => {{
+        let mut stmt = $conn.prepare($sql)?;
+        $crate::__bind!(stmt $sql);
+        stmt
+    }};
+}
+
+/// Captured identifiers in SQL
+///
+/// * only SQLite `$x` / `@x` / `:x` syntax works (Rust `&x` syntax does not
+///   work).
+/// * `$x.y` expression does not work.
+#[cfg(feature = "rusqlite-macros")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
+#[macro_export]
+macro_rules! prepare_cached_and_bind {
+    ($conn:expr, $sql:literal) => {{
+        let mut stmt = $conn.prepare_cached($sql)?;
+        $crate::__bind!(stmt $sql);
+        stmt
+    }};
 }
 
 /// A typedef of the result returned by many methods.
@@ -568,7 +619,7 @@ impl Connection {
     #[inline]
     pub fn execute<P: Params>(&self, sql: &str, params: P) -> Result<usize> {
         self.prepare(sql)
-            .and_then(|mut stmt| stmt.check_no_tail().and_then(|_| stmt.execute(params)))
+            .and_then(|mut stmt| stmt.check_no_tail().and_then(|()| stmt.execute(params)))
     }
 
     /// Returns the path to the database file, if one exists and is known.
@@ -651,7 +702,7 @@ impl Connection {
 
     // https://sqlite.org/tclsqlite.html#onecolumn
     #[cfg(test)]
-    pub(crate) fn one_column<T: crate::types::FromSql>(&self, sql: &str) -> Result<T> {
+    pub(crate) fn one_column<T: types::FromSql>(&self, sql: &str) -> Result<T> {
         self.query_row(sql, [], |r| r.get(0))
     }
 
@@ -901,6 +952,17 @@ impl Connection {
         })
     }
 
+    /// Like SQLITE_EXTENSION_INIT2 macro
+    #[cfg(feature = "loadable_extension")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "loadable_extension")))]
+    pub unsafe fn extension_init2(
+        db: *mut ffi::sqlite3,
+        p_api: *mut ffi::sqlite3_api_routines,
+    ) -> Result<Connection> {
+        ffi::rusqlite_extension_init2(p_api)?;
+        Connection::from_handle(db)
+    }
+
     /// Create a `Connection` from a raw owned handle.
     ///
     /// The returned connection will attempt to close the inner connection
@@ -912,7 +974,7 @@ impl Connection {
     /// This function is unsafe because improper use may impact the Connection.
     /// In particular, it should only be called on connections created
     /// and owned by the caller, e.g. as a result of calling
-    /// ffi::sqlite3_open().
+    /// `ffi::sqlite3_open`().
     #[inline]
     pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Connection> {
         let db = InnerConnection::new(db, true);
@@ -1432,7 +1494,7 @@ mod test {
 
     #[test]
     #[cfg(feature = "extra_check")]
-    fn test_execute_select() {
+    fn test_execute_select_with_no_row() {
         let db = checked_memory_handle();
         let err = db.execute("SELECT 1 WHERE 1 < ?1", [1i32]).unwrap_err();
         assert_eq!(
@@ -1440,6 +1502,13 @@ mod test {
             Error::ExecuteReturnedResults,
             "Unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn test_execute_select_with_row() {
+        let db = checked_memory_handle();
+        let err = db.execute("SELECT 1", []).unwrap_err();
+        assert_eq!(err, Error::ExecuteReturnedResults);
     }
 
     #[test]
@@ -1812,7 +1881,7 @@ mod test {
     #[test]
     fn test_from_handle_owned() -> Result<()> {
         let mut handle: *mut ffi::sqlite3 = std::ptr::null_mut();
-        let r = unsafe { ffi::sqlite3_open(":memory:\0".as_ptr() as *const i8, &mut handle) };
+        let r = unsafe { ffi::sqlite3_open(":memory:\0".as_ptr() as *const c_char, &mut handle) };
         assert_eq!(r, ffi::SQLITE_OK);
         let db = unsafe { Connection::from_handle_owned(handle) }?;
         db.execute_batch("PRAGMA VACUUM")?;
@@ -2114,9 +2183,25 @@ mod test {
     }
 
     #[test]
-    pub fn db_readonly() -> Result<()> {
+    fn db_readonly() -> Result<()> {
         let db = Connection::open_in_memory()?;
         assert!(!db.is_readonly(MAIN_DB)?);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "rusqlite-macros")]
+    fn prepare_and_bind() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let name = "Lisa";
+        let age = 8;
+        let mut stmt = prepare_and_bind!(db, "SELECT $name, $age;");
+        let (v1, v2) = stmt
+            .raw_query()
+            .next()
+            .and_then(|o| o.ok_or(Error::QueryReturnedNoRows))
+            .and_then(|r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
+        assert_eq!((v1.as_str(), v2), (name, age));
         Ok(())
     }
 }
