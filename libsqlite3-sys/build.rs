@@ -359,8 +359,6 @@ fn env_prefix() -> &'static str {
 fn lib_name() -> &'static str {
     if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
         "sqlcipher"
-    } else if cfg!(all(windows, feature = "winsqlite3")) {
-        "winsqlite3"
     } else {
         "sqlite3"
     }
@@ -461,12 +459,6 @@ mod build_linked {
         #[cfg(not(feature = "loadable_extension"))]
         println!("cargo:link-target={link_lib}");
 
-        if win_target() && cfg!(feature = "winsqlite3") {
-            #[cfg(not(feature = "loadable_extension"))]
-            println!("cargo:rustc-link-lib=dylib={link_lib}");
-            return HeaderLocation::Wrapper;
-        }
-
         // Allow users to specify where to find SQLite.
         if let Ok(dir) = env::var(format!("{}_LIB_DIR", env_prefix())) {
             // Try to use pkg-config to determine link commands
@@ -542,9 +534,6 @@ mod bindings {
     use bindgen::callbacks::{IntKind, ParseCallbacks};
 
     use std::path::Path;
-
-    use super::win_target;
-
     #[derive(Debug)]
     struct SqliteTypeChooser;
 
@@ -626,36 +615,6 @@ mod bindings {
         }
         if cfg!(feature = "session") {
             bindings = bindings.clang_arg("-DSQLITE_ENABLE_SESSION");
-        }
-        if win_target() && cfg!(feature = "winsqlite3") {
-            bindings = bindings
-                .clang_arg("-DBINDGEN_USE_WINSQLITE3")
-                .blocklist_item("NTDDI_.+")
-                .blocklist_item("WINAPI_FAMILY.*")
-                .blocklist_item("_WIN32_.+")
-                .blocklist_item("_VCRT_COMPILER_PREPROCESSOR")
-                .blocklist_item("_SAL_VERSION")
-                .blocklist_item("__SAL_H_VERSION")
-                .blocklist_item("_USE_DECLSPECS_FOR_SAL")
-                .blocklist_item("_USE_ATTRIBUTES_FOR_SAL")
-                .blocklist_item("_CRT_PACKING")
-                .blocklist_item("_HAS_EXCEPTIONS")
-                .blocklist_item("_STL_LANG")
-                .blocklist_item("_HAS_CXX17")
-                .blocklist_item("_HAS_CXX20")
-                .blocklist_item("_HAS_NODISCARD")
-                .blocklist_item("WDK_NTDDI_VERSION")
-                .blocklist_item("OSVERSION_MASK")
-                .blocklist_item("SPVERSION_MASK")
-                .blocklist_item("SUBVERSION_MASK")
-                .blocklist_item("WINVER")
-                .blocklist_item("__security_cookie")
-                .blocklist_type("size_t")
-                .blocklist_type("__vcrt_bool")
-                .blocklist_type("wchar_t")
-                .blocklist_function("__security_init_cookie")
-                .blocklist_function("__report_gsfailure")
-                .blocklist_function("__va_start");
         }
 
         // When cross compiling unless effort is taken to fix the issue, bindgen
