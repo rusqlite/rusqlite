@@ -464,7 +464,7 @@ impl Connection {
     where
         A: RefUnwindSafe + UnwindSafe,
         W: WindowAggregate<A, T> + 'static,
-        T: ToSql,
+        T: SqlFnOutput,
     {
         self.db
             .borrow_mut()
@@ -585,7 +585,7 @@ impl InnerConnection {
     where
         A: RefUnwindSafe + UnwindSafe,
         W: WindowAggregate<A, T> + 'static,
-        T: ToSql,
+        T: SqlFnOutput,
     {
         let boxed_aggr: *mut W = Box::into_raw(Box::new(aggr));
         let c_name = str_to_cstring(fn_name)?;
@@ -688,7 +688,7 @@ unsafe extern "C" fn call_boxed_inverse<A, W, T>(
 ) where
     A: RefUnwindSafe + UnwindSafe,
     W: WindowAggregate<A, T>,
-    T: ToSql,
+    T: SqlFnOutput,
 {
     let pac = if let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) {
         pac
@@ -768,7 +768,7 @@ unsafe extern "C" fn call_boxed_value<A, W, T>(ctx: *mut sqlite3_context)
 where
     A: RefUnwindSafe + UnwindSafe,
     W: WindowAggregate<A, T>,
-    T: ToSql,
+    T: SqlFnOutput,
 {
     // Within the xValue callback, it is customary to set N=0 in calls to
     // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
@@ -792,17 +792,7 @@ where
         }
         Ok(r) => r,
     };
-    let t = t.as_ref().map(|(t, sub_type)| (ToSql::to_sql(t), sub_type));
-    match t {
-        Ok((Ok(ref value), sub_type)) => {
-            set_result(ctx, value);
-            if let Some(sub_type) = sub_type {
-                ffi::sqlite3_result_subtype(ctx, *sub_type);
-            }
-        }
-        Ok((Err(err), _)) => report_error(ctx, &err),
-        Err(err) => report_error(ctx, err),
-    }
+    sql_result(ctx, t);
 }
 
 #[cfg(test)]
