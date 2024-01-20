@@ -1801,7 +1801,7 @@ mod test {
             functions::FunctionFlags::default(),
             move |_| {
                 interrupt_handle.interrupt();
-                Ok((0, None))
+                Ok(0)
             },
         )?;
 
