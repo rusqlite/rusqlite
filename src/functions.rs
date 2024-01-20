@@ -263,8 +263,15 @@ pub trait SqlFnOutput {
 }
 
 impl<T: ToSql> SqlFnOutput for T {
+    #[inline]
     fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> {
         ToSql::to_sql(self).map(|o| (o, None))
+    }
+}
+
+impl<T: ToSql> SqlFnOutput for (T, SubType) {
+    fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> {
+        ToSql::to_sql(&self.0).map(|o| (o, self.1))
     }
 }
 
@@ -802,8 +809,8 @@ mod test {
 
     #[cfg(feature = "window")]
     use crate::functions::WindowAggregate;
-    use crate::functions::{Aggregate, Context, FunctionFlags};
-    use crate::{Connection, Error, Result};
+    use crate::functions::{Aggregate, Context, FunctionFlags, SubType};
+    use crate::{Connection, Error, Result, ValueRef};
 
     fn half(ctx: &Context<'_>) -> Result<c_double> {
         assert_eq!(ctx.len(), 1, "called with unexpected number of arguments");
@@ -1078,6 +1085,39 @@ mod test {
             ("e".to_owned(), 9),
         ];
         assert_eq!(expected, results);
+        Ok(())
+    }
+
+    #[test]
+    fn test_sub_type() -> Result<()> {
+        fn test_getsubtype(ctx: &Context<'_>) -> Result<i32> {
+            Ok(ctx.get_subtype(0) as i32)
+        }
+        fn test_setsubtype<'a>(ctx: &'a Context<'_>) -> Result<(ValueRef<'a>, SubType)> {
+            use std::os::raw::c_uint;
+            let value = ctx.get_raw(0);
+            let sub_type = ctx.get::<c_uint>(1)?;
+            Ok((value, Some(sub_type)))
+        }
+        let db = Connection::open_in_memory()?;
+        db.create_scalar_function(
+            "test_getsubtype",
+            1,
+            FunctionFlags::SQLITE_UTF8,
+            test_getsubtype,
+        )?;
+        db.create_scalar_function(
+            "test_setsubtype",
+            2,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_RESULT_SUBTYPE,
+            test_setsubtype,
+        )?;
+        let result: i32 = db.one_column("SELECT test_getsubtype('hello');")?;
+        assert_eq!(0, result);
+
+        let result: i32 = db.one_column("SELECT test_getsubtype(test_setsubtype('hello',123));")?;
+        assert_eq!(123, result);
+
         Ok(())
     }
 }

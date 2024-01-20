@@ -292,6 +292,13 @@ impl ToSql for Value {
     }
 }
 
+impl<'a> ToSql for ValueRef<'a> {
+    #[inline]
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::Borrowed(*self))
+    }
+}
+
 impl<T: ToSql> ToSql for Option<T> {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
