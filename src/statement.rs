@@ -606,6 +606,13 @@ impl Statement<'_> {
                     .conn
                     .decode_result(unsafe { ffi::sqlite3_bind_zeroblob(ptr, col as c_int, len) });
             }
+            #[cfg(feature = "functions")]
+            ToSqlOutput::Arg(_) => {
+                return Err(Error::SqliteFailure(
+                    ffi::Error::new(ffi::SQLITE_MISUSE),
+                    Some(format!("Unsupported value \"{value:?}\"")),
+                ));
+            }
             #[cfg(feature = "array")]
             ToSqlOutput::Array(a) => {
                 return self.conn.decode_result(unsafe {

@@ -149,6 +149,15 @@ impl Context<'_> {
         unsafe { ValueRef::from_value(arg) }
     }
 
+    /// Returns the `idx`th argument as a `SqlFnArg`.
+    /// To be used when the SQL function result is one of its arguments.
+    #[inline]
+    #[must_use]
+    pub fn get_arg(&self, idx: usize) -> SqlFnArg {
+        assert!(idx < self.len());
+        SqlFnArg { idx }
+    }
+
     /// Returns the subtype of `idx`th argument.
     ///
     /// # Failure
@@ -275,12 +284,26 @@ impl<T: ToSql> SqlFnOutput for (T, SubType) {
     }
 }
 
-unsafe fn sql_result<T: SqlFnOutput>(ctx: *mut sqlite3_context, r: Result<T>) {
+/// n-th arg of an SQL scalar function
+pub struct SqlFnArg {
+    idx: usize,
+}
+impl ToSql for SqlFnArg {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::Arg(self.idx))
+    }
+}
+
+unsafe fn sql_result<T: SqlFnOutput>(
+    ctx: *mut sqlite3_context,
+    args: &[*mut sqlite3_value],
+    r: Result<T>,
+) {
     let t = r.as_ref().map(SqlFnOutput::to_sql);
 
     match t {
         Ok(Ok((ref value, sub_type))) => {
-            set_result(ctx, value);
+            set_result(ctx, args, value);
             if let Some(sub_type) = sub_type {
                 ffi::sqlite3_result_subtype(ctx, sub_type);
             }
@@ -514,13 +537,11 @@ impl InnerConnection {
             F: FnMut(&Context<'_>) -> Result<T>,
             T: SqlFnOutput,
         {
+            let args = slice::from_raw_parts(argv, argc as usize);
             let r = catch_unwind(|| {
                 let boxed_f: *mut F = ffi::sqlite3_user_data(ctx).cast::<F>();
                 assert!(!boxed_f.is_null(), "Internal error - null function pointer");
-                let ctx = Context {
-                    ctx,
-                    args: slice::from_raw_parts(argv, argc as usize),
-                };
+                let ctx = Context { ctx, args };
                 (*boxed_f)(&ctx)
             });
             let t = match r {
@@ -530,7 +551,7 @@ impl InnerConnection {
                 }
                 Ok(r) => r,
             };
-            sql_result(ctx, t);
+            sql_result(ctx, args, t);
         }
 
         let boxed_f: *mut F = Box::into_raw(Box::new(x_func));
@@ -767,7 +788,7 @@ where
         }
         Ok(r) => r,
     };
-    sql_result(ctx, t);
+    sql_result(ctx, &[], t);
 }
 
 #[cfg(feature = "window")]
@@ -799,7 +820,7 @@ where
         }
         Ok(r) => r,
     };
-    sql_result(ctx, t);
+    sql_result(ctx, &[], t);
 }
 
 #[cfg(test)]
@@ -809,8 +830,8 @@ mod test {
 
     #[cfg(feature = "window")]
     use crate::functions::WindowAggregate;
-    use crate::functions::{Aggregate, Context, FunctionFlags, SubType};
-    use crate::{Connection, Error, Result, ValueRef};
+    use crate::functions::{Aggregate, Context, FunctionFlags, SqlFnArg, SubType};
+    use crate::{Connection, Error, Result};
 
     fn half(ctx: &Context<'_>) -> Result<c_double> {
         assert_eq!(ctx.len(), 1, "called with unexpected number of arguments");
@@ -1093,9 +1114,9 @@ mod test {
         fn test_getsubtype(ctx: &Context<'_>) -> Result<i32> {
             Ok(ctx.get_subtype(0) as i32)
         }
-        fn test_setsubtype<'a>(ctx: &'a Context<'_>) -> Result<(ValueRef<'a>, SubType)> {
+        fn test_setsubtype(ctx: &Context<'_>) -> Result<(SqlFnArg, SubType)> {
             use std::os::raw::c_uint;
-            let value = ctx.get_raw(0);
+            let value = ctx.get_arg(0);
             let sub_type = ctx.get::<c_uint>(1)?;
             Ok((value, Some(sub_type)))
         }

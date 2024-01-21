@@ -22,6 +22,11 @@ pub enum ToSqlOutput<'a> {
     #[cfg_attr(docsrs, doc(cfg(feature = "blob")))]
     ZeroBlob(i32),
 
+    /// n-th arg of an SQL scalar function
+    #[cfg(feature = "functions")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
+    Arg(usize),
+
     /// `feature = "array"`
     #[cfg(feature = "array")]
     #[cfg_attr(docsrs, doc(cfg(feature = "array")))]
@@ -107,6 +112,8 @@ impl ToSql for ToSqlOutput<'_> {
 
             #[cfg(feature = "blob")]
             ToSqlOutput::ZeroBlob(i) => ToSqlOutput::ZeroBlob(i),
+            #[cfg(feature = "functions")]
+            ToSqlOutput::Arg(i) => ToSqlOutput::Arg(i),
             #[cfg(feature = "array")]
             ToSqlOutput::Array(ref a) => ToSqlOutput::Array(a.clone()),
         })
@@ -289,13 +296,6 @@ impl ToSql for Value {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::from(self))
-    }
-}
-
-impl<'a> ToSql for ValueRef<'a> {
-    #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::Borrowed(*self))
     }
 }
 
