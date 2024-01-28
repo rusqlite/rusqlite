@@ -281,10 +281,12 @@ mod build_bundled {
 
             cfg.flag("-DSQLITE_OS_OTHER")
                 .flag("-DSQLITE_TEMP_STORE=3")
-                .flag("-DSQLITE_OMIT_LOCALTIME");
+                .flag("-DSQLITE_OMIT_LOCALTIME")
+                .flag("-Wno-incompatible-library-redeclaration");
 
-            #[cfg(feature = "wasm32-unknown-unknown-openbsd-libc")]
-            cfg.includes(wasm32_unknown_unknown_openbsd_libc::includes());
+            cfg.include(
+                std::env::var_os("DEP_WASM32_UNKNOWN_UNKNOWN_OPENBSD_LIBC_INCLUDE").unwrap(),
+            );
 
             println!("cargo:rustc-link-lib=compiler-rt-builtins");
             println!("cargo:rustc-link-lib=wasm32-unknown-unknown-openbsd-libc");
