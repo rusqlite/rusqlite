@@ -1353,7 +1353,7 @@ mod test {
     fn test_error_offset() -> Result<()> {
         use crate::ffi::ErrorCode;
         let db = Connection::open_in_memory()?;
-        let r = db.execute_batch("SELECT CURRENT_TIMESTANP;");
+        let r = db.execute_batch("SELECT INVALID_FUNCTION;");
         match r.unwrap_err() {
             Error::SqlInputError { error, offset, .. } => {
                 assert_eq!(error.code, ErrorCode::Unknown);

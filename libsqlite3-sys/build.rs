@@ -5,7 +5,7 @@ use std::path::Path;
 /// `cfg!(windows)`, since the latter does not properly handle cross-compilation
 ///
 /// Note that there is no way to know at compile-time which system we'll be
-/// targetting, and this test must be made at run-time (of the build script) See
+/// targeting, and this test must be made at run-time (of the build script) See
 /// https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
 fn win_target() -> bool {
     env::var("CARGO_CFG_WINDOWS").is_ok()
@@ -668,7 +668,7 @@ mod loadable_extension {
         // (2) `#define sqlite3_xyz sqlite3_api->abc` => `pub unsafe fn
         // sqlite3_xyz(args) -> ty {...}` for each `abc` field:
         for field in sqlite3_api_routines.fields {
-            let ident = field.ident.expect("unamed field");
+            let ident = field.ident.expect("unnamed field");
             let span = ident.span();
             let name = ident.to_string();
             if name == "vmprintf" || name == "xvsnprintf" || name == "str_vappendf" {
