@@ -284,7 +284,7 @@ mod build_bundled {
                 .flag("-DSQLITE_OMIT_LOCALTIME")
                 .flag("-Wno-incompatible-library-redeclaration");
 
-            let supported_features = vec![
+            let supported_features = [
                 "atomics",
                 "bulk-memory",
                 "exception-handling",
