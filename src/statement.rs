@@ -606,6 +606,13 @@ impl Statement<'_> {
                     .conn
                     .decode_result(unsafe { ffi::sqlite3_bind_zeroblob(ptr, col as c_int, len) });
             }
+            #[cfg(feature = "functions")]
+            ToSqlOutput::Arg(_) => {
+                return Err(Error::SqliteFailure(
+                    ffi::Error::new(ffi::SQLITE_MISUSE),
+                    Some(format!("Unsupported value \"{value:?}\"")),
+                ));
+            }
             #[cfg(feature = "array")]
             ToSqlOutput::Array(a) => {
                 return self.conn.decode_result(unsafe {
@@ -1353,7 +1360,7 @@ mod test {
     fn test_error_offset() -> Result<()> {
         use crate::ffi::ErrorCode;
         let db = Connection::open_in_memory()?;
-        let r = db.execute_batch("SELECT CURRENT_TIMESTANP;");
+        let r = db.execute_batch("SELECT INVALID_FUNCTION;");
         match r.unwrap_err() {
             Error::SqlInputError { error, offset, .. } => {
                 assert_eq!(error.code, ErrorCode::Unknown);
