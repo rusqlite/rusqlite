@@ -284,6 +284,27 @@ mod build_bundled {
                 .flag("-DSQLITE_OMIT_LOCALTIME")
                 .flag("-Wno-incompatible-library-redeclaration");
 
+            let supported_features = vec![
+                "atomics",
+                "bulk-memory",
+                "exception-handling",
+                "multivalue",
+                "mutable-globals",
+                "nontrapping-fptoint",
+                "reference-types",
+                "relaxed-simd",
+                "sign-ext",
+                "simd128",
+            ];
+            for feature in env::var("CARGO_CFG_TARGET_FEATURE")
+                .unwrap_or_default()
+                .split(',')
+            {
+                if supported_features.contains(&feature) {
+                    cfg.flag(&format!("-m{feature}"));
+                }
+            }
+
             cfg.include(
                 std::env::var_os("DEP_WASM32_UNKNOWN_UNKNOWN_OPENBSD_LIBC_INCLUDE").unwrap(),
             );
