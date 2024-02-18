@@ -4,7 +4,7 @@ use litrs::StringLit;
 use proc_macro::{Delimiter, Group, Literal, Span, TokenStream, TokenTree};
 
 use fallible_iterator::FallibleIterator;
-use sqlite3_parser::ast::{ParameterInfo, ToTokens};
+use sqlite3_parser::ast::{Cmd, ParameterInfo, ToTokens};
 use sqlite3_parser::lexer::sql::Parser;
 
 // https://internals.rust-lang.org/t/custom-error-diagnostics-with-procedural-macros-on-almost-stable-rust/8113
@@ -19,7 +19,7 @@ type Result<T> = std::result::Result<T, String>;
 
 fn try_bind(input: TokenStream) -> Result<TokenStream> {
     let (stmt, literal) = {
-        let mut iter = input.clone().into_iter();
+        let mut iter = input.into_iter();
         let stmt = iter.next().unwrap();
         let literal = iter.next().unwrap();
         assert!(iter.next().is_none());
@@ -35,16 +35,8 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
         Ok(string_lit) => string_lit,
         Err(e) => return Ok(e.to_compile_error()),
     };
-    let sql = string_lit.value();
+    let ast = parse(string_lit.value())?;
 
-    let mut parser = Parser::new(sql.as_bytes());
-    let ast = match parser.next() {
-        Ok(None) => return Err("Invalid input".to_owned()),
-        Err(err) => {
-            return Err(err.to_string());
-        }
-        Ok(Some(ast)) => ast,
-    };
     let mut info = ParameterInfo::default();
     if let Err(err) = ast.to_tokens(&mut info) {
         return Err(err.to_string());
@@ -70,6 +62,21 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
     }
 
     Ok(res)
+}
+
+fn parse(sql: &str) -> Result<Cmd> {
+    let mut parser = Parser::new(sql.as_bytes());
+    let ast = match parser.next() {
+        Ok(None) => return Err("Invalid input".to_owned()),
+        Err(err) => return Err(err.to_string()),
+        Ok(Some(ast)) => ast,
+    };
+    match parser.next() {
+        Err(err) => return Err(err.to_string()),
+        Ok(Some(_)) => return Err("Multiple statements".to_owned()),
+        _ => {}
+    };
+    Ok(ast)
 }
 
 fn into_literal(ts: &TokenTree) -> Option<Literal> {

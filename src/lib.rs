@@ -239,6 +239,15 @@ macro_rules! named_params {
 ///     Ok(prepare_and_bind!(db, "SELECT $name, @age, :smart;"))
 /// }
 /// ```
+///
+/// ```compile_fail
+/// # use rusqlite::{Connection, Result};
+/// # fn main() -> Result<()> {
+/// # let db = Connection::open_in_memory()?;
+/// let mut stmt = prepare_and_bind!(db, "SELECT 1; SELECT 2"); // should't compile: multiple statements
+/// # Ok(())
+/// # }
+/// ```
 #[cfg(feature = "rusqlite-macros")]
 #[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
 #[macro_export]
