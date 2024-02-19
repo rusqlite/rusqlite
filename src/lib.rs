@@ -90,7 +90,7 @@ pub use crate::types::ToSql;
 pub use crate::version::*;
 #[cfg(feature = "rusqlite-macros")]
 #[doc(hidden)]
-pub use rusqlite_macros::__bind;
+pub use rusqlite_macros::{__bind, __single};
 
 mod error;
 
@@ -273,6 +273,18 @@ macro_rules! prepare_cached_and_bind {
         $crate::__bind!(stmt $sql);
         stmt
     }};
+}
+
+/// Check that only one statement is used at compile time.
+/// This is possible only if a literal is passed as argument.
+#[cfg(feature = "rusqlite-macros")]
+#[macro_export]
+macro_rules! single {
+    ($sql:literal) => {
+        $crate::__single!($sql);
+    };
+    // TODO How to match / ignore anything else ?
+    (sql) => {};
 }
 
 /// A typedef of the result returned by many methods.

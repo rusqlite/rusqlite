@@ -11,6 +11,33 @@ use sqlite3_parser::lexer::sql::Parser;
 
 #[doc(hidden)]
 #[proc_macro]
+pub fn __single(input: TokenStream) -> TokenStream {
+    try_single(input).unwrap_or_else(|msg| parse_ts(&format!("compile_error!({msg:?})")))
+}
+
+fn try_single(input: TokenStream) -> Result<TokenStream> {
+    let literal = {
+        let mut iter = input.clone().into_iter();
+        let literal = iter.next().unwrap();
+        assert!(iter.next().is_none());
+        literal
+    };
+
+    let literal = match into_literal(&literal) {
+        Some(it) => it,
+        None => return Err("expected a plain string literal".to_string()),
+    };
+    let string_lit = match StringLit::try_from(literal) {
+        Ok(string_lit) => string_lit,
+        Err(e) => return Ok(e.to_compile_error()),
+    };
+    parse(string_lit.value())?;
+    // TODO DDL vs DML (without RETURNING) vs DQL
+    Ok(input)
+}
+
+#[doc(hidden)]
+#[proc_macro]
 pub fn __bind(input: TokenStream) -> TokenStream {
     try_bind(input).unwrap_or_else(|msg| parse_ts(&format!("compile_error!({msg:?})")))
 }
