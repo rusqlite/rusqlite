@@ -1244,7 +1244,6 @@ doc_comment::doctest!("../README.md");
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ffi;
     use fallible_iterator::FallibleIterator;
     use std::error::Error as StdError;
     use std::fmt;

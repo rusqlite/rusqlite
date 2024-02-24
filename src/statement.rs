@@ -1,4 +1,3 @@
-use std::iter::IntoIterator;
 use std::os::raw::{c_int, c_void};
 #[cfg(feature = "array")]
 use std::rc::Rc;
