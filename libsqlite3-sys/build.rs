@@ -241,7 +241,7 @@ mod build_bundled {
             if vs_has_nan {
                 cfg.flag("-DHAVE_ISNAN");
             }
-        } else {
+        } else if env::var("TARGET") != Ok("wasm32-unknown-unknown".to_string()) {
             cfg.flag("-DHAVE_ISNAN");
         }
         if !win_target() {
@@ -260,6 +260,57 @@ mod build_bundled {
             if cfg!(feature = "wasm32-wasi-vfs") {
                 cfg.file("sqlite3/wasm32-wasi-vfs.c");
             }
+        }
+        if env::var("TARGET") == Ok("wasm32-unknown-unknown".to_string()) {
+            // Apple clang doesn't support wasm32, so use Homebrew clang by default.
+            if env::var("HOST") == Ok("x86_64-apple-darwin".to_string()) {
+                if env::var("CC").is_err() {
+                    std::env::set_var("CC", "/usr/local/opt/llvm/bin/clang");
+                }
+                if env::var("AR").is_err() {
+                    std::env::set_var("AR", "/usr/local/opt/llvm/bin/llvm-ar");
+                }
+            } else if env::var("HOST") == Ok("aarch64-apple-darwin".to_string()) {
+                if env::var("CC").is_err() {
+                    std::env::set_var("CC", "/opt/homebrew/opt/llvm/bin/clang");
+                }
+                if env::var("AR").is_err() {
+                    std::env::set_var("AR", "/opt/homebrew/opt/llvm/bin/llvm-ar");
+                }
+            }
+
+            cfg.flag("-DSQLITE_OS_OTHER")
+                .flag("-DSQLITE_TEMP_STORE=3")
+                .flag("-DSQLITE_OMIT_LOCALTIME")
+                .flag("-Wno-incompatible-library-redeclaration");
+
+            let supported_features = [
+                "atomics",
+                "bulk-memory",
+                "exception-handling",
+                "multivalue",
+                "mutable-globals",
+                "nontrapping-fptoint",
+                "reference-types",
+                "relaxed-simd",
+                "sign-ext",
+                "simd128",
+            ];
+            for feature in env::var("CARGO_CFG_TARGET_FEATURE")
+                .unwrap_or_default()
+                .split(',')
+            {
+                if supported_features.contains(&feature) {
+                    cfg.flag(&format!("-m{feature}"));
+                }
+            }
+
+            cfg.include(
+                std::env::var_os("DEP_WASM32_UNKNOWN_UNKNOWN_OPENBSD_LIBC_INCLUDE").unwrap(),
+            );
+
+            println!("cargo:rustc-link-lib=compiler-rt-builtins");
+            println!("cargo:rustc-link-lib=wasm32-unknown-unknown-openbsd-libc");
         }
         if cfg!(feature = "unlock_notify") {
             cfg.flag("-DSQLITE_ENABLE_UNLOCK_NOTIFY");

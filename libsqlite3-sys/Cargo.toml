@@ -37,6 +37,12 @@ wasm32-wasi-vfs = []
 [dependencies]
 openssl-sys = { version = "0.9", optional = true }
 
+[target.wasm32-unknown-unknown.dependencies]
+compiler-rt-builtins = "0.1"
+getrandom = { version = "0.2", features = ["js"] }
+js-sys = "0.3"
+wasm32-unknown-unknown-openbsd-libc = "0.2"
+
 [build-dependencies]
 bindgen = { version = "0.69", optional = true, default-features = false, features = ["runtime"] }
 pkg-config = { version = "0.3.19", optional = true }
