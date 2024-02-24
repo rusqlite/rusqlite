@@ -19,7 +19,7 @@ use crate::vtab::array::{free_array, ARRAY_TYPE};
 #[inline]
 pub(super) unsafe fn set_result(
     ctx: *mut sqlite3_context,
-    args: &[*mut sqlite3_value],
+    #[allow(unused_variables)] args: &[*mut sqlite3_value],
     result: &ToSqlOutput<'_>,
 ) {
     let value = match *result {

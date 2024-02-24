@@ -26,7 +26,6 @@
 //! }
 //! ```
 
-use std::default::Default;
 use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int, c_void};
 use std::rc::Rc;

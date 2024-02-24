@@ -68,7 +68,7 @@ impl Connection {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Connection, Result};
+    use crate::Result;
 
     #[test]
     fn test_limit_values() {

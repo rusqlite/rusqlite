@@ -11,7 +11,6 @@
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::marker::PhantomData;
-use std::marker::Sync;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::slice;

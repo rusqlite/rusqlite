@@ -3,7 +3,6 @@ use super::{Null, Value, ValueRef};
 use crate::vtab::array::Array;
 use crate::{Error, Result};
 use std::borrow::Cow;
-use std::convert::TryFrom;
 
 /// `ToSqlOutput` represents the possible output types for implementers of the
 /// [`ToSql`] trait.

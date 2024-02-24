@@ -1,6 +1,5 @@
 use super::Blob;
 
-use std::convert::TryFrom;
 use std::mem::MaybeUninit;
 use std::slice::from_raw_parts_mut;
 
