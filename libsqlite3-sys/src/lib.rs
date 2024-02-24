@@ -7,7 +7,6 @@ extern crate openssl_sys;
 
 pub use self::error::*;
 
-use std::default::Default;
 use std::mem;
 
 mod error;
