@@ -94,17 +94,14 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
   allows loading dynamic library-based SQLite extensions.
 * `loadable_extension` to program [loadable extension](https://sqlite.org/loadext.html) in Rust.
 * [`backup`](https://docs.rs/rusqlite/~0/rusqlite/backup/index.html)
-  allows use of SQLite's online backup API. Note: This feature requires SQLite 3.6.11 or later.
+  allows use of SQLite's online backup API.
 * [`functions`](https://docs.rs/rusqlite/~0/rusqlite/functions/index.html)
   allows you to load Rust closures into SQLite connections for use in queries.
-  Note: This feature requires SQLite 3.7.3 or later.
 * `window` for [window function](https://www.sqlite.org/windowfunctions.html) support (`fun(...) OVER ...`). (Implies `functions`.)
 * [`trace`](https://docs.rs/rusqlite/~0/rusqlite/trace/index.html)
-  allows hooks into SQLite's tracing and profiling APIs. Note: This feature
-  requires SQLite 3.6.23 or later.
+  allows hooks into SQLite's tracing and profiling APIs.
 * [`blob`](https://docs.rs/rusqlite/~0/rusqlite/blob/index.html)
-  gives `std::io::{Read, Write, Seek}` access to SQL BLOBs. Note: This feature
-  requires SQLite 3.7.4 or later.
+  gives `std::io::{Read, Write, Seek}` access to SQL BLOBs.
 * [`limits`](https://docs.rs/rusqlite/~0/rusqlite/struct.Connection.html#method.limit)
   allows you to set and retrieve SQLite's per connection limits.
 * `chrono` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
