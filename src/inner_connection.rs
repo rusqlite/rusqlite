@@ -4,7 +4,6 @@ use std::os::raw::{c_char, c_int};
 use std::path::Path;
 use std::ptr;
 use std::str;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use super::ffi;
@@ -13,7 +12,6 @@ use super::{Connection, InterruptHandle, OpenFlags, PrepFlags, Result};
 use crate::error::{error_from_handle, error_from_sqlite_code, error_with_offset, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
-use crate::version::version_number;
 
 pub struct InnerConnection {
     pub db: *mut ffi::sqlite3,
@@ -66,21 +64,6 @@ impl InnerConnection {
         vfs: Option<&CStr>,
     ) -> Result<InnerConnection> {
         ensure_safe_sqlite_threading_mode()?;
-
-        // Replicate the check for sane open flags from SQLite, because the check in
-        // SQLite itself wasn't added until version 3.7.3.
-        debug_assert_eq!(1 << OpenFlags::SQLITE_OPEN_READ_ONLY.bits(), 0x02);
-        debug_assert_eq!(1 << OpenFlags::SQLITE_OPEN_READ_WRITE.bits(), 0x04);
-        debug_assert_eq!(
-            1 << (OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE).bits(),
-            0x40
-        );
-        if (1 << (flags.bits() & 0x7)) & 0x46 == 0 {
-            return Err(Error::SqliteFailure(
-                ffi::Error::new(ffi::SQLITE_MISUSE),
-                None,
-            ));
-        }
 
         let z_vfs = match vfs {
             Some(c_vfs) => c_vfs.as_ptr(),
@@ -390,11 +373,6 @@ impl Drop for InnerConnection {
     }
 }
 
-#[cfg(not(any(target_arch = "wasm32", feature = "loadable_extension")))]
-static SQLITE_INIT: std::sync::Once = std::sync::Once::new();
-
-pub static BYPASS_SQLITE_INIT: AtomicBool = AtomicBool::new(false);
-
 // threading mode checks are not necessary (and do not work) on target
 // platforms that do not have threading (such as webassembly)
 #[cfg(target_arch = "wasm32")]
@@ -412,51 +390,21 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
     // Now we know SQLite is _capable_ of being in Multi-thread of Serialized mode,
     // but it's possible someone configured it to be in Single-thread mode
     // before calling into us. That would mean we're exposing an unsafe API via
-    // a safe one (in Rust terminology), which is no good. We have two options
-    // to protect against this, depending on the version of SQLite we're linked
-    // with:
+    // a safe one (in Rust terminology).
     //
-    // 1. If we're on 3.7.0 or later, we can ask SQLite for a mutex and check for
-    //    the magic value 8. This isn't documented, but it's what SQLite
-    //    returns for its mutex allocation function in Single-thread mode.
-    // 2. If we're prior to SQLite 3.7.0, AFAIK there's no way to check the
-    //    threading mode. The check we perform for >= 3.7.0 will segfault.
-    //    Instead, we insist on being able to call sqlite3_config and
-    //    sqlite3_initialize ourself, ensuring we know the threading
-    //    mode. This will fail if someone else has already initialized SQLite
-    //    even if they initialized it safely. That's not ideal either, which is
-    //    why we expose bypass_sqlite_initialization    above.
-    if version_number() >= 3_007_000 {
-        const SQLITE_SINGLETHREADED_MUTEX_MAGIC: usize = 8;
-        let is_singlethreaded = unsafe {
-            let mutex_ptr = ffi::sqlite3_mutex_alloc(0);
-            let is_singlethreaded = mutex_ptr as usize == SQLITE_SINGLETHREADED_MUTEX_MAGIC;
-            ffi::sqlite3_mutex_free(mutex_ptr);
-            is_singlethreaded
-        };
-        if is_singlethreaded {
-            Err(Error::SqliteSingleThreadedMode)
-        } else {
-            Ok(())
-        }
+    // We can ask SQLite for a mutex and check for
+    // the magic value 8. This isn't documented, but it's what SQLite
+    // returns for its mutex allocation function in Single-thread mode.
+    const SQLITE_SINGLETHREADED_MUTEX_MAGIC: usize = 8;
+    let is_singlethreaded = unsafe {
+        let mutex_ptr = ffi::sqlite3_mutex_alloc(0);
+        let is_singlethreaded = mutex_ptr as usize == SQLITE_SINGLETHREADED_MUTEX_MAGIC;
+        ffi::sqlite3_mutex_free(mutex_ptr);
+        is_singlethreaded
+    };
+    if is_singlethreaded {
+        Err(Error::SqliteSingleThreadedMode)
     } else {
-        #[cfg(not(feature = "loadable_extension"))]
-        SQLITE_INIT.call_once(|| {
-            use std::sync::atomic::Ordering;
-            if BYPASS_SQLITE_INIT.load(Ordering::Relaxed) {
-                return;
-            }
-
-            unsafe {
-                assert!(ffi::sqlite3_config(ffi::SQLITE_CONFIG_MULTITHREAD) == ffi::SQLITE_OK && ffi::sqlite3_initialize() == ffi::SQLITE_OK,
-                        "Could not ensure safe initialization of SQLite.\n\
-                         To fix this, either:\n\
-                         * Upgrade SQLite to at least version 3.7.0\n\
-                         * Ensure that SQLite has been initialized in Multi-thread or Serialized mode and call\n\
-                           rusqlite::bypass_sqlite_initialization() prior to your first connection attempt."
-                    );
-            }
-        });
         Ok(())
     }
 }
