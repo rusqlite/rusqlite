@@ -1717,7 +1717,9 @@ mod test {
                    END;";
         db.execute_batch(sql)?;
         let total_changes_before = db.total_changes();
-        let changes = db.prepare("INSERT INTO foo_bar VALUES(null, 'baz');")?.execute([])?;
+        let changes = db
+            .prepare("INSERT INTO foo_bar VALUES(null, 'baz');")?
+            .execute([])?;
         let total_changes_after = db.total_changes();
         assert_eq!(changes, 0);
         assert_eq!(total_changes_after - total_changes_before, 1);
