@@ -1005,6 +1005,16 @@ impl Connection {
         self.db.borrow().changes()
     }
 
+    /// Return the total number of rows modified, inserted or deleted by all
+    /// completed INSERT, UPDATE or DELETE statements since the database
+    /// connection was opened, including those executed as part of trigger programs.
+    ///
+    /// See <https://www.sqlite.org/c3ref/total_changes.html>
+    #[inline]
+    pub fn total_changes(&self) -> u64 {
+        self.db.borrow().total_changes()
+    }
+
     /// Test for auto-commit mode.
     /// Autocommit mode is on by default.
     #[inline]
