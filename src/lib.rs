@@ -1706,7 +1706,7 @@ mod test {
     #[test]
     fn test_total_changes() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        let sql = "CREATE TABLE foo(x INTEGER PRIMARY KEY, value TEXT defaut '' NOT NULL,
+        let sql = "CREATE TABLE foo(x INTEGER PRIMARY KEY, value TEXT default '' NOT NULL,
                                     desc TEXT default '');
                    CREATE VIEW foo_bar AS SELECT x, desc FROM foo WHERE value = 'bar';
                    CREATE TRIGGER INSERT_FOOBAR
