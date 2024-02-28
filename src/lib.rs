@@ -1005,6 +1005,16 @@ impl Connection {
         self.db.borrow().changes()
     }
 
+    /// Return the total number of rows modified, inserted or deleted by all
+    /// completed INSERT, UPDATE or DELETE statements since the database
+    /// connection was opened, including those executed as part of trigger programs.
+    ///
+    /// See <https://www.sqlite.org/c3ref/total_changes.html>
+    #[inline]
+    pub fn total_changes(&self) -> u64 {
+        self.db.borrow().total_changes()
+    }
+
     /// Test for auto-commit mode.
     /// Autocommit mode is on by default.
     #[inline]
@@ -1690,6 +1700,29 @@ mod test {
             stmt.execute([])?;
         }
         assert_eq!(db.last_insert_rowid(), 10);
+        Ok(())
+    }
+
+    #[test]
+    fn test_total_changes() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let sql = "CREATE TABLE foo(x INTEGER PRIMARY KEY, value TEXT default '' NOT NULL,
+                                    desc TEXT default '');
+                   CREATE VIEW foo_bar AS SELECT x, desc FROM foo WHERE value = 'bar';
+                   CREATE TRIGGER INSERT_FOOBAR
+                   INSTEAD OF INSERT
+                   ON foo_bar
+                   BEGIN
+                       INSERT INTO foo VALUES(new.x, 'bar', new.desc);
+                   END;";
+        db.execute_batch(sql)?;
+        let total_changes_before = db.total_changes();
+        let changes = db
+            .prepare("INSERT INTO foo_bar VALUES(null, 'baz');")?
+            .execute([])?;
+        let total_changes_after = db.total_changes();
+        assert_eq!(changes, 0);
+        assert_eq!(total_changes_after - total_changes_before, 1);
         Ok(())
     }
 

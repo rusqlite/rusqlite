@@ -289,6 +289,18 @@ impl InnerConnection {
     }
 
     #[inline]
+    pub fn total_changes(&self) -> u64 {
+        #[cfg(not(feature = "modern_sqlite"))]
+        unsafe {
+            ffi::sqlite3_total_changes(self.db()) as u64
+        }
+        #[cfg(feature = "modern_sqlite")] // 3.37.0
+        unsafe {
+            ffi::sqlite3_total_changes64(self.db()) as u64
+        }
+    }
+
+    #[inline]
     pub fn is_autocommit(&self) -> bool {
         unsafe { ffi::sqlite3_get_autocommit(self.db()) != 0 }
     }
