@@ -1,4 +1,5 @@
 ignore:
+  - "examples"
   - "libsqlite3-sys/bindgen-bindings"
   - "libsqlite3-sys/sqlite3"
 coverage:
