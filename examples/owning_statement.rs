@@ -2,6 +2,9 @@ extern crate rusqlite;
 use ouroboros::self_referencing;
 use rusqlite::{CachedStatement, Connection, Result, Rows};
 
+/// Caveat: single statement at a time for one connection.
+/// But if you need multiple statements, you can still create your own struct
+/// with multiple fields (one for each statement).
 #[self_referencing]
 struct OwningStatement {
     conn: Connection,
