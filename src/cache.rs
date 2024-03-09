@@ -153,7 +153,7 @@ impl StatementCache {
     }
 
     // Return a statement to the cache.
-    fn cache_stmt(&self, stmt: RawStatement) {
+    fn cache_stmt(&self, mut stmt: RawStatement) {
         if stmt.is_null() {
             return;
         }
