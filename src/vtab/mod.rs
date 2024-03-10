@@ -759,10 +759,9 @@ impl Values<'_> {
             None
         } else {
             Some(unsafe {
-                let rc = array::Array::from_raw(ptr as *const Vec<Value>);
-                let array = rc.clone();
-                array::Array::into_raw(rc); // don't consume it
-                array
+                let ptr = ptr as *const Vec<Value>;
+                array::Array::increment_strong_count(ptr); // don't consume it
+                array::Array::from_raw(ptr)
             })
         }
     }
