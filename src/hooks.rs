@@ -666,7 +666,8 @@ unsafe fn expect_optional_utf8<'a>(
     if p_str.is_null() {
         return None;
     }
-    std::str::from_utf8(std::ffi::CStr::from_ptr(p_str).to_bytes())
+    std::ffi::CStr::from_ptr(p_str)
+        .to_str()
         .unwrap_or_else(|_| panic!("received non-utf8 string as {description}"))
         .into()
 }

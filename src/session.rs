@@ -71,10 +71,7 @@ impl Session<'_> {
             use std::str;
 
             let boxed_filter: *mut F = p_arg as *mut F;
-            let tbl_name = {
-                let c_slice = CStr::from_ptr(tbl_str).to_bytes();
-                str::from_utf8(c_slice)
-            };
+            let tbl_name = CStr::from_ptr(tbl_str).to_str();
             c_int::from(
                 catch_unwind(|| (*boxed_filter)(tbl_name.expect("non-utf8 table name")))
                     .unwrap_or_default(),
@@ -700,10 +697,7 @@ where
     use std::str;
 
     let tuple: *mut (Option<F>, C) = p_ctx as *mut (Option<F>, C);
-    let tbl_name = {
-        let c_slice = CStr::from_ptr(tbl_str).to_bytes();
-        str::from_utf8(c_slice)
-    };
+    let tbl_name = CStr::from_ptr(tbl_str).to_str();
     match *tuple {
         (Some(ref filter), _) => c_int::from(
             catch_unwind(|| filter(tbl_name.expect("illegal table name"))).unwrap_or_default(),
