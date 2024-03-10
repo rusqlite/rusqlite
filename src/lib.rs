@@ -1037,8 +1037,28 @@ impl Connection {
         self.db.borrow().db_readonly(db_name)
     }
 
+    /// Return the schema name for a database connection
+    ///
+    /// ## Failure
+    ///
+    /// Return an `Error::InvalidDatabaseIndex` if `index` is out of range.
+    #[cfg(feature = "modern_sqlite")] // 3.39.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn db_name(&self, index: usize) -> Result<&str> {
+        unsafe {
+            let db = self.handle();
+            let name = ffi::sqlite3_db_name(db, index as c_int);
+            if name.is_null() {
+                Err(Error::InvalidDatabaseIndex(index))
+            } else {
+                Ok(CStr::from_ptr(name).to_str()?)
+            }
+        }
+    }
+
     /// Determine whether or not an interrupt is currently in effect
     #[cfg(feature = "modern_sqlite")] // 3.41.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn is_interrupted(&self) -> bool {
         self.db.borrow().is_interrupted()
     }
@@ -2209,6 +2229,18 @@ mod test {
             .and_then(|o| o.ok_or(Error::QueryReturnedNoRows))
             .and_then(|r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
         assert_eq!((v1.as_str(), v2), (name, age));
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "modern_sqlite")]
+    fn test_db_name() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        assert_eq!(db.db_name(0), Ok("main"));
+        assert_eq!(db.db_name(1), Ok("temp"));
+        assert_eq!(db.db_name(2), Err(Error::InvalidDatabaseIndex(2)));
+        db.execute_batch("ATTACH DATABASE ':memory:' AS xyz;")?;
+        assert_eq!(db.db_name(2), Ok("xyz"));
         Ok(())
     }
 
