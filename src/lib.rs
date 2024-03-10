@@ -289,8 +289,7 @@ impl<T> OptionalExtension<T> for Result<T> {
 }
 
 unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
-    let c_slice = CStr::from_ptr(errmsg).to_bytes();
-    String::from_utf8_lossy(c_slice).into_owned()
+    CStr::from_ptr(errmsg).to_string_lossy().into_owned()
 }
 
 fn str_to_cstring(s: &str) -> Result<SmallCString> {

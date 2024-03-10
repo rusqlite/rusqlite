@@ -128,10 +128,9 @@ impl InnerConnection {
             let callback: fn(&Connection, &str) -> Result<()> = mem::transmute(arg1);
             let res = catch_unwind(|| {
                 let conn = Connection::from_handle(arg2).unwrap();
-                let collation_name = {
-                    let c_slice = CStr::from_ptr(arg3).to_bytes();
-                    str::from_utf8(c_slice).expect("illegal collation sequence name")
-                };
+                let collation_name = CStr::from_ptr(arg3)
+                    .to_str()
+                    .expect("illegal collation sequence name");
                 callback(&conn, collation_name)
             });
             if res.is_err() {
