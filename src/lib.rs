@@ -2238,7 +2238,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         assert_eq!(db.db_name(0), Ok("main"));
         assert_eq!(db.db_name(1), Ok("temp"));
-        assert!(db.db_name(2).is_err());
+        assert_eq!(db.db_name(2), Err(Error::InvalidDatabaseIndex(2)));
         db.execute_batch("ATTACH DATABASE ':memory:' AS xyz;")?;
         assert_eq!(db.db_name(2), Ok("xyz"));
         Ok(())
