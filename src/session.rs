@@ -68,8 +68,6 @@ impl Session<'_> {
         where
             F: Fn(&str) -> bool + RefUnwindSafe,
         {
-            use std::str;
-
             let boxed_filter: *mut F = p_arg as *mut F;
             let tbl_name = CStr::from_ptr(tbl_str).to_str();
             c_int::from(
@@ -694,8 +692,6 @@ where
     F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
     C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
 {
-    use std::str;
-
     let tuple: *mut (Option<F>, C) = p_ctx as *mut (Option<F>, C);
     let tbl_name = CStr::from_ptr(tbl_str).to_str();
     match *tuple {
