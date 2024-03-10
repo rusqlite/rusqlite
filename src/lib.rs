@@ -1037,6 +1037,12 @@ impl Connection {
     pub fn is_readonly(&self, db_name: DatabaseName<'_>) -> Result<bool> {
         self.db.borrow().db_readonly(db_name)
     }
+
+    /// Determine whether or not an interrupt is currently in effect
+    #[cfg(feature = "modern_sqlite")] // 3.41.0
+    pub fn is_interrupted(&self) -> bool {
+        self.db.borrow().is_interrupted()
+    }
 }
 
 impl fmt::Debug for Connection {
@@ -2204,6 +2210,16 @@ mod test {
             .and_then(|o| o.ok_or(Error::QueryReturnedNoRows))
             .and_then(|r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
         assert_eq!((v1.as_str(), v2), (name, age));
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "modern_sqlite")]
+    fn test_is_interrupted() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        assert!(!db.is_interrupted());
+        db.get_interrupt_handle().interrupt();
+        assert!(db.is_interrupted());
         Ok(())
     }
 }

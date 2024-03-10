@@ -375,6 +375,11 @@ impl InnerConnection {
     pub fn release_memory(&self) -> Result<()> {
         self.decode_result(unsafe { ffi::sqlite3_db_release_memory(self.db) })
     }
+
+    #[cfg(feature = "modern_sqlite")] // 3.41.0
+    pub fn is_interrupted(&self) -> bool {
+        unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
+    }
 }
 
 impl Drop for InnerConnection {
