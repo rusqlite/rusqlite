@@ -463,7 +463,6 @@ tuples_try_from_row!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::redundant_closure)] // false positives due to lifetime issues; clippy issue #5594
     use crate::{Connection, Result};
 
     #[test]

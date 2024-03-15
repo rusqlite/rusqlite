@@ -487,8 +487,8 @@ mod build_linked {
 }
 
 #[cfg(not(feature = "buildtime_bindgen"))]
+#[allow(dead_code)]
 mod bindings {
-    #![allow(dead_code)]
     use super::HeaderLocation;
 
     use std::path::Path;

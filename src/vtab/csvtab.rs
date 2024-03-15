@@ -115,7 +115,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                     if !Path::new(value).exists() {
                         return Err(Error::ModuleError(format!("file '{value}' does not exist")));
                     }
-                    vtab.filename = value.to_owned();
+                    value.clone_into(&mut vtab.filename);
                 }
                 "schema" => {
                     schema = Some(value.to_owned());
