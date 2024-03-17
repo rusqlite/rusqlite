@@ -1044,14 +1044,14 @@ impl Connection {
     /// Return an `Error::InvalidDatabaseIndex` if `index` is out of range.
     #[cfg(feature = "modern_sqlite")] // 3.39.0
     #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-    pub fn db_name(&self, index: usize) -> Result<&str> {
+    pub fn db_name(&self, index: usize) -> Result<String> {
         unsafe {
             let db = self.handle();
             let name = ffi::sqlite3_db_name(db, index as c_int);
             if name.is_null() {
                 Err(Error::InvalidDatabaseIndex(index))
             } else {
-                Ok(CStr::from_ptr(name).to_str()?)
+                Ok(CStr::from_ptr(name).to_str()?.to_owned())
             }
         }
     }
@@ -2236,11 +2236,11 @@ mod test {
     #[cfg(feature = "modern_sqlite")]
     fn test_db_name() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        assert_eq!(db.db_name(0), Ok("main"));
-        assert_eq!(db.db_name(1), Ok("temp"));
+        assert_eq!(db.db_name(0).unwrap(), "main");
+        assert_eq!(db.db_name(1).unwrap(), "temp");
         assert_eq!(db.db_name(2), Err(Error::InvalidDatabaseIndex(2)));
         db.execute_batch("ATTACH DATABASE ':memory:' AS xyz;")?;
-        assert_eq!(db.db_name(2), Ok("xyz"));
+        assert_eq!(db.db_name(2).unwrap(), "xyz");
         Ok(())
     }
 
