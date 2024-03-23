@@ -3106,30 +3106,6 @@ pub unsafe fn sqlite3_bind_text(
     (fun)(arg1, arg2, arg3, n, arg4)
 }
 
-static __SQLITE3_BIND_TEXT16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_bind_text16(
-    arg1: *mut sqlite3_stmt,
-    arg2: ::std::os::raw::c_int,
-    arg3: *const ::std::os::raw::c_void,
-    arg4: ::std::os::raw::c_int,
-    arg5: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_BIND_TEXT16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_stmt,
-        arg2: ::std::os::raw::c_int,
-        arg3: *const ::std::os::raw::c_void,
-        arg4: ::std::os::raw::c_int,
-        arg5: ::std::option::Option<
-            unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void),
-        >,
-    ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3, arg4, arg5)
-}
-
 static __SQLITE3_BIND_VALUE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -3248,38 +3224,6 @@ pub unsafe fn sqlite3_collation_needed(
     (fun)(arg1, arg2, arg3)
 }
 
-static __SQLITE3_COLLATION_NEEDED16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_collation_needed16(
-    arg1: *mut sqlite3,
-    arg2: *mut ::std::os::raw::c_void,
-    arg3: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *mut ::std::os::raw::c_void,
-            arg2: *mut sqlite3,
-            eTextRep: ::std::os::raw::c_int,
-            arg3: *const ::std::os::raw::c_void,
-        ),
-    >,
-) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_COLLATION_NEEDED16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3,
-        arg2: *mut ::std::os::raw::c_void,
-        arg3: ::std::option::Option<
-            unsafe extern "C" fn(
-                arg1: *mut ::std::os::raw::c_void,
-                arg2: *mut sqlite3,
-                eTextRep: ::std::os::raw::c_int,
-                arg3: *const ::std::os::raw::c_void,
-            ),
-        >,
-    ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3)
-}
-
 static __SQLITE3_COLUMN_BLOB: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -3304,22 +3248,6 @@ pub unsafe fn sqlite3_column_bytes(
     iCol: ::std::os::raw::c_int,
 ) -> ::std::os::raw::c_int {
     let ptr = __SQLITE3_COLUMN_BYTES.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_stmt,
-        iCol: ::std::os::raw::c_int,
-    ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
-    (fun)(arg1, iCol)
-}
-
-static __SQLITE3_COLUMN_BYTES16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_column_bytes16(
-    arg1: *mut sqlite3_stmt,
-    iCol: ::std::os::raw::c_int,
-) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_COLUMN_BYTES16.load(::std::sync::atomic::Ordering::Acquire);
     assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
     let fun: unsafe extern "C" fn(
         arg1: *mut sqlite3_stmt,
@@ -3357,23 +3285,6 @@ pub unsafe fn sqlite3_column_database_name(
     (fun)(arg1, arg2)
 }
 
-static __SQLITE3_COLUMN_DATABASE_NAME16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_column_database_name16(
-    arg1: *mut sqlite3_stmt,
-    arg2: ::std::os::raw::c_int,
-) -> *const ::std::os::raw::c_void {
-    let ptr = __SQLITE3_COLUMN_DATABASE_NAME16
-        .load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_stmt,
-        arg2: ::std::os::raw::c_int,
-    ) -> *const ::std::os::raw::c_void = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2)
-}
-
 static __SQLITE3_COLUMN_DECLTYPE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -3388,22 +3299,6 @@ pub unsafe fn sqlite3_column_decltype(
         i: ::std::os::raw::c_int,
     ) -> *const ::std::os::raw::c_char = ::std::mem::transmute(ptr);
     (fun)(arg1, i)
-}
-
-static __SQLITE3_COLUMN_DECLTYPE16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_column_decltype16(
-    arg1: *mut sqlite3_stmt,
-    arg2: ::std::os::raw::c_int,
-) -> *const ::std::os::raw::c_void {
-    let ptr = __SQLITE3_COLUMN_DECLTYPE16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_stmt,
-        arg2: ::std::os::raw::c_int,
-    ) -> *const ::std::os::raw::c_void = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2)
 }
 
 static __SQLITE3_COLUMN_DOUBLE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
@@ -3470,22 +3365,6 @@ pub unsafe fn sqlite3_column_name(
     (fun)(arg1, arg2)
 }
 
-static __SQLITE3_COLUMN_NAME16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_column_name16(
-    arg1: *mut sqlite3_stmt,
-    arg2: ::std::os::raw::c_int,
-) -> *const ::std::os::raw::c_void {
-    let ptr = __SQLITE3_COLUMN_NAME16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_stmt,
-        arg2: ::std::os::raw::c_int,
-    ) -> *const ::std::os::raw::c_void = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2)
-}
-
 static __SQLITE3_COLUMN_ORIGIN_NAME: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -3499,23 +3378,6 @@ pub unsafe fn sqlite3_column_origin_name(
         arg1: *mut sqlite3_stmt,
         arg2: ::std::os::raw::c_int,
     ) -> *const ::std::os::raw::c_char = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2)
-}
-
-static __SQLITE3_COLUMN_ORIGIN_NAME16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_column_origin_name16(
-    arg1: *mut sqlite3_stmt,
-    arg2: ::std::os::raw::c_int,
-) -> *const ::std::os::raw::c_void {
-    let ptr = __SQLITE3_COLUMN_ORIGIN_NAME16
-        .load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_stmt,
-        arg2: ::std::os::raw::c_int,
-    ) -> *const ::std::os::raw::c_void = ::std::mem::transmute(ptr);
     (fun)(arg1, arg2)
 }
 
@@ -3535,22 +3397,6 @@ pub unsafe fn sqlite3_column_table_name(
     (fun)(arg1, arg2)
 }
 
-static __SQLITE3_COLUMN_TABLE_NAME16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_column_table_name16(
-    arg1: *mut sqlite3_stmt,
-    arg2: ::std::os::raw::c_int,
-) -> *const ::std::os::raw::c_void {
-    let ptr = __SQLITE3_COLUMN_TABLE_NAME16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_stmt,
-        arg2: ::std::os::raw::c_int,
-    ) -> *const ::std::os::raw::c_void = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2)
-}
-
 static __SQLITE3_COLUMN_TEXT: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -3564,22 +3410,6 @@ pub unsafe fn sqlite3_column_text(
         arg1: *mut sqlite3_stmt,
         iCol: ::std::os::raw::c_int,
     ) -> *const ::std::os::raw::c_uchar = ::std::mem::transmute(ptr);
-    (fun)(arg1, iCol)
-}
-
-static __SQLITE3_COLUMN_TEXT16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_column_text16(
-    arg1: *mut sqlite3_stmt,
-    iCol: ::std::os::raw::c_int,
-) -> *const ::std::os::raw::c_void {
-    let ptr = __SQLITE3_COLUMN_TEXT16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_stmt,
-        iCol: ::std::os::raw::c_int,
-    ) -> *const ::std::os::raw::c_void = ::std::mem::transmute(ptr);
     (fun)(arg1, iCol)
 }
 
@@ -3653,20 +3483,6 @@ pub unsafe fn sqlite3_complete(
     (fun)(sql)
 }
 
-static __SQLITE3_COMPLETE16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_complete16(
-    sql: *const ::std::os::raw::c_void,
-) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_COMPLETE16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        sql: *const ::std::os::raw::c_void,
-    ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
-    (fun)(sql)
-}
-
 static __SQLITE3_CREATE_COLLATION: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -3690,44 +3506,6 @@ pub unsafe fn sqlite3_create_collation(
     let fun: unsafe extern "C" fn(
         arg1: *mut sqlite3,
         arg2: *const ::std::os::raw::c_char,
-        arg3: ::std::os::raw::c_int,
-        arg4: *mut ::std::os::raw::c_void,
-        arg5: ::std::option::Option<
-            unsafe extern "C" fn(
-                arg1: *mut ::std::os::raw::c_void,
-                arg2: ::std::os::raw::c_int,
-                arg3: *const ::std::os::raw::c_void,
-                arg4: ::std::os::raw::c_int,
-                arg5: *const ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int,
-        >,
-    ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3, arg4, arg5)
-}
-
-static __SQLITE3_CREATE_COLLATION16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_create_collation16(
-    arg1: *mut sqlite3,
-    arg2: *const ::std::os::raw::c_void,
-    arg3: ::std::os::raw::c_int,
-    arg4: *mut ::std::os::raw::c_void,
-    arg5: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *mut ::std::os::raw::c_void,
-            arg2: ::std::os::raw::c_int,
-            arg3: *const ::std::os::raw::c_void,
-            arg4: ::std::os::raw::c_int,
-            arg5: *const ::std::os::raw::c_void,
-        ) -> ::std::os::raw::c_int,
-    >,
-) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_CREATE_COLLATION16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3,
-        arg2: *const ::std::os::raw::c_void,
         arg3: ::std::os::raw::c_int,
         arg4: *mut ::std::os::raw::c_void,
         arg5: ::std::option::Option<
@@ -3773,58 +3551,6 @@ pub unsafe fn sqlite3_create_function(
     let fun: unsafe extern "C" fn(
         arg1: *mut sqlite3,
         arg2: *const ::std::os::raw::c_char,
-        arg3: ::std::os::raw::c_int,
-        arg4: ::std::os::raw::c_int,
-        arg5: *mut ::std::os::raw::c_void,
-        xFunc: ::std::option::Option<
-            unsafe extern "C" fn(
-                arg1: *mut sqlite3_context,
-                arg2: ::std::os::raw::c_int,
-                arg3: *mut *mut sqlite3_value,
-            ),
-        >,
-        xStep: ::std::option::Option<
-            unsafe extern "C" fn(
-                arg1: *mut sqlite3_context,
-                arg2: ::std::os::raw::c_int,
-                arg3: *mut *mut sqlite3_value,
-            ),
-        >,
-        xFinal: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_context)>,
-    ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3, arg4, arg5, xFunc, xStep, xFinal)
-}
-
-static __SQLITE3_CREATE_FUNCTION16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_create_function16(
-    arg1: *mut sqlite3,
-    arg2: *const ::std::os::raw::c_void,
-    arg3: ::std::os::raw::c_int,
-    arg4: ::std::os::raw::c_int,
-    arg5: *mut ::std::os::raw::c_void,
-    xFunc: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *mut sqlite3_context,
-            arg2: ::std::os::raw::c_int,
-            arg3: *mut *mut sqlite3_value,
-        ),
-    >,
-    xStep: ::std::option::Option<
-        unsafe extern "C" fn(
-            arg1: *mut sqlite3_context,
-            arg2: ::std::os::raw::c_int,
-            arg3: *mut *mut sqlite3_value,
-        ),
-    >,
-    xFinal: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_context)>,
-) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_CREATE_FUNCTION16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3,
-        arg2: *const ::std::os::raw::c_void,
         arg3: ::std::os::raw::c_int,
         arg4: ::std::os::raw::c_int,
         arg5: *mut ::std::os::raw::c_void,
@@ -3940,18 +3666,6 @@ pub unsafe fn sqlite3_errmsg(arg1: *mut sqlite3) -> *const ::std::os::raw::c_cha
     let ptr = __SQLITE3_ERRMSG.load(::std::sync::atomic::Ordering::Acquire);
     assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
     let fun: unsafe extern "C" fn(arg1: *mut sqlite3) -> *const ::std::os::raw::c_char = ::std::mem::transmute(
-        ptr,
-    );
-    (fun)(arg1)
-}
-
-static __SQLITE3_ERRMSG16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_errmsg16(arg1: *mut sqlite3) -> *const ::std::os::raw::c_void {
-    let ptr = __SQLITE3_ERRMSG16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(arg1: *mut sqlite3) -> *const ::std::os::raw::c_void = ::std::mem::transmute(
         ptr,
     );
     (fun)(arg1)
@@ -4143,22 +3857,6 @@ pub unsafe fn sqlite3_open(
     (fun)(arg1, arg2)
 }
 
-static __SQLITE3_OPEN16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_open16(
-    arg1: *const ::std::os::raw::c_void,
-    arg2: *mut *mut sqlite3,
-) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_OPEN16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *const ::std::os::raw::c_void,
-        arg2: *mut *mut sqlite3,
-    ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2)
-}
-
 static __SQLITE3_PREPARE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -4177,28 +3875,6 @@ pub unsafe fn sqlite3_prepare(
         arg3: ::std::os::raw::c_int,
         arg4: *mut *mut sqlite3_stmt,
         arg5: *mut *const ::std::os::raw::c_char,
-    ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3, arg4, arg5)
-}
-
-static __SQLITE3_PREPARE16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_prepare16(
-    arg1: *mut sqlite3,
-    arg2: *const ::std::os::raw::c_void,
-    arg3: ::std::os::raw::c_int,
-    arg4: *mut *mut sqlite3_stmt,
-    arg5: *mut *const ::std::os::raw::c_void,
-) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_PREPARE16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3,
-        arg2: *const ::std::os::raw::c_void,
-        arg3: ::std::os::raw::c_int,
-        arg4: *mut *mut sqlite3_stmt,
-        arg5: *mut *const ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
     (fun)(arg1, arg2, arg3, arg4, arg5)
 }
@@ -4339,24 +4015,6 @@ pub unsafe fn sqlite3_result_error(
     (fun)(arg1, arg2, arg3)
 }
 
-static __SQLITE3_RESULT_ERROR16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_result_error16(
-    arg1: *mut sqlite3_context,
-    arg2: *const ::std::os::raw::c_void,
-    arg3: ::std::os::raw::c_int,
-) {
-    let ptr = __SQLITE3_RESULT_ERROR16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_context,
-        arg2: *const ::std::os::raw::c_void,
-        arg3: ::std::os::raw::c_int,
-    ) = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3)
-}
-
 static __SQLITE3_RESULT_INT: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -4411,72 +4069,6 @@ pub unsafe fn sqlite3_result_text(
     let fun: unsafe extern "C" fn(
         arg1: *mut sqlite3_context,
         arg2: *const ::std::os::raw::c_char,
-        arg3: ::std::os::raw::c_int,
-        arg4: ::std::option::Option<
-            unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void),
-        >,
-    ) = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3, arg4)
-}
-
-static __SQLITE3_RESULT_TEXT16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_result_text16(
-    arg1: *mut sqlite3_context,
-    arg2: *const ::std::os::raw::c_void,
-    arg3: ::std::os::raw::c_int,
-    arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-) {
-    let ptr = __SQLITE3_RESULT_TEXT16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_context,
-        arg2: *const ::std::os::raw::c_void,
-        arg3: ::std::os::raw::c_int,
-        arg4: ::std::option::Option<
-            unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void),
-        >,
-    ) = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3, arg4)
-}
-
-static __SQLITE3_RESULT_TEXT16BE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_result_text16be(
-    arg1: *mut sqlite3_context,
-    arg2: *const ::std::os::raw::c_void,
-    arg3: ::std::os::raw::c_int,
-    arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-) {
-    let ptr = __SQLITE3_RESULT_TEXT16BE.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_context,
-        arg2: *const ::std::os::raw::c_void,
-        arg3: ::std::os::raw::c_int,
-        arg4: ::std::option::Option<
-            unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void),
-        >,
-    ) = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3, arg4)
-}
-
-static __SQLITE3_RESULT_TEXT16LE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_result_text16le(
-    arg1: *mut sqlite3_context,
-    arg2: *const ::std::os::raw::c_void,
-    arg3: ::std::os::raw::c_int,
-    arg4: ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
-) {
-    let ptr = __SQLITE3_RESULT_TEXT16LE.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_context,
-        arg2: *const ::std::os::raw::c_void,
         arg3: ::std::os::raw::c_int,
         arg4: ::std::option::Option<
             unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void),
@@ -4736,18 +4328,6 @@ pub unsafe fn sqlite3_value_bytes(arg1: *mut sqlite3_value) -> ::std::os::raw::c
     (fun)(arg1)
 }
 
-static __SQLITE3_VALUE_BYTES16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_value_bytes16(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_VALUE_BYTES16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(arg1: *mut sqlite3_value) -> ::std::os::raw::c_int = ::std::mem::transmute(
-        ptr,
-    );
-    (fun)(arg1)
-}
-
 static __SQLITE3_VALUE_DOUBLE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -4812,48 +4392,6 @@ pub unsafe fn sqlite3_value_text(
     (fun)(arg1)
 }
 
-static __SQLITE3_VALUE_TEXT16: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_value_text16(
-    arg1: *mut sqlite3_value,
-) -> *const ::std::os::raw::c_void {
-    let ptr = __SQLITE3_VALUE_TEXT16.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_value,
-    ) -> *const ::std::os::raw::c_void = ::std::mem::transmute(ptr);
-    (fun)(arg1)
-}
-
-static __SQLITE3_VALUE_TEXT16BE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_value_text16be(
-    arg1: *mut sqlite3_value,
-) -> *const ::std::os::raw::c_void {
-    let ptr = __SQLITE3_VALUE_TEXT16BE.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_value,
-    ) -> *const ::std::os::raw::c_void = ::std::mem::transmute(ptr);
-    (fun)(arg1)
-}
-
-static __SQLITE3_VALUE_TEXT16LE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_value_text16le(
-    arg1: *mut sqlite3_value,
-) -> *const ::std::os::raw::c_void {
-    let ptr = __SQLITE3_VALUE_TEXT16LE.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3_value,
-    ) -> *const ::std::os::raw::c_void = ::std::mem::transmute(ptr);
-    (fun)(arg1)
-}
-
 static __SQLITE3_VALUE_TYPE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -4902,28 +4440,6 @@ pub unsafe fn sqlite3_prepare_v2(
         arg3: ::std::os::raw::c_int,
         arg4: *mut *mut sqlite3_stmt,
         arg5: *mut *const ::std::os::raw::c_char,
-    ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3, arg4, arg5)
-}
-
-static __SQLITE3_PREPARE16_V2: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_prepare16_v2(
-    arg1: *mut sqlite3,
-    arg2: *const ::std::os::raw::c_void,
-    arg3: ::std::os::raw::c_int,
-    arg4: *mut *mut sqlite3_stmt,
-    arg5: *mut *const ::std::os::raw::c_void,
-) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_PREPARE16_V2.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3,
-        arg2: *const ::std::os::raw::c_void,
-        arg3: ::std::os::raw::c_int,
-        arg4: *mut *mut sqlite3_stmt,
-        arg5: *mut *const ::std::os::raw::c_void,
     ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
     (fun)(arg1, arg2, arg3, arg4, arg5)
 }
@@ -6558,30 +6074,6 @@ pub unsafe fn sqlite3_prepare_v3(
     (fun)(arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
-static __SQLITE3_PREPARE16_V3: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn sqlite3_prepare16_v3(
-    arg1: *mut sqlite3,
-    arg2: *const ::std::os::raw::c_void,
-    arg3: ::std::os::raw::c_int,
-    arg4: ::std::os::raw::c_uint,
-    arg5: *mut *mut sqlite3_stmt,
-    arg6: *mut *const ::std::os::raw::c_void,
-) -> ::std::os::raw::c_int {
-    let ptr = __SQLITE3_PREPARE16_V3.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(! ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-    let fun: unsafe extern "C" fn(
-        arg1: *mut sqlite3,
-        arg2: *const ::std::os::raw::c_void,
-        arg3: ::std::os::raw::c_int,
-        arg4: ::std::os::raw::c_uint,
-        arg5: *mut *mut sqlite3_stmt,
-        arg6: *mut *const ::std::os::raw::c_void,
-    ) -> ::std::os::raw::c_int = ::std::mem::transmute(ptr);
-    (fun)(arg1, arg2, arg3, arg4, arg5, arg6)
-}
-
 static __SQLITE3_BIND_POINTER: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -7457,10 +6949,6 @@ pub unsafe fn rusqlite_extension_init2(
         __SQLITE3_BIND_TEXT
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).bind_text16 {
-        __SQLITE3_BIND_TEXT16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).bind_value {
         __SQLITE3_BIND_VALUE
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
@@ -7485,20 +6973,12 @@ pub unsafe fn rusqlite_extension_init2(
         __SQLITE3_COLLATION_NEEDED
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).collation_needed16 {
-        __SQLITE3_COLLATION_NEEDED16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).column_blob {
         __SQLITE3_COLUMN_BLOB
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).column_bytes {
         __SQLITE3_COLUMN_BYTES
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).column_bytes16 {
-        __SQLITE3_COLUMN_BYTES16
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).column_count {
@@ -7509,16 +6989,8 @@ pub unsafe fn rusqlite_extension_init2(
         __SQLITE3_COLUMN_DATABASE_NAME
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).column_database_name16 {
-        __SQLITE3_COLUMN_DATABASE_NAME16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).column_decltype {
         __SQLITE3_COLUMN_DECLTYPE
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).column_decltype16 {
-        __SQLITE3_COLUMN_DECLTYPE16
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).column_double {
@@ -7537,32 +7009,16 @@ pub unsafe fn rusqlite_extension_init2(
         __SQLITE3_COLUMN_NAME
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).column_name16 {
-        __SQLITE3_COLUMN_NAME16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).column_origin_name {
         __SQLITE3_COLUMN_ORIGIN_NAME
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).column_origin_name16 {
-        __SQLITE3_COLUMN_ORIGIN_NAME16
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).column_table_name {
         __SQLITE3_COLUMN_TABLE_NAME
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).column_table_name16 {
-        __SQLITE3_COLUMN_TABLE_NAME16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).column_text {
         __SQLITE3_COLUMN_TEXT
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).column_text16 {
-        __SQLITE3_COLUMN_TEXT16
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).column_type {
@@ -7581,24 +7037,12 @@ pub unsafe fn rusqlite_extension_init2(
         __SQLITE3_COMPLETE
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).complete16 {
-        __SQLITE3_COMPLETE16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).create_collation {
         __SQLITE3_CREATE_COLLATION
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).create_collation16 {
-        __SQLITE3_CREATE_COLLATION16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).create_function {
         __SQLITE3_CREATE_FUNCTION
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).create_function16 {
-        __SQLITE3_CREATE_FUNCTION16
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).create_module {
@@ -7627,10 +7071,6 @@ pub unsafe fn rusqlite_extension_init2(
     }
     if let Some(fun) = (*p_api).errmsg {
         __SQLITE3_ERRMSG
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).errmsg16 {
-        __SQLITE3_ERRMSG16
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).exec {
@@ -7681,16 +7121,8 @@ pub unsafe fn rusqlite_extension_init2(
         __SQLITE3_OPEN
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).open16 {
-        __SQLITE3_OPEN16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).prepare {
         __SQLITE3_PREPARE
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).prepare16 {
-        __SQLITE3_PREPARE16
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).profile {
@@ -7721,10 +7153,6 @@ pub unsafe fn rusqlite_extension_init2(
         __SQLITE3_RESULT_ERROR
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).result_error16 {
-        __SQLITE3_RESULT_ERROR16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).result_int {
         __SQLITE3_RESULT_INT
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
@@ -7739,18 +7167,6 @@ pub unsafe fn rusqlite_extension_init2(
     }
     if let Some(fun) = (*p_api).result_text {
         __SQLITE3_RESULT_TEXT
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).result_text16 {
-        __SQLITE3_RESULT_TEXT16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).result_text16be {
-        __SQLITE3_RESULT_TEXT16BE
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).result_text16le {
-        __SQLITE3_RESULT_TEXT16LE
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).result_value {
@@ -7801,10 +7217,6 @@ pub unsafe fn rusqlite_extension_init2(
         __SQLITE3_VALUE_BYTES
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).value_bytes16 {
-        __SQLITE3_VALUE_BYTES16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).value_double {
         __SQLITE3_VALUE_DOUBLE
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
@@ -7825,18 +7237,6 @@ pub unsafe fn rusqlite_extension_init2(
         __SQLITE3_VALUE_TEXT
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).value_text16 {
-        __SQLITE3_VALUE_TEXT16
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).value_text16be {
-        __SQLITE3_VALUE_TEXT16BE
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).value_text16le {
-        __SQLITE3_VALUE_TEXT16LE
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).value_type {
         __SQLITE3_VALUE_TYPE
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
@@ -7847,10 +7247,6 @@ pub unsafe fn rusqlite_extension_init2(
     }
     if let Some(fun) = (*p_api).prepare_v2 {
         __SQLITE3_PREPARE_V2
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).prepare16_v2 {
-        __SQLITE3_PREPARE16_V2
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).clear_bindings {
@@ -8243,10 +7639,6 @@ pub unsafe fn rusqlite_extension_init2(
     }
     if let Some(fun) = (*p_api).prepare_v3 {
         __SQLITE3_PREPARE_V3
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).prepare16_v3 {
-        __SQLITE3_PREPARE16_V3
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).bind_pointer {
