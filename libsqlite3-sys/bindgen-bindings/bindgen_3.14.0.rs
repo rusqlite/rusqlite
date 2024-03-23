@@ -430,9 +430,6 @@ pub type sqlite3_uint64 = sqlite_uint64;
 extern "C" {
     pub fn sqlite3_close(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
 }
-extern "C" {
-    pub fn sqlite3_close_v2(arg1: *mut sqlite3) -> ::std::os::raw::c_int;
-}
 pub type sqlite3_callback = ::std::option::Option<
     unsafe extern "C" fn(
         arg1: *mut ::std::os::raw::c_void,
@@ -970,15 +967,6 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn sqlite3_prepare(
-        db: *mut sqlite3,
-        zSql: *const ::std::os::raw::c_char,
-        nByte: ::std::os::raw::c_int,
-        ppStmt: *mut *mut sqlite3_stmt,
-        pzTail: *mut *const ::std::os::raw::c_char,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
     pub fn sqlite3_prepare_v2(
         db: *mut sqlite3,
         zSql: *const ::std::os::raw::c_char,
@@ -1204,30 +1192,6 @@ extern "C" {
     pub fn sqlite3_reset(pStmt: *mut sqlite3_stmt) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn sqlite3_create_function(
-        db: *mut sqlite3,
-        zFunctionName: *const ::std::os::raw::c_char,
-        nArg: ::std::os::raw::c_int,
-        eTextRep: ::std::os::raw::c_int,
-        pApp: *mut ::std::os::raw::c_void,
-        xFunc: ::std::option::Option<
-            unsafe extern "C" fn(
-                arg1: *mut sqlite3_context,
-                arg2: ::std::os::raw::c_int,
-                arg3: *mut *mut sqlite3_value,
-            ),
-        >,
-        xStep: ::std::option::Option<
-            unsafe extern "C" fn(
-                arg1: *mut sqlite3_context,
-                arg2: ::std::os::raw::c_int,
-                arg3: *mut *mut sqlite3_value,
-            ),
-        >,
-        xFinal: ::std::option::Option<unsafe extern "C" fn(arg1: *mut sqlite3_context)>,
-    ) -> ::std::os::raw::c_int;
-}
-extern "C" {
     pub fn sqlite3_create_function_v2(
         db: *mut sqlite3,
         zFunctionName: *const ::std::os::raw::c_char,
@@ -1419,23 +1383,6 @@ extern "C" {
 }
 extern "C" {
     pub fn sqlite3_result_subtype(arg1: *mut sqlite3_context, arg2: ::std::os::raw::c_uint);
-}
-extern "C" {
-    pub fn sqlite3_create_collation(
-        arg1: *mut sqlite3,
-        zName: *const ::std::os::raw::c_char,
-        eTextRep: ::std::os::raw::c_int,
-        pArg: *mut ::std::os::raw::c_void,
-        xCompare: ::std::option::Option<
-            unsafe extern "C" fn(
-                arg1: *mut ::std::os::raw::c_void,
-                arg2: ::std::os::raw::c_int,
-                arg3: *const ::std::os::raw::c_void,
-                arg4: ::std::os::raw::c_int,
-                arg5: *const ::std::os::raw::c_void,
-            ) -> ::std::os::raw::c_int,
-        >,
-    ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn sqlite3_create_collation_v2(
@@ -1744,14 +1691,6 @@ pub struct sqlite3_index_orderby {
 pub struct sqlite3_index_constraint_usage {
     pub argvIndex: ::std::os::raw::c_int,
     pub omit: ::std::os::raw::c_uchar,
-}
-extern "C" {
-    pub fn sqlite3_create_module(
-        db: *mut sqlite3,
-        zName: *const ::std::os::raw::c_char,
-        p: *const sqlite3_module,
-        pClientData: *mut ::std::os::raw::c_void,
-    ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn sqlite3_create_module_v2(

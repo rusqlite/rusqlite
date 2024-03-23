@@ -575,7 +575,12 @@ mod bindings {
     ) -> ::std::os::raw::c_int;
 }"#,
                 )
-                .blocklist_function(".*16.*");
+                .blocklist_function(".*16.*")
+                .blocklist_function("sqlite3_close_v2")
+                .blocklist_function("sqlite3_create_collation")
+                .blocklist_function("sqlite3_create_function")
+                .blocklist_function("sqlite3_create_module")
+                .blocklist_function("sqlite3_prepare");
         }
 
         if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
@@ -681,6 +686,11 @@ mod loadable_extension {
                 || name == "global_recover"
                 || name == "thread_cleanup"
                 || name == "transfer_bindings"
+                || name == "create_collation"
+                || name == "create_function"
+                || name == "create_module"
+                || name == "prepare"
+                || name == "close_v2"
             {
                 continue; // omit deprecated
             }
