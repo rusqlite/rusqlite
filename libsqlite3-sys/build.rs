@@ -574,7 +574,8 @@ mod bindings {
         >,
     ) -> ::std::os::raw::c_int;
 }"#,
-                );
+                )
+                .blocklist_function(".*16.*");
         }
 
         if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
@@ -671,7 +672,9 @@ mod loadable_extension {
             let ident = field.ident.expect("unnamed field");
             let span = ident.span();
             let name = ident.to_string();
-            if name == "vmprintf" || name == "xvsnprintf" || name == "str_vappendf" {
+            if name.contains("16") {
+                continue; // skip UTF-16 api as rust uses UTF-8
+            } else if name == "vmprintf" || name == "xvsnprintf" || name == "str_vappendf" {
                 continue; // skip va_list
             } else if name == "aggregate_count"
                 || name == "expired"
