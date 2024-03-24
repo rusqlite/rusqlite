@@ -364,7 +364,7 @@ impl DatabaseName<'_> {
     fn as_cstring(&self) -> Result<SmallCString> {
         use self::DatabaseName::{Attached, Main, Temp};
         match *self {
-            Main => str_to_cstring("main"),
+            Main => str_to_cstring("main"), // TODO C-string literals
             Temp => str_to_cstring("temp"),
             Attached(s) => str_to_cstring(s),
         }
@@ -1908,7 +1908,7 @@ mod test {
     #[test]
     fn test_from_handle_owned() -> Result<()> {
         let mut handle: *mut ffi::sqlite3 = std::ptr::null_mut();
-        let r = unsafe { ffi::sqlite3_open(":memory:\0".as_ptr() as *const c_char, &mut handle) };
+        let r = unsafe { ffi::sqlite3_open(c":memory:".as_ptr(), &mut handle) };
         assert_eq!(r, ffi::SQLITE_OK);
         let db = unsafe { Connection::from_handle_owned(handle) }?;
         db.execute_batch("PRAGMA VACUUM")?;
