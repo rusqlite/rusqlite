@@ -1214,7 +1214,6 @@ impl Default for OpenFlags {
             | OpenFlags::SQLITE_OPEN_CREATE
             | OpenFlags::SQLITE_OPEN_NO_MUTEX
             | OpenFlags::SQLITE_OPEN_URI
-            | OpenFlags::SQLITE_OPEN_EXRESCODE
     }
 }
 

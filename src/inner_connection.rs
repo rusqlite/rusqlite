@@ -61,7 +61,7 @@ impl InnerConnection {
 
     pub fn open_with_flags(
         c_path: &CStr,
-        flags: OpenFlags,
+        mut flags: OpenFlags,
         vfs: Option<&CStr>,
     ) -> Result<InnerConnection> {
         ensure_safe_sqlite_threading_mode()?;
@@ -69,6 +69,16 @@ impl InnerConnection {
         let z_vfs = match vfs {
             Some(c_vfs) => c_vfs.as_ptr(),
             None => ptr::null(),
+        };
+
+        // turn on extended results code before opening database to have a better diagnostic if a failure happens
+        let exrescode = if version_number() >= 3_037_000 {
+            if !flags.contains(OpenFlags::SQLITE_OPEN_EXRESCODE) {
+                flags |= OpenFlags::SQLITE_OPEN_EXRESCODE;
+            }
+            true
+        } else {
+            false // flag SQLITE_OPEN_EXRESCODE is ignored by SQLite version < 3.37.0
         };
 
         unsafe {
@@ -100,7 +110,7 @@ impl InnerConnection {
             }
 
             // attempt to turn on extended results code; don't fail if we can't.
-            if version_number() < 3_037_000 || !flags.contains(OpenFlags::SQLITE_OPEN_EXRESCODE) {
+            if !exrescode {
                 ffi::sqlite3_extended_result_codes(db, 1);
             }
 
