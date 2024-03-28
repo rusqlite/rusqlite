@@ -12,6 +12,7 @@ use super::{Connection, InterruptHandle, OpenFlags, PrepFlags, Result};
 use crate::error::{error_from_handle, error_from_sqlite_code, error_with_offset, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
+use crate::version_number;
 
 pub struct InnerConnection {
     pub db: *mut ffi::sqlite3,
@@ -60,7 +61,7 @@ impl InnerConnection {
 
     pub fn open_with_flags(
         c_path: &CStr,
-        flags: OpenFlags,
+        mut flags: OpenFlags,
         vfs: Option<&CStr>,
     ) -> Result<InnerConnection> {
         ensure_safe_sqlite_threading_mode()?;
@@ -68,6 +69,14 @@ impl InnerConnection {
         let z_vfs = match vfs {
             Some(c_vfs) => c_vfs.as_ptr(),
             None => ptr::null(),
+        };
+
+        // turn on extended results code before opening database to have a better diagnostic if a failure happens
+        let exrescode = if version_number() >= 3_037_000 {
+            flags |= OpenFlags::SQLITE_OPEN_EXRESCODE;
+            true
+        } else {
+            false // flag SQLITE_OPEN_EXRESCODE is ignored by SQLite version < 3.37.0
         };
 
         unsafe {
@@ -99,7 +108,9 @@ impl InnerConnection {
             }
 
             // attempt to turn on extended results code; don't fail if we can't.
-            ffi::sqlite3_extended_result_codes(db, 1);
+            if !exrescode {
+                ffi::sqlite3_extended_result_codes(db, 1);
+            }
 
             let r = ffi::sqlite3_busy_timeout(db, 5000);
             if r != ffi::SQLITE_OK {
@@ -210,7 +221,6 @@ impl InnerConnection {
         let mut c_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
         let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
         let mut c_tail: *const c_char = ptr::null();
-        // TODO sqlite3_prepare_v3 (https://sqlite.org/c3ref/c_prepare_normalize.html) // 3.20.0, #728
         #[cfg(not(feature = "unlock_notify"))]
         let r = unsafe { self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail) };
         #[cfg(feature = "unlock_notify")]
