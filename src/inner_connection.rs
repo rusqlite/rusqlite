@@ -73,9 +73,7 @@ impl InnerConnection {
 
         // turn on extended results code before opening database to have a better diagnostic if a failure happens
         let exrescode = if version_number() >= 3_037_000 {
-            if !flags.contains(OpenFlags::SQLITE_OPEN_EXRESCODE) {
-                flags |= OpenFlags::SQLITE_OPEN_EXRESCODE;
-            }
+            flags |= OpenFlags::SQLITE_OPEN_EXRESCODE;
             true
         } else {
             false // flag SQLITE_OPEN_EXRESCODE is ignored by SQLite version < 3.37.0
