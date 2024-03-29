@@ -11,7 +11,7 @@ use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 use fallible_streaming_iterator::FallibleStreamingIterator;
 
-use crate::error::{check, error_from_sqlite_code};
+use crate::error::{check, error_from_sqlite_code, Error};
 use crate::ffi;
 use crate::hooks::Action;
 use crate::types::ValueRef;
@@ -421,7 +421,11 @@ impl ChangesetItem {
                 col as i32,
                 &mut p_value,
             ))?;
-            Ok(ValueRef::from_value(p_value))
+            if p_value.is_null() {
+                Err(Error::InvalidColumnIndex(col))
+            } else {
+                Ok(ValueRef::from_value(p_value))
+            }
         }
     }
 
@@ -447,7 +451,11 @@ impl ChangesetItem {
         unsafe {
             let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
             check(ffi::sqlite3changeset_new(self.it, col as i32, &mut p_value))?;
-            Ok(ValueRef::from_value(p_value))
+            if p_value.is_null() {
+                Err(Error::InvalidColumnIndex(col))
+            } else {
+                Ok(ValueRef::from_value(p_value))
+            }
         }
     }
 
@@ -460,7 +468,11 @@ impl ChangesetItem {
         unsafe {
             let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
             check(ffi::sqlite3changeset_old(self.it, col as i32, &mut p_value))?;
-            Ok(ValueRef::from_value(p_value))
+            if p_value.is_null() {
+                Err(Error::InvalidColumnIndex(col))
+            } else {
+                Ok(ValueRef::from_value(p_value))
+            }
         }
     }
 
@@ -761,7 +773,7 @@ mod test {
     use crate::hooks::Action;
     use crate::{Connection, Result};
 
-    fn one_changeset() -> Result<Changeset> {
+    fn one_changeset_insert() -> Result<Changeset> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")?;
 
@@ -770,6 +782,20 @@ mod test {
 
         session.attach(None)?;
         db.execute("INSERT INTO foo (t) VALUES (?1);", ["bar"])?;
+
+        session.changeset()
+    }
+
+    fn one_changeset_update() -> Result<Changeset> {
+        let db = Connection::open_in_memory()?;
+        db.execute_batch(
+            "CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL, i INTEGER NOT NULL DEFAULT 0);",
+        )?;
+        db.execute_batch("INSERT INTO foo (t) VALUES ('bar');")?;
+
+        let mut session = Session::new(&db)?;
+        session.attach(None)?;
+        db.execute("UPDATE foo SET i=100 WHERE t='bar';", [])?;
 
         session.changeset()
     }
@@ -791,7 +817,7 @@ mod test {
 
     #[test]
     fn test_changeset() -> Result<()> {
-        let changeset = one_changeset()?;
+        let changeset = one_changeset_insert()?;
         let mut iter = changeset.iter()?;
         let item = iter.next()?;
         assert!(item.is_some());
@@ -825,8 +851,21 @@ mod test {
     }
 
     #[test]
+    fn test_changeset_values() -> Result<()> {
+        let changeset = one_changeset_update()?;
+        let mut iter = changeset.iter()?;
+        let item = iter.next()?.unwrap();
+
+        let new_value = item.new_value(0); // unchanged
+        assert_eq!(Err(crate::Error::InvalidColumnIndex(0)), new_value);
+        let new_value = item.new_value(1)?; // updated
+        assert_eq!(Ok(100), new_value.as_i64());
+        Ok(())
+    }
+
+    #[test]
     fn test_changeset_apply() -> Result<()> {
-        let changeset = one_changeset()?;
+        let changeset = one_changeset_insert()?;
 
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")?;
