@@ -131,7 +131,7 @@ impl Connection {
     #[inline]
     pub fn preupdate_hook<F>(&self, hook: Option<F>)
     where
-        F: FnMut(Action, &str, &str, &PreUpdateCase) + Send,
+        F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
     {
         self.db.borrow_mut().preupdate_hook(hook);
     }
@@ -143,9 +143,22 @@ impl InnerConnection {
         self.preupdate_hook(None::<fn(Action, &str, &str, &PreUpdateCase)>);
     }
 
+    /// ```compile_fail
+    /// use rusqlite::{Connection, Result, hooks::PreUpdateCase};
+    /// fn main() -> Result<()> {
+    ///     let db = Connection::open_in_memory()?;
+    ///     {
+    ///         let mut called = std::sync::atomic::AtomicBool::new(false);
+    ///         db.preupdate_hook(Some(|action, db: &str, tbl: &str, case: &PreUpdateCase| {
+    ///         called.store(true, std::sync::atomic::Ordering::Relaxed);
+    ///         }));  
+    ///     }
+    ///     db.execute_batch("CREATE TABLE foo AS SELECT 1 AS bar;")
+    /// }
+    /// ```
     fn preupdate_hook<F>(&mut self, hook: Option<F>)
     where
-        F: FnMut(Action, &str, &str, &PreUpdateCase) + Send,
+        F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<F>(
             p_arg: *mut c_void,
@@ -223,6 +236,8 @@ impl InnerConnection {
 
 #[cfg(test)]
 mod test {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
     use super::super::Action;
     use super::PreUpdateCase;
     use crate::{Connection, Result};
@@ -231,7 +246,8 @@ mod test {
     fn test_preupdate_hook_insert() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
-        let mut called = false;
+        static CALLED: AtomicBool = AtomicBool::new(false);
+
         db.preupdate_hook(Some(|action, db: &str, tbl: &str, case: &PreUpdateCase| {
             assert_eq!(Action::SQLITE_INSERT, action);
             assert_eq!("main", db);
@@ -246,11 +262,11 @@ mod test {
                 }
                 _ => panic!("wrong preupdate case"),
             }
-            called = true;
+            CALLED.store(true, Ordering::Relaxed);
         }));
         db.execute_batch("CREATE TABLE foo (t TEXT)")?;
         db.execute_batch("INSERT INTO foo VALUES ('lisa')")?;
-        assert!(called);
+        assert!(CALLED.load(Ordering::Relaxed));
         Ok(())
     }
 
@@ -258,7 +274,7 @@ mod test {
     fn test_preupdate_hook_delete() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
-        let mut called = false;
+        static CALLED: AtomicBool = AtomicBool::new(false);
 
         db.execute_batch("CREATE TABLE foo (t TEXT)")?;
         db.execute_batch("INSERT INTO foo VALUES ('lisa')")?;
@@ -277,11 +293,11 @@ mod test {
                 }
                 _ => panic!("wrong preupdate case"),
             }
-            called = true;
+            CALLED.store(true, Ordering::Relaxed);
         }));
 
         db.execute_batch("DELETE from foo")?;
-        assert!(called);
+        assert!(CALLED.load(Ordering::Relaxed));
         Ok(())
     }
 
@@ -289,7 +305,7 @@ mod test {
     fn test_preupdate_hook_update() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
-        let mut called = false;
+        static CALLED: AtomicBool = AtomicBool::new(false);
 
         db.execute_batch("CREATE TABLE foo (t TEXT)")?;
         db.execute_batch("INSERT INTO foo VALUES ('lisa')")?;
@@ -323,11 +339,11 @@ mod test {
                 }
                 _ => panic!("wrong preupdate case"),
             }
-            called = true;
+            CALLED.store(true, Ordering::Relaxed);
         }));
 
         db.execute_batch("UPDATE foo SET t = 'janice'")?;
-        assert!(called);
+        assert!(CALLED.load(Ordering::Relaxed));
         Ok(())
     }
 }
