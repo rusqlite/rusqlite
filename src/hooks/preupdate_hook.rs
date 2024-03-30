@@ -150,7 +150,7 @@ impl InnerConnection {
     ///     {
     ///         let mut called = std::sync::atomic::AtomicBool::new(false);
     ///         db.preupdate_hook(Some(|action, db: &str, tbl: &str, case: &PreUpdateCase| {
-    ///         called.store(true, std::sync::atomic::Ordering::Relaxed);
+    ///             called.store(true, std::sync::atomic::Ordering::Relaxed);
     ///         }));  
     ///     }
     ///     db.execute_batch("CREATE TABLE foo AS SELECT 1 AS bar;")
