@@ -111,7 +111,7 @@ mod context;
 #[cfg(feature = "functions")]
 #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
 pub mod functions;
-#[cfg(feature = "hooks")]
+#[cfg(any(feature = "hooks", feature = "preupdate_hook"))]
 #[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
 pub mod hooks;
 mod inner_connection;
