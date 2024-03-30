@@ -143,9 +143,9 @@ impl InnerConnection {
         self.preupdate_hook(None::<fn(Action, &str, &str, &PreUpdateCase)>);
     }
 
-    fn preupdate_hook<'c, F>(&'c mut self, hook: Option<F>)
+    fn preupdate_hook<F>(&mut self, hook: Option<F>)
     where
-        F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'c,
+        F: FnMut(Action, &str, &str, &PreUpdateCase) + Send,
     {
         unsafe extern "C" fn call_boxed_closure<F>(
             p_arg: *mut c_void,
