@@ -123,6 +123,7 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
   - As the name implies this depends on the `bundled-sqlcipher` feature, and automatically turns it on.
   - If turned on, this uses the [`openssl-sys`](https://crates.io/crates/openssl-sys) crate, with the `vendored` feature enabled in order to build and bundle the OpenSSL crypto library.
 * `hooks` for [Commit, Rollback](http://sqlite.org/c3ref/commit_hook.html) and [Data Change](http://sqlite.org/c3ref/update_hook.html) notification callbacks.
+* `preupdate_hook` for [preupdate](https://sqlite.org/c3ref/preupdate_count.html) notification callbacks. (Implies `hooks`.)
 * `unlock_notify` for [Unlock](https://sqlite.org/unlock_notify.html) notification.
 * `vtab` for [virtual table](https://sqlite.org/vtab.html) support (allows you to write virtual table implementations in Rust). Currently, only read-only virtual tables are supported.
 * `series` exposes [`generate_series(...)`](https://www.sqlite.org/series.html) Table-Valued Function. (Implies `vtab`.)
