@@ -93,6 +93,7 @@ pub use rusqlite_macros::__bind;
 
 mod error;
 
+#[cfg(not(feature = "loadable_extension"))]
 pub mod auto_extension;
 #[cfg(feature = "backup")]
 #[cfg_attr(docsrs, doc(cfg(feature = "backup")))]
