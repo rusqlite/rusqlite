@@ -554,8 +554,8 @@ mod bindings {
         xEntryPoint: ::std::option::Option<
             unsafe extern "C" fn(
                 db: *mut sqlite3,
-                pzErrMsg: *mut *const ::std::os::raw::c_char,
-                pThunk: *const sqlite3_api_routines,
+                pzErrMsg: *mut *mut ::std::os::raw::c_char,
+                _: *const sqlite3_api_routines,
             ) -> ::std::os::raw::c_int,
         >,
     ) -> ::std::os::raw::c_int;
@@ -568,8 +568,8 @@ mod bindings {
         xEntryPoint: ::std::option::Option<
             unsafe extern "C" fn(
                 db: *mut sqlite3,
-                pzErrMsg: *mut *const ::std::os::raw::c_char,
-                pThunk: *const sqlite3_api_routines,
+                pzErrMsg: *mut *mut ::std::os::raw::c_char,
+                _: *const sqlite3_api_routines,
             ) -> ::std::os::raw::c_int,
         >,
     ) -> ::std::os::raw::c_int;
