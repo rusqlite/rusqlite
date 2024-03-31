@@ -102,8 +102,6 @@ pub enum Error {
     ModuleError(String),
 
     /// An unwinding panic occurs in an UDF (user-defined function).
-    #[cfg(feature = "functions")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
     UnwindingPanic,
 
     /// An error returned when
@@ -185,7 +183,6 @@ impl PartialEq for Error {
             (Error::InvalidQuery, Error::InvalidQuery) => true,
             #[cfg(feature = "vtab")]
             (Error::ModuleError(s1), Error::ModuleError(s2)) => s1 == s2,
-            #[cfg(feature = "functions")]
             (Error::UnwindingPanic, Error::UnwindingPanic) => true,
             #[cfg(feature = "functions")]
             (Error::GetAuxWrongType, Error::GetAuxWrongType) => true,
@@ -318,7 +315,6 @@ impl fmt::Display for Error {
             Error::InvalidQuery => write!(f, "Query is not read-only"),
             #[cfg(feature = "vtab")]
             Error::ModuleError(ref desc) => write!(f, "{desc}"),
-            #[cfg(feature = "functions")]
             Error::UnwindingPanic => write!(f, "unwinding panic"),
             #[cfg(feature = "functions")]
             Error::GetAuxWrongType => write!(f, "get_aux called with wrong type"),
@@ -375,7 +371,6 @@ impl error::Error for Error {
             #[cfg(feature = "vtab")]
             Error::ModuleError(_) => None,
 
-            #[cfg(feature = "functions")]
             Error::UnwindingPanic => None,
 
             #[cfg(feature = "functions")]

@@ -1,8 +1,9 @@
 //! Automatic axtension loading
 use super::ffi;
 use crate::error::{check, to_sqlite_error};
-use crate::{Connection, Result};
+use crate::{Connection, Error, Result};
 use std::os::raw::{c_char, c_int};
+use std::panic::catch_unwind;
 
 /// Automatic extension initialization routine
 pub type AutoExtension = fn(Connection) -> Result<()>;
@@ -27,8 +28,12 @@ pub unsafe fn init_auto_extension(
     pz_err_msg: *mut *mut c_char,
     ax: AutoExtension,
 ) -> c_int {
-    let c = Connection::from_handle(db);
-    match c.and_then(ax) {
+    match catch_unwind(|| {
+        let c = Connection::from_handle(db);
+        c.and_then(ax)
+    })
+    .map_err(|_| Error::UnwindingPanic)
+    {
         Err(e) => to_sqlite_error(&e, pz_err_msg),
         _ => ffi::SQLITE_OK,
     }
