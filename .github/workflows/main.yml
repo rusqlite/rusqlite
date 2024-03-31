@@ -49,7 +49,7 @@ jobs:
       # The `{ sharedKey: ... }` allows different actions to share the cache.
       # We're using a `fullBuild` key mostly as a "this needs to do the
       # complete" that needs to do the complete build (that is, including
-      # `--features 'bundled-full session buildtime_bindgen'`), which is very
+      # `--features 'bundled-full session buildtime_bindgen preupdate_hook'`), which is very
       # slow, and has several deps.
       - uses: Swatinem/rust-cache@v2
         with: { sharedKey: fullBuild }
