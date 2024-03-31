@@ -9,6 +9,12 @@ use crate::ffi;
 
 use crate::{Connection, InnerConnection};
 
+#[cfg(feature = "preupdate_hook")]
+pub use preupdate_hook::*;
+
+#[cfg(feature = "preupdate_hook")]
+mod preupdate_hook;
+
 /// Action Codes
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(i32)]

@@ -33,6 +33,8 @@ pub struct InnerConnection {
     pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
     pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
+    #[cfg(feature = "preupdate_hook")]
+    pub free_preupdate_hook: Option<unsafe fn(*mut ::std::os::raw::c_void)>,
     owned: bool,
 }
 
@@ -55,6 +57,8 @@ impl InnerConnection {
             progress_handler: None,
             #[cfg(feature = "hooks")]
             authorizer: None,
+            #[cfg(feature = "preupdate_hook")]
+            free_preupdate_hook: None,
             owned,
         }
     }
@@ -148,6 +152,7 @@ impl InnerConnection {
             return Ok(());
         }
         self.remove_hooks();
+        self.remove_preupdate_hook();
         let mut shared_handle = self.interrupt_lock.lock().unwrap();
         assert!(
             !shared_handle.is_null(),
@@ -336,6 +341,10 @@ impl InnerConnection {
     #[cfg(not(feature = "hooks"))]
     #[inline]
     fn remove_hooks(&mut self) {}
+
+    #[cfg(not(feature = "preupdate_hook"))]
+    #[inline]
+    fn remove_preupdate_hook(&mut self) {}
 
     pub fn db_readonly(&self, db_name: super::DatabaseName<'_>) -> Result<bool> {
         let name = db_name.as_cstring()?;
