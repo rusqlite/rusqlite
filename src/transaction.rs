@@ -775,4 +775,27 @@ mod test {
         db.execute_batch("ROLLBACK")?;
         Ok(())
     }
+
+    #[test]
+    #[cfg(feature = "modern_sqlite")]
+    fn auto_commit() -> Result<()> {
+        use super::TransactionState;
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE t(i UNIQUE);")?;
+        assert!(db.is_autocommit());
+        let mut stmt = db.prepare("SELECT name FROM sqlite_master")?;
+        assert_eq!(TransactionState::None, db.transaction_state(None)?);
+        {
+            let mut rows = stmt.query([])?;
+            assert!(rows.next()?.is_some()); // start reading
+            assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+            db.execute("INSERT INTO t VALUES (1)", [])?; // auto-commit
+            assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+            assert!(rows.next()?.is_some()); // still reading
+            assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+            assert!(rows.next()?.is_none()); // end
+            assert_eq!(TransactionState::None, db.transaction_state(None)?);
+        }
+        Ok(())
+    }
 }

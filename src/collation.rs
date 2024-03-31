@@ -201,9 +201,7 @@ mod test {
     #[test]
     fn test_unicase() -> Result<()> {
         let db = Connection::open_in_memory()?;
-
         db.create_collation("unicase", unicase_compare)?;
-
         collate(db)
     }
 
@@ -232,5 +230,12 @@ mod test {
         let db = Connection::open_in_memory()?;
         db.collation_needed(collation_needed)?;
         collate(db)
+    }
+
+    #[test]
+    fn remove_collation() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.create_collation("unicase", unicase_compare)?;
+        db.remove_collation("unicase")
     }
 }
