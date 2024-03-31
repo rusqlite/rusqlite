@@ -28,12 +28,12 @@ pub unsafe fn init_auto_extension(
     pz_err_msg: *mut *mut c_char,
     ax: AutoExtension,
 ) -> c_int {
-    match catch_unwind(|| {
+    let r = catch_unwind(|| {
         let c = Connection::from_handle(db);
         c.and_then(ax)
     })
-    .unwrap_or_else(|_| Err(Error::UnwindingPanic))
-    {
+    .unwrap_or_else(|_| Err(Error::UnwindingPanic));
+    match r {
         Err(e) => to_sqlite_error(&e, pz_err_msg),
         _ => ffi::SQLITE_OK,
     }
