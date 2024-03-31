@@ -1,7 +1,7 @@
 //! Add, remove, or modify a collation
 use std::cmp::Ordering;
 use std::os::raw::{c_char, c_int, c_void};
-use std::panic::{catch_unwind, UnwindSafe};
+use std::panic::catch_unwind;
 use std::ptr;
 use std::slice;
 
@@ -18,7 +18,7 @@ impl Connection {
     #[inline]
     pub fn create_collation<C>(&self, collation_name: &str, x_compare: C) -> Result<()>
     where
-        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'static,
+        C: Fn(&str, &str) -> Ordering + Send + 'static,
     {
         self.db
             .borrow_mut()
@@ -44,7 +44,7 @@ impl Connection {
 impl InnerConnection {
     fn create_collation<C>(&mut self, collation_name: &str, x_compare: C) -> Result<()>
     where
-        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'static,
+        C: Fn(&str, &str) -> Ordering + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<C>(
             arg1: *mut c_void,
