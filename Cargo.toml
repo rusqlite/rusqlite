@@ -142,6 +142,9 @@ path = "libsqlite3-sys"
 version = "0.28.0"
 
 [[test]]
+name = "auto_ext"
+
+[[test]]
 name = "config_log"
 harness = false
 

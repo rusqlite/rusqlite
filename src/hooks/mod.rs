@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 
 use std::os::raw::{c_char, c_int, c_void};
-use std::panic::{catch_unwind, RefUnwindSafe};
+use std::panic::catch_unwind;
 use std::ptr;
 
 use crate::ffi;
@@ -394,7 +394,7 @@ impl Connection {
     /// If the progress callback returns `true`, the operation is interrupted.
     pub fn progress_handler<F>(&self, num_ops: c_int, handler: Option<F>)
     where
-        F: FnMut() -> bool + Send + RefUnwindSafe + 'static,
+        F: FnMut() -> bool + Send + 'static,
     {
         self.db.borrow_mut().progress_handler(num_ops, handler);
     }
@@ -404,7 +404,7 @@ impl Connection {
     #[inline]
     pub fn authorizer<'c, F>(&self, hook: Option<F>)
     where
-        F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + RefUnwindSafe + 'static,
+        F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + 'static,
     {
         self.db.borrow_mut().authorizer(hook);
     }
@@ -420,6 +420,27 @@ impl InnerConnection {
         self.authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
     }
 
+    /// ```compile_fail
+    /// use rusqlite::{Connection, Result};
+    /// fn main() -> Result<()> {
+    ///     let db = Connection::open_in_memory()?;
+    ///     {
+    ///         let mut called = std::sync::atomic::AtomicBool::new(false);
+    ///         db.commit_hook(Some(|| {
+    ///             called.store(true, std::sync::atomic::Ordering::Relaxed);
+    ///             true
+    ///         }));
+    ///     }
+    ///     assert!(db
+    ///         .execute_batch(
+    ///             "BEGIN;
+    ///         CREATE TABLE foo (t TEXT);
+    ///         COMMIT;",
+    ///         )
+    ///         .is_err());
+    ///     Ok(())
+    /// }
+    /// ```
     fn commit_hook<F>(&mut self, hook: Option<F>)
     where
         F: FnMut() -> bool + Send + 'static,
@@ -465,6 +486,26 @@ impl InnerConnection {
         self.free_commit_hook = free_commit_hook;
     }
 
+    /// ```compile_fail
+    /// use rusqlite::{Connection, Result};
+    /// fn main() -> Result<()> {
+    ///     let db = Connection::open_in_memory()?;
+    ///     {
+    ///         let mut called = std::sync::atomic::AtomicBool::new(false);
+    ///         db.rollback_hook(Some(|| {
+    ///             called.store(true, std::sync::atomic::Ordering::Relaxed);
+    ///         }));
+    ///     }
+    ///     assert!(db
+    ///         .execute_batch(
+    ///             "BEGIN;
+    ///         CREATE TABLE foo (t TEXT);
+    ///         ROLLBACK;",
+    ///         )
+    ///         .is_err());
+    ///     Ok(())
+    /// }
+    /// ```
     fn rollback_hook<F>(&mut self, hook: Option<F>)
     where
         F: FnMut() + Send + 'static,
@@ -506,6 +547,19 @@ impl InnerConnection {
         self.free_rollback_hook = free_rollback_hook;
     }
 
+    /// ```compile_fail
+    /// use rusqlite::{Connection, Result};
+    /// fn main() -> Result<()> {
+    ///     let db = Connection::open_in_memory()?;
+    ///     {
+    ///         let mut called = std::sync::atomic::AtomicBool::new(false);
+    ///         db.update_hook(Some(|_, _: &str, _: &str, _| {
+    ///             called.store(true, std::sync::atomic::Ordering::Relaxed);
+    ///         }));
+    ///     }
+    ///     db.execute_batch("CREATE TABLE foo AS SELECT 1 AS bar;")
+    /// }
+    /// ```
     fn update_hook<F>(&mut self, hook: Option<F>)
     where
         F: FnMut(Action, &str, &str, i64) + Send + 'static,
@@ -558,9 +612,29 @@ impl InnerConnection {
         self.free_update_hook = free_update_hook;
     }
 
+    /// ```compile_fail
+    /// use rusqlite::{Connection, Result};
+    /// fn main() -> Result<()> {
+    ///     let db = Connection::open_in_memory()?;
+    ///     {
+    ///         let mut called = std::sync::atomic::AtomicBool::new(false);
+    ///         db.progress_handler(
+    ///             1,
+    ///             Some(|| {
+    ///                 called.store(true, std::sync::atomic::Ordering::Relaxed);
+    ///                 true
+    ///             }),
+    ///         );
+    ///     }
+    ///     assert!(db
+    ///         .execute_batch("BEGIN; CREATE TABLE foo (t TEXT); COMMIT;")
+    ///         .is_err());
+    ///     Ok(())
+    /// }
+    /// ```
     fn progress_handler<F>(&mut self, num_ops: c_int, handler: Option<F>)
     where
-        F: FnMut() -> bool + Send + RefUnwindSafe + 'static,
+        F: FnMut() -> bool + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<F>(p_arg: *mut c_void) -> c_int
         where
@@ -590,9 +664,26 @@ impl InnerConnection {
         };
     }
 
+    /// ```compile_fail
+    /// use rusqlite::{Connection, Result};
+    /// fn main() -> Result<()> {
+    ///     let db = Connection::open_in_memory()?;
+    ///     {
+    ///         let mut called = std::sync::atomic::AtomicBool::new(false);
+    ///         db.authorizer(Some(|_: rusqlite::hooks::AuthContext<'_>| {
+    ///             called.store(true, std::sync::atomic::Ordering::Relaxed);
+    ///             rusqlite::hooks::Authorization::Deny
+    ///         }));
+    ///     }
+    ///     assert!(db
+    ///         .execute_batch("BEGIN; CREATE TABLE foo (t TEXT); COMMIT;")
+    ///         .is_err());
+    ///     Ok(())
+    /// }
+    /// ```
     fn authorizer<'c, F>(&'c mut self, authorizer: Option<F>)
     where
-        F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + RefUnwindSafe + 'static,
+        F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<'c, F>(
             p_arg: *mut c_void,
