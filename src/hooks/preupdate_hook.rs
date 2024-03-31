@@ -195,15 +195,15 @@ impl InnerConnection {
                 Action::UNKNOWN => PreUpdateCase::Unknown,
             };
 
-            let _ = catch_unwind(|| {
-                let boxed_hook: *mut F = p_arg as *mut F;
+            drop(catch_unwind(|| {
+                let boxed_hook: *mut F = p_arg.cast<F>();
                 (*boxed_hook)(
                     action,
                     expect_utf8(db_name, "database name"),
                     expect_utf8(tbl_name, "table name"),
                     &preupdate_case,
                 );
-            });
+            }));
         }
 
         let free_preupdate_hook = if hook.is_some() {
@@ -219,7 +219,7 @@ impl InnerConnection {
                     ffi::sqlite3_preupdate_hook(
                         self.db(),
                         Some(call_boxed_closure::<F>),
-                        boxed_hook as *mut _,
+                        boxed_hook.cast(),
                     )
                 }
             }
