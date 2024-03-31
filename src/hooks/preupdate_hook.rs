@@ -6,11 +6,12 @@ use std::ptr;
 use super::expect_utf8;
 use super::free_boxed_hook;
 use super::Action;
-
+use crate::error::check;
 use crate::ffi;
 use crate::inner_connection::InnerConnection;
 use crate::types::ValueRef;
 use crate::Connection;
+use crate::Result;
 
 /// The possible cases for when a PreUpdateHook gets triggered. Allows access to the relevant
 /// functions for each case through the contained values.
@@ -71,11 +72,11 @@ impl PreUpdateOldValueAccessor {
     }
 
     /// Get the value of the row being updated/deleted at the specified index.
-    pub fn get_old_column_value(&self, i: i32) -> ValueRef {
+    pub fn get_old_column_value(&self, i: i32) -> Result<ValueRef> {
         let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
         unsafe {
-            ffi::sqlite3_preupdate_old(self.db, i, &mut p_value);
-            ValueRef::from_value(p_value)
+            check(ffi::sqlite3_preupdate_old(self.db, i, &mut p_value))?;
+            Ok(ValueRef::from_value(p_value))
         }
     }
 }
@@ -109,11 +110,11 @@ impl PreUpdateNewValueAccessor {
     }
 
     /// Get the value of the row being updated/deleted at the specified index.
-    pub fn get_new_column_value(&self, i: i32) -> ValueRef {
+    pub fn get_new_column_value(&self, i: i32) -> Result<ValueRef> {
         let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
         unsafe {
-            ffi::sqlite3_preupdate_new(self.db, i, &mut p_value);
-            ValueRef::from_value(p_value)
+            check(ffi::sqlite3_preupdate_new(self.db, i, &mut p_value))?;
+            Ok(ValueRef::from_value(p_value))
         }
     }
 }
@@ -257,7 +258,12 @@ mod test {
                     assert_eq!(1, accessor.get_column_count());
                     assert_eq!(1, accessor.get_new_row_id());
                     assert_eq!(0, accessor.get_query_depth());
-                    assert_eq!("lisa", accessor.get_new_column_value(0).as_str().unwrap());
+                    // out of bounds access should return an error
+                    assert!(accessor.get_new_column_value(1).is_err());
+                    assert_eq!(
+                        "lisa",
+                        accessor.get_new_column_value(0).unwrap().as_str().unwrap()
+                    );
                     assert_eq!(0, accessor.get_query_depth());
                 }
                 _ => panic!("wrong preupdate case"),
@@ -288,7 +294,12 @@ mod test {
                     assert_eq!(1, accessor.get_column_count());
                     assert_eq!(1, accessor.get_old_row_id());
                     assert_eq!(0, accessor.get_query_depth());
-                    assert_eq!("lisa", accessor.get_old_column_value(0).as_str().unwrap());
+                    // out of bounds access should return an error
+                    assert!(accessor.get_old_column_value(1).is_err());
+                    assert_eq!(
+                        "lisa",
+                        accessor.get_old_column_value(0).unwrap().as_str().unwrap()
+                    );
                     assert_eq!(0, accessor.get_query_depth());
                 }
                 _ => panic!("wrong preupdate case"),
@@ -322,18 +333,30 @@ mod test {
                     assert_eq!(1, old_value_accessor.get_column_count());
                     assert_eq!(1, old_value_accessor.get_old_row_id());
                     assert_eq!(0, old_value_accessor.get_query_depth());
+                    // out of bounds access should return an error
+                    assert!(old_value_accessor.get_old_column_value(1).is_err());
                     assert_eq!(
                         "lisa",
-                        old_value_accessor.get_old_column_value(0).as_str().unwrap()
+                        old_value_accessor
+                            .get_old_column_value(0)
+                            .unwrap()
+                            .as_str()
+                            .unwrap()
                     );
                     assert_eq!(0, old_value_accessor.get_query_depth());
 
                     assert_eq!(1, new_value_accessor.get_column_count());
                     assert_eq!(1, new_value_accessor.get_new_row_id());
                     assert_eq!(0, new_value_accessor.get_query_depth());
+                    // out of bounds access should return an error
+                    assert!(new_value_accessor.get_new_column_value(1).is_err());
                     assert_eq!(
                         "janice",
-                        new_value_accessor.get_new_column_value(0).as_str().unwrap()
+                        new_value_accessor
+                            .get_new_column_value(0)
+                            .unwrap()
+                            .as_str()
+                            .unwrap()
                     );
                     assert_eq!(0, new_value_accessor.get_query_depth());
                 }
