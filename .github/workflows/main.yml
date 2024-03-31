@@ -62,8 +62,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - run: cargo test --features 'bundled-full session buildtime_bindgen' --all-targets --workspace --verbose
-      - run: cargo test --features 'bundled-full session buildtime_bindgen' --doc --workspace --verbose
+      - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --all-targets --workspace --verbose
+      - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --doc --workspace --verbose
 
       - name: loadable extension
         run: |
@@ -119,8 +119,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - run: cargo test --features 'bundled-full session buildtime_bindgen' --all-targets --workspace --verbose
-      - run: cargo test --features 'bundled-full session buildtime_bindgen' --doc --workspace --verbose
+      - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --all-targets --workspace --verbose
+      - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --doc --workspace --verbose
 
   sqlcipher:
     name: Test with sqlcipher
@@ -156,7 +156,7 @@ jobs:
           # leak sanitization, but we don't care about backtraces here, so long
           # as the other tests have them.
           RUST_BACKTRACE: "0"
-        run: cargo -Z build-std test --features 'bundled-full session buildtime_bindgen with-asan' --target x86_64-unknown-linux-gnu
+        run: cargo -Z build-std test --features 'bundled-full session buildtime_bindgen preupdate_hook with-asan' --target x86_64-unknown-linux-gnu
 
   # Ensure clippy doesn't complain.
   clippy:
@@ -170,7 +170,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --workspace --features bundled -- -D warnings
       # Clippy with all non-conflicting features
-      - run: cargo clippy --all-targets --workspace --features 'bundled-full session buildtime_bindgen' -- -D warnings
+      - run: cargo clippy --all-targets --workspace --features 'bundled-full session buildtime_bindgen preupdate_hook' -- -D warnings
 
   # Ensure patch is formatted.
   fmt:
@@ -192,7 +192,7 @@ jobs:
       - uses: hecrj/setup-rust-action@v1
       - uses: Swatinem/rust-cache@v2
         with: { sharedKey: fullBuild }
-      - run: cargo doc --features 'bundled-full session buildtime_bindgen' --no-deps
+      - run: cargo doc --features 'bundled-full session buildtime_bindgen preupdate_hook' --no-deps
         env: { RUSTDOCFLAGS: -Dwarnings }
 
   codecov:
@@ -210,7 +210,7 @@ jobs:
         run: |
           cargo test --verbose
           cargo test --features="bundled-full" --verbose
-          cargo test --features="bundled-full session buildtime_bindgen" --verbose
+          cargo test --features="bundled-full session buildtime_bindgen preupdate_hook" --verbose
           cargo test --features="bundled-sqlcipher-vendored-openssl" --verbose
         env:
           RUSTFLAGS: -Cinstrument-coverage
