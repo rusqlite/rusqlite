@@ -32,7 +32,7 @@ pub unsafe fn init_auto_extension(
         let c = Connection::from_handle(db);
         c.and_then(ax)
     })
-    .map_err(|_| Error::UnwindingPanic)
+    .unwrap_or_else(|_| Err(Error::UnwindingPanic))
     {
         Err(e) => to_sqlite_error(&e, pz_err_msg),
         _ => ffi::SQLITE_OK,
