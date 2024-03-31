@@ -42,6 +42,28 @@ impl Connection {
 }
 
 impl InnerConnection {
+    /// ```compile_fail
+    /// use rusqlite::{Connection, Result};
+    /// fn main() -> Result<()> {
+    ///     let db = Connection::open_in_memory()?;
+    ///     {
+    ///         let mut called = std::sync::atomic::AtomicBool::new(false);
+    ///         db.create_collation("foo", |_, _| {
+    ///             called.store(true, std::sync::atomic::Ordering::Relaxed);
+    ///             std::cmp::Ordering::Equal
+    ///         })?;
+    ///     }
+    ///     let value: String = db.query_row(
+    ///         "WITH cte(bar) AS
+    ///        (VALUES ('v1'),('v2'),('v3'),('v4'),('v5'))
+    ///         SELECT DISTINCT bar COLLATE foo FROM cte;",
+    ///         [],
+    ///         |row| row.get(0),
+    ///     )?;
+    ///     assert_eq!(value, "v1");
+    ///     Ok(())
+    /// }
+    /// ```
     fn create_collation<C>(&mut self, collation_name: &str, x_compare: C) -> Result<()>
     where
         C: Fn(&str, &str) -> Ordering + Send + 'static,

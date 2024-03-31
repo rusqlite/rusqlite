@@ -518,6 +518,27 @@ impl Connection {
 }
 
 impl InnerConnection {
+    /// ```compile_fail
+    /// use rusqlite::{functions::FunctionFlags, Connection, Result};
+    /// fn main() -> Result<()> {
+    ///     let db = Connection::open_in_memory()?;
+    ///     {
+    ///         let mut called = std::sync::atomic::AtomicBool::new(false);
+    ///         db.create_scalar_function(
+    ///             "test",
+    ///             0,
+    ///             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+    ///             |_| {
+    ///                 called.store(true, std::sync::atomic::Ordering::Relaxed);
+    ///                 Ok(true)
+    ///             },
+    ///         );
+    ///     }
+    ///     let result: Result<bool> = db.query_row("SELECT test()", [], |r| r.get(0));
+    ///     assert!(result?);
+    ///     Ok(())
+    /// }
+    /// ```
     fn create_scalar_function<F, T>(
         &mut self,
         fn_name: &str,
