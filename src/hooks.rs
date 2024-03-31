@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 
 use std::os::raw::{c_char, c_int, c_void};
-use std::panic::{catch_unwind, RefUnwindSafe};
+use std::panic::catch_unwind;
 use std::ptr;
 
 use crate::ffi;
@@ -388,7 +388,7 @@ impl Connection {
     /// If the progress callback returns `true`, the operation is interrupted.
     pub fn progress_handler<F>(&self, num_ops: c_int, handler: Option<F>)
     where
-        F: FnMut() -> bool + Send + RefUnwindSafe + 'static,
+        F: FnMut() -> bool + Send + 'static,
     {
         self.db.borrow_mut().progress_handler(num_ops, handler);
     }
@@ -398,7 +398,7 @@ impl Connection {
     #[inline]
     pub fn authorizer<'c, F>(&self, hook: Option<F>)
     where
-        F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + RefUnwindSafe + 'static,
+        F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + 'static,
     {
         self.db.borrow_mut().authorizer(hook);
     }
@@ -554,7 +554,7 @@ impl InnerConnection {
 
     fn progress_handler<F>(&mut self, num_ops: c_int, handler: Option<F>)
     where
-        F: FnMut() -> bool + Send + RefUnwindSafe + 'static,
+        F: FnMut() -> bool + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<F>(p_arg: *mut c_void) -> c_int
         where
@@ -586,7 +586,7 @@ impl InnerConnection {
 
     fn authorizer<'c, F>(&'c mut self, authorizer: Option<F>)
     where
-        F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + RefUnwindSafe + 'static,
+        F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<'c, F>(
             p_arg: *mut c_void,

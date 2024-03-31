@@ -5,7 +5,7 @@ use std::ffi::CStr;
 use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int, c_uchar, c_void};
-use std::panic::{catch_unwind, RefUnwindSafe};
+use std::panic::catch_unwind;
 use std::ptr;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 
@@ -59,20 +59,22 @@ impl Session<'_> {
     /// Set a table filter
     pub fn table_filter<F>(&mut self, filter: Option<F>)
     where
-        F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
+        F: Fn(&str) -> bool + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<F>(
             p_arg: *mut c_void,
             tbl_str: *const c_char,
         ) -> c_int
         where
-            F: Fn(&str) -> bool + RefUnwindSafe,
+            F: Fn(&str) -> bool,
         {
-            let boxed_filter: *mut F = p_arg as *mut F;
             let tbl_name = CStr::from_ptr(tbl_str).to_str();
             c_int::from(
-                catch_unwind(|| (*boxed_filter)(tbl_name.expect("non-utf8 table name")))
-                    .unwrap_or_default(),
+                catch_unwind(|| {
+                    let boxed_filter: *mut F = p_arg.cast::<F>();
+                    (*boxed_filter)(tbl_name.expect("non-utf8 table name"))
+                })
+                .unwrap_or_default(),
             )
         }
 
@@ -588,8 +590,8 @@ impl Connection {
     /// Apply a changeset to a database
     pub fn apply<F, C>(&self, cs: &Changeset, filter: Option<F>, conflict: C) -> Result<()>
     where
-        F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
-        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
+        F: Fn(&str) -> bool + Send + 'static,
+        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
     {
         let db = self.db.borrow_mut().db;
 
@@ -626,8 +628,8 @@ impl Connection {
         conflict: C,
     ) -> Result<()>
     where
-        F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
-        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
+        F: Fn(&str) -> bool + Send + 'static,
+        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
     {
         let input_ref = &input;
         let db = self.db.borrow_mut().db;
@@ -701,17 +703,21 @@ pub enum ConflictAction {
 
 unsafe extern "C" fn call_filter<F, C>(p_ctx: *mut c_void, tbl_str: *const c_char) -> c_int
 where
-    F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
-    C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
+    F: Fn(&str) -> bool + Send + 'static,
+    C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
 {
-    let tuple: *mut (Option<F>, C) = p_ctx as *mut (Option<F>, C);
     let tbl_name = CStr::from_ptr(tbl_str).to_str();
-    match *tuple {
-        (Some(ref filter), _) => c_int::from(
-            catch_unwind(|| filter(tbl_name.expect("illegal table name"))).unwrap_or_default(),
-        ),
-        _ => unimplemented!(),
-    }
+    c_int::from(
+        catch_unwind(|| {
+            let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
+            if let Some(ref filter) = (*tuple).0 {
+                filter(tbl_name.expect("illegal table name"))
+            } else {
+                true
+            }
+        })
+        .unwrap_or_default(),
+    )
 }
 
 unsafe extern "C" fn call_conflict<F, C>(
@@ -720,13 +726,15 @@ unsafe extern "C" fn call_conflict<F, C>(
     p: *mut ffi::sqlite3_changeset_iter,
 ) -> c_int
 where
-    F: Fn(&str) -> bool + Send + RefUnwindSafe + 'static,
-    C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + RefUnwindSafe + 'static,
+    F: Fn(&str) -> bool + Send + 'static,
+    C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
 {
-    let tuple: *mut (Option<F>, C) = p_ctx as *mut (Option<F>, C);
     let conflict_type = ConflictType::from(e_conflict);
     let item = ChangesetItem { it: p };
-    if let Ok(action) = catch_unwind(|| (*tuple).1(conflict_type, item)) {
+    if let Ok(action) = catch_unwind(|| {
+        let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
+        (*tuple).1(conflict_type, item)
+    }) {
         action as c_int
     } else {
         ffi::SQLITE_CHANGESET_ABORT
