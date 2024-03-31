@@ -196,7 +196,7 @@ impl InnerConnection {
             };
 
             drop(catch_unwind(|| {
-                let boxed_hook: *mut F = p_arg.cast<F>();
+                let boxed_hook: *mut F = p_arg.cast::<F>();
                 (*boxed_hook)(
                     action,
                     expect_utf8(db_name, "database name"),
