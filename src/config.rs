@@ -9,6 +9,7 @@ use crate::{Connection, Result};
 /// Database Connection Configuration Options
 /// See [Database Connection Configuration Options](https://sqlite.org/c3ref/c_dbconfig_enable_fkey.html) for details.
 #[repr(i32)]
+#[derive(Copy, Clone, Debug)]
 #[allow(non_snake_case, non_camel_case_types)]
 #[non_exhaustive]
 #[allow(clippy::upper_case_acronyms)]
@@ -61,6 +62,13 @@ pub enum DbConfig {
     /// sqlite_master tables) are untainted by malicious content.
     #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_TRUSTED_SCHEMA = 1017, // 3.31.0
+    /// Sets or clears a flag that enables collection of the
+    /// sqlite3_stmt_scanstatus_v2() statistics
+    #[cfg(feature = "modern_sqlite")]
+    SQLITE_DBCONFIG_STMT_SCANSTATUS = 1018, // 3.42.0
+    /// Changes the default order in which tables and indexes are scanned
+    #[cfg(feature = "modern_sqlite")]
+    SQLITE_DBCONFIG_REVERSE_SCANORDER = 1019, // 3.42.0
 }
 
 impl Connection {

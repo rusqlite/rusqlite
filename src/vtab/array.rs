@@ -17,7 +17,7 @@
 //!     let v = [1i64, 2, 3, 4];
 //!     // Note: A `Rc<Vec<Value>>` must be used as the parameter.
 //!     let values = Rc::new(v.iter().copied().map(Value::from).collect::<Vec<Value>>());
-//!     let mut stmt = db.prepare("SELECT value from rarray(?);")?;
+//!     let mut stmt = db.prepare("SELECT value from rarray(?1);")?;
 //!     let rows = stmt.query_map([values], |row| row.get::<_, i64>(0))?;
 //!     for value in rows {
 //!         println!("{}", value?);
@@ -26,7 +26,6 @@
 //! }
 //! ```
 
-use std::default::Default;
 use std::marker::PhantomData;
 use std::os::raw::{c_char, c_int, c_void};
 use std::rc::Rc;
@@ -41,7 +40,7 @@ use crate::{Connection, Result};
 
 // http://sqlite.org/bindptr.html
 
-pub(crate) const ARRAY_TYPE: *const c_char = (b"rarray\0" as *const u8).cast::<c_char>();
+pub(crate) const ARRAY_TYPE: *const c_char = c"rarray".as_ptr();
 
 pub(crate) unsafe extern "C" fn free_array(p: *mut c_void) {
     drop(Rc::from_raw(p as *const Vec<Value>));
@@ -206,7 +205,7 @@ mod test {
         let values: Vec<Value> = v.into_iter().map(Value::from).collect();
         let ptr = Rc::new(values);
         {
-            let mut stmt = db.prepare("SELECT value from rarray(?);")?;
+            let mut stmt = db.prepare("SELECT value from rarray(?1);")?;
 
             let rows = stmt.query_map([&ptr], |row| row.get::<_, i64>(0))?;
             assert_eq!(2, Rc::strong_count(&ptr));

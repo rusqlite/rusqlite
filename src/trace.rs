@@ -8,8 +8,7 @@ use std::ptr;
 use std::time::Duration;
 
 use super::ffi;
-use crate::error::error_from_sqlite_code;
-use crate::{Connection, Result};
+use crate::Connection;
 
 /// Set up the process-wide SQLite error logging callback.
 ///
@@ -25,12 +24,12 @@ use crate::{Connection, Result};
 ///     * It must be threadsafe if SQLite is used in a multithreaded way.
 ///
 /// cf [The Error And Warning Log](http://sqlite.org/errlog.html).
-pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> Result<()> {
+#[cfg(not(feature = "loadable_extension"))]
+pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> crate::Result<()> {
     extern "C" fn log_callback(p_arg: *mut c_void, err: c_int, msg: *const c_char) {
-        let c_slice = unsafe { CStr::from_ptr(msg).to_bytes() };
+        let s = unsafe { CStr::from_ptr(msg).to_string_lossy() };
         let callback: fn(c_int, &str) = unsafe { mem::transmute(p_arg) };
 
-        let s = String::from_utf8_lossy(c_slice);
         drop(catch_unwind(|| callback(err, &s)));
     }
 
@@ -48,7 +47,7 @@ pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> Result<()> {
     if rc == ffi::SQLITE_OK {
         Ok(())
     } else {
-        Err(error_from_sqlite_code(rc, None))
+        Err(crate::error::error_from_sqlite_code(rc, None))
     }
 }
 
@@ -72,8 +71,7 @@ impl Connection {
     pub fn trace(&mut self, trace_fn: Option<fn(&str)>) {
         unsafe extern "C" fn trace_callback(p_arg: *mut c_void, z_sql: *const c_char) {
             let trace_fn: fn(&str) = mem::transmute(p_arg);
-            let c_slice = CStr::from_ptr(z_sql).to_bytes();
-            let s = String::from_utf8_lossy(c_slice);
+            let s = CStr::from_ptr(z_sql).to_string_lossy();
             drop(catch_unwind(|| trace_fn(&s)));
         }
 
@@ -100,8 +98,7 @@ impl Connection {
             nanoseconds: u64,
         ) {
             let profile_fn: fn(&str, Duration) = mem::transmute(p_arg);
-            let c_slice = CStr::from_ptr(z_sql).to_bytes();
-            let s = String::from_utf8_lossy(c_slice);
+            let s = CStr::from_ptr(z_sql).to_string_lossy();
             const NANOS_PER_SEC: u64 = 1_000_000_000;
 
             let duration = Duration::new(
@@ -144,13 +141,13 @@ mod test {
         let mut db = Connection::open_in_memory()?;
         db.trace(Some(tracer));
         {
-            let _ = db.query_row("SELECT ?", [1i32], |_| Ok(()));
-            let _ = db.query_row("SELECT ?", ["hello"], |_| Ok(()));
+            let _ = db.query_row("SELECT ?1", [1i32], |_| Ok(()));
+            let _ = db.query_row("SELECT ?1", ["hello"], |_| Ok(()));
         }
         db.trace(None);
         {
-            let _ = db.query_row("SELECT ?", [2i32], |_| Ok(()));
-            let _ = db.query_row("SELECT ?", ["goodbye"], |_| Ok(()));
+            let _ = db.query_row("SELECT ?1", [2i32], |_| Ok(()));
+            let _ = db.query_row("SELECT ?1", ["goodbye"], |_| Ok(()));
         }
 
         let traced_stmts = TRACED_STMTS.lock().unwrap();

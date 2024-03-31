@@ -1,7 +1,7 @@
 //! Add, remove, or modify a collation
 use std::cmp::Ordering;
 use std::os::raw::{c_char, c_int, c_void};
-use std::panic::{catch_unwind, UnwindSafe};
+use std::panic::catch_unwind;
 use std::ptr;
 use std::slice;
 
@@ -18,7 +18,7 @@ impl Connection {
     #[inline]
     pub fn create_collation<C>(&self, collation_name: &str, x_compare: C) -> Result<()>
     where
-        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'static,
+        C: Fn(&str, &str) -> Ordering + Send + 'static,
     {
         self.db
             .borrow_mut()
@@ -66,7 +66,7 @@ impl InnerConnection {
     /// ```
     fn create_collation<C>(&mut self, collation_name: &str, x_compare: C) -> Result<()>
     where
-        C: Fn(&str, &str) -> Ordering + Send + UnwindSafe + 'static,
+        C: Fn(&str, &str) -> Ordering + Send + 'static,
     {
         unsafe extern "C" fn call_boxed_closure<C>(
             arg1: *mut c_void,
@@ -150,10 +150,9 @@ impl InnerConnection {
             let callback: fn(&Connection, &str) -> Result<()> = mem::transmute(arg1);
             let res = catch_unwind(|| {
                 let conn = Connection::from_handle(arg2).unwrap();
-                let collation_name = {
-                    let c_slice = CStr::from_ptr(arg3).to_bytes();
-                    str::from_utf8(c_slice).expect("illegal collation sequence name")
-                };
+                let collation_name = CStr::from_ptr(arg3)
+                    .to_str()
+                    .expect("illegal collation sequence name");
                 callback(&conn, collation_name)
             });
             if res.is_err() {

@@ -3,7 +3,6 @@
 //! Port of C [generate series
 //! "function"](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/series.c):
 //! `https://www.sqlite.org/series.html`
-use std::default::Default;
 use std::marker::PhantomData;
 use std::os::raw::c_int;
 
@@ -28,6 +27,7 @@ const SERIES_COLUMN_STOP: c_int = 2;
 const SERIES_COLUMN_STEP: c_int = 3;
 
 bitflags::bitflags! {
+    #[derive(Clone, Copy)]
     #[repr(C)]
     struct QueryPlanFlags: ::std::os::raw::c_int {
         // start = $value  -- constraint exists
@@ -41,7 +41,7 @@ bitflags::bitflags! {
         // output in ascending order
         const ASC  = 16;
         // Both start and stop
-        const BOTH  = QueryPlanFlags::START.bits | QueryPlanFlags::STOP.bits;
+        const BOTH  = QueryPlanFlags::START.bits() | QueryPlanFlags::STOP.bits();
     }
 }
 
@@ -115,7 +115,7 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
         }
         if idx_num.contains(QueryPlanFlags::BOTH) {
             // Both start= and stop= boundaries are available.
-            //#[allow(clippy::bool_to_int_with_if)]
+            #[allow(clippy::bool_to_int_with_if)]
             info.set_estimated_cost(f64::from(
                 2 - if idx_num.contains(QueryPlanFlags::STEP) {
                     1
@@ -199,19 +199,19 @@ unsafe impl VTabCursor for SeriesTabCursor<'_> {
         let mut idx_num = QueryPlanFlags::from_bits_truncate(idx_num);
         let mut i = 0;
         if idx_num.contains(QueryPlanFlags::START) {
-            self.min_value = args.get(i)?;
+            self.min_value = args.get::<Option<_>>(i)?.unwrap_or_default();
             i += 1;
         } else {
             self.min_value = 0;
         }
         if idx_num.contains(QueryPlanFlags::STOP) {
-            self.max_value = args.get(i)?;
+            self.max_value = args.get::<Option<_>>(i)?.unwrap_or_default();
             i += 1;
         } else {
             self.max_value = 0xffff_ffff;
         }
         if idx_num.contains(QueryPlanFlags::STEP) {
-            self.step = args.get(i)?;
+            self.step = args.get::<Option<_>>(i)?.unwrap_or_default();
             if self.step == 0 {
                 self.step = 1;
             } else if self.step < 0 {
@@ -314,6 +314,26 @@ mod test {
         let mut s = db.prepare("SELECT * FROM generate_series(0,32,5) ORDER BY value DESC")?;
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(vec![30, 25, 20, 15, 10, 5, 0], series);
+
+        let mut s = db.prepare("SELECT * FROM generate_series(NULL)")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        let empty = Vec::<i32>::new();
+        assert_eq!(empty, series);
+        let mut s = db.prepare("SELECT * FROM generate_series(5,NULL)")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(empty, series);
+        let mut s = db.prepare("SELECT * FROM generate_series(5,10,NULL)")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(empty, series);
+        let mut s = db.prepare("SELECT * FROM generate_series(NULL,10,2)")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(empty, series);
+        let mut s = db.prepare("SELECT * FROM generate_series(5,NULL,2)")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(empty, series);
+        let mut s = db.prepare("SELECT * FROM generate_series(NULL) ORDER BY value DESC")?;
+        let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
+        assert_eq!(empty, series);
 
         Ok(())
     }

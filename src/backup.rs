@@ -316,9 +316,27 @@ impl Drop for Backup<'_, '_> {
 
 #[cfg(test)]
 mod test {
-    use super::Backup;
+    use super::{Backup, Progress};
     use crate::{Connection, DatabaseName, Result};
     use std::time::Duration;
+
+    #[test]
+    fn backup_to_path() -> Result<()> {
+        let src = Connection::open_in_memory()?;
+        src.execute_batch("CREATE TABLE foo AS SELECT 42 AS x")?;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("test.db3");
+
+        fn progress(_: Progress) {}
+
+        src.backup(DatabaseName::Main, path.as_path(), Some(progress))?;
+
+        let mut dst = Connection::open_in_memory()?;
+        dst.restore(DatabaseName::Main, path, Some(progress))?;
+
+        Ok(())
+    }
 
     #[test]
     fn test_backup() -> Result<()> {
@@ -336,7 +354,7 @@ mod test {
             backup.step(-1)?;
         }
 
-        let the_answer: i64 = dst.query_row("SELECT x FROM foo", [], |r| r.get(0))?;
+        let the_answer: i64 = dst.one_column("SELECT x FROM foo")?;
         assert_eq!(42, the_answer);
 
         src.execute_batch("INSERT INTO foo VALUES(43)")?;
@@ -346,7 +364,7 @@ mod test {
             backup.run_to_completion(5, Duration::from_millis(250), None)?;
         }
 
-        let the_answer: i64 = dst.query_row("SELECT SUM(x) FROM foo", [], |r| r.get(0))?;
+        let the_answer: i64 = dst.one_column("SELECT SUM(x) FROM foo")?;
         assert_eq!(42 + 43, the_answer);
         Ok(())
     }
@@ -368,7 +386,7 @@ mod test {
             backup.step(-1)?;
         }
 
-        let the_answer: i64 = dst.query_row("SELECT x FROM foo", [], |r| r.get(0))?;
+        let the_answer: i64 = dst.one_column("SELECT x FROM foo")?;
         assert_eq!(42, the_answer);
 
         src.execute_batch("INSERT INTO foo VALUES(43)")?;
@@ -379,7 +397,7 @@ mod test {
             backup.run_to_completion(5, Duration::from_millis(250), None)?;
         }
 
-        let the_answer: i64 = dst.query_row("SELECT SUM(x) FROM foo", [], |r| r.get(0))?;
+        let the_answer: i64 = dst.one_column("SELECT SUM(x) FROM foo")?;
         assert_eq!(42 + 43, the_answer);
         Ok(())
     }
@@ -406,7 +424,7 @@ mod test {
             backup.step(-1)?;
         }
 
-        let the_answer: i64 = dst.query_row("SELECT x FROM foo", [], |r| r.get(0))?;
+        let the_answer: i64 = dst.one_column("SELECT x FROM foo")?;
         assert_eq!(42, the_answer);
 
         src.execute_batch("INSERT INTO foo VALUES(43)")?;
@@ -421,7 +439,7 @@ mod test {
             backup.run_to_completion(5, Duration::from_millis(250), None)?;
         }
 
-        let the_answer: i64 = dst.query_row("SELECT SUM(x) FROM foo", [], |r| r.get(0))?;
+        let the_answer: i64 = dst.one_column("SELECT SUM(x) FROM foo")?;
         assert_eq!(42 + 43, the_answer);
         Ok(())
     }

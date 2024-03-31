@@ -169,8 +169,10 @@ impl RawStatement {
     }
 
     #[inline]
-    pub fn clear_bindings(&self) -> c_int {
-        unsafe { ffi::sqlite3_clear_bindings(self.ptr) }
+    pub fn clear_bindings(&mut self) {
+        unsafe {
+            ffi::sqlite3_clear_bindings(self.ptr);
+        } // rc is always SQLITE_OK
     }
 
     #[inline]
@@ -195,7 +197,6 @@ impl RawStatement {
     }
 
     // does not work for PRAGMA
-    #[cfg(feature = "extra_check")]
     #[inline]
     pub fn readonly(&self) -> bool {
         unsafe { ffi::sqlite3_stmt_readonly(self.ptr) != 0 }
