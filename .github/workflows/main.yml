@@ -208,10 +208,10 @@ jobs:
           tool: grcov
       - name: Run tests for coverage
         run: |
-          cargo test --verbose
-          cargo test --features="bundled-full" --verbose
-          cargo test --features="bundled-full session buildtime_bindgen preupdate_hook" --verbose
-          cargo test --features="bundled-sqlcipher-vendored-openssl" --verbose
+          cargo test --all --verbose
+          cargo test --features="bundled-full" --all --verbose
+          cargo test --features="bundled-full session buildtime_bindgen preupdate_hook" --all --verbose
+          cargo test --features="bundled-sqlcipher-vendored-openssl" --all --verbose
         env:
           RUSTFLAGS: -Cinstrument-coverage
           RUSTDOCFLAGS: -Cinstrument-coverage
