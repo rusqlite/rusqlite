@@ -855,7 +855,14 @@ mod test {
     use crate::{Connection, Error, Result};
 
     fn half(ctx: &Context<'_>) -> Result<c_double> {
+        assert!(!ctx.is_empty());
         assert_eq!(ctx.len(), 1, "called with unexpected number of arguments");
+        assert!(unsafe {
+            ctx.get_connection()
+                .as_ref()
+                .map(::std::ops::Deref::deref)
+                .is_ok()
+        });
         let value = ctx.get::<c_double>(0)?;
         Ok(value / 2f64)
     }

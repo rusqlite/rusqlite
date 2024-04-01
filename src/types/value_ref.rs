@@ -261,3 +261,75 @@ impl<'a> ValueRef<'a> {
     // TODO sqlite3_value_nochange // 3.22.0 & VTab xUpdate
     // TODO sqlite3_value_frombind // 3.28.0
 }
+
+#[cfg(test)]
+mod test {
+    use super::ValueRef;
+    use crate::types::FromSqlResult;
+
+    #[test]
+    fn as_i64() -> FromSqlResult<()> {
+        assert!(ValueRef::Real(1.0).as_i64().is_err());
+        assert_eq!(ValueRef::Integer(1).as_i64(), Ok(1));
+        Ok(())
+    }
+    #[test]
+    fn as_i64_or_null() -> FromSqlResult<()> {
+        assert_eq!(ValueRef::Null.as_i64_or_null(), Ok(None));
+        assert!(ValueRef::Real(1.0).as_i64_or_null().is_err());
+        assert_eq!(ValueRef::Integer(1).as_i64_or_null(), Ok(Some(1)));
+        Ok(())
+    }
+    #[test]
+    fn as_f64() -> FromSqlResult<()> {
+        assert!(ValueRef::Integer(1).as_f64().is_err());
+        assert_eq!(ValueRef::Real(1.0).as_f64(), Ok(1.0));
+        Ok(())
+    }
+    #[test]
+    fn as_f64_or_null() -> FromSqlResult<()> {
+        assert_eq!(ValueRef::Null.as_f64_or_null(), Ok(None));
+        assert!(ValueRef::Integer(1).as_f64_or_null().is_err());
+        assert_eq!(ValueRef::Real(1.0).as_f64_or_null(), Ok(Some(1.0)));
+        Ok(())
+    }
+    #[test]
+    fn as_str() -> FromSqlResult<()> {
+        assert!(ValueRef::Null.as_str().is_err());
+        assert_eq!(ValueRef::Text(b"").as_str(), Ok(""));
+        Ok(())
+    }
+    #[test]
+    fn as_str_or_null() -> FromSqlResult<()> {
+        assert_eq!(ValueRef::Null.as_str_or_null(), Ok(None));
+        assert!(ValueRef::Integer(1).as_str_or_null().is_err());
+        assert_eq!(ValueRef::Text(b"").as_str_or_null(), Ok(Some("")));
+        Ok(())
+    }
+    #[test]
+    fn as_blob() -> FromSqlResult<()> {
+        assert!(ValueRef::Null.as_blob().is_err());
+        assert_eq!(ValueRef::Blob(b"").as_blob(), Ok(&b""[..]));
+        Ok(())
+    }
+    #[test]
+    fn as_blob_or_null() -> FromSqlResult<()> {
+        assert_eq!(ValueRef::Null.as_blob_or_null(), Ok(None));
+        assert!(ValueRef::Integer(1).as_blob_or_null().is_err());
+        assert_eq!(ValueRef::Blob(b"").as_blob_or_null(), Ok(Some(&b""[..])));
+        Ok(())
+    }
+    #[test]
+    fn as_bytes() -> FromSqlResult<()> {
+        assert!(ValueRef::Null.as_bytes().is_err());
+        assert_eq!(ValueRef::Blob(b"").as_bytes(), Ok(&b""[..]));
+        Ok(())
+    }
+    #[test]
+    fn as_bytes_or_null() -> FromSqlResult<()> {
+        assert_eq!(ValueRef::Null.as_bytes_or_null(), Ok(None));
+        assert!(ValueRef::Integer(1).as_bytes_or_null().is_err());
+        assert_eq!(ValueRef::Blob(b"").as_bytes_or_null(), Ok(Some(&b""[..])));
+        Ok(())
+    }
+}

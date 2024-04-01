@@ -439,9 +439,12 @@ mod test {
         let (db, rowid) = db_with_test_blob()?;
 
         let mut blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false)?;
+        assert!(!blob.is_empty());
+        assert_eq!(10, blob.len());
         assert_eq!(4, blob.write(b"Clob").unwrap());
         assert_eq!(6, blob.write(b"567890xxxxxx").unwrap()); // cannot write past 10
         assert_eq!(0, blob.write(b"5678").unwrap()); // still cannot write past 10
+        blob.flush().unwrap();
 
         blob.reopen(rowid)?;
         blob.close()?;
@@ -546,5 +549,13 @@ mod test {
             assert_eq!(b"aaaaaaaaaa", &bytes);
             Ok(())
         }
+    }
+
+    #[test]
+    fn zero_blob() -> Result<()> {
+        use crate::types::ToSql;
+        let zb = super::ZeroBlob(1);
+        assert!(zb.to_sql().is_ok());
+        Ok(())
     }
 }

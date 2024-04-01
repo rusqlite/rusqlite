@@ -359,7 +359,7 @@ impl<'stmt> std::fmt::Debug for Row<'stmt> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dm = f.debug_map();
         for c in 0..self.stmt.column_count() {
-            let name = self.stmt.column_name(c);
+            let name = self.stmt.column_name(c).expect("valid column index");
             dm.key(&name);
             let value = self.get_ref(c);
             match value {
@@ -611,6 +611,31 @@ mod tests {
             let fallible_iterator_last = stmt.query([])?.map(|_| Ok(())).last();
             assert!(fallible_iterator_last.is_err());
         }
+        Ok(())
+    }
+
+    #[test]
+    fn as_ref() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        let mut stmt = conn.prepare("SELECT 'Lisa' as name, 1 as id")?;
+        let rows = stmt.query([])?;
+        assert_eq!(rows.as_ref().unwrap().column_count(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn debug() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        let mut stmt = conn.prepare(
+            "SELECT 'Lisa' as name, 1 as id, 3.14 as pi, X'53514C697465' as blob, NULL as void",
+        )?;
+        let mut rows = stmt.query([])?;
+        let row = rows.next()?.unwrap();
+        let s = format!("{:?}", row);
+        assert_eq!(
+            s,
+            r#"{"name": (Text, "Lisa"), "id": (Integer, 1), "pi": (Real, 3.14), "blob": (Blob, 6), "void": (Null, ())}"#
+        );
         Ok(())
     }
 }
