@@ -143,13 +143,13 @@ impl Value {
 
 #[cfg(test)]
 mod test {
-    use crate::types::Type;
     use super::Value;
+    use crate::types::Type;
 
     #[test]
     fn from() {
         assert_eq!(Value::from(2f32), Value::Real(2f64));
-        assert_eq!(Value::from(3.14), Value::Real(3.14));
+        assert_eq!(Value::from(3.), Value::Real(3.));
         assert_eq!(Value::from(vec![0u8]), Value::Blob(vec![0u8]));
     }
 
