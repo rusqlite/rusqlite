@@ -4,7 +4,7 @@ use std::os::raw::{c_char, c_int};
 use rusqlite::ffi;
 use rusqlite::functions::FunctionFlags;
 use rusqlite::types::{ToSqlOutput, Value};
-use rusqlite::{to_sqlite_error, Connection, Result};
+use rusqlite::{Connection, Result};
 
 /// # build
 /// ```sh
