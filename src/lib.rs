@@ -952,15 +952,31 @@ impl Connection {
         })
     }
 
-    /// Like SQLITE_EXTENSION_INIT2 macro
+    /// Helper to register an SQLite extension written in Rust.
+    /// For [persistent](https://sqlite.org/loadext.html#persistent_loadable_extensions) extension,
+    /// `init` should returns `Ok(true)`.
+    /// # Safety
+    /// * Results are undefined if `init` does not just register features.
     #[cfg(feature = "loadable_extension")]
     #[cfg_attr(docsrs, doc(cfg(feature = "loadable_extension")))]
     pub unsafe fn extension_init2(
         db: *mut ffi::sqlite3,
+        pz_err_msg: *mut *mut c_char,
         p_api: *mut ffi::sqlite3_api_routines,
-    ) -> Result<Connection> {
-        ffi::rusqlite_extension_init2(p_api)?;
-        Connection::from_handle(db)
+        init: fn(Connection) -> Result<bool>,
+    ) -> c_int {
+        if p_api.is_null() {
+            return ffi::SQLITE_ERROR;
+        }
+        match ffi::rusqlite_extension_init2(p_api)
+            .map_err(Error::from)
+            .and(Connection::from_handle(db))
+            .and_then(init)
+        {
+            Err(err) => to_sqlite_error(&err, pz_err_msg),
+            Ok(true) => ffi::SQLITE_OK_LOAD_PERMANENTLY,
+            _ => ffi::SQLITE_OK,
+        }
     }
 
     /// Create a `Connection` from a raw owned handle.
