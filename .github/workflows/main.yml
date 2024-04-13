@@ -39,20 +39,20 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       # This has a matcher for test panics, so we use it even though elsewhere
       # we use actions-rs/toolchain.
-      - uses: hecrj/setup-rust-action@v1
+      - uses: hecrj/setup-rust-action@v2
         with:
           rust-version: stable${{ matrix.host }}
           targets: ${{ matrix.target }}
-      # The `{ sharedKey: ... }` allows different actions to share the cache.
+      # The `{ shared-key: ... }` allows different actions to share the cache.
       # We're using a `fullBuild` key mostly as a "this needs to do the
       # complete" that needs to do the complete build (that is, including
       # `--features 'bundled-full session buildtime_bindgen preupdate_hook'`), which is very
       # slow, and has several deps.
       - uses: Swatinem/rust-cache@v2
-        with: { sharedKey: fullBuild }
+        with: { shared-key: fullBuild }
 
       - run: cargo build --features bundled --workspace --all-targets --verbose
       - run: cargo test --features bundled --workspace --all-targets --verbose
@@ -93,15 +93,15 @@ jobs:
         # TODO: find a way to test this on windows :(
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       # This has a matcher for test panics, so we use it even though elsewhere
       # we use actions-rs/toolchain.
-      - uses: hecrj/setup-rust-action@v1
+      - uses: hecrj/setup-rust-action@v2
         with:
           rust-version: stable${{ matrix.host }}
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-        with: { sharedKey: fullBuild }
+        with: { shared-key: fullBuild }
 
       - run: cargo test --features 'bundled-sqlcipher' --workspace --all-targets --verbose
       - run: cargo test --features 'bundled-sqlcipher' --workspace --doc --verbose
@@ -126,8 +126,8 @@ jobs:
     name: Test with sqlcipher
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@v4
+      - uses: hecrj/setup-rust-action@v2
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get install sqlcipher libsqlcipher-dev
       - run: sqlcipher --version
@@ -139,9 +139,9 @@ jobs:
     name: Address Sanitizer
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       # Need nightly rust.
-      - uses: hecrj/setup-rust-action@v1
+      - uses: hecrj/setup-rust-action@v2
         with:
           rust-version: nightly
           components: rust-src
@@ -163,8 +163,8 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@v4
+      - uses: hecrj/setup-rust-action@v2
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
@@ -177,8 +177,8 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@v4
+      - uses: hecrj/setup-rust-action@v2
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
@@ -188,10 +188,10 @@ jobs:
     name: Docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: hecrj/setup-rust-action@v1
+      - uses: actions/checkout@v4
+      - uses: hecrj/setup-rust-action@v2
       - uses: Swatinem/rust-cache@v2
-        with: { sharedKey: fullBuild }
+        with: { shared-key: fullBuild }
       - run: cargo doc --features 'bundled-full session buildtime_bindgen preupdate_hook' --no-deps
         env: { RUSTDOCFLAGS: -Dwarnings }
 
@@ -199,7 +199,7 @@ jobs:
     name: Generate code coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: 'llvm-tools-preview'
