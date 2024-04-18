@@ -23,10 +23,10 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 
-pub const SQLITE_VERSION: &[u8; 7] = b"3.45.2\0";
-pub const SQLITE_VERSION_NUMBER: i32 = 3045002;
+pub const SQLITE_VERSION: &[u8; 7] = b"3.45.3\0";
+pub const SQLITE_VERSION_NUMBER: i32 = 3045003;
 pub const SQLITE_SOURCE_ID: &[u8; 85] =
-    b"2024-03-12 11:06:23 d8cd6d49b46a395b13955387d05e9e1a2a47e54fb99f3c9b59835bbefad6af77\0";
+    b"2024-04-15 13:34:05 8653b758870e6ef0c98d46b3ace27849054af85da891eb121e9aaa537f1e8355\0";
 pub const SQLITE_OK: i32 = 0;
 pub const SQLITE_ERROR: i32 = 1;
 pub const SQLITE_INTERNAL: i32 = 2;
@@ -261,6 +261,7 @@ pub const SQLITE_CONFIG_STMTJRNL_SPILL: i32 = 26;
 pub const SQLITE_CONFIG_SMALL_MALLOC: i32 = 27;
 pub const SQLITE_CONFIG_SORTERREF_SIZE: i32 = 28;
 pub const SQLITE_CONFIG_MEMDB_MAXSIZE: i32 = 29;
+pub const SQLITE_CONFIG_ROWID_IN_VIEW: i32 = 30;
 pub const SQLITE_DBCONFIG_MAINDBNAME: i32 = 1000;
 pub const SQLITE_DBCONFIG_LOOKASIDE: i32 = 1001;
 pub const SQLITE_DBCONFIG_ENABLE_FKEY: i32 = 1002;
