@@ -167,7 +167,14 @@ mod build_bundled {
                         }
                     }
                     Some(openssl_dir) => {
-                        let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
+                        let lib_dir = lib_dir.unwrap_or_else(|| {
+                            // OpenSSL 3.0 now puts it's libraries in lib64/ by default,
+                            // check for both it and lib/.
+                            if openssl_dir.join("lib64").exists() {
+                                return openssl_dir.join("lib64");
+                            }
+                            openssl_dir.join("lib")
+                        });
                         let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
 
                         assert!(
