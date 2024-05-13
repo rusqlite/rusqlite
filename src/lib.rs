@@ -579,8 +579,8 @@ impl Connection {
     /// # use rusqlite::{Connection};
     /// fn update_rows(conn: &Connection) {
     ///     match conn.execute("UPDATE foo SET bar = 'baz' WHERE qux = ?1", [1i32]) {
-    ///         Ok(updated) => println!("{} rows were updated", updated),
-    ///         Err(err) => println!("update failed: {}", err),
+    ///         Ok(updated) => println!("{updated} rows were updated"),
+    ///         Err(err) => println!("update failed: {err}"),
     ///     }
     /// }
     /// ```
@@ -594,8 +594,8 @@ impl Connection {
     ///         "UPDATE foo SET bar = 'baz' WHERE qux = ?1 AND quux = ?2",
     ///         params![1i32, 1.5f64],
     ///     ) {
-    ///         Ok(updated) => println!("{} rows were updated", updated),
-    ///         Err(err) => println!("update failed: {}", err),
+    ///         Ok(updated) => println!("{updated} rows were updated"),
+    ///         Err(err) => println!("update failed: {err}"),
     ///     }
     /// }
     /// ```

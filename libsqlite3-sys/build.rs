@@ -196,7 +196,7 @@ mod build_bundled {
             } else if use_openssl {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 let lib_name = if is_windows { "libcrypto" } else { "crypto" };
-                println!("cargo:rustc-link-lib=dylib={}", lib_name);
+                println!("cargo:rustc-link-lib=dylib={lib_name}");
                 println!("cargo:rustc-link-search={}", lib_dir.to_string_lossy());
             } else if is_apple {
                 cfg.flag("-DSQLCIPHER_CRYPTO_CC");
@@ -293,7 +293,7 @@ mod build_bundled {
                 } else if extra.starts_with("SQLITE_") {
                     cfg.flag(&format!("-D{extra}"));
                 } else {
-                    panic!("Don't understand {} in LIBSQLITE3_FLAGS", extra);
+                    panic!("Don't understand {extra} in LIBSQLITE3_FLAGS");
                 }
             }
         }
@@ -414,6 +414,7 @@ mod build_linked {
             _ => "dylib",
         }
     }
+
     // Prints the necessary cargo link commands and returns the path to the header.
     fn find_sqlite() -> HeaderLocation {
         let link_lib = lib_name();
@@ -625,7 +626,7 @@ mod bindings {
         let bindings = bindings
             .layout_tests(false)
             .generate()
-            .unwrap_or_else(|_| panic!("could not run bindgen on header {}", header));
+            .unwrap_or_else(|_| panic!("could not run bindgen on header {header}"));
 
         #[cfg(feature = "loadable_extension")]
         {
@@ -636,12 +637,12 @@ mod bindings {
             let mut output = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
             super::loadable_extension::generate_functions(&mut output);
             std::fs::write(out_path, output.as_bytes())
-                .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
+                .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
         }
         #[cfg(not(feature = "loadable_extension"))]
         bindings
             .write_to_file(out_path)
-            .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
+            .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
     }
 }
 
