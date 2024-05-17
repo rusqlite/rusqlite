@@ -14,7 +14,7 @@
 //!     // Assume my_csv.csv
 //!     let schema = "
 //!         CREATE VIRTUAL TABLE my_csv_data
-//!         USING csv(filename = 'my_csv.csv')
+//!         USING csv(filename='my_csv.csv')
 //!     ";
 //!     db.execute_batch(schema)?;
 //!     // Now the `my_csv_data` (virtual) table can be queried as normal...
