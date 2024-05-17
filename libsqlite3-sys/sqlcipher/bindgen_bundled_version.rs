@@ -23,10 +23,10 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 
-pub const SQLITE_VERSION: &[u8; 7] = b"3.44.2\0";
-pub const SQLITE_VERSION_NUMBER: i32 = 3044002;
+pub const SQLITE_VERSION: &[u8; 7] = b"3.45.3\0";
+pub const SQLITE_VERSION_NUMBER: i32 = 3045003;
 pub const SQLITE_SOURCE_ID: &[u8; 85] =
-    b"2023-11-24 11:41:44 ebead0e7230cd33bcec9f95d2183069565b9e709bf745c9b5db65cc0cbf9alt1\0";
+    b"2024-04-15 13:34:05 8653b758870e6ef0c98d46b3ace27849054af85da891eb121e9aaa537f1ealt1\0";
 pub const SQLITE_OK: i32 = 0;
 pub const SQLITE_ERROR: i32 = 1;
 pub const SQLITE_INTERNAL: i32 = 2;
@@ -261,6 +261,7 @@ pub const SQLITE_CONFIG_STMTJRNL_SPILL: i32 = 26;
 pub const SQLITE_CONFIG_SMALL_MALLOC: i32 = 27;
 pub const SQLITE_CONFIG_SORTERREF_SIZE: i32 = 28;
 pub const SQLITE_CONFIG_MEMDB_MAXSIZE: i32 = 29;
+pub const SQLITE_CONFIG_ROWID_IN_VIEW: i32 = 30;
 pub const SQLITE_DBCONFIG_MAINDBNAME: i32 = 1000;
 pub const SQLITE_DBCONFIG_LOOKASIDE: i32 = 1001;
 pub const SQLITE_DBCONFIG_ENABLE_FKEY: i32 = 1002;
@@ -406,6 +407,7 @@ pub const SQLITE_TESTCTRL_PENDING_BYTE: i32 = 11;
 pub const SQLITE_TESTCTRL_ASSERT: i32 = 12;
 pub const SQLITE_TESTCTRL_ALWAYS: i32 = 13;
 pub const SQLITE_TESTCTRL_RESERVE: i32 = 14;
+pub const SQLITE_TESTCTRL_JSON_SELFCHECK: i32 = 14;
 pub const SQLITE_TESTCTRL_OPTIMIZATIONS: i32 = 15;
 pub const SQLITE_TESTCTRL_ISKEYWORD: i32 = 16;
 pub const SQLITE_TESTCTRL_SCRATCHMALLOC: i32 = 17;
@@ -3367,6 +3369,24 @@ pub struct Fts5ExtensionApi {
             arg2: *mut Fts5PhraseIter,
             piCol: *mut ::std::os::raw::c_int,
         ),
+    >,
+    pub xQueryToken: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut Fts5Context,
+            iPhrase: ::std::os::raw::c_int,
+            iToken: ::std::os::raw::c_int,
+            ppToken: *mut *const ::std::os::raw::c_char,
+            pnToken: *mut ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
+    >,
+    pub xInstToken: ::std::option::Option<
+        unsafe extern "C" fn(
+            arg1: *mut Fts5Context,
+            iIdx: ::std::os::raw::c_int,
+            iToken: ::std::os::raw::c_int,
+            arg2: *mut *const ::std::os::raw::c_char,
+            arg3: *mut ::std::os::raw::c_int,
+        ) -> ::std::os::raw::c_int,
     >,
 }
 #[repr(C)]
