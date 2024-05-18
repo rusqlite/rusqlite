@@ -922,7 +922,7 @@ pub fn parameter(c_slice: &[u8]) -> Result<(&str, &str)> {
     if let Some(key) = split.next() {
         if let Some(value) = split.next() {
             let param = key.trim();
-            let value = dequote(value);
+            let value = dequote(value.trim());
             return Ok((param, value));
         }
     }
