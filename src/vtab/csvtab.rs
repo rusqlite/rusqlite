@@ -350,7 +350,9 @@ mod test {
     fn test_csv_module() -> Result<()> {
         let db = Connection::open_in_memory()?;
         csvtab::load_module(&db)?;
-        db.execute_batch("CREATE VIRTUAL TABLE vtab USING csv(filename='test.csv', header=yes)")?;
+        db.execute_batch(
+            "CREATE VIRTUAL TABLE vtab USING csv(filename = 'test.csv', header = yes)",
+        )?;
 
         {
             let mut s = db.prepare("SELECT rowid, * FROM vtab")?;
