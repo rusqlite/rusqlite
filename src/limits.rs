@@ -148,17 +148,11 @@ mod test {
         db.set_limit(Limit::SQLITE_LIMIT_VARIABLE_NUMBER, 99);
         assert_eq!(99, db.limit(Limit::SQLITE_LIMIT_VARIABLE_NUMBER));
 
-        // SQLITE_LIMIT_TRIGGER_DEPTH was added in SQLite 3.6.18.
-        if crate::version_number() >= 3_006_018 {
-            db.set_limit(Limit::SQLITE_LIMIT_TRIGGER_DEPTH, 32);
-            assert_eq!(32, db.limit(Limit::SQLITE_LIMIT_TRIGGER_DEPTH));
-        }
+        db.set_limit(Limit::SQLITE_LIMIT_TRIGGER_DEPTH, 32);
+        assert_eq!(32, db.limit(Limit::SQLITE_LIMIT_TRIGGER_DEPTH));
 
-        // SQLITE_LIMIT_WORKER_THREADS was added in SQLite 3.8.7.
-        if crate::version_number() >= 3_008_007 {
-            db.set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, 2);
-            assert_eq!(2, db.limit(Limit::SQLITE_LIMIT_WORKER_THREADS));
-        }
+        db.set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, 2);
+        assert_eq!(2, db.limit(Limit::SQLITE_LIMIT_WORKER_THREADS));
         Ok(())
     }
 }

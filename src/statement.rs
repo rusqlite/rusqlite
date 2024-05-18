@@ -443,7 +443,8 @@ impl Statement<'_> {
     #[inline]
     pub fn parameter_name(&self, index: usize) -> Option<&'_ str> {
         self.stmt.bind_parameter_name(index as i32).map(|name| {
-            str::from_utf8(name.to_bytes()).expect("Invalid UTF-8 sequence in parameter name")
+            name.to_str()
+                .expect("Invalid UTF-8 sequence in parameter name")
         })
     }
 
@@ -768,7 +769,7 @@ impl fmt::Debug for Statement<'_> {
         let sql = if self.stmt.is_null() {
             Ok("")
         } else {
-            str::from_utf8(self.stmt.sql().unwrap().to_bytes())
+            self.stmt.sql().unwrap().to_str()
         };
         f.debug_struct("Statement")
             .field("conn", self.conn)

@@ -487,8 +487,8 @@ mod build_linked {
 }
 
 #[cfg(not(feature = "buildtime_bindgen"))]
+#[allow(dead_code)]
 mod bindings {
-    #![allow(dead_code)]
     use super::HeaderLocation;
 
     use std::path::Path;
@@ -554,8 +554,8 @@ mod bindings {
         xEntryPoint: ::std::option::Option<
             unsafe extern "C" fn(
                 db: *mut sqlite3,
-                pzErrMsg: *mut *const ::std::os::raw::c_char,
-                pThunk: *const sqlite3_api_routines,
+                pzErrMsg: *mut *mut ::std::os::raw::c_char,
+                _: *const sqlite3_api_routines,
             ) -> ::std::os::raw::c_int,
         >,
     ) -> ::std::os::raw::c_int;
@@ -568,13 +568,19 @@ mod bindings {
         xEntryPoint: ::std::option::Option<
             unsafe extern "C" fn(
                 db: *mut sqlite3,
-                pzErrMsg: *mut *const ::std::os::raw::c_char,
-                pThunk: *const sqlite3_api_routines,
+                pzErrMsg: *mut *mut ::std::os::raw::c_char,
+                _: *const sqlite3_api_routines,
             ) -> ::std::os::raw::c_int,
         >,
     ) -> ::std::os::raw::c_int;
 }"#,
-                );
+                )
+                .blocklist_function(".*16.*")
+                .blocklist_function("sqlite3_close_v2")
+                .blocklist_function("sqlite3_create_collation")
+                .blocklist_function("sqlite3_create_function")
+                .blocklist_function("sqlite3_create_module")
+                .blocklist_function("sqlite3_prepare");
         }
 
         if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
@@ -671,13 +677,20 @@ mod loadable_extension {
             let ident = field.ident.expect("unnamed field");
             let span = ident.span();
             let name = ident.to_string();
-            if name == "vmprintf" || name == "xvsnprintf" || name == "str_vappendf" {
+            if name.contains("16") {
+                continue; // skip UTF-16 api as rust uses UTF-8
+            } else if name == "vmprintf" || name == "xvsnprintf" || name == "str_vappendf" {
                 continue; // skip va_list
             } else if name == "aggregate_count"
                 || name == "expired"
                 || name == "global_recover"
                 || name == "thread_cleanup"
                 || name == "transfer_bindings"
+                || name == "create_collation"
+                || name == "create_function"
+                || name == "create_module"
+                || name == "prepare"
+                || name == "close_v2"
             {
                 continue; // omit deprecated
             }

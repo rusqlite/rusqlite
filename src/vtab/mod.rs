@@ -759,10 +759,9 @@ impl Values<'_> {
             None
         } else {
             Some(unsafe {
-                let rc = array::Array::from_raw(ptr as *const Vec<Value>);
-                let array = rc.clone();
-                array::Array::into_raw(rc); // don't consume it
-                array
+                let ptr = ptr as *const Vec<Value>;
+                array::Array::increment_strong_count(ptr); // don't consume it
+                array::Array::from_raw(ptr)
             })
         }
     }
@@ -1081,12 +1080,12 @@ where
     }
 }
 
-unsafe extern "C" fn rust_open<'vtab, T: 'vtab>(
+unsafe extern "C" fn rust_open<'vtab, T>(
     vtab: *mut ffi::sqlite3_vtab,
     pp_cursor: *mut *mut ffi::sqlite3_vtab_cursor,
 ) -> c_int
 where
-    T: VTab<'vtab>,
+    T: VTab<'vtab> + 'vtab,
 {
     let vt = vtab.cast::<T>();
     match (*vt).open() {
@@ -1187,14 +1186,14 @@ where
     }
 }
 
-unsafe extern "C" fn rust_update<'vtab, T: 'vtab>(
+unsafe extern "C" fn rust_update<'vtab, T>(
     vtab: *mut ffi::sqlite3_vtab,
     argc: c_int,
     argv: *mut *mut ffi::sqlite3_value,
     p_rowid: *mut ffi::sqlite3_int64,
 ) -> c_int
 where
-    T: UpdateVTab<'vtab>,
+    T: UpdateVTab<'vtab> + 'vtab,
 {
     assert!(argc >= 1);
     let args = slice::from_raw_parts_mut(argv, argc as usize);

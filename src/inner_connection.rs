@@ -4,7 +4,6 @@ use std::os::raw::{c_char, c_int};
 use std::path::Path;
 use std::ptr;
 use std::str;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use super::ffi;
@@ -13,7 +12,7 @@ use super::{Connection, InterruptHandle, OpenFlags, PrepFlags, Result};
 use crate::error::{error_from_handle, error_from_sqlite_code, error_with_offset, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
-use crate::version::version_number;
+use crate::version_number;
 
 pub struct InnerConnection {
     pub db: *mut ffi::sqlite3,
@@ -34,6 +33,8 @@ pub struct InnerConnection {
     pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
     pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
+    #[cfg(feature = "preupdate_hook")]
+    pub free_preupdate_hook: Option<unsafe fn(*mut ::std::os::raw::c_void)>,
     owned: bool,
 }
 
@@ -56,35 +57,30 @@ impl InnerConnection {
             progress_handler: None,
             #[cfg(feature = "hooks")]
             authorizer: None,
+            #[cfg(feature = "preupdate_hook")]
+            free_preupdate_hook: None,
             owned,
         }
     }
 
     pub fn open_with_flags(
         c_path: &CStr,
-        flags: OpenFlags,
+        mut flags: OpenFlags,
         vfs: Option<&CStr>,
     ) -> Result<InnerConnection> {
         ensure_safe_sqlite_threading_mode()?;
 
-        // Replicate the check for sane open flags from SQLite, because the check in
-        // SQLite itself wasn't added until version 3.7.3.
-        debug_assert_eq!(1 << OpenFlags::SQLITE_OPEN_READ_ONLY.bits(), 0x02);
-        debug_assert_eq!(1 << OpenFlags::SQLITE_OPEN_READ_WRITE.bits(), 0x04);
-        debug_assert_eq!(
-            1 << (OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE).bits(),
-            0x40
-        );
-        if (1 << (flags.bits() & 0x7)) & 0x46 == 0 {
-            return Err(Error::SqliteFailure(
-                ffi::Error::new(ffi::SQLITE_MISUSE),
-                None,
-            ));
-        }
-
         let z_vfs = match vfs {
             Some(c_vfs) => c_vfs.as_ptr(),
             None => ptr::null(),
+        };
+
+        // turn on extended results code before opening database to have a better diagnostic if a failure happens
+        let exrescode = if version_number() >= 3_037_000 {
+            flags |= OpenFlags::SQLITE_OPEN_EXRESCODE;
+            true
+        } else {
+            false // flag SQLITE_OPEN_EXRESCODE is ignored by SQLite version < 3.37.0
         };
 
         unsafe {
@@ -116,7 +112,9 @@ impl InnerConnection {
             }
 
             // attempt to turn on extended results code; don't fail if we can't.
-            ffi::sqlite3_extended_result_codes(db, 1);
+            if !exrescode {
+                ffi::sqlite3_extended_result_codes(db, 1);
+            }
 
             let r = ffi::sqlite3_busy_timeout(db, 5000);
             if r != ffi::SQLITE_OK {
@@ -154,6 +152,7 @@ impl InnerConnection {
             return Ok(());
         }
         self.remove_hooks();
+        self.remove_preupdate_hook();
         let mut shared_handle = self.interrupt_lock.lock().unwrap();
         assert!(
             !shared_handle.is_null(),
@@ -227,7 +226,6 @@ impl InnerConnection {
         let mut c_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
         let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
         let mut c_tail: *const c_char = ptr::null();
-        // TODO sqlite3_prepare_v3 (https://sqlite.org/c3ref/c_prepare_normalize.html) // 3.20.0, #728
         #[cfg(not(feature = "unlock_notify"))]
         let r = unsafe { self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail) };
         #[cfg(feature = "unlock_notify")]
@@ -306,6 +304,18 @@ impl InnerConnection {
     }
 
     #[inline]
+    pub fn total_changes(&self) -> u64 {
+        #[cfg(not(feature = "modern_sqlite"))]
+        unsafe {
+            ffi::sqlite3_total_changes(self.db()) as u64
+        }
+        #[cfg(feature = "modern_sqlite")] // 3.37.0
+        unsafe {
+            ffi::sqlite3_total_changes64(self.db()) as u64
+        }
+    }
+
+    #[inline]
     pub fn is_autocommit(&self) -> bool {
         unsafe { ffi::sqlite3_get_autocommit(self.db()) != 0 }
     }
@@ -331,6 +341,10 @@ impl InnerConnection {
     #[cfg(not(feature = "hooks"))]
     #[inline]
     fn remove_hooks(&mut self) {}
+
+    #[cfg(not(feature = "preupdate_hook"))]
+    #[inline]
+    fn remove_preupdate_hook(&mut self) {}
 
     pub fn db_readonly(&self, db_name: super::DatabaseName<'_>) -> Result<bool> {
         let name = db_name.as_cstring()?;
@@ -380,6 +394,11 @@ impl InnerConnection {
     pub fn release_memory(&self) -> Result<()> {
         self.decode_result(unsafe { ffi::sqlite3_db_release_memory(self.db) })
     }
+
+    #[cfg(feature = "modern_sqlite")] // 3.41.0
+    pub fn is_interrupted(&self) -> bool {
+        unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
+    }
 }
 
 impl Drop for InnerConnection {
@@ -389,11 +408,6 @@ impl Drop for InnerConnection {
         self.close();
     }
 }
-
-#[cfg(not(any(target_arch = "wasm32", feature = "loadable_extension")))]
-static SQLITE_INIT: std::sync::Once = std::sync::Once::new();
-
-pub static BYPASS_SQLITE_INIT: AtomicBool = AtomicBool::new(false);
 
 // threading mode checks are not necessary (and do not work) on target
 // platforms that do not have threading (such as webassembly)
@@ -412,51 +426,21 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
     // Now we know SQLite is _capable_ of being in Multi-thread of Serialized mode,
     // but it's possible someone configured it to be in Single-thread mode
     // before calling into us. That would mean we're exposing an unsafe API via
-    // a safe one (in Rust terminology), which is no good. We have two options
-    // to protect against this, depending on the version of SQLite we're linked
-    // with:
+    // a safe one (in Rust terminology).
     //
-    // 1. If we're on 3.7.0 or later, we can ask SQLite for a mutex and check for
-    //    the magic value 8. This isn't documented, but it's what SQLite
-    //    returns for its mutex allocation function in Single-thread mode.
-    // 2. If we're prior to SQLite 3.7.0, AFAIK there's no way to check the
-    //    threading mode. The check we perform for >= 3.7.0 will segfault.
-    //    Instead, we insist on being able to call sqlite3_config and
-    //    sqlite3_initialize ourself, ensuring we know the threading
-    //    mode. This will fail if someone else has already initialized SQLite
-    //    even if they initialized it safely. That's not ideal either, which is
-    //    why we expose bypass_sqlite_initialization    above.
-    if version_number() >= 3_007_000 {
-        const SQLITE_SINGLETHREADED_MUTEX_MAGIC: usize = 8;
-        let is_singlethreaded = unsafe {
-            let mutex_ptr = ffi::sqlite3_mutex_alloc(0);
-            let is_singlethreaded = mutex_ptr as usize == SQLITE_SINGLETHREADED_MUTEX_MAGIC;
-            ffi::sqlite3_mutex_free(mutex_ptr);
-            is_singlethreaded
-        };
-        if is_singlethreaded {
-            Err(Error::SqliteSingleThreadedMode)
-        } else {
-            Ok(())
-        }
+    // We can ask SQLite for a mutex and check for
+    // the magic value 8. This isn't documented, but it's what SQLite
+    // returns for its mutex allocation function in Single-thread mode.
+    const SQLITE_SINGLETHREADED_MUTEX_MAGIC: usize = 8;
+    let is_singlethreaded = unsafe {
+        let mutex_ptr = ffi::sqlite3_mutex_alloc(0);
+        let is_singlethreaded = mutex_ptr as usize == SQLITE_SINGLETHREADED_MUTEX_MAGIC;
+        ffi::sqlite3_mutex_free(mutex_ptr);
+        is_singlethreaded
+    };
+    if is_singlethreaded {
+        Err(Error::SqliteSingleThreadedMode)
     } else {
-        #[cfg(not(feature = "loadable_extension"))]
-        SQLITE_INIT.call_once(|| {
-            use std::sync::atomic::Ordering;
-            if BYPASS_SQLITE_INIT.load(Ordering::Relaxed) {
-                return;
-            }
-
-            unsafe {
-                assert!(ffi::sqlite3_config(ffi::SQLITE_CONFIG_MULTITHREAD) == ffi::SQLITE_OK && ffi::sqlite3_initialize() == ffi::SQLITE_OK,
-                        "Could not ensure safe initialization of SQLite.\n\
-                         To fix this, either:\n\
-                         * Upgrade SQLite to at least version 3.7.0\n\
-                         * Ensure that SQLite has been initialized in Multi-thread or Serialized mode and call\n\
-                           rusqlite::bypass_sqlite_initialization() prior to your first connection attempt."
-                    );
-            }
-        });
         Ok(())
     }
 }
