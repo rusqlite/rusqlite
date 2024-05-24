@@ -156,25 +156,34 @@ mod build_bundled {
             let (lib_dir, inc_dir) = match (lib_dir, inc_dir) {
                 (Some(lib_dir), Some(inc_dir)) => {
                     use_openssl = true;
-                    (lib_dir, inc_dir)
+                    (vec![lib_dir], inc_dir)
                 }
                 (lib_dir, inc_dir) => match find_openssl_dir(&host, &target) {
                     None => {
                         if is_windows && !cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
                             panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
                         } else {
-                            (PathBuf::new(), PathBuf::new())
+                            (vec![PathBuf::new()], PathBuf::new())
                         }
                     }
                     Some(openssl_dir) => {
-                        let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
+                        let lib_dir = lib_dir.map(|d| vec![d]).unwrap_or_else(|| {
+                            let mut lib_dirs = vec![];
+                            // OpenSSL 3.0 now puts it's libraries in lib64/ by default,
+                            // check for both it and lib/.
+                            if openssl_dir.join("lib64").exists() {
+                                lib_dirs.push(openssl_dir.join("lib64"));
+                            }
+                            if openssl_dir.join("lib").exists() {
+                                lib_dirs.push(openssl_dir.join("lib"));
+                            }
+                            lib_dirs
+                        });
                         let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
 
-                        assert!(
-                            Path::new(&lib_dir).exists(),
-                            "OpenSSL library directory does not exist: {}",
-                            lib_dir.to_string_lossy()
-                        );
+                        if !lib_dir.iter().all(|p| p.exists()) {
+                            panic!("OpenSSL library directory does not exist: {:?}", lib_dir);
+                        }
 
                         if !Path::new(&inc_dir).exists() {
                             panic!(
@@ -197,7 +206,9 @@ mod build_bundled {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 let lib_name = if is_windows { "libcrypto" } else { "crypto" };
                 println!("cargo:rustc-link-lib=dylib={}", lib_name);
-                println!("cargo:rustc-link-search={}", lib_dir.to_string_lossy());
+                for lib_dir_item in lib_dir.iter() {
+                    println!("cargo:rustc-link-search={}", lib_dir_item.to_string_lossy());
+                }
             } else if is_apple {
                 cfg.flag("-DSQLCIPHER_CRYPTO_CC");
                 println!("cargo:rustc-link-lib=framework=Security");
