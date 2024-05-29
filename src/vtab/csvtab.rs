@@ -22,6 +22,7 @@
 //! }
 //! ```
 use std::fs::File;
+use std::io::Cursor;
 use std::marker::PhantomData;
 use std::os::raw::c_int;
 use std::path::Path;
@@ -58,6 +59,7 @@ struct CsvTab {
     base: ffi::sqlite3_vtab,
     /// Name of the CSV file
     filename: String,
+    data: String,
     has_headers: bool,
     delimiter: u8,
     quote: u8,
@@ -72,6 +74,14 @@ impl CsvTab {
             .delimiter(self.delimiter)
             .quote(self.quote)
             .from_path(&self.filename)
+    }
+
+    fn data_reader(&self) -> csv::Reader<Cursor<String>> {
+        csv::ReaderBuilder::new()
+            .has_headers(self.has_headers)
+            .delimiter(self.delimiter)
+            .quote(self.quote)
+            .from_reader(Cursor::new(self.data.to_owned()))
     }
 
     fn parse_byte(arg: &str) -> Option<u8> {
@@ -99,6 +109,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
         let mut vtab = CsvTab {
             base: ffi::sqlite3_vtab::default(),
             filename: "".to_owned(),
+            data: "".to_owned(),
             has_headers: false,
             delimiter: b',',
             quote: b'"',
@@ -116,6 +127,9 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                         return Err(Error::ModuleError(format!("file '{value}' does not exist")));
                     }
                     value.clone_into(&mut vtab.filename);
+                }
+                "data" => {
+                    vtab.data = value.to_owned();
                 }
                 "schema" => {
                     schema = Some(value.to_owned());
@@ -177,13 +191,19 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
             }
         }
 
-        if vtab.filename.is_empty() {
-            return Err(Error::ModuleError("no CSV file specified".to_owned()));
+        if vtab.filename.is_empty() && vtab.data.is_empty() {
+            return Err(Error::ModuleError(
+                "no CSV file or data specified".to_owned(),
+            ));
         }
 
         let mut cols: Vec<String> = Vec::new();
         if vtab.has_headers || (n_col.is_none() && schema.is_none()) {
-            let mut reader = vtab.reader()?;
+            let mut reader = if vtab.filename.is_empty() {
+                Reader::Data(vtab.data_reader())
+            } else {
+                Reader::File(vtab.reader()?)
+            };
             if vtab.has_headers {
                 {
                     let headers = reader.headers()?;
@@ -239,12 +259,60 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
     }
 
     fn open(&mut self) -> Result<CsvTabCursor<'_>> {
-        Ok(CsvTabCursor::new(self.reader()?))
+        if self.filename.is_empty() {
+            Ok(CsvTabCursor::new(Reader::Data(self.data_reader())))
+        } else {
+            Ok(CsvTabCursor::new(Reader::File(self.reader()?)))
+        }
     }
 }
 
 impl CreateVTab<'_> for CsvTab {
     const KIND: VTabKind = VTabKind::Default;
+}
+
+enum Reader {
+    File(csv::Reader<File>),
+    Data(csv::Reader<Cursor<String>>),
+}
+
+impl Reader {
+    fn headers(&mut self) -> csv::Result<&csv::StringRecord> {
+        match self {
+            Reader::File(reader) => reader.headers(),
+            Reader::Data(reader) => reader.headers(),
+        }
+    }
+    fn read_record(&mut self, record: &mut csv::StringRecord) -> csv::Result<bool> {
+        match self {
+            Reader::File(reader) => reader.read_record(record),
+            Reader::Data(reader) => reader.read_record(record),
+        }
+    }
+    fn read_byte_record(&mut self, record: &mut csv::ByteRecord) -> csv::Result<bool> {
+        match self {
+            Reader::File(reader) => reader.read_byte_record(record),
+            Reader::Data(reader) => reader.read_byte_record(record),
+        }
+    }
+    fn position(&self) -> &csv::Position {
+        match self {
+            Reader::File(reader) => reader.position(),
+            Reader::Data(reader) => reader.position(),
+        }
+    }
+    fn seek(&mut self, pos: csv::Position) -> csv::Result<()> {
+        match self {
+            Reader::File(reader) => reader.seek(pos),
+            Reader::Data(reader) => reader.seek(pos),
+        }
+    }
+    fn is_done(&self) -> bool {
+        match self {
+            Reader::File(reader) => reader.is_done(),
+            Reader::Data(reader) => reader.is_done(),
+        }
+    }
 }
 
 /// A cursor for the CSV virtual table
@@ -253,7 +321,7 @@ struct CsvTabCursor<'vtab> {
     /// Base class. Must be first
     base: ffi::sqlite3_vtab_cursor,
     /// The CSV reader object
-    reader: csv::Reader<File>,
+    reader: Reader,
     /// Current cursor position used as rowid
     row_number: usize,
     /// Values of the current row
@@ -263,7 +331,7 @@ struct CsvTabCursor<'vtab> {
 }
 
 impl CsvTabCursor<'_> {
-    fn new<'vtab>(reader: csv::Reader<File>) -> CsvTabCursor<'vtab> {
+    fn new<'vtab>(reader: Reader) -> CsvTabCursor<'vtab> {
         CsvTabCursor {
             base: ffi::sqlite3_vtab_cursor::default(),
             reader,
@@ -383,6 +451,30 @@ mod test {
             let mut rows = s.query([])?;
             let row = rows.next()?.unwrap();
             assert_eq!(row.get_unwrap::<_, i32>(0), 2);
+        }
+        db.execute_batch("DROP TABLE vtab")
+    }
+
+    #[test]
+    fn test_csv_data() -> Result<()> {
+        let data = std::fs::read_to_string("test.csv").expect("test.csv");
+        let db = Connection::open_in_memory()?;
+        csvtab::load_module(&db)?;
+        db.execute_batch(&format!(
+            "CREATE VIRTUAL TABLE vtab USING csv(data='{}', header=yes)",
+            data,
+        ))?;
+
+        {
+            let mut s = db.prepare("SELECT rowid, * FROM vtab")?;
+            {
+                let headers = s.column_names();
+                assert_eq!(vec!["rowid", "colA", "colB", "colC"], headers);
+            }
+
+            let ids: Result<Vec<i32>> = s.query([])?.map(|row| row.get::<_, i32>(0)).collect();
+            let sum = ids?.iter().sum::<i32>();
+            assert_eq!(sum, 15);
         }
         db.execute_batch("DROP TABLE vtab")
     }
