@@ -196,7 +196,7 @@ pub trait Params: Sealed {
 // forces people to use `params![...]` or `rusqlite::params_from_iter` for long
 // homogeneous lists of parameters. This is not that big of a deal, but is
 // unfortunate, especially because I mostly did it because I wanted a simple
-// syntax for no-params that didnt require importing -- the empty tuple fits
+// syntax for no-params that didn't require importing -- the empty tuple fits
 // that nicely, but I didn't think of it until much later.
 //
 // Admittedly, if we did have the generic impl, then we *wouldn't* support the
