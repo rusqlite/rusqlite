@@ -100,7 +100,7 @@ impl Transaction<'_> {
     /// transactions.
     ///
     /// Even though we don't mutate the connection, we take a `&mut Connection`
-    /// so as to prevent nested transactions on the same connection. For cases
+    /// to prevent nested transactions on the same connection. For cases
     /// where this is unacceptable, [`Transaction::new_unchecked`] is available.
     #[inline]
     pub fn new(conn: &mut Connection, behavior: TransactionBehavior) -> Result<Transaction<'_>> {
@@ -624,12 +624,12 @@ mod test {
                 let mut sp1 = tx.savepoint()?;
                 sp1.execute_batch("INSERT INTO foo VALUES(2)")?;
                 assert_current_sum(3, &sp1)?;
-                // will rollback sp1
+                // will roll back sp1
                 {
                     let mut sp2 = sp1.savepoint()?;
                     sp2.execute_batch("INSERT INTO foo VALUES(4)")?;
                     assert_current_sum(7, &sp2)?;
-                    // will rollback sp2
+                    // will roll back sp2
                     {
                         let sp3 = sp2.savepoint()?;
                         sp3.execute_batch("INSERT INTO foo VALUES(8)")?;

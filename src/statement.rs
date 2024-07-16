@@ -561,7 +561,7 @@ impl Statement<'_> {
     ///
     /// Any unbound parameters will have `NULL` as their value.
     ///
-    /// This should not generally be used outside of special cases, and
+    /// This should not generally be used outside special cases, and
     /// functions in the [`Statement::execute`] family should be preferred.
     ///
     /// # Failure
@@ -580,7 +580,7 @@ impl Statement<'_> {
     ///
     /// Any unbound parameters will have `NULL` as their value.
     ///
-    /// This should not generally be used outside of special cases, and
+    /// This should not generally be used outside special cases, and
     /// functions in the [`Statement::query`] family should be preferred.
     ///
     /// Note that if the SQL does not return results, [`Statement::raw_execute`]
@@ -1019,7 +1019,7 @@ mod test {
         let doubled_id: i32 = rows.next().unwrap()?;
         assert_eq!(1, doubled_id);
 
-        // second row should be Err
+        // second row should be an `Err`
         #[allow(clippy::match_wild_err_arm)]
         match rows.next().unwrap() {
             Ok(_) => panic!("invalid Ok"),

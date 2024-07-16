@@ -118,7 +118,7 @@ impl error::Error for Error {
 
 // Result codes.
 // Note: These are not public because our bindgen bindings export whichever
-// constants are present in the current version of SQLite. We repeat them here
+// constants are present in the current version of SQLite. We repeat them here,
 // so we don't have to worry about which version of SQLite added which
 // constants, and we only use them to implement code_to_str below.
 

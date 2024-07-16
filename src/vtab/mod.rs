@@ -137,7 +137,7 @@ macro_rules! module {
     };
 }
 
-/// Create an modifiable virtual table implementation.
+/// Create a modifiable virtual table implementation.
 ///
 /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
 #[must_use]

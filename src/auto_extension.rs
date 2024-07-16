@@ -1,4 +1,4 @@
-//! Automatic axtension loading
+//! Automatic extension loading
 use super::ffi;
 use crate::error::{check, to_sqlite_error};
 use crate::{Connection, Error, Result};
