@@ -1,18 +1,10 @@
 use crate::{Connection, Result};
 use std::ops::Deref;
 
-impl Connection {
-    /// Set the default transaction behavior for the connection.
-    pub fn set_transaction_behavior(&mut self, behavior: TransactionBehavior) {
-        self.transaction_behavior = behavior;
-    }
-}
-
 /// Options for transaction behavior. See [BEGIN
 /// TRANSACTION](http://www.sqlite.org/lang_transaction.html) for details.
 #[derive(Copy, Clone)]
 #[non_exhaustive]
-
 pub enum TransactionBehavior {
     /// DEFERRED means that the transaction does not actually start until the
     /// database is first accessed.
@@ -472,7 +464,7 @@ impl Connection {
     /// Will return `Err` if the underlying SQLite call fails. The specific
     /// error returned if transactions are nested is currently unspecified.
     pub fn unchecked_transaction(&self) -> Result<Transaction<'_>> {
-        Transaction::new_unchecked(self, TransactionBehavior::Deferred)
+        Transaction::new_unchecked(self, self.transaction_behavior)
     }
 
     /// Begin a new savepoint with the default behavior (DEFERRED).
@@ -525,6 +517,34 @@ impl Connection {
         db_name: Option<crate::DatabaseName<'_>>,
     ) -> Result<TransactionState> {
         self.db.borrow().txn_state(db_name)
+    }
+
+    /// Set the default transaction behavior for the connection.
+    ///
+    /// ## Note
+    ///
+    /// This will only apply to transactions initiated by [`transaction`](Connection::transaction)
+    /// or [`unchecked_transaction`](Connection::unchecked_transaction).
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result, TransactionBehavior};
+    /// # fn do_queries_part_1(_conn: &Connection) -> Result<()> { Ok(()) }
+    /// # fn do_queries_part_2(_conn: &Connection) -> Result<()> { Ok(()) }
+    /// fn perform_queries(conn: &mut Connection) -> Result<()> {
+    ///     conn.set_transaction_behavior(TransactionBehavior::Immediate);
+    ///
+    ///     let tx = conn.transaction()?;
+    ///
+    ///     do_queries_part_1(&tx)?; // tx causes rollback if this fails
+    ///     do_queries_part_2(&tx)?; // tx causes rollback if this fails
+    ///
+    ///     tx.commit()
+    /// }
+    /// ```
+    pub fn set_transaction_behavior(&mut self, behavior: TransactionBehavior) {
+        self.transaction_behavior = behavior;
     }
 }
 
