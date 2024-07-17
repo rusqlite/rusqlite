@@ -1,10 +1,18 @@
 use crate::{Connection, Result};
 use std::ops::Deref;
 
+impl Connection {
+    /// Set the default transaction behavior for the connection.
+    pub fn set_transaction_behavior(&mut self, behavior: TransactionBehavior) {
+        self.transaction_behavior = behavior;
+    }
+}
+
 /// Options for transaction behavior. See [BEGIN
 /// TRANSACTION](http://www.sqlite.org/lang_transaction.html) for details.
 #[derive(Copy, Clone)]
 #[non_exhaustive]
+
 pub enum TransactionBehavior {
     /// DEFERRED means that the transaction does not actually start until the
     /// database is first accessed.
@@ -414,7 +422,7 @@ impl Connection {
     /// Will return `Err` if the underlying SQLite call fails.
     #[inline]
     pub fn transaction(&mut self) -> Result<Transaction<'_>> {
-        Transaction::new(self, TransactionBehavior::Deferred)
+        Transaction::new(self, self.transaction_behavior)
     }
 
     /// Begin a new transaction with a specified behavior.
