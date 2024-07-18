@@ -377,7 +377,7 @@ impl DatabaseName<'_> {
 pub struct Connection {
     db: RefCell<InnerConnection>,
     cache: StatementCache,
-    transaction_behavior: TransactionBehavior
+    transaction_behavior: TransactionBehavior,
 }
 
 unsafe impl Send for Connection {}
@@ -474,7 +474,7 @@ impl Connection {
         InnerConnection::open_with_flags(&c_path, flags, None).map(|db| Connection {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
-            transaction_behavior: TransactionBehavior::Deferred
+            transaction_behavior: TransactionBehavior::Deferred,
         })
     }
 
@@ -499,7 +499,7 @@ impl Connection {
         InnerConnection::open_with_flags(&c_path, flags, Some(&c_vfs)).map(|db| Connection {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
-            transaction_behavior: TransactionBehavior::Deferred
+            transaction_behavior: TransactionBehavior::Deferred,
         })
     }
 
@@ -952,7 +952,7 @@ impl Connection {
         Ok(Connection {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
-            transaction_behavior: TransactionBehavior::Deferred
+            transaction_behavior: TransactionBehavior::Deferred,
         })
     }
 
@@ -1001,7 +1001,7 @@ impl Connection {
         Ok(Connection {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
-            transaction_behavior: TransactionBehavior::Deferred
+            transaction_behavior: TransactionBehavior::Deferred,
         })
     }
 
