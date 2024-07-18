@@ -954,7 +954,7 @@ impl Connection {
 
     /// Helper to register an SQLite extension written in Rust.
     /// For [persistent](https://sqlite.org/loadext.html#persistent_loadable_extensions) extension,
-    /// `init` should returns `Ok(true)`.
+    /// `init` should return `Ok(true)`.
     /// # Safety
     /// * Results are undefined if `init` does not just register features.
     #[cfg(feature = "loadable_extension")]
@@ -1000,7 +1000,7 @@ impl Connection {
         })
     }
 
-    /// Get access to a handle that can be used to interrupt long running
+    /// Get access to a handle that can be used to interrupt long-running
     /// queries from another thread.
     #[inline]
     pub fn get_interrupt_handle(&self) -> InterruptHandle {
@@ -1074,7 +1074,7 @@ impl Connection {
         }
     }
 
-    /// Determine whether or not an interrupt is currently in effect
+    /// Determine whether an interrupt is currently in effect
     #[cfg(feature = "modern_sqlite")] // 3.41.0
     #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn is_interrupted(&self) -> bool {
@@ -1165,7 +1165,7 @@ bitflags::bitflags! {
         /// If the database does not already exist, an error is returned.
         const SQLITE_OPEN_READ_ONLY = ffi::SQLITE_OPEN_READONLY;
         /// The database is opened for reading and writing if possible,
-        /// or reading only if the file is write protected by the operating system.
+        /// or reading only if the file is write-protected by the operating system.
         /// In either case the database must already exist, otherwise an error is returned.
         const SQLITE_OPEN_READ_WRITE = ffi::SQLITE_OPEN_READWRITE;
         /// The database is created if it does not already exist
@@ -1870,7 +1870,7 @@ mod test {
         db.close().unwrap();
         handle.interrupt();
 
-        // Look at it's internals to see if we cleared it out properly.
+        // Look at its internals to see if we cleared it out properly.
         let db_guard = handle.db_lock.lock().unwrap();
         assert!(db_guard.is_null());
         // It would be nice to test that we properly handle close/interrupt

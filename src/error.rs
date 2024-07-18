@@ -101,7 +101,7 @@ pub enum Error {
     #[allow(dead_code)]
     ModuleError(String),
 
-    /// An unwinding panic occurs in an UDF (user-defined function).
+    /// An unwinding panic occurs in a UDF (user-defined function).
     UnwindingPanic,
 
     /// An error returned when

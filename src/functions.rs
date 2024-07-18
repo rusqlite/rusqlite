@@ -267,7 +267,7 @@ pub type SubType = Option<std::os::raw::c_uint>;
 
 /// Result of an SQL function
 pub trait SqlFnOutput {
-    /// Converts Rust value to SQLite value with an optional sub-type
+    /// Converts Rust value to SQLite value with an optional subtype
     fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)>;
 }
 
@@ -381,11 +381,11 @@ bitflags::bitflags! {
         const SQLITE_DETERMINISTIC = ffi::SQLITE_DETERMINISTIC; // 3.8.3
         /// Means that the function may only be invoked from top-level SQL.
         const SQLITE_DIRECTONLY    = 0x0000_0008_0000; // 3.30.0
-        /// Indicates to SQLite that a function may call `sqlite3_value_subtype()` to inspect the sub-types of its arguments.
+        /// Indicates to SQLite that a function may call `sqlite3_value_subtype()` to inspect the subtypes of its arguments.
         const SQLITE_SUBTYPE       = 0x0000_0010_0000; // 3.30.0
         /// Means that the function is unlikely to cause problems even if misused.
         const SQLITE_INNOCUOUS     = 0x0000_0020_0000; // 3.31.0
-        /// Indicates to SQLite that a function might call `sqlite3_result_subtype()` to cause a sub-type to be associated with its result.
+        /// Indicates to SQLite that a function might call `sqlite3_result_subtype()` to cause a subtype to be associated with its result.
         const SQLITE_RESULT_SUBTYPE     = 0x0000_0100_0000; // 3.45.0
     }
 }

@@ -20,7 +20,7 @@ pub struct InnerConnection {
     // a `sqlite3_interrupt`, and vice versa, so we take this mutex during
     // those functions. This protects a copy of the `db` pointer (which is
     // cleared on closing), however the main copy, `db`, is unprotected.
-    // Otherwise, a long running query would prevent calling interrupt, as
+    // Otherwise, a long-running query would prevent calling interrupt, as
     // interrupt would only acquire the lock after the query's completion.
     interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
     #[cfg(feature = "hooks")]
