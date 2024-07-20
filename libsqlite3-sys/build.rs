@@ -136,6 +136,7 @@ mod build_bundled {
             .flag("-DSQLITE_THREADSAFE=1")
             .flag("-DSQLITE_USE_URI")
             .flag("-DHAVE_USLEEP=1")
+            .flag("-DHAVE_ISNAN")
             .flag("-D_POSIX_THREAD_SAFE_FUNCTIONS") // cross compile with MinGW
             .warnings(false);
 
@@ -235,25 +236,6 @@ mod build_bundled {
             cfg.static_crt(true);
         }
 
-        // Older versions of visual studio don't support c99 (including isnan), which
-        // causes a build failure when the linker fails to find the `isnan`
-        // function. `sqlite` provides its own implementation, using the fact
-        // that x != x when x is NaN.
-        //
-        // There may be other platforms that don't support `isnan`, they should be
-        // tested for here.
-        if is_compiler("msvc") {
-            use cc::windows_registry::{find_vs_version, VsVers};
-            let vs_has_nan = match find_vs_version() {
-                Ok(ver) => ver != VsVers::Vs12,
-                Err(_msg) => false,
-            };
-            if vs_has_nan {
-                cfg.flag("-DHAVE_ISNAN");
-            }
-        } else {
-            cfg.flag("-DHAVE_ISNAN");
-        }
         if !win_target() {
             cfg.flag("-DHAVE_LOCALTIME_R");
         }
