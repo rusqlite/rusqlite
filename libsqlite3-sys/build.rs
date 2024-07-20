@@ -282,17 +282,17 @@ mod build_bundled {
         }
 
         if let Ok(limit) = env::var("SQLITE_MAX_VARIABLE_NUMBER") {
-            cfg.flag(&format!("-DSQLITE_MAX_VARIABLE_NUMBER={limit}"));
+            cfg.flag(format!("-DSQLITE_MAX_VARIABLE_NUMBER={limit}"));
         }
         println!("cargo:rerun-if-env-changed=SQLITE_MAX_VARIABLE_NUMBER");
 
         if let Ok(limit) = env::var("SQLITE_MAX_EXPR_DEPTH") {
-            cfg.flag(&format!("-DSQLITE_MAX_EXPR_DEPTH={limit}"));
+            cfg.flag(format!("-DSQLITE_MAX_EXPR_DEPTH={limit}"));
         }
         println!("cargo:rerun-if-env-changed=SQLITE_MAX_EXPR_DEPTH");
 
         if let Ok(limit) = env::var("SQLITE_MAX_COLUMN") {
-            cfg.flag(&format!("-DSQLITE_MAX_COLUMN={limit}"));
+            cfg.flag(format!("-DSQLITE_MAX_COLUMN={limit}"));
         }
         println!("cargo:rerun-if-env-changed=SQLITE_MAX_COLUMN");
 
@@ -301,7 +301,7 @@ mod build_bundled {
                 if extra.starts_with("-D") || extra.starts_with("-U") {
                     cfg.flag(extra);
                 } else if extra.starts_with("SQLITE_") {
-                    cfg.flag(&format!("-D{extra}"));
+                    cfg.flag(format!("-D{extra}"));
                 } else {
                     panic!("Don't understand {} in LIBSQLITE3_FLAGS", extra);
                 }
