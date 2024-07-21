@@ -372,7 +372,7 @@ impl Connection {
     /// The callback parameters are:
     ///
     /// - the type of database update (`SQLITE_INSERT`, `SQLITE_UPDATE` or
-    /// `SQLITE_DELETE`),
+    ///   `SQLITE_DELETE`),
     /// - the name of the database ("main", "temp", ...),
     /// - the name of the table that is updated,
     /// - the ROWID of the row that is updated.

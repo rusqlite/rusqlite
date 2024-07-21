@@ -128,7 +128,7 @@ impl Connection {
     /// - the name of the database ("main", "temp", ...),
     /// - the name of the table that is updated,
     /// - a variant of the PreUpdateCase enum which allows access to extra functions depending
-    /// on whether it's an update, delete or insert.
+    ///   on whether it's an update, delete or insert.
     #[inline]
     pub fn preupdate_hook<F>(&self, hook: Option<F>)
     where
@@ -152,7 +152,7 @@ impl InnerConnection {
     ///         let mut called = std::sync::atomic::AtomicBool::new(false);
     ///         db.preupdate_hook(Some(|action, db: &str, tbl: &str, case: &PreUpdateCase| {
     ///             called.store(true, std::sync::atomic::Ordering::Relaxed);
-    ///         }));  
+    ///         }));
     ///     }
     ///     db.execute_batch("CREATE TABLE foo AS SELECT 1 AS bar;")
     /// }

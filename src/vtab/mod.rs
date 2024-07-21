@@ -3,10 +3,10 @@
 //! Follow these steps to create your own virtual table:
 //! 1. Write implementation of [`VTab`] and [`VTabCursor`] traits.
 //! 2. Create an instance of the [`Module`] structure specialized for [`VTab`]
-//! impl. from step 1.
+//!    impl. from step 1.
 //! 3. Register your [`Module`] structure using [`Connection::create_module`].
 //! 4. Run a `CREATE VIRTUAL TABLE` command that specifies the new module in the
-//! `USING` clause.
+//!    `USING` clause.
 //!
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
 use std::borrow::Cow::{self, Borrowed, Owned};

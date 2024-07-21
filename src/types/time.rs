@@ -7,6 +7,7 @@
 //!  - Format 2: "YYYY-MM-DD HH:MM"
 //!  - Format 5: "YYYY-MM-DDTHH:MM"
 //!  - Format 8: "HH:MM"
+//!
 //! without an explicit second value will assume 0 seconds.
 //! Time String that contain an optional timezone without an explicit date are unsupported.
 //! All other assumptions described in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) section are unsupported.
