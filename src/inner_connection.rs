@@ -155,7 +155,7 @@ impl InnerConnection {
         self.remove_preupdate_hook();
         let mut shared_handle = self.interrupt_lock.lock().unwrap();
         assert!(
-            !shared_handle.is_null(),
+            !self.owned || !shared_handle.is_null(),
             "Bug: Somehow interrupt_lock was cleared before the DB was closed"
         );
         if !self.owned {
