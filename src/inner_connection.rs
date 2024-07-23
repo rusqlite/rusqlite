@@ -46,7 +46,7 @@ impl InnerConnection {
     pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> InnerConnection {
         InnerConnection {
             db,
-            interrupt_lock: Arc::new(Mutex::new(db)),
+            interrupt_lock: Arc::new(Mutex::new(if owned { db } else { ptr::null_mut() })),
             #[cfg(feature = "hooks")]
             free_commit_hook: None,
             #[cfg(feature = "hooks")]
