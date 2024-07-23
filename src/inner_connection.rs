@@ -46,7 +46,7 @@ impl InnerConnection {
     pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> InnerConnection {
         InnerConnection {
             db,
-            interrupt_lock: Arc::new(Mutex::new(db)),
+            interrupt_lock: Arc::new(Mutex::new(if owned { db } else { ptr::null_mut() })),
             #[cfg(feature = "hooks")]
             free_commit_hook: None,
             #[cfg(feature = "hooks")]
@@ -155,7 +155,7 @@ impl InnerConnection {
         self.remove_preupdate_hook();
         let mut shared_handle = self.interrupt_lock.lock().unwrap();
         assert!(
-            !shared_handle.is_null(),
+            !self.owned || !shared_handle.is_null(),
             "Bug: Somehow interrupt_lock was cleared before the DB was closed"
         );
         if !self.owned {
