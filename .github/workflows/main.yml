@@ -163,7 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - ueses: hecrj/setup-rust-action@v2
+      - uses: hecrj/setup-rust-action@v2
         with:
           rust-version: nightly
       - uses: Swatinem/rust-cache@v2
