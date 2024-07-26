@@ -20,6 +20,10 @@ env:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Test ${{ matrix.target }}
@@ -157,6 +161,18 @@ jobs:
           # as the other tests have them.
           RUST_BACKTRACE: "0"
         run: cargo -Z build-std test --features 'bundled-full session buildtime_bindgen preupdate_hook with-asan' --target x86_64-unknown-linux-gnu
+
+  direct-minimal-versions:
+    name: Test min versions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hecrj/setup-rust-action@v2
+        with:
+          rust-version: nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo update -Z direct-minimal-versions
+      - run: cargo test --workspace --all-targets --features bundled-full
 
   # Ensure clippy doesn't complain.
   clippy:
