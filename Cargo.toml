@@ -47,7 +47,10 @@ trace = []
 release_memory = []
 bundled = ["libsqlite3-sys/bundled", "modern_sqlite"]
 bundled-sqlcipher = ["libsqlite3-sys/bundled-sqlcipher", "bundled"]
-bundled-sqlcipher-vendored-openssl = ["libsqlite3-sys/bundled-sqlcipher-vendored-openssl", "bundled-sqlcipher"]
+bundled-sqlcipher-vendored-openssl = [
+    "libsqlite3-sys/bundled-sqlcipher-vendored-openssl",
+    "bundled-sqlcipher",
+]
 buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
 limits = []
 loadable_extension = ["libsqlite3-sys/loadable_extension"]
@@ -97,6 +100,7 @@ modern-full = [
     "functions",
     "hooks",
     "i128_blob",
+    "jiff",
     "limits",
     "load_extension",
     "serde_json",
@@ -113,10 +117,19 @@ modern-full = [
 bundled-full = ["modern-full", "bundled"]
 
 [dependencies]
-time = { version = "0.3.36", features = ["formatting", "macros", "parsing"], optional = true }
+jiff = { version = "0.1", optional = true, default-features = false, features = [
+    "std",
+] }
+time = { version = "0.3.36", features = [
+    "formatting",
+    "macros",
+    "parsing",
+], optional = true }
 bitflags = "2.6.0"
 hashlink = "0.9"
-chrono = { version = "0.4.38", optional = true, default-features = false, features = ["clock"] }
+chrono = { version = "0.4.38", optional = true, default-features = false, features = [
+    "clock",
+] }
 serde_json = { version = "1.0", optional = true }
 csv = { version = "1.1", optional = true }
 url = { version = "2.1", optional = true }
