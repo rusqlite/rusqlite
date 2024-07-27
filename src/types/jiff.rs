@@ -117,7 +117,7 @@ mod test {
     #[test]
     fn test_date_time() -> Result<()> {
         let db = checked_memory_handle()?;
-        let dt = DateTime::constant(2016, 2, 23, 23, 56, 04, 0);
+        let dt = DateTime::constant(2016, 2, 23, 23, 56, 4, 0);
 
         db.execute("INSERT INTO foo (t) VALUES (?1)", [dt])?;
 
