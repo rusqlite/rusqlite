@@ -130,7 +130,7 @@ mod test {
         let v: DateTime = db.one_column("SELECT b FROM foo")?;
         assert_eq!(dt, v);
 
-        let r: Result<Time> = db.one_column("SELECT '2023-02-29T00:00:00'");
+        let r: Result<DateTime> = db.one_column("SELECT '2023-02-29T00:00:00'");
         assert!(r.is_err());
         Ok(())
     }
