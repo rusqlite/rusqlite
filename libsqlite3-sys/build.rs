@@ -6,7 +6,7 @@ use std::path::Path;
 ///
 /// Note that there is no way to know at compile-time which system we'll be
 /// targeting, and this test must be made at run-time (of the build script) See
-/// https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
+/// <https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts>
 fn win_target() -> bool {
     env::var("CARGO_CFG_WINDOWS").is_ok()
 }

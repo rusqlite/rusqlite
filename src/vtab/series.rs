@@ -14,7 +14,7 @@ use crate::vtab::{
 };
 use crate::{Connection, Error, Result};
 
-/// Register the "generate_series" module.
+/// Register the `generate_series` module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
     conn.create_module("generate_series", eponymous_only_module::<SeriesTab>(), aux)

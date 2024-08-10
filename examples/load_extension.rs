@@ -1,4 +1,4 @@
-//! Ensure loadable_extension.rs works.
+//! Ensure `loadable_extension.rs` works.
 
 use rusqlite::{Connection, Result};
 use std::env::consts::{DLL_PREFIX, DLL_SUFFIX};

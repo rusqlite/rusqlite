@@ -189,13 +189,13 @@ pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum VTabConfig {
-    /// Equivalent to SQLITE_VTAB_CONSTRAINT_SUPPORT
+    /// Equivalent to `SQLITE_VTAB_CONSTRAINT_SUPPORT`
     ConstraintSupport = 1,
-    /// Equivalent to SQLITE_VTAB_INNOCUOUS
+    /// Equivalent to `SQLITE_VTAB_INNOCUOUS`
     Innocuous = 2,
-    /// Equivalent to SQLITE_VTAB_DIRECTONLY
+    /// Equivalent to `SQLITE_VTAB_DIRECTONLY`
     DirectOnly = 3,
-    /// Equivalent to SQLITE_VTAB_USES_ALL_SCHEMAS
+    /// Equivalent to `SQLITE_VTAB_USES_ALL_SCHEMAS`
     UsesAllSchemas = 4,
 }
 
@@ -480,7 +480,7 @@ impl IndexInfo {
         }
     }
 
-    /// Mask of SQLITE_INDEX_SCAN_* flags.
+    /// Mask of `SQLITE_INDEX_SCAN_*` flags.
     #[inline]
     pub fn set_idx_flags(&mut self, flags: IndexFlags) {
         unsafe { (*self.0).idxFlags = flags.bits() };
