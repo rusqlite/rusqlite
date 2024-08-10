@@ -206,7 +206,7 @@ mod build_bundled {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 let lib_name = if is_windows { "libcrypto" } else { "crypto" };
                 println!("cargo:rustc-link-lib=dylib={lib_name}");
-                for lib_dir_item in lib_dir.iter() {
+                for lib_dir_item in &lib_dir {
                     println!("cargo:rustc-link-search={}", lib_dir_item.to_string_lossy());
                 }
             } else if is_apple {
