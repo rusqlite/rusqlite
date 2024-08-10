@@ -278,10 +278,10 @@ mod test {
     fn test_ddl() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch(
-            r#"
+            r"
             CREATE TABLE foo (x INT);
             INSERT INTO foo VALUES (1);
-        "#,
+        ",
         )?;
 
         let sql = "SELECT * FROM foo";
@@ -292,10 +292,10 @@ mod test {
         }
 
         db.execute_batch(
-            r#"
+            r"
             ALTER TABLE foo ADD COLUMN y INT;
             UPDATE foo SET y = 2;
-        "#,
+        ",
         )?;
 
         {
