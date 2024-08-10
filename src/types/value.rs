@@ -158,7 +158,7 @@ mod test {
         assert_eq!(Value::Null.data_type(), Type::Null);
         assert_eq!(Value::Integer(0).data_type(), Type::Integer);
         assert_eq!(Value::Real(0.).data_type(), Type::Real);
-        assert_eq!(Value::Text("".to_owned()).data_type(), Type::Text);
+        assert_eq!(Value::Text(String::new()).data_type(), Type::Text);
         assert_eq!(Value::Blob(vec![]).data_type(), Type::Blob);
     }
 }

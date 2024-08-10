@@ -98,7 +98,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
 
         let mut vtab = Self {
             base: ffi::sqlite3_vtab::default(),
-            filename: "".to_owned(),
+            filename: String::new(),
             has_headers: false,
             delimiter: b',',
             quote: b'"',
