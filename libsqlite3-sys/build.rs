@@ -182,7 +182,7 @@ mod build_bundled {
                         let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
 
                         if !lib_dir.iter().all(|p| p.exists()) {
-                            panic!("OpenSSL library directory does not exist: {:?}", lib_dir);
+                            panic!("OpenSSL library directory does not exist: {lib_dir:?}");
                         }
 
                         if !Path::new(&inc_dir).exists() {
@@ -205,7 +205,7 @@ mod build_bundled {
             } else if use_openssl {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 let lib_name = if is_windows { "libcrypto" } else { "crypto" };
-                println!("cargo:rustc-link-lib=dylib={}", lib_name);
+                println!("cargo:rustc-link-lib=dylib={lib_name}");
                 for lib_dir_item in lib_dir.iter() {
                     println!("cargo:rustc-link-search={}", lib_dir_item.to_string_lossy());
                 }
@@ -285,7 +285,7 @@ mod build_bundled {
                 } else if extra.starts_with("SQLITE_") {
                     cfg.flag(format!("-D{extra}"));
                 } else {
-                    panic!("Don't understand {} in LIBSQLITE3_FLAGS", extra);
+                    panic!("Don't understand {extra} in LIBSQLITE3_FLAGS");
                 }
             }
         }

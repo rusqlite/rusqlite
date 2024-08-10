@@ -631,7 +631,7 @@ mod tests {
         )?;
         let mut rows = stmt.query([])?;
         let row = rows.next()?.unwrap();
-        let s = format!("{:?}", row);
+        let s = format!("{row:?}");
         assert_eq!(
             s,
             r#"{"name": (Text, "Lisa"), "id": (Integer, 1), "pi": (Real, 3.14), "blob": (Blob, 6), "void": (Null, ())}"#

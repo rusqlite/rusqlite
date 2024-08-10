@@ -336,7 +336,7 @@ mod test {
                     extended_code: sqlite_code
                 }
             );
-            let s = format!("{}", err);
+            let s = format!("{err}");
             assert!(!s.is_empty());
         }
     }
