@@ -27,10 +27,7 @@ impl Connection {
 
     /// Collation needed callback
     #[inline]
-    pub fn collation_needed(
-        &self,
-        x_coll_needed: fn(&Connection, &str) -> Result<()>,
-    ) -> Result<()> {
+    pub fn collation_needed(&self, x_coll_needed: fn(&Self, &str) -> Result<()>) -> Result<()> {
         self.db.borrow_mut().collation_needed(x_coll_needed)
     }
 

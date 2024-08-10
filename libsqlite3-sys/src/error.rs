@@ -64,7 +64,7 @@ pub struct Error {
 
 impl Error {
     #[must_use]
-    pub fn new(result_code: c_int) -> Error {
+    pub fn new(result_code: c_int) -> Self {
         let code = match result_code & 0xff {
             super::SQLITE_INTERNAL => ErrorCode::InternalMalfunction,
             super::SQLITE_PERM => ErrorCode::PermissionDenied,
@@ -92,7 +92,7 @@ impl Error {
             _ => ErrorCode::Unknown,
         };
 
-        Error {
+        Self {
             code,
             extended_code: result_code,
         }
@@ -288,13 +288,13 @@ pub enum InitError {
 impl ::std::fmt::Display for InitError {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         match *self {
-            InitError::VersionMismatch {
+            Self::VersionMismatch {
                 compile_time,
                 runtime,
             } => {
                 write!(f, "SQLite version mismatch: {runtime} < {compile_time}")
             }
-            InitError::NullFunctionPointer => {
+            Self::NullFunctionPointer => {
                 write!(f, "Some sqlite3_api_routines fields are null")
             }
         }

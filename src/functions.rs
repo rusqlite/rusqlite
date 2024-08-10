@@ -392,8 +392,8 @@ bitflags::bitflags! {
 
 impl Default for FunctionFlags {
     #[inline]
-    fn default() -> FunctionFlags {
-        FunctionFlags::SQLITE_UTF8
+    fn default() -> Self {
+        Self::SQLITE_UTF8
     }
 }
 

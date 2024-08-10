@@ -60,8 +60,8 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
         db: &mut VTabConnection,
         _aux: Option<&()>,
         _args: &[&[u8]],
-    ) -> Result<(String, SeriesTab)> {
-        let vtab = SeriesTab {
+    ) -> Result<(String, Self)> {
+        let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
         };
         db.config(VTabConfig::Innocuous)?;

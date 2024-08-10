@@ -19,7 +19,7 @@ impl ToSql for Date {
 impl FromSql for Date {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value.as_str().and_then(|s| match Date::from_str(s) {
+        value.as_str().and_then(|s| match Self::from_str(s) {
             Ok(d) => Ok(d),
             Err(err) => Err(FromSqlError::Other(Box::new(err))),
         })
@@ -37,7 +37,7 @@ impl ToSql for Time {
 /// "HH:MM:SS.SSS" => time.
 impl FromSql for Time {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value.as_str().and_then(|s| match Time::from_str(s) {
+        value.as_str().and_then(|s| match Self::from_str(s) {
             Ok(t) => Ok(t),
             Err(err) => Err(FromSqlError::Other(Box::new(err))),
         })
@@ -56,7 +56,7 @@ impl ToSql for DateTime {
 /// "YYYY-MM-DDTHH:MM:SS.SSS" => Gregorian datetime.
 impl FromSql for DateTime {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value.as_str().and_then(|s| match DateTime::from_str(s) {
+        value.as_str().and_then(|s| match Self::from_str(s) {
             Ok(dt) => Ok(dt),
             Err(err) => Err(FromSqlError::Other(Box::new(err))),
         })

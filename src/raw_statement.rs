@@ -29,8 +29,8 @@ pub struct RawStatement {
 
 impl RawStatement {
     #[inline]
-    pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt, tail: usize) -> RawStatement {
-        RawStatement {
+    pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt, tail: usize) -> Self {
+        Self {
             ptr: stmt,
             tail,
             cache: ParamIndexCache::default(),

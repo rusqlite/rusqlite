@@ -413,7 +413,7 @@ pub struct ZeroBlob(pub i32);
 impl ToSql for ZeroBlob {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let ZeroBlob(length) = *self;
+        let Self(length) = *self;
         Ok(ToSqlOutput::ZeroBlob(length))
     }
 }
