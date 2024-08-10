@@ -27,9 +27,8 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
         (stmt, literal)
     };
 
-    let literal = match into_literal(&literal) {
-        Some(it) => it,
-        None => return Err("expected a plain string literal".to_string()),
+    let Some(literal) = into_literal(&literal) else {
+        return Err("expected a plain string literal".to_string());
     };
     let call_site = literal.span();
     let string_lit = match StringLit::try_from(literal) {

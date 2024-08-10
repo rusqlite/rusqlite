@@ -443,9 +443,9 @@ impl Connection {
     /// Will return `Err` if `path` cannot be converted to a C-compatible string
     /// or if the underlying SQLite open call fails.
     #[inline]
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Connection> {
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let flags = OpenFlags::default();
-        Connection::open_with_flags(path, flags)
+        Self::open_with_flags(path, flags)
     }
 
     /// Open a new connection to an in-memory SQLite database.
@@ -454,9 +454,9 @@ impl Connection {
     ///
     /// Will return `Err` if the underlying SQLite open call fails.
     #[inline]
-    pub fn open_in_memory() -> Result<Connection> {
+    pub fn open_in_memory() -> Result<Self> {
         let flags = OpenFlags::default();
-        Connection::open_in_memory_with_flags(flags)
+        Self::open_in_memory_with_flags(flags)
     }
 
     /// Open a new connection to a SQLite database.
@@ -469,9 +469,9 @@ impl Connection {
     /// Will return `Err` if `path` cannot be converted to a C-compatible
     /// string or if the underlying SQLite open call fails.
     #[inline]
-    pub fn open_with_flags<P: AsRef<Path>>(path: P, flags: OpenFlags) -> Result<Connection> {
+    pub fn open_with_flags<P: AsRef<Path>>(path: P, flags: OpenFlags) -> Result<Self> {
         let c_path = path_to_cstring(path.as_ref())?;
-        InnerConnection::open_with_flags(&c_path, flags, None).map(|db| Connection {
+        InnerConnection::open_with_flags(&c_path, flags, None).map(|db| Self {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
@@ -493,10 +493,10 @@ impl Connection {
         path: P,
         flags: OpenFlags,
         vfs: &str,
-    ) -> Result<Connection> {
+    ) -> Result<Self> {
         let c_path = path_to_cstring(path.as_ref())?;
         let c_vfs = str_to_cstring(vfs)?;
-        InnerConnection::open_with_flags(&c_path, flags, Some(&c_vfs)).map(|db| Connection {
+        InnerConnection::open_with_flags(&c_path, flags, Some(&c_vfs)).map(|db| Self {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
@@ -512,8 +512,8 @@ impl Connection {
     ///
     /// Will return `Err` if the underlying SQLite open call fails.
     #[inline]
-    pub fn open_in_memory_with_flags(flags: OpenFlags) -> Result<Connection> {
-        Connection::open_with_flags(":memory:", flags)
+    pub fn open_in_memory_with_flags(flags: OpenFlags) -> Result<Self> {
+        Self::open_with_flags(":memory:", flags)
     }
 
     /// Open a new connection to an in-memory SQLite database using the specific
@@ -527,8 +527,8 @@ impl Connection {
     /// Will return `Err` if `vfs` cannot be converted to a C-compatible
     /// string or if the underlying SQLite open call fails.
     #[inline]
-    pub fn open_in_memory_with_flags_and_vfs(flags: OpenFlags, vfs: &str) -> Result<Connection> {
-        Connection::open_with_flags_and_vfs(":memory:", flags, vfs)
+    pub fn open_in_memory_with_flags_and_vfs(flags: OpenFlags, vfs: &str) -> Result<Self> {
+        Self::open_with_flags_and_vfs(":memory:", flags, vfs)
     }
 
     /// Convenience method to run multiple SQL statements (that cannot take any
@@ -792,7 +792,7 @@ impl Connection {
     ///
     /// Will return `Err` if the underlying SQLite call fails.
     #[inline]
-    pub fn close(self) -> Result<(), (Connection, Error)> {
+    pub fn close(self) -> Result<(), (Self, Error)> {
         self.flush_prepared_statement_cache();
         let r = self.db.borrow_mut().close();
         r.map_err(move |err| (self, err))
@@ -947,9 +947,9 @@ impl Connection {
     ///
     /// This function is unsafe because improper use may impact the Connection.
     #[inline]
-    pub unsafe fn from_handle(db: *mut ffi::sqlite3) -> Result<Connection> {
+    pub unsafe fn from_handle(db: *mut ffi::sqlite3) -> Result<Self> {
         let db = InnerConnection::new(db, false);
-        Ok(Connection {
+        Ok(Self {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
@@ -967,14 +967,14 @@ impl Connection {
         db: *mut ffi::sqlite3,
         pz_err_msg: *mut *mut c_char,
         p_api: *mut ffi::sqlite3_api_routines,
-        init: fn(Connection) -> Result<bool>,
+        init: fn(Self) -> Result<bool>,
     ) -> c_int {
         if p_api.is_null() {
             return ffi::SQLITE_ERROR;
         }
         match ffi::rusqlite_extension_init2(p_api)
             .map_err(Error::from)
-            .and(Connection::from_handle(db))
+            .and(Self::from_handle(db))
             .and_then(init)
         {
             Err(err) => to_sqlite_error(&err, pz_err_msg),
@@ -996,9 +996,9 @@ impl Connection {
     /// and owned by the caller, e.g. as a result of calling
     /// `ffi::sqlite3_open`().
     #[inline]
-    pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Connection> {
+    pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Self> {
         let db = InnerConnection::new(db, true);
-        Ok(Connection {
+        Ok(Self {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
@@ -1121,7 +1121,7 @@ pub struct Batch<'conn, 'sql> {
 
 impl<'conn, 'sql> Batch<'conn, 'sql> {
     /// Constructor
-    pub fn new(conn: &'conn Connection, sql: &'sql str) -> Batch<'conn, 'sql> {
+    pub fn new(conn: &'conn Connection, sql: &'sql str) -> Self {
         Batch { conn, sql, tail: 0 }
     }
 
@@ -1230,13 +1230,13 @@ bitflags::bitflags! {
 
 impl Default for OpenFlags {
     #[inline]
-    fn default() -> OpenFlags {
+    fn default() -> Self {
         // Note: update the `Connection::open` and top-level `OpenFlags` docs if
         // you change these.
-        OpenFlags::SQLITE_OPEN_READ_WRITE
-            | OpenFlags::SQLITE_OPEN_CREATE
-            | OpenFlags::SQLITE_OPEN_NO_MUTEX
-            | OpenFlags::SQLITE_OPEN_URI
+        Self::SQLITE_OPEN_READ_WRITE
+            | Self::SQLITE_OPEN_CREATE
+            | Self::SQLITE_OPEN_NO_MUTEX
+            | Self::SQLITE_OPEN_URI
     }
 }
 
@@ -1391,7 +1391,7 @@ mod test {
         assert_eq!(Some(""), db.path());
         let path = tmp.path().join("file.db");
         let db = Connection::open(path)?;
-        assert!(db.path().map(|p| p.ends_with("file.db")).unwrap_or(false));
+        assert!(db.path().is_some_and(|p| p.ends_with("file.db")));
         Ok(())
     }
 
@@ -1951,8 +1951,8 @@ mod test {
         impl fmt::Display for CustomError {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
                 match *self {
-                    CustomError::SomeError => write!(f, "my custom error"),
-                    CustomError::Sqlite(ref se) => write!(f, "my custom error: {se}"),
+                    Self::SomeError => write!(f, "my custom error"),
+                    Self::Sqlite(ref se) => write!(f, "my custom error: {se}"),
                 }
             }
         }
@@ -1964,15 +1964,15 @@ mod test {
 
             fn cause(&self) -> Option<&dyn StdError> {
                 match *self {
-                    CustomError::SomeError => None,
-                    CustomError::Sqlite(ref se) => Some(se),
+                    Self::SomeError => None,
+                    Self::Sqlite(ref se) => Some(se),
                 }
             }
         }
 
         impl From<Error> for CustomError {
-            fn from(se: Error) -> CustomError {
-                CustomError::Sqlite(se)
+            fn from(se: Error) -> Self {
+                Self::Sqlite(se)
             }
         }
 

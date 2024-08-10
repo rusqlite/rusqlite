@@ -57,7 +57,7 @@ impl Statement<'_> {
     }
 
     /// Check that column name reference lifetime is limited:
-    /// https://www.sqlite.org/c3ref/column_name.html
+    /// <https://www.sqlite.org/c3ref/column_name.html>
     /// > The returned string pointer is valid...
     ///
     /// `column_name` reference can become invalid if `stmt` is reprepared
@@ -231,7 +231,7 @@ mod test {
     /// `column_name` reference should stay valid until `stmt` is reprepared (or
     /// reset) even if DB schema is altered (SQLite documentation is
     /// ambiguous here because it says reference "is valid until (...) the next
-    /// call to sqlite3_column_name() or sqlite3_column_name16() on the same
+    /// call to `sqlite3_column_name()` or `sqlite3_column_name16()` on the same
     /// column.". We assume that reference is valid if only
     /// `sqlite3_column_name()` is used):
     #[test]

@@ -16,17 +16,17 @@ pub enum ErrorCode {
     DatabaseBusy,
     /// A table in the database is locked
     DatabaseLocked,
-    /// A malloc() failed
+    /// A `malloc()` failed
     OutOfMemory,
     /// Attempt to write a readonly database
     ReadOnly,
-    /// Operation terminated by sqlite3_interrupt()
+    /// Operation terminated by `sqlite3_interrupt()`
     OperationInterrupted,
     /// Some kind of disk I/O error occurred
     SystemIoFailure,
     /// The database disk image is malformed
     DatabaseCorrupt,
-    /// Unknown opcode in sqlite3_file_control()
+    /// Unknown opcode in `sqlite3_file_control()`
     NotFound,
     /// Insertion failed because database is full
     DiskFull,
@@ -48,7 +48,7 @@ pub enum ErrorCode {
     NoLargeFileSupport,
     /// Authorization denied
     AuthorizationForStatementDenied,
-    /// 2nd parameter to sqlite3_bind out of range
+    /// 2nd parameter to `sqlite3_bind` out of range
     ParameterOutOfRange,
     /// File opened that is not a database file
     NotADatabase,
@@ -64,7 +64,7 @@ pub struct Error {
 
 impl Error {
     #[must_use]
-    pub fn new(result_code: c_int) -> Error {
+    pub fn new(result_code: c_int) -> Self {
         let code = match result_code & 0xff {
             super::SQLITE_INTERNAL => ErrorCode::InternalMalfunction,
             super::SQLITE_PERM => ErrorCode::PermissionDenied,
@@ -92,7 +92,7 @@ impl Error {
             _ => ErrorCode::Unknown,
         };
 
-        Error {
+        Self {
             code,
             extended_code: result_code,
         }
@@ -281,20 +281,20 @@ pub fn code_to_str(code: c_int) -> &'static str {
 pub enum InitError {
     /// Version mismatch between the extension and the SQLite3 library
     VersionMismatch { compile_time: i32, runtime: i32 },
-    /// Invalid function pointer in one of sqlite3_api_routines fields
+    /// Invalid function pointer in one of `sqlite3_api_routines` fields
     NullFunctionPointer,
 }
 #[cfg(feature = "loadable_extension")]
 impl ::std::fmt::Display for InitError {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         match *self {
-            InitError::VersionMismatch {
+            Self::VersionMismatch {
                 compile_time,
                 runtime,
             } => {
                 write!(f, "SQLite version mismatch: {runtime} < {compile_time}")
             }
-            InitError::NullFunctionPointer => {
+            Self::NullFunctionPointer => {
                 write!(f, "Some sqlite3_api_routines fields are null")
             }
         }
@@ -336,7 +336,7 @@ mod test {
                     extended_code: sqlite_code
                 }
             );
-            let s = format!("{}", err);
+            let s = format!("{err}");
             assert!(!s.is_empty());
         }
     }

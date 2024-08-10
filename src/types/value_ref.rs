@@ -153,16 +153,16 @@ impl<'a> ValueRef<'a> {
 impl From<ValueRef<'_>> for Value {
     #[inline]
     #[track_caller]
-    fn from(borrowed: ValueRef<'_>) -> Value {
+    fn from(borrowed: ValueRef<'_>) -> Self {
         match borrowed {
-            ValueRef::Null => Value::Null,
-            ValueRef::Integer(i) => Value::Integer(i),
-            ValueRef::Real(r) => Value::Real(r),
+            ValueRef::Null => Self::Null,
+            ValueRef::Integer(i) => Self::Integer(i),
+            ValueRef::Real(r) => Self::Real(r),
             ValueRef::Text(s) => {
                 let s = std::str::from_utf8(s).expect("invalid UTF-8");
-                Value::Text(s.to_string())
+                Self::Text(s.to_string())
             }
-            ValueRef::Blob(b) => Value::Blob(b.to_vec()),
+            ValueRef::Blob(b) => Self::Blob(b.to_vec()),
         }
     }
 }
@@ -183,7 +183,7 @@ impl<'a> From<&'a [u8]> for ValueRef<'a> {
 
 impl<'a> From<&'a Value> for ValueRef<'a> {
     #[inline]
-    fn from(value: &'a Value) -> ValueRef<'a> {
+    fn from(value: &'a Value) -> Self {
         match *value {
             Value::Null => ValueRef::Null,
             Value::Integer(i) => ValueRef::Integer(i),
@@ -196,10 +196,10 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
 
 impl<'a, T> From<Option<T>> for ValueRef<'a>
 where
-    T: Into<ValueRef<'a>>,
+    T: Into<Self>,
 {
     #[inline]
-    fn from(s: Option<T>) -> ValueRef<'a> {
+    fn from(s: Option<T>) -> Self {
         match s {
             Some(x) => x.into(),
             None => ValueRef::Null,
@@ -214,7 +214,7 @@ where
     feature = "preupdate_hook"
 ))]
 impl<'a> ValueRef<'a> {
-    pub(crate) unsafe fn from_value(value: *mut crate::ffi::sqlite3_value) -> ValueRef<'a> {
+    pub(crate) unsafe fn from_value(value: *mut crate::ffi::sqlite3_value) -> Self {
         use crate::ffi;
         use std::slice::from_raw_parts;
 

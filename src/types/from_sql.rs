@@ -28,16 +28,16 @@ pub enum FromSqlError {
 }
 
 impl PartialEq for FromSqlError {
-    fn eq(&self, other: &FromSqlError) -> bool {
+    fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (FromSqlError::InvalidType, FromSqlError::InvalidType) => true,
-            (FromSqlError::OutOfRange(n1), FromSqlError::OutOfRange(n2)) => n1 == n2,
+            (Self::InvalidType, Self::InvalidType) => true,
+            (Self::OutOfRange(n1), Self::OutOfRange(n2)) => n1 == n2,
             (
-                FromSqlError::InvalidBlobSize {
+                Self::InvalidBlobSize {
                     expected_size: es1,
                     blob_size: bs1,
                 },
-                FromSqlError::InvalidBlobSize {
+                Self::InvalidBlobSize {
                     expected_size: es2,
                     blob_size: bs2,
                 },
@@ -50,9 +50,9 @@ impl PartialEq for FromSqlError {
 impl fmt::Display for FromSqlError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            FromSqlError::InvalidType => write!(f, "Invalid type"),
-            FromSqlError::OutOfRange(i) => write!(f, "Value {i} out of range"),
-            FromSqlError::InvalidBlobSize {
+            Self::InvalidType => write!(f, "Invalid type"),
+            Self::OutOfRange(i) => write!(f, "Value {i} out of range"),
+            Self::InvalidBlobSize {
                 expected_size,
                 blob_size,
             } => {
@@ -61,14 +61,14 @@ impl fmt::Display for FromSqlError {
                     "Cannot read {expected_size} byte value out of {blob_size} byte blob"
                 )
             }
-            FromSqlError::Other(ref err) => err.fmt(f),
+            Self::Other(ref err) => err.fmt(f),
         }
     }
 }
 
 impl Error for FromSqlError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        if let FromSqlError::Other(ref err) = self {
+        if let Self::Other(ref err) = self {
             Some(&**err)
         } else {
             None
@@ -144,8 +144,8 @@ impl FromSql for f32 {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Integer(i) => Ok(i as f32),
-            ValueRef::Real(f) => Ok(f as f32),
+            ValueRef::Integer(i) => Ok(i as Self),
+            ValueRef::Real(f) => Ok(f as Self),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -155,7 +155,7 @@ impl FromSql for f64 {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         match value {
-            ValueRef::Integer(i) => Ok(i as f64),
+            ValueRef::Integer(i) => Ok(i as Self),
             ValueRef::Real(f) => Ok(f),
             _ => Err(FromSqlError::InvalidType),
         }
@@ -221,7 +221,7 @@ impl FromSql for i128 {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         let bytes = <[u8; 16]>::column_result(value)?;
-        Ok(i128::from_be_bytes(bytes) ^ (1_i128 << 127))
+        Ok(Self::from_be_bytes(bytes) ^ (1_i128 << 127))
     }
 }
 
@@ -231,7 +231,7 @@ impl FromSql for uuid::Uuid {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         let bytes = <[u8; 16]>::column_result(value)?;
-        Ok(uuid::Uuid::from_u128(u128::from_be_bytes(bytes)))
+        Ok(Self::from_u128(u128::from_be_bytes(bytes)))
     }
 }
 

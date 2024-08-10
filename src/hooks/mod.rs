@@ -33,12 +33,12 @@ pub enum Action {
 
 impl From<i32> for Action {
     #[inline]
-    fn from(code: i32) -> Action {
+    fn from(code: i32) -> Self {
         match code {
-            ffi::SQLITE_DELETE => Action::SQLITE_DELETE,
-            ffi::SQLITE_INSERT => Action::SQLITE_INSERT,
-            ffi::SQLITE_UPDATE => Action::SQLITE_UPDATE,
-            _ => Action::UNKNOWN,
+            ffi::SQLITE_DELETE => Self::SQLITE_DELETE,
+            ffi::SQLITE_INSERT => Self::SQLITE_INSERT,
+            ffi::SQLITE_UPDATE => Self::SQLITE_UPDATE,
+            _ => Self::UNKNOWN,
         }
     }
 }

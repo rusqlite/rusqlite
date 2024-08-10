@@ -131,11 +131,11 @@ pub enum Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Type::Null => f.pad("Null"),
-            Type::Integer => f.pad("Integer"),
-            Type::Real => f.pad("Real"),
-            Type::Text => f.pad("Text"),
-            Type::Blob => f.pad("Blob"),
+            Self::Null => f.pad("Null"),
+            Self::Integer => f.pad("Integer"),
+            Self::Real => f.pad("Real"),
+            Self::Text => f.pad("Text"),
+            Self::Blob => f.pad("Blob"),
         }
     }
 }

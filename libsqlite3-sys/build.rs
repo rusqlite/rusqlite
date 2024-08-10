@@ -6,7 +6,7 @@ use std::path::Path;
 ///
 /// Note that there is no way to know at compile-time which system we'll be
 /// targeting, and this test must be made at run-time (of the build script) See
-/// https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
+/// <https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts>
 fn win_target() -> bool {
     env::var("CARGO_CFG_WINDOWS").is_ok()
 }
@@ -182,7 +182,7 @@ mod build_bundled {
                         let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
 
                         if !lib_dir.iter().all(|p| p.exists()) {
-                            panic!("OpenSSL library directory does not exist: {:?}", lib_dir);
+                            panic!("OpenSSL library directory does not exist: {lib_dir:?}");
                         }
 
                         if !Path::new(&inc_dir).exists() {
@@ -205,8 +205,8 @@ mod build_bundled {
             } else if use_openssl {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 let lib_name = if is_windows { "libcrypto" } else { "crypto" };
-                println!("cargo:rustc-link-lib=dylib={}", lib_name);
-                for lib_dir_item in lib_dir.iter() {
+                println!("cargo:rustc-link-lib=dylib={lib_name}");
+                for lib_dir_item in &lib_dir {
                     println!("cargo:rustc-link-search={}", lib_dir_item.to_string_lossy());
                 }
             } else if is_apple {
@@ -285,7 +285,7 @@ mod build_bundled {
                 } else if extra.starts_with("SQLITE_") {
                     cfg.flag(format!("-D{extra}"));
                 } else {
-                    panic!("Don't understand {} in LIBSQLITE3_FLAGS", extra);
+                    panic!("Don't understand {extra} in LIBSQLITE3_FLAGS");
                 }
             }
         }
@@ -336,7 +336,7 @@ pub enum HeaderLocation {
 }
 
 impl From<HeaderLocation> for String {
-    fn from(header: HeaderLocation) -> String {
+    fn from(header: HeaderLocation) -> Self {
         match header {
             HeaderLocation::FromEnvironment => {
                 let prefix = env_prefix();

@@ -377,11 +377,11 @@ impl Drop for Savepoint<'_> {
 #[cfg(feature = "modern_sqlite")] // 3.37.0
 #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
 pub enum TransactionState {
-    /// Equivalent to SQLITE_TXN_NONE
+    /// Equivalent to `SQLITE_TXN_NONE`
     None,
-    /// Equivalent to SQLITE_TXN_READ
+    /// Equivalent to `SQLITE_TXN_READ`
     Read,
-    /// Equivalent to SQLITE_TXN_WRITE
+    /// Equivalent to `SQLITE_TXN_WRITE`
     Write,
 }
 

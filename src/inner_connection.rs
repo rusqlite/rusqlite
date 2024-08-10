@@ -43,8 +43,8 @@ unsafe impl Send for InnerConnection {}
 impl InnerConnection {
     #[allow(clippy::mutex_atomic, clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
     #[inline]
-    pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> InnerConnection {
-        InnerConnection {
+    pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> Self {
+        Self {
             db,
             interrupt_lock: Arc::new(Mutex::new(if owned { db } else { ptr::null_mut() })),
             #[cfg(feature = "hooks")]
@@ -67,7 +67,7 @@ impl InnerConnection {
         c_path: &CStr,
         mut flags: OpenFlags,
         vfs: Option<&CStr>,
-    ) -> Result<InnerConnection> {
+    ) -> Result<Self> {
         ensure_safe_sqlite_threading_mode()?;
 
         let z_vfs = match vfs {
@@ -123,7 +123,7 @@ impl InnerConnection {
                 return Err(e);
             }
 
-            Ok(InnerConnection::new(db, true))
+            Ok(Self::new(db, true))
         }
     }
 
@@ -134,7 +134,7 @@ impl InnerConnection {
 
     #[inline]
     pub fn decode_result(&self, code: c_int) -> Result<()> {
-        unsafe { InnerConnection::decode_result_raw(self.db(), code) }
+        unsafe { Self::decode_result_raw(self.db(), code) }
     }
 
     #[inline]
@@ -166,7 +166,7 @@ impl InnerConnection {
             let r = ffi::sqlite3_close(self.db);
             // Need to use _raw because _guard has a reference out, and
             // decode_result takes &mut self.
-            let r = InnerConnection::decode_result_raw(self.db, r);
+            let r = Self::decode_result_raw(self.db, r);
             if r.is_ok() {
                 *shared_handle = ptr::null_mut();
                 self.db = ptr::null_mut();

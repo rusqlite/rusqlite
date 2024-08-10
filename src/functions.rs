@@ -392,8 +392,8 @@ bitflags::bitflags! {
 
 impl Default for FunctionFlags {
     #[inline]
-    fn default() -> FunctionFlags {
-        FunctionFlags::SQLITE_UTF8
+    fn default() -> Self {
+        Self::SQLITE_UTF8
     }
 }
 
@@ -691,9 +691,7 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
     D: Aggregate<A, T>,
     T: SqlFnOutput,
 {
-    let pac = if let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) {
-        pac
-    } else {
+    let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) else {
         ffi::sqlite3_result_error_nomem(ctx);
         return;
     };
@@ -739,9 +737,7 @@ unsafe extern "C" fn call_boxed_inverse<A, W, T>(
     W: WindowAggregate<A, T>,
     T: SqlFnOutput,
 {
-    let pac = if let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) {
-        pac
-    } else {
+    let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) else {
         ffi::sqlite3_result_error_nomem(ctx);
         return;
     };
