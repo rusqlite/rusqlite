@@ -1391,7 +1391,7 @@ mod test {
         assert_eq!(Some(""), db.path());
         let path = tmp.path().join("file.db");
         let db = Connection::open(path)?;
-        assert!(db.path().map(|p| p.ends_with("file.db")).unwrap_or(false));
+        assert!(db.path().is_some_and(|p| p.ends_with("file.db")));
         Ok(())
     }
 
