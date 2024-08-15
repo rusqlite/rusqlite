@@ -124,7 +124,7 @@ use sealed::Sealed;
 /// ```rust,no_run
 /// # use rusqlite::{Connection, Result, named_params};
 /// fn insert(conn: &Connection) -> Result<()> {
-///     let mut stmt = conn.prepare("INSERT INTO test (key, value) VALUES (:key, :value)")?;
+///     let mut stmt = conn.prepare("INSERT INTO test (key, value) VALUES (:key, :val)")?;
 ///     // Using `rusqlite::params!`:
 ///     stmt.execute(named_params! { ":key": "one", ":val": 2 })?;
 ///     // Alternatively:
