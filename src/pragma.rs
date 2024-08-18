@@ -12,8 +12,8 @@ pub struct Sql {
 }
 
 impl Sql {
-    pub fn new() -> Sql {
-        Sql { buf: String::new() }
+    pub fn new() -> Self {
+        Self { buf: String::new() }
     }
 
     pub fn push_pragma(

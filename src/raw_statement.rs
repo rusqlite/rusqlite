@@ -29,8 +29,8 @@ pub struct RawStatement {
 
 impl RawStatement {
     #[inline]
-    pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt, tail: usize) -> RawStatement {
-        RawStatement {
+    pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt, tail: usize) -> Self {
+        Self {
             ptr: stmt,
             tail,
             cache: ParamIndexCache::default(),
@@ -169,7 +169,7 @@ impl RawStatement {
     }
 
     #[inline]
-    pub fn clear_bindings(&self) {
+    pub fn clear_bindings(&mut self) {
         unsafe {
             ffi::sqlite3_clear_bindings(self.ptr);
         } // rc is always SQLITE_OK

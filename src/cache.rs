@@ -119,8 +119,8 @@ impl CachedStatement<'_> {
 impl StatementCache {
     /// Create a statement cache.
     #[inline]
-    pub fn with_capacity(capacity: usize) -> StatementCache {
-        StatementCache(RefCell::new(LruCache::new(capacity)))
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(RefCell::new(LruCache::new(capacity)))
     }
 
     #[inline]
@@ -153,7 +153,7 @@ impl StatementCache {
     }
 
     // Return a statement to the cache.
-    fn cache_stmt(&self, stmt: RawStatement) {
+    fn cache_stmt(&self, mut stmt: RawStatement) {
         if stmt.is_null() {
             return;
         }
@@ -278,10 +278,10 @@ mod test {
     fn test_ddl() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch(
-            r#"
+            r"
             CREATE TABLE foo (x INT);
             INSERT INTO foo VALUES (1);
-        "#,
+        ",
         )?;
 
         let sql = "SELECT * FROM foo";
@@ -292,10 +292,10 @@ mod test {
         }
 
         db.execute_batch(
-            r#"
+            r"
             ALTER TABLE foo ADD COLUMN y INT;
             UPDATE foo SET y = 2;
-        "#,
+        ",
         )?;
 
         {
