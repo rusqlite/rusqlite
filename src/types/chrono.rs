@@ -20,7 +20,7 @@ impl FromSql for NaiveDate {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value
             .as_str()
-            .and_then(|s| match NaiveDate::parse_from_str(s, "%F") {
+            .and_then(|s| match Self::parse_from_str(s, "%F") {
                 Ok(dt) => Ok(dt),
                 Err(err) => Err(FromSqlError::Other(Box::new(err))),
             })
@@ -45,7 +45,7 @@ impl FromSql for NaiveTime {
                 8 => "%T",
                 _ => "%T%.f",
             };
-            match NaiveTime::parse_from_str(s, fmt) {
+            match Self::parse_from_str(s, fmt) {
                 Ok(dt) => Ok(dt),
                 Err(err) => Err(FromSqlError::Other(Box::new(err))),
             }
@@ -75,7 +75,7 @@ impl FromSql for NaiveDateTime {
                 "%F %T%.f"
             };
 
-            match NaiveDateTime::parse_from_str(s, fmt) {
+            match Self::parse_from_str(s, fmt) {
                 Ok(dt) => Ok(dt),
                 Err(err) => Err(FromSqlError::Other(Box::new(err))),
             }

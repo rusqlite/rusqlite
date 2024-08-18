@@ -21,7 +21,7 @@ pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
     Some(unsafe { mem::transmute::<isize, unsafe extern "C" fn(*mut std::ffi::c_void)>(-1_isize) })
 }
 
-#[allow(clippy::all)]
+#[allow(dead_code, clippy::all)]
 mod bindings {
     include!(concat!(env!("OUT_DIR"), "/bindgen.rs"));
 }

@@ -1,4 +1,4 @@
-//! Automatic axtension loading
+//! Automatic extension loading
 use super::ffi;
 use crate::error::{check, to_sqlite_error};
 use crate::{Connection, Error, Result};
@@ -15,7 +15,7 @@ pub type RawAutoExtension = unsafe extern "C" fn(
     _: *const ffi::sqlite3_api_routines,
 ) -> c_int;
 
-/// Bridge bewteen `RawAutoExtension` and `AutoExtension`
+/// Bridge between `RawAutoExtension` and `AutoExtension`
 ///
 /// # Safety
 /// * Opening a database from an auto-extension handler will lead to

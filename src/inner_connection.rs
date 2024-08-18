@@ -20,7 +20,7 @@ pub struct InnerConnection {
     // a `sqlite3_interrupt`, and vice versa, so we take this mutex during
     // those functions. This protects a copy of the `db` pointer (which is
     // cleared on closing), however the main copy, `db`, is unprotected.
-    // Otherwise, a long running query would prevent calling interrupt, as
+    // Otherwise, a long-running query would prevent calling interrupt, as
     // interrupt would only acquire the lock after the query's completion.
     interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
     #[cfg(feature = "hooks")]
@@ -43,10 +43,10 @@ unsafe impl Send for InnerConnection {}
 impl InnerConnection {
     #[allow(clippy::mutex_atomic, clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
     #[inline]
-    pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> InnerConnection {
-        InnerConnection {
+    pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> Self {
+        Self {
             db,
-            interrupt_lock: Arc::new(Mutex::new(db)),
+            interrupt_lock: Arc::new(Mutex::new(if owned { db } else { ptr::null_mut() })),
             #[cfg(feature = "hooks")]
             free_commit_hook: None,
             #[cfg(feature = "hooks")]
@@ -67,7 +67,7 @@ impl InnerConnection {
         c_path: &CStr,
         mut flags: OpenFlags,
         vfs: Option<&CStr>,
-    ) -> Result<InnerConnection> {
+    ) -> Result<Self> {
         ensure_safe_sqlite_threading_mode()?;
 
         let z_vfs = match vfs {
@@ -123,7 +123,7 @@ impl InnerConnection {
                 return Err(e);
             }
 
-            Ok(InnerConnection::new(db, true))
+            Ok(Self::new(db, true))
         }
     }
 
@@ -134,7 +134,7 @@ impl InnerConnection {
 
     #[inline]
     pub fn decode_result(&self, code: c_int) -> Result<()> {
-        unsafe { InnerConnection::decode_result_raw(self.db(), code) }
+        unsafe { Self::decode_result_raw(self.db(), code) }
     }
 
     #[inline]
@@ -155,7 +155,7 @@ impl InnerConnection {
         self.remove_preupdate_hook();
         let mut shared_handle = self.interrupt_lock.lock().unwrap();
         assert!(
-            !shared_handle.is_null(),
+            !self.owned || !shared_handle.is_null(),
             "Bug: Somehow interrupt_lock was cleared before the DB was closed"
         );
         if !self.owned {
@@ -166,7 +166,7 @@ impl InnerConnection {
             let r = ffi::sqlite3_close(self.db);
             // Need to use _raw because _guard has a reference out, and
             // decode_result takes &mut self.
-            let r = InnerConnection::decode_result_raw(self.db, r);
+            let r = Self::decode_result_raw(self.db, r);
             if r.is_ok() {
                 *shared_handle = ptr::null_mut();
                 self.db = ptr::null_mut();

@@ -81,8 +81,8 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
         _: &mut VTabConnection,
         _aux: Option<&()>,
         _args: &[&[u8]],
-    ) -> Result<(String, ArrayTab)> {
-        let vtab = ArrayTab {
+    ) -> Result<(String, Self)> {
+        let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
         };
         Ok(("CREATE TABLE x(value,pointer hidden)".to_owned(), vtab))

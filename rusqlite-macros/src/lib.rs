@@ -4,7 +4,8 @@ use litrs::StringLit;
 use proc_macro::{Delimiter, Group, Literal, Span, TokenStream, TokenTree};
 
 use fallible_iterator::FallibleIterator;
-use sqlite3_parser::ast::{Cmd, ParameterInfo, ToTokens};
+use sqlite3_parser::ast::fmt::ToTokens;
+use sqlite3_parser::ast::{Cmd, ParameterInfo};
 use sqlite3_parser::lexer::sql::Parser;
 
 // https://internals.rust-lang.org/t/custom-error-diagnostics-with-procedural-macros-on-almost-stable-rust/8113
@@ -53,9 +54,8 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
         (stmt, literal)
     };
 
-    let literal = match into_literal(&literal) {
-        Some(it) => it,
-        None => return Err("expected a plain string literal".to_string()),
+    let Some(literal) = into_literal(&literal) else {
+        return Err("expected a plain string literal".to_string());
     };
     let call_site = literal.span();
     let string_lit = match StringLit::try_from(literal) {

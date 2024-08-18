@@ -6,7 +6,7 @@ use std::path::Path;
 ///
 /// Note that there is no way to know at compile-time which system we'll be
 /// targeting, and this test must be made at run-time (of the build script) See
-/// https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts
+/// <https://doc.rust-lang.org/cargo/reference/environment-variables.html#environment-variables-cargo-sets-for-build-scripts>
 fn win_target() -> bool {
     env::var("CARGO_CFG_WINDOWS").is_ok()
 }
@@ -131,12 +131,12 @@ mod build_bundled {
             .flag("-DSQLITE_ENABLE_LOAD_EXTENSION=1")
             .flag("-DSQLITE_ENABLE_MEMORY_MANAGEMENT")
             .flag("-DSQLITE_ENABLE_RTREE")
-            .flag("-DSQLITE_ENABLE_STAT2")
             .flag("-DSQLITE_ENABLE_STAT4")
             .flag("-DSQLITE_SOUNDEX")
             .flag("-DSQLITE_THREADSAFE=1")
             .flag("-DSQLITE_USE_URI")
             .flag("-DHAVE_USLEEP=1")
+            .flag("-DHAVE_ISNAN")
             .flag("-D_POSIX_THREAD_SAFE_FUNCTIONS") // cross compile with MinGW
             .warnings(false);
 
@@ -156,25 +156,34 @@ mod build_bundled {
             let (lib_dir, inc_dir) = match (lib_dir, inc_dir) {
                 (Some(lib_dir), Some(inc_dir)) => {
                     use_openssl = true;
-                    (lib_dir, inc_dir)
+                    (vec![lib_dir], inc_dir)
                 }
                 (lib_dir, inc_dir) => match find_openssl_dir(&host, &target) {
                     None => {
                         if is_windows && !cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
                             panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
                         } else {
-                            (PathBuf::new(), PathBuf::new())
+                            (vec![PathBuf::new()], PathBuf::new())
                         }
                     }
                     Some(openssl_dir) => {
-                        let lib_dir = lib_dir.unwrap_or_else(|| openssl_dir.join("lib"));
+                        let lib_dir = lib_dir.map(|d| vec![d]).unwrap_or_else(|| {
+                            let mut lib_dirs = vec![];
+                            // OpenSSL 3.0 now puts its libraries in lib64/ by default,
+                            // check for both it and lib/.
+                            if openssl_dir.join("lib64").exists() {
+                                lib_dirs.push(openssl_dir.join("lib64"));
+                            }
+                            if openssl_dir.join("lib").exists() {
+                                lib_dirs.push(openssl_dir.join("lib"));
+                            }
+                            lib_dirs
+                        });
                         let inc_dir = inc_dir.unwrap_or_else(|| openssl_dir.join("include"));
 
-                        assert!(
-                            Path::new(&lib_dir).exists(),
-                            "OpenSSL library directory does not exist: {}",
-                            lib_dir.to_string_lossy()
-                        );
+                        if !lib_dir.iter().all(|p| p.exists()) {
+                            panic!("OpenSSL library directory does not exist: {lib_dir:?}");
+                        }
 
                         if !Path::new(&inc_dir).exists() {
                             panic!(
@@ -196,8 +205,10 @@ mod build_bundled {
             } else if use_openssl {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 let lib_name = if is_windows { "libcrypto" } else { "crypto" };
-                println!("cargo:rustc-link-lib=dylib={}", lib_name);
-                println!("cargo:rustc-link-search={}", lib_dir.to_string_lossy());
+                println!("cargo:rustc-link-lib=dylib={lib_name}");
+                for lib_dir_item in &lib_dir {
+                    println!("cargo:rustc-link-search={}", lib_dir_item.to_string_lossy());
+                }
             } else if is_apple {
                 cfg.flag("-DSQLCIPHER_CRYPTO_CC");
                 println!("cargo:rustc-link-lib=framework=Security");
@@ -225,25 +236,6 @@ mod build_bundled {
             cfg.static_crt(true);
         }
 
-        // Older versions of visual studio don't support c99 (including isnan), which
-        // causes a build failure when the linker fails to find the `isnan`
-        // function. `sqlite` provides its own implementation, using the fact
-        // that x != x when x is NaN.
-        //
-        // There may be other platforms that don't support `isnan`, they should be
-        // tested for here.
-        if is_compiler("msvc") {
-            use cc::windows_registry::{find_vs_version, VsVers};
-            let vs_has_nan = match find_vs_version() {
-                Ok(ver) => ver != VsVers::Vs12,
-                Err(_msg) => false,
-            };
-            if vs_has_nan {
-                cfg.flag("-DHAVE_ISNAN");
-            }
-        } else {
-            cfg.flag("-DHAVE_ISNAN");
-        }
         if !win_target() {
             cfg.flag("-DHAVE_LOCALTIME_R");
         }
@@ -272,17 +264,17 @@ mod build_bundled {
         }
 
         if let Ok(limit) = env::var("SQLITE_MAX_VARIABLE_NUMBER") {
-            cfg.flag(&format!("-DSQLITE_MAX_VARIABLE_NUMBER={limit}"));
+            cfg.flag(format!("-DSQLITE_MAX_VARIABLE_NUMBER={limit}"));
         }
         println!("cargo:rerun-if-env-changed=SQLITE_MAX_VARIABLE_NUMBER");
 
         if let Ok(limit) = env::var("SQLITE_MAX_EXPR_DEPTH") {
-            cfg.flag(&format!("-DSQLITE_MAX_EXPR_DEPTH={limit}"));
+            cfg.flag(format!("-DSQLITE_MAX_EXPR_DEPTH={limit}"));
         }
         println!("cargo:rerun-if-env-changed=SQLITE_MAX_EXPR_DEPTH");
 
         if let Ok(limit) = env::var("SQLITE_MAX_COLUMN") {
-            cfg.flag(&format!("-DSQLITE_MAX_COLUMN={limit}"));
+            cfg.flag(format!("-DSQLITE_MAX_COLUMN={limit}"));
         }
         println!("cargo:rerun-if-env-changed=SQLITE_MAX_COLUMN");
 
@@ -291,9 +283,9 @@ mod build_bundled {
                 if extra.starts_with("-D") || extra.starts_with("-U") {
                     cfg.flag(extra);
                 } else if extra.starts_with("SQLITE_") {
-                    cfg.flag(&format!("-D{extra}"));
+                    cfg.flag(format!("-D{extra}"));
                 } else {
-                    panic!("Don't understand {} in LIBSQLITE3_FLAGS", extra);
+                    panic!("Don't understand {extra} in LIBSQLITE3_FLAGS");
                 }
             }
         }
@@ -344,7 +336,7 @@ pub enum HeaderLocation {
 }
 
 impl From<HeaderLocation> for String {
-    fn from(header: HeaderLocation) -> String {
+    fn from(header: HeaderLocation) -> Self {
         match header {
             HeaderLocation::FromEnvironment => {
                 let prefix = env_prefix();

@@ -14,7 +14,7 @@ use crate::vtab::{
 };
 use crate::{Connection, Error, Result};
 
-/// Register the "generate_series" module.
+/// Register the `generate_series` module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
     conn.create_module("generate_series", eponymous_only_module::<SeriesTab>(), aux)
@@ -60,8 +60,8 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
         db: &mut VTabConnection,
         _aux: Option<&()>,
         _args: &[&[u8]],
-    ) -> Result<(String, SeriesTab)> {
-        let vtab = SeriesTab {
+    ) -> Result<(String, Self)> {
+        let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
         };
         db.config(VTabConfig::Innocuous)?;

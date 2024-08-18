@@ -65,7 +65,7 @@ impl Connection {
         progress: Option<fn(Progress)>,
     ) -> Result<()> {
         use self::StepResult::{Busy, Done, Locked, More};
-        let mut dst = Connection::open(dst_path)?;
+        let mut dst = Self::open(dst_path)?;
         let backup = Backup::new_with_names(self, name, &mut dst, DatabaseName::Main)?;
 
         let mut r = More;
@@ -103,7 +103,7 @@ impl Connection {
         progress: Option<F>,
     ) -> Result<()> {
         use self::StepResult::{Busy, Done, Locked, More};
-        let src = Connection::open(src_path)?;
+        let src = Self::open(src_path)?;
         let restore = Backup::new_with_names(&src, DatabaseName::Main, self, name)?;
 
         let mut r = More;

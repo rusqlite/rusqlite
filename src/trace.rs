@@ -122,17 +122,15 @@ impl Connection {
 
 #[cfg(test)]
 mod test {
-    use lazy_static::lazy_static;
-    use std::sync::Mutex;
+    use std::sync::{LazyLock, Mutex};
     use std::time::Duration;
 
     use crate::{Connection, Result};
 
     #[test]
     fn test_trace() -> Result<()> {
-        lazy_static! {
-            static ref TRACED_STMTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
-        }
+        static TRACED_STMTS: LazyLock<Mutex<Vec<String>>> =
+            LazyLock::new(|| Mutex::new(Vec::new()));
         fn tracer(s: &str) {
             let mut traced_stmts = TRACED_STMTS.lock().unwrap();
             traced_stmts.push(s.to_owned());
@@ -159,9 +157,8 @@ mod test {
 
     #[test]
     fn test_profile() -> Result<()> {
-        lazy_static! {
-            static ref PROFILED: Mutex<Vec<(String, Duration)>> = Mutex::new(Vec::new());
-        }
+        static PROFILED: LazyLock<Mutex<Vec<(String, Duration)>>> =
+            LazyLock::new(|| Mutex::new(Vec::new()));
         fn profiler(s: &str, d: Duration) {
             let mut profiled = PROFILED.lock().unwrap();
             profiled.push((s.to_owned(), d));

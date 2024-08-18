@@ -116,7 +116,7 @@ impl<'conn> Blob<'conn> {
 
         if read_len == 0 {
             // We could return `Ok(&mut [])`, but it seems confusing that the
-            // pointers don't match, so fabricate a empty slice of u8 with the
+            // pointers don't match, so fabricate an empty slice of u8 with the
             // same base pointer as `buf`.
             let empty = unsafe { from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), 0) };
             return Ok(empty);

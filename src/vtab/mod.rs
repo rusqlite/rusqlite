@@ -3,10 +3,10 @@
 //! Follow these steps to create your own virtual table:
 //! 1. Write implementation of [`VTab`] and [`VTabCursor`] traits.
 //! 2. Create an instance of the [`Module`] structure specialized for [`VTab`]
-//! impl. from step 1.
+//!    impl. from step 1.
 //! 3. Register your [`Module`] structure using [`Connection::create_module`].
 //! 4. Run a `CREATE VIRTUAL TABLE` command that specifies the new module in the
-//! `USING` clause.
+//!    `USING` clause.
 //!
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
 use std::borrow::Cow::{self, Borrowed, Owned};
@@ -137,7 +137,7 @@ macro_rules! module {
     };
 }
 
-/// Create an modifiable virtual table implementation.
+/// Create a modifiable virtual table implementation.
 ///
 /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
 #[must_use]
@@ -189,13 +189,13 @@ pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, 
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum VTabConfig {
-    /// Equivalent to SQLITE_VTAB_CONSTRAINT_SUPPORT
+    /// Equivalent to `SQLITE_VTAB_CONSTRAINT_SUPPORT`
     ConstraintSupport = 1,
-    /// Equivalent to SQLITE_VTAB_INNOCUOUS
+    /// Equivalent to `SQLITE_VTAB_INNOCUOUS`
     Innocuous = 2,
-    /// Equivalent to SQLITE_VTAB_DIRECTONLY
+    /// Equivalent to `SQLITE_VTAB_DIRECTONLY`
     DirectOnly = 3,
-    /// Equivalent to SQLITE_VTAB_USES_ALL_SCHEMAS
+    /// Equivalent to `SQLITE_VTAB_USES_ALL_SCHEMAS`
     UsesAllSchemas = 4,
 }
 
@@ -345,25 +345,25 @@ pub enum IndexConstraintOp {
 }
 
 impl From<u8> for IndexConstraintOp {
-    fn from(code: u8) -> IndexConstraintOp {
+    fn from(code: u8) -> Self {
         match code {
-            2 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ,
-            4 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GT,
-            8 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LE,
-            16 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LT,
-            32 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GE,
-            64 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_MATCH,
-            65 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIKE,
-            66 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GLOB,
-            67 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_REGEXP,
-            68 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_NE,
-            69 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNOT,
-            70 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNOTNULL,
-            71 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNULL,
-            72 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_IS,
-            73 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIMIT,
-            74 => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_OFFSET,
-            v => IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_FUNCTION(v),
+            2 => Self::SQLITE_INDEX_CONSTRAINT_EQ,
+            4 => Self::SQLITE_INDEX_CONSTRAINT_GT,
+            8 => Self::SQLITE_INDEX_CONSTRAINT_LE,
+            16 => Self::SQLITE_INDEX_CONSTRAINT_LT,
+            32 => Self::SQLITE_INDEX_CONSTRAINT_GE,
+            64 => Self::SQLITE_INDEX_CONSTRAINT_MATCH,
+            65 => Self::SQLITE_INDEX_CONSTRAINT_LIKE,
+            66 => Self::SQLITE_INDEX_CONSTRAINT_GLOB,
+            67 => Self::SQLITE_INDEX_CONSTRAINT_REGEXP,
+            68 => Self::SQLITE_INDEX_CONSTRAINT_NE,
+            69 => Self::SQLITE_INDEX_CONSTRAINT_ISNOT,
+            70 => Self::SQLITE_INDEX_CONSTRAINT_ISNOTNULL,
+            71 => Self::SQLITE_INDEX_CONSTRAINT_ISNULL,
+            72 => Self::SQLITE_INDEX_CONSTRAINT_IS,
+            73 => Self::SQLITE_INDEX_CONSTRAINT_LIMIT,
+            74 => Self::SQLITE_INDEX_CONSTRAINT_OFFSET,
+            v => Self::SQLITE_INDEX_CONSTRAINT_FUNCTION(v),
         }
     }
 }
@@ -480,7 +480,7 @@ impl IndexInfo {
         }
     }
 
-    /// Mask of SQLITE_INDEX_SCAN_* flags.
+    /// Mask of `SQLITE_INDEX_SCAN_*` flags.
     #[inline]
     pub fn set_idx_flags(&mut self, flags: IndexFlags) {
         unsafe { (*self.0).idxFlags = flags.bits() };
@@ -922,7 +922,7 @@ pub fn parameter(c_slice: &[u8]) -> Result<(&str, &str)> {
     if let Some(key) = split.next() {
         if let Some(value) = split.next() {
             let param = key.trim();
-            let value = dequote(value);
+            let value = dequote(value.trim());
             return Ok((param, value));
         }
     }

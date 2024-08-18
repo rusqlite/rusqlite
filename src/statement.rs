@@ -563,7 +563,7 @@ impl Statement<'_> {
     ///
     /// Any unbound parameters will have `NULL` as their value.
     ///
-    /// This should not generally be used outside of special cases, and
+    /// This should not generally be used outside special cases, and
     /// functions in the [`Statement::execute`] family should be preferred.
     ///
     /// # Failure
@@ -582,7 +582,7 @@ impl Statement<'_> {
     ///
     /// Any unbound parameters will have `NULL` as their value.
     ///
-    /// This should not generally be used outside of special cases, and
+    /// This should not generally be used outside special cases, and
     /// functions in the [`Statement::query`] family should be preferred.
     ///
     /// Note that if the SQL does not return results, [`Statement::raw_execute`]
@@ -878,23 +878,23 @@ impl Statement<'_> {
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum StatementStatus {
-    /// Equivalent to SQLITE_STMTSTATUS_FULLSCAN_STEP
+    /// Equivalent to `SQLITE_STMTSTATUS_FULLSCAN_STEP`
     FullscanStep = 1,
-    /// Equivalent to SQLITE_STMTSTATUS_SORT
+    /// Equivalent to `SQLITE_STMTSTATUS_SORT`
     Sort = 2,
-    /// Equivalent to SQLITE_STMTSTATUS_AUTOINDEX
+    /// Equivalent to `SQLITE_STMTSTATUS_AUTOINDEX`
     AutoIndex = 3,
-    /// Equivalent to SQLITE_STMTSTATUS_VM_STEP
+    /// Equivalent to `SQLITE_STMTSTATUS_VM_STEP`
     VmStep = 4,
-    /// Equivalent to SQLITE_STMTSTATUS_REPREPARE (3.20.0)
+    /// Equivalent to `SQLITE_STMTSTATUS_REPREPARE` (3.20.0)
     RePrepare = 5,
-    /// Equivalent to SQLITE_STMTSTATUS_RUN (3.20.0)
+    /// Equivalent to `SQLITE_STMTSTATUS_RUN` (3.20.0)
     Run = 6,
-    /// Equivalent to SQLITE_STMTSTATUS_FILTER_MISS
+    /// Equivalent to `SQLITE_STMTSTATUS_FILTER_MISS`
     FilterMiss = 7,
-    /// Equivalent to SQLITE_STMTSTATUS_FILTER_HIT
+    /// Equivalent to `SQLITE_STMTSTATUS_FILTER_HIT`
     FilterHit = 8,
-    /// Equivalent to SQLITE_STMTSTATUS_MEMUSED (3.20.0)
+    /// Equivalent to `SQLITE_STMTSTATUS_MEMUSED` (3.20.0)
     MemUsed = 99,
 }
 
@@ -1021,7 +1021,7 @@ mod test {
         let doubled_id: i32 = rows.next().unwrap()?;
         assert_eq!(1, doubled_id);
 
-        // second row should be Err
+        // second row should be an `Err`
         #[allow(clippy::match_wild_err_arm)]
         match rows.next().unwrap() {
             Ok(_) => panic!("invalid Ok"),

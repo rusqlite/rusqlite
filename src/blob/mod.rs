@@ -50,7 +50,7 @@
 //!    Using `MaybeUninit` here can be more efficient in some cases, but is
 //!    often inconvenient, so both are provided.
 //!
-//! 2. Exact/inexact refers to to whether or not the entire buffer must be
+//! 2. Exact/inexact refers to whether or not the entire buffer must be
 //!    filled in order for the call to be considered a success.
 //!
 //!    The "exact" functions require the provided buffer be entirely filled, or
@@ -287,7 +287,7 @@ impl Blob<'_> {
     /// Close a BLOB handle.
     ///
     /// Calling `close` explicitly is not required (the BLOB will be closed
-    /// when the `Blob` is dropped), but it is available so you can get any
+    /// when the `Blob` is dropped), but it is available, so you can get any
     /// errors that occur.
     ///
     /// # Failure
@@ -413,7 +413,7 @@ pub struct ZeroBlob(pub i32);
 impl ToSql for ZeroBlob {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let ZeroBlob(length) = *self;
+        let Self(length) = *self;
         Ok(ToSqlOutput::ZeroBlob(length))
     }
 }

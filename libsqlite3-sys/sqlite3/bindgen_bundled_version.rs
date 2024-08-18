@@ -23,10 +23,10 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 
-pub const SQLITE_VERSION: &[u8; 7] = b"3.45.3\0";
-pub const SQLITE_VERSION_NUMBER: i32 = 3045003;
+pub const SQLITE_VERSION: &[u8; 7] = b"3.46.1\0";
+pub const SQLITE_VERSION_NUMBER: i32 = 3046001;
 pub const SQLITE_SOURCE_ID: &[u8; 85] =
-    b"2024-04-15 13:34:05 8653b758870e6ef0c98d46b3ace27849054af85da891eb121e9aaa537f1e8355\0";
+    b"2024-08-13 09:16:08 c9c2ab54ba1f5f46360f1b4f35d849cd3f080e6fc2b6c60e91b16c63f69a1e33\0";
 pub const SQLITE_OK: i32 = 0;
 pub const SQLITE_ERROR: i32 = 1;
 pub const SQLITE_INTERNAL: i32 = 2;
@@ -2881,6 +2881,12 @@ extern "C" {
         arg1: *mut sqlite3_changegroup,
         nData: ::std::os::raw::c_int,
         pData: *mut ::std::os::raw::c_void,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn sqlite3changegroup_add_change(
+        arg1: *mut sqlite3_changegroup,
+        arg2: *mut sqlite3_changeset_iter,
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {

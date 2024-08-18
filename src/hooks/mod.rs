@@ -33,12 +33,12 @@ pub enum Action {
 
 impl From<i32> for Action {
     #[inline]
-    fn from(code: i32) -> Action {
+    fn from(code: i32) -> Self {
         match code {
-            ffi::SQLITE_DELETE => Action::SQLITE_DELETE,
-            ffi::SQLITE_INSERT => Action::SQLITE_INSERT,
-            ffi::SQLITE_UPDATE => Action::SQLITE_UPDATE,
-            _ => Action::UNKNOWN,
+            ffi::SQLITE_DELETE => Self::SQLITE_DELETE,
+            ffi::SQLITE_INSERT => Self::SQLITE_INSERT,
+            ffi::SQLITE_UPDATE => Self::SQLITE_UPDATE,
+            _ => Self::UNKNOWN,
         }
     }
 }
@@ -372,7 +372,7 @@ impl Connection {
     /// The callback parameters are:
     ///
     /// - the type of database update (`SQLITE_INSERT`, `SQLITE_UPDATE` or
-    /// `SQLITE_DELETE`),
+    ///   `SQLITE_DELETE`),
     /// - the name of the database ("main", "temp", ...),
     /// - the name of the table that is updated,
     /// - the ROWID of the row that is updated.

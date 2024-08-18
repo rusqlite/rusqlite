@@ -7,6 +7,7 @@
 //!  - Format 2: "YYYY-MM-DD HH:MM"
 //!  - Format 5: "YYYY-MM-DDTHH:MM"
 //!  - Format 8: "HH:MM"
+//!
 //! without an explicit second value will assume 0 seconds.
 //! Time String that contain an optional timezone without an explicit date are unsupported.
 //! All other assumptions described in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) section are unsupported.
@@ -50,7 +51,7 @@ const LEGACY_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
     "[year]-[month]-[day] [hour]:[minute]:[second]:[subsecond] [offset_hour sign:mandatory]:[offset_minute]"
 );
 
-/// OffsetDatetime => RFC3339 format ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM")
+/// `OffsetDatetime` => RFC3339 format ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM")
 impl ToSql for OffsetDateTime {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
@@ -68,12 +69,12 @@ impl FromSql for OffsetDateTime {
         value.as_str().and_then(|s| {
             if let Some(b' ') = s.as_bytes().get(23) {
                 // legacy
-                return OffsetDateTime::parse(s, &LEGACY_DATE_TIME_FORMAT)
+                return Self::parse(s, &LEGACY_DATE_TIME_FORMAT)
                     .map_err(|err| FromSqlError::Other(Box::new(err)));
             }
             if s[8..].contains('+') || s[8..].contains('-') {
                 // Formats 2-7 with timezone
-                return OffsetDateTime::parse(s, &OFFSET_DATE_TIME_FORMAT)
+                return Self::parse(s, &OFFSET_DATE_TIME_FORMAT)
                     .map_err(|err| FromSqlError::Other(Box::new(err)));
             }
             // Formats 2-7 without timezone
@@ -100,7 +101,7 @@ impl FromSql for Date {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value.as_str().and_then(|s| {
-            Date::parse(s, &DATE_FORMAT).map_err(|err| FromSqlError::Other(err.into()))
+            Self::parse(s, &DATE_FORMAT).map_err(|err| FromSqlError::Other(err.into()))
         })
     }
 }
@@ -121,7 +122,7 @@ impl FromSql for Time {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value.as_str().and_then(|s| {
-            Time::parse(s, &TIME_FORMAT).map_err(|err| FromSqlError::Other(err.into()))
+            Self::parse(s, &TIME_FORMAT).map_err(|err| FromSqlError::Other(err.into()))
         })
     }
 }
@@ -148,7 +149,7 @@ impl FromSql for PrimitiveDateTime {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value.as_str().and_then(|s| {
-            PrimitiveDateTime::parse(s, &PRIMITIVE_DATE_TIME_FORMAT)
+            Self::parse(s, &PRIMITIVE_DATE_TIME_FORMAT)
                 .map_err(|err| FromSqlError::Other(err.into()))
         })
     }

@@ -18,7 +18,7 @@ impl FromSql for Url {
         match value {
             ValueRef::Text(s) => {
                 let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
-                Url::parse(s).map_err(|e| FromSqlError::Other(Box::new(e)))
+                Self::parse(s).map_err(|e| FromSqlError::Other(Box::new(e)))
             }
             _ => Err(FromSqlError::InvalidType),
         }
