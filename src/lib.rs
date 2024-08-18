@@ -151,7 +151,7 @@ pub(crate) use util::SmallCString;
 // Number of cached prepared statements we'll hold on to.
 const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
 
-/// A macro making it more convenient to longer lists of
+/// A macro making it more convenient to pass longer lists of
 /// parameters as a `&[&dyn ToSql]`.
 ///
 /// # Example
