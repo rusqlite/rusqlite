@@ -226,7 +226,7 @@ jobs:
         run: |
           cargo test --verbose
           cargo test --features="bundled-full" --verbose
-          cargo test --features="bundled-full session buildtime_bindgen preupdate_hook" --verbose
+          cargo test --features="bundled-full session buildtime_bindgen preupdate_hook load_extension" --all --all-targets --verbose
           cargo test --features="bundled-sqlcipher-vendored-openssl" --verbose
         env:
           RUSTFLAGS: -Cinstrument-coverage
