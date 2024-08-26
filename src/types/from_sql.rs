@@ -1,6 +1,6 @@
 use super::{Value, ValueRef};
-use std::error::Error;
 use std::borrow::Cow;
+use std::error::Error;
 use std::fmt;
 
 /// Enum listing possible errors from [`FromSql`] trait.
@@ -287,11 +287,11 @@ impl FromSql for Value {
 
 #[cfg(test)]
 mod test {
+    use super::FromSql;
+    use crate::{Connection, Error, Result};
     use std::borrow::Cow;
     use std::rc::Rc;
     use std::sync::Arc;
-    use super::FromSql;
-    use crate::{Connection, Error, Result};
 
     #[test]
     fn test_integral_ranges() -> Result<()> {
@@ -404,15 +404,27 @@ mod test {
         let db = Connection::open_in_memory()?;
 
         assert_eq!(
-            db.query_row("SELECT 'this is a string'", [], |r| r.get::<_, Cow<'_, str>>(0)),
+            db.query_row(
+                "SELECT 'this is a string'",
+                [],
+                |r| r.get::<_, Cow<'_, str>>(0),
+            ),
             Ok(Cow::Borrowed("this is a string")),
         );
         assert_eq!(
-            db.query_row("SELECT x'09ab20fdee87'", [], |r| r.get::<_, Cow<'_, [u8]>>(0)),
+            db.query_row(
+                "SELECT x'09ab20fdee87'",
+                [],
+                |r| r.get::<_, Cow<'_, [u8]>>(0),
+            ),
             Ok(Cow::Owned(vec![0x09, 0xab, 0x20, 0xfd, 0xee, 0x87])),
         );
         assert_eq!(
-            db.query_row("SELECT 24.5", [], |r| r.get::<_, Cow<'_, f32>>(0)),
+            db.query_row(
+                "SELECT 24.5",
+                [],
+                |r| r.get::<_, Cow<'_, f32>>(0),
+            ),
             Ok(Cow::Borrowed(&24.5)),
         );
 
@@ -424,11 +436,19 @@ mod test {
         let db = Connection::open_in_memory()?;
 
         assert_eq!(
-            db.query_row("SELECT 'Some string slice!'", [], |r| r.get::<_, Rc<str>>(0)),
+            db.query_row(
+                "SELECT 'Some string slice!'",
+                [],
+                |r| r.get::<_, Rc<str>>(0),
+            ),
             Ok(Rc::from("Some string slice!")),
         );
         assert_eq!(
-            db.query_row("SELECT x'012366779988fedc'", [], |r| r.get::<_, Rc<[u8]>>(0)),
+            db.query_row(
+                "SELECT x'012366779988fedc'",
+                [],
+                |r| r.get::<_, Rc<[u8]>>(0),
+            ),
             Ok(Rc::from(b"\x01\x23\x66\x77\x99\x88\xfe\xdc".as_slice())),
         );
 
@@ -441,11 +461,19 @@ mod test {
             Ok(b"a string CAN be a blob".to_vec().into_boxed_slice()),
         );
         assert_eq!(
-            db.query_row("SELECT 'This is inside an Arc.'", [], |r| r.get::<_, Arc<str>>(0)),
+            db.query_row(
+                "SELECT 'This is inside an Arc.'",
+                [],
+                |r| r.get::<_, Arc<str>>(0),
+            ),
             Ok(Arc::from("This is inside an Arc.")),
         );
         assert_eq!(
-            db.query_row("SELECT x'afd374'", [], |r| r.get::<_, Arc<[u8]>>(0)),
+            db.query_row(
+                "SELECT x'afd374'",
+                [],
+                |r| r.get::<_, Arc<[u8]>>(0),
+            ),
             Ok(Arc::from(b"\xaf\xd3\x74".as_slice())),
         );
 
