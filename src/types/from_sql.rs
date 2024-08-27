@@ -1,4 +1,5 @@
 use super::{Value, ValueRef};
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
 
@@ -204,6 +205,27 @@ impl FromSql for Vec<u8> {
     }
 }
 
+impl FromSql for Box<[u8]> {
+    #[inline]
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value.as_blob().map(Box::<[u8]>::from)
+    }
+}
+
+impl FromSql for std::rc::Rc<[u8]> {
+    #[inline]
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value.as_blob().map(std::rc::Rc::<[u8]>::from)
+    }
+}
+
+impl FromSql for std::sync::Arc<[u8]> {
+    #[inline]
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value.as_blob().map(std::sync::Arc::<[u8]>::from)
+    }
+}
+
 impl<const N: usize> FromSql for [u8; N] {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
@@ -245,6 +267,17 @@ impl<T: FromSql> FromSql for Option<T> {
     }
 }
 
+impl<T: ?Sized> FromSql for Cow<'_, T>
+where
+    T: ToOwned,
+    T::Owned: FromSql,
+{
+    #[inline]
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        <T::Owned>::column_result(value).map(Cow::Owned)
+    }
+}
+
 impl FromSql for Value {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
@@ -256,6 +289,9 @@ impl FromSql for Value {
 mod test {
     use super::FromSql;
     use crate::{Connection, Error, Result};
+    use std::borrow::Cow;
+    use std::rc::Rc;
+    use std::sync::Arc;
 
     #[test]
     fn test_integral_ranges() -> Result<()> {
@@ -358,6 +394,64 @@ mod test {
             std::num::NonZeroUsize,
             &[0, -2, -1, -4_294_967_296],
             &[1, 4_294_967_295]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cow() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+
+        assert_eq!(
+            db.query_row("SELECT 'this is a string'", [], |r| r
+                .get::<_, Cow<'_, str>>(0)),
+            Ok(Cow::Borrowed("this is a string")),
+        );
+        assert_eq!(
+            db.query_row("SELECT x'09ab20fdee87'", [], |r| r
+                .get::<_, Cow<'_, [u8]>>(0)),
+            Ok(Cow::Owned(vec![0x09, 0xab, 0x20, 0xfd, 0xee, 0x87])),
+        );
+        assert_eq!(
+            db.query_row("SELECT 24.5", [], |r| r.get::<_, Cow<'_, f32>>(0),),
+            Ok(Cow::Borrowed(&24.5)),
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_heap_slice() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+
+        assert_eq!(
+            db.query_row("SELECT 'Some string slice!'", [], |r| r
+                .get::<_, Rc<str>>(0)),
+            Ok(Rc::from("Some string slice!")),
+        );
+        assert_eq!(
+            db.query_row("SELECT x'012366779988fedc'", [], |r| r
+                .get::<_, Rc<[u8]>>(0)),
+            Ok(Rc::from(b"\x01\x23\x66\x77\x99\x88\xfe\xdc".as_slice())),
+        );
+
+        assert_eq!(
+            db.query_row(
+                "SELECT x'6120737472696e672043414e206265206120626c6f62'",
+                [],
+                |r| r.get::<_, Box<[u8]>>(0)
+            ),
+            Ok(b"a string CAN be a blob".to_vec().into_boxed_slice()),
+        );
+        assert_eq!(
+            db.query_row("SELECT 'This is inside an Arc.'", [], |r| r
+                .get::<_, Arc<str>>(0)),
+            Ok(Arc::from("This is inside an Arc.")),
+        );
+        assert_eq!(
+            db.query_row("SELECT x'afd374'", [], |r| r.get::<_, Arc<[u8]>>(0),),
+            Ok(Arc::from(b"\xaf\xd3\x74".as_slice())),
         );
 
         Ok(())
