@@ -1,5 +1,8 @@
 //! Online SQLite backup API.
 //!
+//! Alternatively, you can create a backup with a simple
+//! [`VACUUM INTO <backup_path>`](https://sqlite.org/lang_vacuum.html#vacuuminto).
+//!
 //! To create a [`Backup`], you must have two distinct [`Connection`]s - one
 //! for the source (which can be used while the backup is running) and one for
 //! the destination (which cannot).  A [`Backup`] handle exposes three methods:
