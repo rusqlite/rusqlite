@@ -238,7 +238,7 @@ impl Deref for Transaction<'_> {
     }
 }
 
-#[allow(unused_must_use)]
+#[expect(unused_must_use)]
 impl Drop for Transaction<'_> {
     #[inline]
     fn drop(&mut self) {
@@ -363,7 +363,7 @@ impl Deref for Savepoint<'_> {
     }
 }
 
-#[allow(unused_must_use)]
+#[expect(unused_must_use)]
 impl Drop for Savepoint<'_> {
     #[inline]
     fn drop(&mut self) {

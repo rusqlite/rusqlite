@@ -1128,7 +1128,7 @@ impl<'conn, 'sql> Batch<'conn, 'sql> {
     /// Iterates on each batch statements.
     ///
     /// Returns `Ok(None)` when batch is completed.
-    #[allow(clippy::should_implement_trait)] // fallible iterator
+    #[expect(clippy::should_implement_trait)] // fallible iterator
     pub fn next(&mut self) -> Result<Option<Statement<'conn>>> {
         while self.tail < self.sql.len() {
             let sql = &self.sql[self.tail..];
@@ -1285,21 +1285,15 @@ mod test {
     // this function is never called, but is still type checked; in
     // particular, calls with specific instantiations will require
     // that those types are `Send`.
-    #[allow(
-        dead_code,
-        unconditional_recursion,
-        clippy::extra_unused_type_parameters
-    )]
+    #[allow(dead_code)]
+    #[expect(unconditional_recursion, clippy::extra_unused_type_parameters)]
     fn ensure_send<T: Send>() {
         ensure_send::<Connection>();
         ensure_send::<InterruptHandle>();
     }
 
-    #[allow(
-        dead_code,
-        unconditional_recursion,
-        clippy::extra_unused_type_parameters
-    )]
+    #[allow(dead_code)]
+    #[expect(unconditional_recursion, clippy::extra_unused_type_parameters)]
     fn ensure_sync<T: Sync>() {
         ensure_sync::<InterruptHandle>();
     }

@@ -155,8 +155,9 @@ pub enum StepResult {
     Locked,
 }
 
-/// Struct specifying the progress of a backup. The
-/// percentage completion can be calculated as `(pagecount - remaining) /
+/// Struct specifying the progress of a backup.
+///
+/// The percentage completion can be calculated as `(pagecount - remaining) /
 /// pagecount`. The progress of a backup is as of the last call to
 /// [`step`](Backup::step) - if the source database is modified after a call to
 /// [`step`](Backup::step), the progress value will become outdated and

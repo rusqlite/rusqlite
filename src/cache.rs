@@ -60,7 +60,6 @@ impl Connection {
 #[derive(Debug)]
 pub struct StatementCache(RefCell<LruCache<Arc<str>, RawStatement>>);
 
-#[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl Send for StatementCache {}
 
 /// Cacheable statement.
@@ -90,7 +89,6 @@ impl<'conn> DerefMut for CachedStatement<'conn> {
 }
 
 impl Drop for CachedStatement<'_> {
-    #[allow(unused_must_use)]
     #[inline]
     fn drop(&mut self) {
         if let Some(stmt) = self.stmt.take() {

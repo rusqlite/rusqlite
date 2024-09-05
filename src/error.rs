@@ -9,7 +9,6 @@ use std::str;
 
 /// Enum listing possible errors from rusqlite.
 #[derive(Debug)]
-#[allow(clippy::enum_variant_names)]
 #[non_exhaustive]
 pub enum Error {
     /// An error from an underlying SQLite call.
@@ -84,7 +83,6 @@ pub enum Error {
     /// [`create_scalar_function`](crate::Connection::create_scalar_function)).
     #[cfg(feature = "functions")]
     #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
-    #[allow(dead_code)]
     UserFunctionError(Box<dyn error::Error + Send + Sync + 'static>),
 
     /// Error available for the implementors of the
@@ -98,7 +96,6 @@ pub enum Error {
     /// [`create_module`](crate::Connection::create_module)).
     #[cfg(feature = "vtab")]
     #[cfg_attr(docsrs, doc(cfg(feature = "vtab")))]
-    #[allow(dead_code)]
     ModuleError(String),
 
     /// An unwinding panic occurs in a UDF (user-defined function).

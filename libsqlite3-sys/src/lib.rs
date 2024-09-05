@@ -1,5 +1,4 @@
-#![allow(non_snake_case, non_camel_case_types)]
-#![cfg_attr(test, allow(deref_nullptr))] // https://github.com/rust-lang/rust-bindgen/issues/2066
+#![expect(non_snake_case, non_camel_case_types)]
 
 // force linking to openssl
 #[cfg(feature = "bundled-sqlcipher-vendored-openssl")]

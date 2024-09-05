@@ -18,7 +18,7 @@ use rusqlite::{Connection, Result};
 /// sqlite> SELECT rusqlite_test_function();
 /// Rusqlite extension loaded correctly!
 /// ```
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[expect(clippy::not_unsafe_ptr_arg_deref)]
 #[no_mangle]
 pub unsafe extern "C" fn sqlite3_extension_init(
     db: *mut ffi::sqlite3,

@@ -242,7 +242,7 @@ mod test {
     }
 
     #[test]
-    #[allow(clippy::cognitive_complexity)]
+    #[expect(clippy::cognitive_complexity)]
     fn test_mismatched_types() -> Result<()> {
         fn is_invalid_column_type(err: Error) -> bool {
             matches!(err, Error::InvalidColumnType(..))
@@ -388,7 +388,7 @@ mod test {
     }
 
     #[test]
-    #[allow(clippy::float_cmp)]
+    #[expect(clippy::float_cmp)]
     fn test_numeric_conversions() -> Result<()> {
         // Test what happens when we store an f32 and retrieve an i32 etc.
         let db = Connection::open_in_memory()?;

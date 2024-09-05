@@ -23,9 +23,9 @@ pub enum PreUpdateCase {
     Delete(PreUpdateOldValueAccessor),
     /// Pre-update hook was triggered by an update.
     Update {
-        #[allow(missing_docs)]
+        #[expect(missing_docs)]
         old_value_accessor: PreUpdateOldValueAccessor,
-        #[allow(missing_docs)]
+        #[expect(missing_docs)]
         new_value_accessor: PreUpdateNewValueAccessor,
     },
     /// This variant is not normally produced by SQLite. You may encounter it
