@@ -662,11 +662,10 @@ impl Connection {
 
 /// Constants passed to the conflict handler
 /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_CONFLICT) for details.
-#[expect(missing_docs)]
+#[allow(missing_docs)]
 #[repr(i32)]
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
-#[expect(clippy::upper_case_acronyms)]
 pub enum ConflictType {
     UNKNOWN = -1,
     SQLITE_CHANGESET_DATA = ffi::SQLITE_CHANGESET_DATA,
@@ -690,11 +689,10 @@ impl From<i32> for ConflictType {
 
 /// Constants returned by the conflict handler
 /// See [here](https://sqlite.org/session.html#SQLITE_CHANGESET_ABORT) for details.
-#[expect(missing_docs)]
+#[allow(missing_docs)]
 #[repr(i32)]
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
-#[expect(clippy::upper_case_acronyms)]
 pub enum ConflictAction {
     SQLITE_CHANGESET_OMIT = ffi::SQLITE_CHANGESET_OMIT,
     SQLITE_CHANGESET_REPLACE = ffi::SQLITE_CHANGESET_REPLACE,
