@@ -41,7 +41,7 @@ pub struct InnerConnection {
 unsafe impl Send for InnerConnection {}
 
 impl InnerConnection {
-    #[allow(clippy::mutex_atomic, clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
+    #[expect(clippy::mutex_atomic, clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
     #[inline]
     pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> Self {
         Self {
@@ -146,7 +146,6 @@ impl InnerConnection {
         }
     }
 
-    #[allow(clippy::mutex_atomic)]
     pub fn close(&mut self) -> Result<()> {
         if self.db.is_null() {
             return Ok(());
@@ -402,7 +401,7 @@ impl InnerConnection {
 }
 
 impl Drop for InnerConnection {
-    #[allow(unused_must_use)]
+    #[expect(unused_must_use)]
     #[inline]
     fn drop(&mut self) {
         self.close();

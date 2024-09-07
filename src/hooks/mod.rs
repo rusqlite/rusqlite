@@ -1,5 +1,5 @@
 //! Commit, Data Change and Rollback Notification Callbacks
-#![allow(non_camel_case_types)]
+#![expect(non_camel_case_types)]
 
 use std::os::raw::{c_char, c_int, c_void};
 use std::panic::catch_unwind;
@@ -19,7 +19,6 @@ mod preupdate_hook;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(i32)]
 #[non_exhaustive]
-#[allow(clippy::upper_case_acronyms)]
 pub enum Action {
     /// Unsupported / unexpected action
     UNKNOWN = -1,

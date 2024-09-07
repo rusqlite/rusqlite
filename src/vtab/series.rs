@@ -115,7 +115,7 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
         }
         if idx_num.contains(QueryPlanFlags::BOTH) {
             // Both start= and stop= boundaries are available.
-            #[allow(clippy::bool_to_int_with_if)]
+            #[expect(clippy::bool_to_int_with_if)]
             info.set_estimated_cost(f64::from(
                 2 - if idx_num.contains(QueryPlanFlags::STEP) {
                     1
@@ -193,7 +193,7 @@ impl SeriesTabCursor<'_> {
         }
     }
 }
-#[allow(clippy::comparison_chain)]
+#[expect(clippy::comparison_chain)]
 unsafe impl VTabCursor for SeriesTabCursor<'_> {
     fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
         let mut idx_num = QueryPlanFlags::from_bits_truncate(idx_num);

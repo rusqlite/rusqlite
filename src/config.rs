@@ -10,9 +10,8 @@ use crate::{Connection, Result};
 /// See [Database Connection Configuration Options](https://sqlite.org/c3ref/c_dbconfig_enable_fkey.html) for details.
 #[repr(i32)]
 #[derive(Copy, Clone, Debug)]
-#[allow(non_snake_case, non_camel_case_types)]
+#[expect(non_camel_case_types)]
 #[non_exhaustive]
-#[allow(clippy::upper_case_acronyms)]
 pub enum DbConfig {
     //SQLITE_DBCONFIG_MAINDBNAME = 1000, /* const char* */
     //SQLITE_DBCONFIG_LOOKASIDE = 1001,  /* void* int int */
