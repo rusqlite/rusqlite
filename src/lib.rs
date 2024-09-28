@@ -1195,7 +1195,7 @@ bitflags::bitflags! {
         ///
         /// This flag should probably never be used with `rusqlite`, as we
         /// ensure thread-safety statically (we implement [`Send`] and not
-        /// [`Sync`]). That said
+        /// [`Sync`]).
         ///
         /// Critically, even if this flag is used, the [`Connection`] is not
         /// safe to use across multiple threads simultaneously. To access a
