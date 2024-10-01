@@ -93,7 +93,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ ubuntu-latest, macos-latest ]
         # TODO: find a way to test this on windows :(
 
     steps:
@@ -183,10 +183,13 @@ jobs:
       - uses: hecrj/setup-rust-action@v2
         with:
           components: clippy
+      - run: rustc --version && cargo --version
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --workspace --features bundled -- -D warnings
       # Clippy with all non-conflicting features
       - run: cargo clippy --all-targets --workspace --features 'bundled-full session buildtime_bindgen preupdate_hook' -- -D warnings
+      - run: cargo clippy --all-targets --workspace --features 'loadable_extension functions trace' -- -D warnings
+      - run: cargo clippy --all-targets --workspace --features 'load_extension bundled functions trace' -- -D warnings
 
   # Ensure patch is formatted.
   fmt:
