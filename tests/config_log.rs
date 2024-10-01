@@ -2,7 +2,7 @@
 //! function affects SQLite process-wide and so is not safe to run as a normal
 //! #[test] in the library.
 
-#[cfg(feature = "trace")]
+#[cfg(all(feature = "trace", not(feature = "loadable_extension")))]
 fn main() {
     use std::os::raw::c_int;
     use std::sync::{LazyLock, Mutex};
@@ -28,5 +28,5 @@ fn main() {
     assert_eq!(logs_received[0].1, "First message from rusqlite");
 }
 
-#[cfg(not(feature = "trace"))]
+#[cfg(not(all(feature = "trace", not(feature = "loadable_extension"))))]
 fn main() {}
