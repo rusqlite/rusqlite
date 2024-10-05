@@ -239,7 +239,7 @@ mod build_bundled {
         if !win_target() {
             cfg.flag("-DHAVE_LOCALTIME_R");
         }
-        if env::var("TARGET").map_or(false, |v| v == "wasm32-wasi") {
+        if env::var("TARGET").map_or(false, |v| v.starts_with("wasm32-wasi")) {
             cfg.flag("-USQLITE_THREADSAFE")
                 .flag("-DSQLITE_THREADSAFE=0")
                 // https://github.com/rust-lang/rust/issues/74393
