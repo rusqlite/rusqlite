@@ -115,6 +115,8 @@ impl Statement<'_> {
 
     /// Execute an INSERT and return the ROWID.
     ///
+    /// You should use 'INSERT ... RETURNING ROWID;' instead (3.35.0).
+    ///
     /// # Note
     ///
     /// This function is a convenience wrapper around
