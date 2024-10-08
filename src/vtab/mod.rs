@@ -103,7 +103,6 @@ const ZERO_MODULE: ffi::sqlite3_module = unsafe {
 
 macro_rules! module {
     ($lt:lifetime, $vt:ty, $ct:ty, $xc:expr, $xd:expr, $xu:expr) => {
-    #[allow(clippy::needless_update)]
     &Module {
         base: ffi::sqlite3_module {
             // We don't use V3
@@ -322,8 +321,8 @@ pub trait UpdateVTab<'vtab>: CreateVTab<'vtab> {
 /// Index constraint operator.
 /// See [Virtual Table Constraint Operator Codes](https://sqlite.org/c3ref/c_index_constraint_eq.html) for details.
 #[derive(Debug, Eq, PartialEq)]
-#[allow(non_snake_case, non_camel_case_types, missing_docs)]
-#[allow(clippy::upper_case_acronyms)]
+#[allow(missing_docs)]
+#[expect(non_camel_case_types)]
 pub enum IndexConstraintOp {
     SQLITE_INDEX_CONSTRAINT_EQ,
     SQLITE_INDEX_CONSTRAINT_GT,

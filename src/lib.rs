@@ -1149,7 +1149,7 @@ impl<'conn, 'sql> Batch<'conn, 'sql> {
     /// Iterates on each batch statements.
     ///
     /// Returns `Ok(None)` when batch is completed.
-    #[allow(clippy::should_implement_trait)] // fallible iterator
+    #[expect(clippy::should_implement_trait)] // fallible iterator
     pub fn next(&mut self) -> Result<Option<Statement<'conn>>> {
         while self.tail < self.sql.len() {
             let sql = &self.sql[self.tail..];
@@ -1216,7 +1216,7 @@ bitflags::bitflags! {
         ///
         /// This flag should probably never be used with `rusqlite`, as we
         /// ensure thread-safety statically (we implement [`Send`] and not
-        /// [`Sync`]). That said
+        /// [`Sync`]).
         ///
         /// Critically, even if this flag is used, the [`Connection`] is not
         /// safe to use across multiple threads simultaneously. To access a
@@ -1306,21 +1306,15 @@ mod test {
     // this function is never called, but is still type checked; in
     // particular, calls with specific instantiations will require
     // that those types are `Send`.
-    #[allow(
-        dead_code,
-        unconditional_recursion,
-        clippy::extra_unused_type_parameters
-    )]
+    #[allow(dead_code)]
+    #[expect(unconditional_recursion, clippy::extra_unused_type_parameters)]
     fn ensure_send<T: Send>() {
         ensure_send::<Connection>();
         ensure_send::<InterruptHandle>();
     }
 
-    #[allow(
-        dead_code,
-        unconditional_recursion,
-        clippy::extra_unused_type_parameters
-    )]
+    #[allow(dead_code)]
+    #[expect(unconditional_recursion, clippy::extra_unused_type_parameters)]
     fn ensure_sync<T: Sync>() {
         ensure_sync::<InterruptHandle>();
     }

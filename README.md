@@ -245,3 +245,8 @@ Depending on the set of enabled cargo `features`, rusqlite and libsqlite3-sys wi
 - If `--features=bundled` is enabled, the vendored source of SQLite will be compiled and linked in. SQLite is in the public domain, as described [here](https://www.sqlite.org/copyright.html).
 
 Both of these are quite permissive, have no bearing on the license of the code in `rusqlite` or `libsqlite3-sys` themselves, and can be entirely ignored if you do not use the feature in question.
+
+## Minimum supported Rust version (MSRV)
+
+Latest stable Rust version at the time of release. It might compile with older versions.
+

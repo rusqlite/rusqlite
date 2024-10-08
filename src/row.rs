@@ -34,7 +34,7 @@ impl<'stmt> Rows<'stmt> {
     /// consider using [`query_map`](Statement::query_map) or
     /// [`query_and_then`](Statement::query_and_then) instead, which
     /// return types that implement `Iterator`.
-    #[allow(clippy::should_implement_trait)] // cannot implement Iterator
+    #[expect(clippy::should_implement_trait)] // cannot implement Iterator
     #[inline]
     pub fn next(&mut self) -> Result<Option<&Row<'stmt>>> {
         self.advance()?;
@@ -107,7 +107,7 @@ impl<'stmt> Rows<'stmt> {
 }
 
 impl Drop for Rows<'_> {
-    #[allow(unused_must_use)]
+    #[expect(unused_must_use)]
     #[inline]
     fn drop(&mut self) {
         self.reset();
@@ -438,7 +438,7 @@ macro_rules! tuple_try_from_row {
             fn try_from(row: &'a Row<'a>) -> Result<Self> {
                 let mut index = 0;
                 $(
-                    #[allow(non_snake_case)]
+                    #[expect(non_snake_case)]
                     let $field = row.get::<_, $field>(index)?;
                     index += 1;
                 )*

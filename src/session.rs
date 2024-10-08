@@ -1,5 +1,5 @@
 //! [Session Extension](https://sqlite.org/sessionintro.html)
-#![allow(non_camel_case_types)]
+#![expect(non_camel_case_types)]
 
 use std::ffi::CStr;
 use std::io::{Read, Write};
@@ -666,7 +666,6 @@ impl Connection {
 #[repr(i32)]
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
-#[allow(clippy::upper_case_acronyms)]
 pub enum ConflictType {
     UNKNOWN = -1,
     SQLITE_CHANGESET_DATA = ffi::SQLITE_CHANGESET_DATA,
@@ -694,7 +693,6 @@ impl From<i32> for ConflictType {
 #[repr(i32)]
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]
-#[allow(clippy::upper_case_acronyms)]
 pub enum ConflictAction {
     SQLITE_CHANGESET_OMIT = ffi::SQLITE_CHANGESET_OMIT,
     SQLITE_CHANGESET_REPLACE = ffi::SQLITE_CHANGESET_REPLACE,

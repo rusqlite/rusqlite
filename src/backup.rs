@@ -1,5 +1,8 @@
 //! Online SQLite backup API.
 //!
+//! Alternatively, you can create a backup with a simple
+//! [`VACUUM INTO <backup_path>`](https://sqlite.org/lang_vacuum.html#vacuuminto).
+//!
 //! To create a [`Backup`], you must have two distinct [`Connection`]s - one
 //! for the source (which can be used while the backup is running) and one for
 //! the destination (which cannot).  A [`Backup`] handle exposes three methods:
@@ -152,8 +155,9 @@ pub enum StepResult {
     Locked,
 }
 
-/// Struct specifying the progress of a backup. The
-/// percentage completion can be calculated as `(pagecount - remaining) /
+/// Struct specifying the progress of a backup.
+///
+/// The percentage completion can be calculated as `(pagecount - remaining) /
 /// pagecount`. The progress of a backup is as of the last call to
 /// [`step`](Backup::step) - if the source database is modified after a call to
 /// [`step`](Backup::step), the progress value will become outdated and
