@@ -247,7 +247,7 @@ pub struct Row<'stmt> {
     pub(crate) stmt: &'stmt Statement<'stmt>,
 }
 
-impl<'stmt> Row<'stmt> {
+impl Row<'_> {
     /// Get the value of a particular column of the result row.
     ///
     /// # Panics
@@ -355,7 +355,7 @@ impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> {
 /// Debug `Row` like an ordered `Map<Result<&str>, Result<(Type, ValueRef)>>`
 /// with column name as key except that for `Type::Blob` only its size is
 /// printed (not its content).
-impl<'stmt> std::fmt::Debug for Row<'stmt> {
+impl std::fmt::Debug for Row<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut dm = f.debug_map();
         for c in 0..self.stmt.column_count() {

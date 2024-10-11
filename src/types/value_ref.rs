@@ -194,7 +194,7 @@ impl<'a> From<&'a Value> for ValueRef<'a> {
     }
 }
 
-impl<'a, T> From<Option<T>> for ValueRef<'a>
+impl<T> From<Option<T>> for ValueRef<'_>
 where
     T: Into<Self>,
 {
