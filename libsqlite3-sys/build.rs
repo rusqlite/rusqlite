@@ -487,6 +487,7 @@ mod bindings {
 
     static PREBUILT_BINDGENS: &[&str] = &["bindgen_3.14.0"];
 
+    #[expect(clippy::needless_pass_by_value)]
     pub fn write_to_out_dir(_header: HeaderLocation, out_path: &Path) {
         let name = PREBUILT_BINDGENS[PREBUILT_BINDGENS.len() - 1];
         super::copy_bindings("bindgen-bindings", name, out_path);

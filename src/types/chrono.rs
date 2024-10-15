@@ -238,7 +238,7 @@ mod test {
         assert_eq!(utc, v2);
 
         let v3: DateTime<Utc> = db.one_column("SELECT '2016-02-23 23:56:04'")?;
-        assert_eq!(utc - Duration::try_milliseconds(789).unwrap(), v3);
+        assert_eq!(utc - Duration::milliseconds(789), v3);
 
         let v4: DateTime<Utc> = db.one_column("SELECT '2016-02-23 23:56:04.789+00:00'")?;
         assert_eq!(utc, v4);
