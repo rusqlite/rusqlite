@@ -1105,6 +1105,7 @@ impl fmt::Debug for Connection {
 /// So you should break the loop when an error is raised by the `next` method.
 ///
 /// ```rust
+/// use fallible_iterator::FallibleIterator;
 /// use rusqlite::{Batch, Connection, Result};
 ///
 /// fn main() -> Result<()> {
