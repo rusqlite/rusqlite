@@ -54,6 +54,8 @@
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+pub use fallible_iterator;
+pub use fallible_streaming_iterator;
 pub use libsqlite3_sys as ffi;
 
 use std::cell::RefCell;
@@ -1095,7 +1097,13 @@ impl fmt::Debug for Connection {
     }
 }
 
-/// Batch iterator
+/// Batch fallible iterator
+///
+/// # Warning
+///
+/// There is no recovery on parsing error, when a invalid statement is found in `sql`, SQLite cannot jump to the next statement.
+/// So you should break the loop when an error is raised by the `next` method.
+///
 /// ```rust
 /// use rusqlite::{Batch, Connection, Result};
 ///
@@ -1124,12 +1132,16 @@ impl<'conn, 'sql> Batch<'conn, 'sql> {
     pub fn new(conn: &'conn Connection, sql: &'sql str) -> Self {
         Batch { conn, sql, tail: 0 }
     }
+}
+impl<'conn> fallible_iterator::FallibleIterator for Batch<'conn, '_> {
+    type Error = Error;
+    type Item = Statement<'conn>;
 
     /// Iterates on each batch statements.
     ///
     /// Returns `Ok(None)` when batch is completed.
     #[expect(clippy::should_implement_trait)] // fallible iterator
-    pub fn next(&mut self) -> Result<Option<Statement<'conn>>> {
+    fn next(&mut self) -> Result<Option<Statement<'conn>>> {
         while self.tail < self.sql.len() {
             let sql = &self.sql[self.tail..];
             let next = self.conn.prepare(sql)?;
@@ -1145,14 +1157,6 @@ impl<'conn, 'sql> Batch<'conn, 'sql> {
             return Ok(Some(next));
         }
         Ok(None)
-    }
-}
-
-impl<'conn> Iterator for Batch<'conn, '_> {
-    type Item = Result<Statement<'conn>>;
-
-    fn next(&mut self) -> Option<Result<Statement<'conn>>> {
-        self.next().transpose()
     }
 }
 
@@ -2202,9 +2206,8 @@ mod test {
              CREATE TABLE tbl1 (col);
              CREATE TABLE tbl2 (col);
              ";
-        let batch = Batch::new(&db, sql);
-        for stmt in batch {
-            let mut stmt = stmt?;
+        let mut batch = Batch::new(&db, sql);
+        while let Some(mut stmt) = batch.next()? {
             stmt.execute([])?;
         }
         Ok(())
