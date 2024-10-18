@@ -51,7 +51,7 @@ pub enum Data<'conn> {
     Owned(OwnedData),
 }
 
-impl<'conn> Deref for Data<'conn> {
+impl Deref for Data<'_> {
     type Target = [u8];
 
     fn deref(&self) -> &[u8] {

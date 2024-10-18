@@ -6,7 +6,7 @@ use std::slice::from_raw_parts_mut;
 use crate::ffi;
 use crate::{Error, Result};
 
-impl<'conn> Blob<'conn> {
+impl Blob<'_> {
     /// Write `buf` to `self` starting at `write_start`, returning an error if
     /// `write_start + buf.len()` is past the end of the blob.
     ///

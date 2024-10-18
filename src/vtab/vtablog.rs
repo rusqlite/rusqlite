@@ -130,7 +130,7 @@ unsafe impl<'vtab> VTab<'vtab> for VTabLog {
     }
 }
 
-impl<'vtab> CreateVTab<'vtab> for VTabLog {
+impl CreateVTab<'_> for VTabLog {
     const KIND: VTabKind = VTabKind::Default;
 
     fn create(
@@ -147,7 +147,7 @@ impl<'vtab> CreateVTab<'vtab> for VTabLog {
     }
 }
 
-impl<'vtab> UpdateVTab<'vtab> for VTabLog {
+impl UpdateVTab<'_> for VTabLog {
     fn delete(&mut self, arg: ValueRef<'_>) -> Result<()> {
         println!("VTabLog::delete({}, {arg:?})", self.i_inst);
         Ok(())

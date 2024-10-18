@@ -213,7 +213,7 @@ where
     feature = "vtab",
     feature = "preupdate_hook"
 ))]
-impl<'a> ValueRef<'a> {
+impl ValueRef<'_> {
     pub(crate) unsafe fn from_value(value: *mut crate::ffi::sqlite3_value) -> Self {
         use crate::ffi;
         use std::slice::from_raw_parts;
