@@ -1141,7 +1141,6 @@ impl<'conn> fallible_iterator::FallibleIterator for Batch<'conn, '_> {
     /// Iterates on each batch statements.
     ///
     /// Returns `Ok(None)` when batch is completed.
-    #[expect(clippy::should_implement_trait)] // fallible iterator
     fn next(&mut self) -> Result<Option<Statement<'conn>>> {
         while self.tail < self.sql.len() {
             let sql = &self.sql[self.tail..];
