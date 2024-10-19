@@ -2214,6 +2214,22 @@ mod test {
     }
 
     #[test]
+    fn test_invalid_batch() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let sql = r"
+            PRAGMA test1;
+            PRAGMA test2=?;
+            PRAGMA test3;
+            ";
+        let mut batch = Batch::new(&db, sql);
+        assert!(batch.next().is_ok());
+        assert!(batch.next().is_err());
+        assert!(batch.next().is_err());
+        assert!(Batch::new(&db, sql).count().is_err());
+        Ok(())
+    }
+
+    #[test]
     #[cfg(feature = "modern_sqlite")]
     fn test_returning() -> Result<()> {
         let db = Connection::open_in_memory()?;
