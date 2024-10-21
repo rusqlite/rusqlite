@@ -104,6 +104,7 @@ modern-full = [
     "limits",
     "load_extension",
     "serde_json",
+    "serialize",
     "series",
     "time",
     "trace",
