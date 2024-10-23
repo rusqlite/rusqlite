@@ -377,6 +377,8 @@ bitflags::bitflags! {
         const NONE     = 0;
         /// Scan visits at most 1 row.
         const SQLITE_INDEX_SCAN_UNIQUE  = ffi::SQLITE_INDEX_SCAN_UNIQUE;
+        /// Display idxNum as hex in EXPLAIN QUERY PLAN
+        const SQLITE_INDEX_SCAN_HEX  = 0x0000_0002; // 3.47.0
     }
 }
 

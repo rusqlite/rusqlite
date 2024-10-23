@@ -387,6 +387,8 @@ bitflags::bitflags! {
         const SQLITE_INNOCUOUS     = 0x0000_0020_0000; // 3.31.0
         /// Indicates to SQLite that a function might call `sqlite3_result_subtype()` to cause a subtype to be associated with its result.
         const SQLITE_RESULT_SUBTYPE     = 0x0000_0100_0000; // 3.45.0
+        /// Indicates that the function is an aggregate that internally orders the values provided to the first argument.
+        const SQLITE_SELFORDER1 = 0x0000_0200_0000; // 3.47.0
     }
 }
 
