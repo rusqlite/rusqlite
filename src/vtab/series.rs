@@ -29,7 +29,7 @@ const SERIES_COLUMN_STEP: c_int = 3;
 bitflags::bitflags! {
     #[derive(Clone, Copy)]
     #[repr(C)]
-    struct QueryPlanFlags: ::std::os::raw::c_int {
+    struct QueryPlanFlags: c_int {
         // start = $value  -- constraint exists
         const START = 1;
         // stop = $value   -- constraint exists

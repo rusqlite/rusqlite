@@ -34,7 +34,7 @@ pub struct InnerConnection {
     #[cfg(feature = "hooks")]
     pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
     #[cfg(feature = "preupdate_hook")]
-    pub free_preupdate_hook: Option<unsafe fn(*mut ::std::os::raw::c_void)>,
+    pub free_preupdate_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
     owned: bool,
 }
 

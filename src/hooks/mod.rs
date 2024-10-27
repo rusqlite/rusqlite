@@ -869,8 +869,7 @@ mod test {
         use super::{AuthAction, AuthContext, Authorization};
 
         let db = Connection::open_in_memory()?;
-        db.execute_batch("CREATE TABLE foo (public TEXT, private TEXT)")
-            .unwrap();
+        db.execute_batch("CREATE TABLE foo (public TEXT, private TEXT)")?;
 
         let authorizer = move |ctx: AuthContext<'_>| match ctx.action {
             AuthAction::Read {
@@ -885,18 +884,16 @@ mod test {
         db.authorizer(Some(authorizer));
         db.execute_batch(
             "BEGIN TRANSACTION; INSERT INTO foo VALUES ('pub txt', 'priv txt'); COMMIT;",
-        )
-        .unwrap();
+        )?;
         db.query_row_and_then("SELECT * FROM foo", [], |row| -> Result<()> {
             assert_eq!(row.get::<_, String>("public")?, "pub txt");
             assert!(row.get::<_, Option<String>>("private")?.is_none());
             Ok(())
-        })
-        .unwrap();
+        })?;
         db.execute_batch("DROP TABLE foo").unwrap_err();
 
         db.authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
-        db.execute_batch("PRAGMA user_version=1").unwrap(); // Disallowed by first authorizer, but it's now removed.
+        db.execute_batch("PRAGMA user_version=1")?; // Disallowed by first authorizer, but it's now removed.
 
         Ok(())
     }

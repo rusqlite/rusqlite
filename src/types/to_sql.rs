@@ -445,7 +445,7 @@ mod test {
 
     #[cfg(feature = "i128_blob")]
     #[test]
-    fn test_i128() -> crate::Result<()> {
+    fn test_i128() -> Result<()> {
         use crate::Connection;
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo (i128 BLOB, desc TEXT)")?;
@@ -484,7 +484,7 @@ mod test {
 
     #[cfg(feature = "i128_blob")]
     #[test]
-    fn test_non_zero_i128() -> crate::Result<()> {
+    fn test_non_zero_i128() -> Result<()> {
         use std::num::NonZeroI128;
         macro_rules! nz {
             ($x:expr) => {
@@ -532,7 +532,7 @@ mod test {
 
     #[cfg(feature = "uuid")]
     #[test]
-    fn test_uuid() -> crate::Result<()> {
+    fn test_uuid() -> Result<()> {
         use crate::{params, Connection};
         use uuid::Uuid;
 

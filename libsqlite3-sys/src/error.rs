@@ -285,8 +285,8 @@ pub enum InitError {
     NullFunctionPointer,
 }
 #[cfg(feature = "loadable_extension")]
-impl ::std::fmt::Display for InitError {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+impl fmt::Display for InitError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::VersionMismatch {
                 compile_time,

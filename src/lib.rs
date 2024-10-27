@@ -46,7 +46,7 @@
 //!     })?;
 //!
 //!     for person in person_iter {
-//!         println!("Found person {:?}", person.unwrap());
+//!         println!("Found person {:?}", person?);
 //!     }
 //!     Ok(())
 //! }
@@ -1169,7 +1169,7 @@ bitflags::bitflags! {
     /// some discussion about these flags.
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     #[repr(C)]
-    pub struct OpenFlags: ::std::os::raw::c_int {
+    pub struct OpenFlags: c_int {
         /// The database is opened in read-only mode.
         /// If the database does not already exist, an error is returned.
         const SQLITE_OPEN_READ_ONLY = ffi::SQLITE_OPEN_READONLY;
@@ -2272,11 +2272,11 @@ mod test {
     #[cfg(feature = "modern_sqlite")]
     fn test_db_name() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        assert_eq!(db.db_name(0).unwrap(), "main");
-        assert_eq!(db.db_name(1).unwrap(), "temp");
+        assert_eq!(db.db_name(0)?, "main");
+        assert_eq!(db.db_name(1)?, "temp");
         assert_eq!(db.db_name(2), Err(Error::InvalidDatabaseIndex(2)));
         db.execute_batch("ATTACH DATABASE ':memory:' AS xyz;")?;
-        assert_eq!(db.db_name(2).unwrap(), "xyz");
+        assert_eq!(db.db_name(2)?, "xyz");
         Ok(())
     }
 

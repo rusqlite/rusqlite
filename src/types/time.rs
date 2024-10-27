@@ -1,8 +1,8 @@
 //! Convert formats 1-10 in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) to time types.
-//! [`ToSql`] and [`FromSql`] implementation for [`time::OffsetDateTime`].
-//! [`ToSql`] and [`FromSql`] implementation for [`time::PrimitiveDateTime`].
-//! [`ToSql`] and [`FromSql`] implementation for [`time::Date`].
-//! [`ToSql`] and [`FromSql`] implementation for [`time::Time`].
+//! [`ToSql`] and [`FromSql`] implementation for [`OffsetDateTime`].
+//! [`ToSql`] and [`FromSql`] implementation for [`PrimitiveDateTime`].
+//! [`ToSql`] and [`FromSql`] implementation for [`Date`].
+//! [`ToSql`] and [`FromSql`] implementation for [`Time`].
 //! Time Strings in:
 //!  - Format 2: "YYYY-MM-DD HH:MM"
 //!  - Format 5: "YYYY-MM-DDTHH:MM"
@@ -362,12 +362,10 @@ mod test {
     #[test]
     fn test_sqlite_functions() -> Result<()> {
         let db = checked_memory_handle()?;
-        db.one_column::<Time>("SELECT CURRENT_TIME").unwrap();
-        db.one_column::<Date>("SELECT CURRENT_DATE").unwrap();
-        db.one_column::<PrimitiveDateTime>("SELECT CURRENT_TIMESTAMP")
-            .unwrap();
-        db.one_column::<OffsetDateTime>("SELECT CURRENT_TIMESTAMP")
-            .unwrap();
+        db.one_column::<Time>("SELECT CURRENT_TIME")?;
+        db.one_column::<Date>("SELECT CURRENT_DATE")?;
+        db.one_column::<PrimitiveDateTime>("SELECT CURRENT_TIMESTAMP")?;
+        db.one_column::<OffsetDateTime>("SELECT CURRENT_TIMESTAMP")?;
         Ok(())
     }
 
@@ -380,7 +378,7 @@ mod test {
             [now],
             |r| r.get(0),
         );
-        result.unwrap();
+        result?;
         Ok(())
     }
 
@@ -393,7 +391,7 @@ mod test {
             [now],
             |r| r.get(0),
         );
-        result.unwrap();
+        result?;
         Ok(())
     }
 
@@ -409,7 +407,7 @@ mod test {
             [now],
             |r| r.get(0),
         );
-        result.unwrap();
+        result?;
         Ok(())
     }
 
@@ -421,7 +419,7 @@ mod test {
             [OffsetDateTime::now_utc()],
             |r| r.get(0),
         );
-        result.unwrap();
+        result?;
         Ok(())
     }
 }
