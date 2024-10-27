@@ -87,7 +87,7 @@ unsafe impl<'vtab, T: VTab<'vtab>> Send for Module<'vtab, T> {}
 unsafe impl<'vtab, T: VTab<'vtab>> Sync for Module<'vtab, T> {}
 
 union ModuleZeroHack {
-    bytes: [u8; std::mem::size_of::<ffi::sqlite3_module>()],
+    bytes: [u8; size_of::<ffi::sqlite3_module>()],
     module: ffi::sqlite3_module,
 }
 
@@ -96,7 +96,7 @@ union ModuleZeroHack {
 // structs are allowed to be zeroed.
 const ZERO_MODULE: ffi::sqlite3_module = unsafe {
     ModuleZeroHack {
-        bytes: [0_u8; std::mem::size_of::<ffi::sqlite3_module>()],
+        bytes: [0_u8; size_of::<ffi::sqlite3_module>()],
     }
     .module
 };
@@ -372,7 +372,7 @@ bitflags::bitflags! {
     /// See [Function Flags](https://sqlite.org/c3ref/c_index_scan_unique.html) for details.
     #[repr(C)]
     #[derive(Copy, Clone, Debug)]
-    pub struct IndexFlags: ::std::os::raw::c_int {
+    pub struct IndexFlags: c_int {
         /// Default
         const NONE     = 0;
         /// Scan visits at most 1 row.
@@ -940,7 +940,7 @@ unsafe extern "C" fn rust_create<'vtab, T>(
     aux: *mut c_void,
     argc: c_int,
     argv: *const *const c_char,
-    pp_vtab: *mut *mut ffi::sqlite3_vtab,
+    pp_vtab: *mut *mut sqlite3_vtab,
     err_msg: *mut *mut c_char,
 ) -> c_int
 where
@@ -961,7 +961,7 @@ where
                 let rc = ffi::sqlite3_declare_vtab(db, c_sql.as_ptr());
                 if rc == ffi::SQLITE_OK {
                     let boxed_vtab: *mut T = Box::into_raw(Box::new(vtab));
-                    *pp_vtab = boxed_vtab.cast::<ffi::sqlite3_vtab>();
+                    *pp_vtab = boxed_vtab.cast::<sqlite3_vtab>();
                     ffi::SQLITE_OK
                 } else {
                     let err = error_from_sqlite_code(rc, None);
@@ -982,7 +982,7 @@ unsafe extern "C" fn rust_connect<'vtab, T>(
     aux: *mut c_void,
     argc: c_int,
     argv: *const *const c_char,
-    pp_vtab: *mut *mut ffi::sqlite3_vtab,
+    pp_vtab: *mut *mut sqlite3_vtab,
     err_msg: *mut *mut c_char,
 ) -> c_int
 where
@@ -1003,7 +1003,7 @@ where
                 let rc = ffi::sqlite3_declare_vtab(db, c_sql.as_ptr());
                 if rc == ffi::SQLITE_OK {
                     let boxed_vtab: *mut T = Box::into_raw(Box::new(vtab));
-                    *pp_vtab = boxed_vtab.cast::<ffi::sqlite3_vtab>();
+                    *pp_vtab = boxed_vtab.cast::<sqlite3_vtab>();
                     ffi::SQLITE_OK
                 } else {
                     let err = error_from_sqlite_code(rc, None);
@@ -1020,7 +1020,7 @@ where
 }
 
 unsafe extern "C" fn rust_best_index<'vtab, T>(
-    vtab: *mut ffi::sqlite3_vtab,
+    vtab: *mut sqlite3_vtab,
     info: *mut ffi::sqlite3_index_info,
 ) -> c_int
 where
@@ -1043,7 +1043,7 @@ where
     }
 }
 
-unsafe extern "C" fn rust_disconnect<'vtab, T>(vtab: *mut ffi::sqlite3_vtab) -> c_int
+unsafe extern "C" fn rust_disconnect<'vtab, T>(vtab: *mut sqlite3_vtab) -> c_int
 where
     T: VTab<'vtab>,
 {
@@ -1055,7 +1055,7 @@ where
     ffi::SQLITE_OK
 }
 
-unsafe extern "C" fn rust_destroy<'vtab, T>(vtab: *mut ffi::sqlite3_vtab) -> c_int
+unsafe extern "C" fn rust_destroy<'vtab, T>(vtab: *mut sqlite3_vtab) -> c_int
 where
     T: CreateVTab<'vtab>,
 {
@@ -1082,8 +1082,8 @@ where
 }
 
 unsafe extern "C" fn rust_open<'vtab, T>(
-    vtab: *mut ffi::sqlite3_vtab,
-    pp_cursor: *mut *mut ffi::sqlite3_vtab_cursor,
+    vtab: *mut sqlite3_vtab,
+    pp_cursor: *mut *mut sqlite3_vtab_cursor,
 ) -> c_int
 where
     T: VTab<'vtab> + 'vtab,
@@ -1092,7 +1092,7 @@ where
     match (*vt).open() {
         Ok(cursor) => {
             let boxed_cursor: *mut T::Cursor = Box::into_raw(Box::new(cursor));
-            *pp_cursor = boxed_cursor.cast::<ffi::sqlite3_vtab_cursor>();
+            *pp_cursor = boxed_cursor.cast::<sqlite3_vtab_cursor>();
             ffi::SQLITE_OK
         }
         Err(Error::SqliteFailure(err, s)) => {
@@ -1108,7 +1108,7 @@ where
     }
 }
 
-unsafe extern "C" fn rust_close<C>(cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int
+unsafe extern "C" fn rust_close<C>(cursor: *mut sqlite3_vtab_cursor) -> c_int
 where
     C: VTabCursor,
 {
@@ -1118,7 +1118,7 @@ where
 }
 
 unsafe extern "C" fn rust_filter<C>(
-    cursor: *mut ffi::sqlite3_vtab_cursor,
+    cursor: *mut sqlite3_vtab_cursor,
     idx_num: c_int,
     idx_str: *const c_char,
     argc: c_int,
@@ -1141,7 +1141,7 @@ where
     cursor_error(cursor, (*cr).filter(idx_num, idx_name, &values))
 }
 
-unsafe extern "C" fn rust_next<C>(cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int
+unsafe extern "C" fn rust_next<C>(cursor: *mut sqlite3_vtab_cursor) -> c_int
 where
     C: VTabCursor,
 {
@@ -1149,7 +1149,7 @@ where
     cursor_error(cursor, (*cr).next())
 }
 
-unsafe extern "C" fn rust_eof<C>(cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int
+unsafe extern "C" fn rust_eof<C>(cursor: *mut sqlite3_vtab_cursor) -> c_int
 where
     C: VTabCursor,
 {
@@ -1158,7 +1158,7 @@ where
 }
 
 unsafe extern "C" fn rust_column<C>(
-    cursor: *mut ffi::sqlite3_vtab_cursor,
+    cursor: *mut sqlite3_vtab_cursor,
     ctx: *mut ffi::sqlite3_context,
     i: c_int,
 ) -> c_int
@@ -1171,7 +1171,7 @@ where
 }
 
 unsafe extern "C" fn rust_rowid<C>(
-    cursor: *mut ffi::sqlite3_vtab_cursor,
+    cursor: *mut sqlite3_vtab_cursor,
     p_rowid: *mut ffi::sqlite3_int64,
 ) -> c_int
 where
@@ -1188,7 +1188,7 @@ where
 }
 
 unsafe extern "C" fn rust_update<'vtab, T>(
-    vtab: *mut ffi::sqlite3_vtab,
+    vtab: *mut sqlite3_vtab,
     argc: c_int,
     argv: *mut *mut ffi::sqlite3_value,
     p_rowid: *mut ffi::sqlite3_int64,
@@ -1233,7 +1233,7 @@ where
 /// Virtual table cursors can set an error message by assigning a string to
 /// `zErrMsg`.
 #[cold]
-unsafe fn cursor_error<T>(cursor: *mut ffi::sqlite3_vtab_cursor, result: Result<T>) -> c_int {
+unsafe fn cursor_error<T>(cursor: *mut sqlite3_vtab_cursor, result: Result<T>) -> c_int {
     match result {
         Ok(_) => ffi::SQLITE_OK,
         Err(Error::SqliteFailure(err, s)) => {
@@ -1252,7 +1252,7 @@ unsafe fn cursor_error<T>(cursor: *mut ffi::sqlite3_vtab_cursor, result: Result<
 /// Virtual tables methods can set an error message by assigning a string to
 /// `zErrMsg`.
 #[cold]
-unsafe fn set_err_msg(vtab: *mut ffi::sqlite3_vtab, err_msg: &str) {
+unsafe fn set_err_msg(vtab: *mut sqlite3_vtab, err_msg: &str) {
     if !(*vtab).zErrMsg.is_null() {
         ffi::sqlite3_free((*vtab).zErrMsg.cast::<c_void>());
     }

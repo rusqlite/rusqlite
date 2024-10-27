@@ -1169,7 +1169,7 @@ bitflags::bitflags! {
     /// some discussion about these flags.
     #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
     #[repr(C)]
-    pub struct OpenFlags: ::std::os::raw::c_int {
+    pub struct OpenFlags: c_int {
         /// The database is opened in read-only mode.
         /// If the database does not already exist, an error is returned.
         const SQLITE_OPEN_READ_ONLY = ffi::SQLITE_OPEN_READONLY;

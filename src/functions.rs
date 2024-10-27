@@ -368,7 +368,7 @@ bitflags::bitflags! {
     /// and [Function Flags](https://sqlite.org/c3ref/c_deterministic.html) for details.
     #[derive(Clone, Copy, Debug)]
     #[repr(C)]
-    pub struct FunctionFlags: ::std::os::raw::c_int {
+    pub struct FunctionFlags: c_int {
         /// Specifies UTF-8 as the text encoding this SQL function prefers for its parameters.
         const SQLITE_UTF8     = ffi::SQLITE_UTF8;
         /// Specifies UTF-16 using little-endian byte order as the text encoding this SQL function prefers for its parameters.
@@ -693,7 +693,7 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
     D: Aggregate<A, T>,
     T: SqlFnOutput,
 {
-    let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) else {
+    let Some(pac) = aggregate_context(ctx, size_of::<*mut A>()) else {
         ffi::sqlite3_result_error_nomem(ctx);
         return;
     };
@@ -739,7 +739,7 @@ unsafe extern "C" fn call_boxed_inverse<A, W, T>(
     W: WindowAggregate<A, T>,
     T: SqlFnOutput,
 {
-    let Some(pac) = aggregate_context(ctx, std::mem::size_of::<*mut A>()) else {
+    let Some(pac) = aggregate_context(ctx, size_of::<*mut A>()) else {
         ffi::sqlite3_result_error_nomem(ctx);
         return;
     };

@@ -1,8 +1,8 @@
 //! Convert formats 1-10 in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) to time types.
-//! [`ToSql`] and [`FromSql`] implementation for [`time::OffsetDateTime`].
-//! [`ToSql`] and [`FromSql`] implementation for [`time::PrimitiveDateTime`].
-//! [`ToSql`] and [`FromSql`] implementation for [`time::Date`].
-//! [`ToSql`] and [`FromSql`] implementation for [`time::Time`].
+//! [`ToSql`] and [`FromSql`] implementation for [`OffsetDateTime`].
+//! [`ToSql`] and [`FromSql`] implementation for [`PrimitiveDateTime`].
+//! [`ToSql`] and [`FromSql`] implementation for [`Date`].
+//! [`ToSql`] and [`FromSql`] implementation for [`Time`].
 //! Time Strings in:
 //!  - Format 2: "YYYY-MM-DD HH:MM"
 //!  - Format 5: "YYYY-MM-DDTHH:MM"

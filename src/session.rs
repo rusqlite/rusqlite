@@ -333,7 +333,7 @@ impl ChangesetIter<'_> {
 }
 
 impl FallibleStreamingIterator for ChangesetIter<'_> {
-    type Error = crate::error::Error;
+    type Error = Error;
     type Item = ChangesetItem;
 
     #[inline]
