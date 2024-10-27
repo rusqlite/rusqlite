@@ -1285,9 +1285,9 @@ mod test {
         let conn = Connection::open_in_memory()?;
         let mut stmt = conn.prepare("")?;
         assert_eq!(0, stmt.column_count());
-        stmt.parameter_index("test").unwrap();
+        stmt.parameter_index("test")?;
         stmt.step().unwrap_err();
-        stmt.reset().unwrap(); // SQLITE_OMIT_AUTORESET = false
+        stmt.reset()?; // SQLITE_OMIT_AUTORESET = false
         stmt.execute([]).unwrap_err();
         Ok(())
     }

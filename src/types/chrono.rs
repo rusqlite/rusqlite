@@ -285,13 +285,13 @@ mod test {
     fn test_sqlite_functions() -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Result<NaiveTime> = db.one_column("SELECT CURRENT_TIME");
-        result.unwrap();
+        result?;
         let result: Result<NaiveDate> = db.one_column("SELECT CURRENT_DATE");
-        result.unwrap();
+        result?;
         let result: Result<NaiveDateTime> = db.one_column("SELECT CURRENT_TIMESTAMP");
-        result.unwrap();
+        result?;
         let result: Result<DateTime<Utc>> = db.one_column("SELECT CURRENT_TIMESTAMP");
-        result.unwrap();
+        result?;
         Ok(())
     }
 
@@ -299,7 +299,7 @@ mod test {
     fn test_naive_date_time_param() -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Result<bool> = db.query_row("SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')", [Utc::now().naive_utc()], |r| r.get(0));
-        result.unwrap();
+        result?;
         Ok(())
     }
 
@@ -307,7 +307,7 @@ mod test {
     fn test_date_time_param() -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Result<bool> = db.query_row("SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')", [Utc::now()], |r| r.get(0));
-        result.unwrap();
+        result?;
         Ok(())
     }
 

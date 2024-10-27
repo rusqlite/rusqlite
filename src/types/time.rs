@@ -362,12 +362,10 @@ mod test {
     #[test]
     fn test_sqlite_functions() -> Result<()> {
         let db = checked_memory_handle()?;
-        db.one_column::<Time>("SELECT CURRENT_TIME").unwrap();
-        db.one_column::<Date>("SELECT CURRENT_DATE").unwrap();
-        db.one_column::<PrimitiveDateTime>("SELECT CURRENT_TIMESTAMP")
-            .unwrap();
-        db.one_column::<OffsetDateTime>("SELECT CURRENT_TIMESTAMP")
-            .unwrap();
+        db.one_column::<Time>("SELECT CURRENT_TIME")?;
+        db.one_column::<Date>("SELECT CURRENT_DATE")?;
+        db.one_column::<PrimitiveDateTime>("SELECT CURRENT_TIMESTAMP")?;
+        db.one_column::<OffsetDateTime>("SELECT CURRENT_TIMESTAMP")?;
         Ok(())
     }
 
@@ -380,7 +378,7 @@ mod test {
             [now],
             |r| r.get(0),
         );
-        result.unwrap();
+        result?;
         Ok(())
     }
 
@@ -393,7 +391,7 @@ mod test {
             [now],
             |r| r.get(0),
         );
-        result.unwrap();
+        result?;
         Ok(())
     }
 
@@ -409,7 +407,7 @@ mod test {
             [now],
             |r| r.get(0),
         );
-        result.unwrap();
+        result?;
         Ok(())
     }
 
@@ -421,7 +419,7 @@ mod test {
             [OffsetDateTime::now_utc()],
             |r| r.get(0),
         );
-        result.unwrap();
+        result?;
         Ok(())
     }
 }
