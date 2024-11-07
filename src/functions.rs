@@ -446,7 +446,7 @@ impl Connection {
         x_func: F,
     ) -> Result<()>
     where
-        F: FnMut(&Context<'_>) -> Result<T> + Send + 'static,
+        F: Fn(&Context<'_>) -> Result<T> + Send + 'static,
         T: SqlFnOutput,
     {
         self.db
@@ -549,7 +549,7 @@ impl InnerConnection {
         x_func: F,
     ) -> Result<()>
     where
-        F: FnMut(&Context<'_>) -> Result<T> + Send + 'static,
+        F: Fn(&Context<'_>) -> Result<T> + Send + 'static,
         T: SqlFnOutput,
     {
         unsafe extern "C" fn call_boxed_closure<F, T>(
@@ -557,12 +557,12 @@ impl InnerConnection {
             argc: c_int,
             argv: *mut *mut sqlite3_value,
         ) where
-            F: FnMut(&Context<'_>) -> Result<T>,
+            F: Fn(&Context<'_>) -> Result<T>,
             T: SqlFnOutput,
         {
             let args = slice::from_raw_parts(argv, argc as usize);
             let r = catch_unwind(|| {
-                let boxed_f: *mut F = ffi::sqlite3_user_data(ctx).cast::<F>();
+                let boxed_f: *const F = ffi::sqlite3_user_data(ctx).cast::<F>();
                 assert!(!boxed_f.is_null(), "Internal error - null function pointer");
                 let ctx = Context { ctx, args };
                 (*boxed_f)(&ctx)
