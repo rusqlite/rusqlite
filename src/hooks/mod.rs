@@ -441,6 +441,21 @@ impl Connection {
     }
 }
 
+/// Checkpoint mode
+#[derive(Clone, Copy)]
+#[repr(i32)]
+#[non_exhaustive]
+pub enum CheckpointMode {
+    /// Do as much as possible w/o blocking
+    PASSIVE = ffi::SQLITE_CHECKPOINT_PASSIVE,
+    /// Wait for writers, then checkpoint
+    FULL = ffi::SQLITE_CHECKPOINT_FULL,
+    /// Like FULL but wait for readers
+    RESTART = ffi::SQLITE_CHECKPOINT_RESTART,
+    /// Like RESTART but also truncate WA
+    TRUNCATE = ffi::SQLITE_CHECKPOINT_TRUNCATE,
+}
+
 /// Write-Ahead Log
 pub struct Wal {
     db: *mut ffi::sqlite3,
@@ -453,7 +468,7 @@ impl Wal {
         unsafe { decode_result_raw(self.db, ffi::sqlite3_wal_checkpoint(self.db, self.db_name)) }
     }
     /// Checkpoint a database
-    pub fn checkpoint_v2(&self, mode: c_int) -> Result<(c_int, c_int)> {
+    pub fn checkpoint_v2(&self, mode: CheckpointMode) -> Result<(c_int, c_int)> {
         let mut n_log = 0;
         let mut n_ckpt = 0;
         unsafe {
@@ -462,7 +477,7 @@ impl Wal {
                 ffi::sqlite3_wal_checkpoint_v2(
                     self.db,
                     self.db_name,
-                    mode,
+                    mode as c_int,
                     &mut n_log,
                     &mut n_ckpt,
                 ),
@@ -985,6 +1000,16 @@ mod test {
         }));
         db.execute_batch("CREATE TABLE x(c);")?;
         assert!(CALLED.load(Ordering::Relaxed));
+
+        db.wal_hook(Some(|wal, pages| {
+            assert!(pages > 0);
+            let (log, ckpt) = wal.checkpoint_v2(super::CheckpointMode::TRUNCATE)?;
+            assert_eq!(log, 0);
+            assert_eq!(ckpt, 0);
+            Ok(())
+        }));
+        db.execute_batch("CREATE TABLE y(c);")?;
+
         db.wal_hook(None);
         Ok(())
     }
