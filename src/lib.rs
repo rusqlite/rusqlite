@@ -343,7 +343,7 @@ fn path_to_cstring(p: &Path) -> Result<CString> {
 }
 
 /// Name for a database within a SQLite connection.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum DatabaseName<'a> {
     /// The main database.
     Main,
@@ -371,6 +371,15 @@ impl DatabaseName<'_> {
             Main => str_to_cstring("main"), // TODO C-string literals
             Temp => str_to_cstring("temp"),
             Attached(s) => str_to_cstring(s),
+        }
+    }
+    #[cfg(feature = "hooks")]
+    pub(crate) fn from_cstr(db_name: &std::ffi::CStr) -> DatabaseName<'_> {
+        let s = db_name.to_str().expect("illegal database name");
+        match s {
+            "main" => DatabaseName::Main,
+            "temp" => DatabaseName::Temp,
+            _ => DatabaseName::Attached(s),
         }
     }
 }
