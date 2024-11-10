@@ -42,7 +42,7 @@ impl Session<'_> {
         db: &'conn Connection,
         name: DatabaseName<'_>,
     ) -> Result<Session<'conn>> {
-        let name = name.as_cstring()?;
+        let name = name.as_cstr()?;
 
         let db = db.db.borrow_mut().db;
 
@@ -154,7 +154,7 @@ impl Session<'_> {
 
     /// Load the difference between tables.
     pub fn diff(&mut self, from: DatabaseName<'_>, table: &str) -> Result<()> {
-        let from = from.as_cstring()?;
+        let from = from.as_cstr()?;
         let table = str_to_cstring(table)?;
         let table = table.as_ptr();
         unsafe {

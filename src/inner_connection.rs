@@ -346,7 +346,7 @@ impl InnerConnection {
     fn remove_preupdate_hook(&mut self) {}
 
     pub fn db_readonly(&self, db_name: super::DatabaseName<'_>) -> Result<bool> {
-        let name = db_name.as_cstring()?;
+        let name = db_name.as_cstr()?;
         let r = unsafe { ffi::sqlite3_db_readonly(self.db, name.as_ptr()) };
         match r {
             0 => Ok(false),
@@ -368,7 +368,7 @@ impl InnerConnection {
         db_name: Option<super::DatabaseName<'_>>,
     ) -> Result<super::transaction::TransactionState> {
         let r = if let Some(ref name) = db_name {
-            let name = name.as_cstring()?;
+            let name = name.as_cstr()?;
             unsafe { ffi::sqlite3_txn_state(self.db, name.as_ptr()) }
         } else {
             unsafe { ffi::sqlite3_txn_state(self.db, ptr::null()) }

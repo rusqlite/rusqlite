@@ -207,8 +207,8 @@ impl Backup<'_, '_> {
         to: &'b mut Connection,
         to_name: DatabaseName<'_>,
     ) -> Result<Backup<'a, 'b>> {
-        let to_name = to_name.as_cstring()?;
-        let from_name = from_name.as_cstring()?;
+        let to_name = to_name.as_cstr()?;
+        let from_name = from_name.as_cstr()?;
 
         let to_db = to.db.borrow_mut().db;
 
