@@ -422,6 +422,14 @@ pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     error_from_sqlite_code(code, message)
 }
 
+pub unsafe fn decode_result_raw(db: *mut ffi::sqlite3, code: c_int) -> Result<()> {
+    if code == ffi::SQLITE_OK {
+        Ok(())
+    } else {
+        Err(error_from_handle(db, code))
+    }
+}
+
 #[cold]
 #[cfg(not(feature = "modern_sqlite"))] // SQLite >= 3.38.0
 pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, _sql: &str) -> Error {

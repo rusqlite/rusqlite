@@ -9,7 +9,9 @@ use std::sync::{Arc, Mutex};
 use super::ffi;
 use super::str_for_sqlite;
 use super::{Connection, InterruptHandle, OpenFlags, PrepFlags, Result};
-use crate::error::{error_from_handle, error_from_sqlite_code, error_with_offset, Error};
+use crate::error::{
+    decode_result_raw, error_from_handle, error_from_sqlite_code, error_with_offset, Error,
+};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
 use crate::version_number;
@@ -134,16 +136,7 @@ impl InnerConnection {
 
     #[inline]
     pub fn decode_result(&self, code: c_int) -> Result<()> {
-        unsafe { Self::decode_result_raw(self.db(), code) }
-    }
-
-    #[inline]
-    unsafe fn decode_result_raw(db: *mut ffi::sqlite3, code: c_int) -> Result<()> {
-        if code == ffi::SQLITE_OK {
-            Ok(())
-        } else {
-            Err(error_from_handle(db, code))
-        }
+        unsafe { decode_result_raw(self.db(), code) }
     }
 
     pub fn close(&mut self) -> Result<()> {
@@ -165,7 +158,7 @@ impl InnerConnection {
             let r = ffi::sqlite3_close(self.db);
             // Need to use _raw because _guard has a reference out, and
             // decode_result takes &mut self.
-            let r = Self::decode_result_raw(self.db, r);
+            let r = decode_result_raw(self.db, r);
             if r.is_ok() {
                 *shared_handle = ptr::null_mut();
                 self.db = ptr::null_mut();

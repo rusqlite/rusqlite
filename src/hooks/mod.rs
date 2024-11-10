@@ -7,7 +7,7 @@ use std::ptr;
 
 use crate::ffi;
 
-use crate::{error, Connection, DatabaseName, InnerConnection, Result};
+use crate::{error::decode_result_raw, Connection, DatabaseName, InnerConnection, Result};
 
 #[cfg(feature = "preupdate_hook")]
 pub use preupdate_hook::*;
@@ -450,15 +450,24 @@ pub struct Wal {
 impl Wal {
     /// Checkpoint a database
     pub fn checkpoint(&self) -> Result<()> {
-        error::check(unsafe { ffi::sqlite3_wal_checkpoint(self.db, self.db_name) })
+        unsafe { decode_result_raw(self.db, ffi::sqlite3_wal_checkpoint(self.db, self.db_name)) }
     }
     /// Checkpoint a database
     pub fn checkpoint_v2(&self, mode: c_int) -> Result<(c_int, c_int)> {
         let mut n_log = 0;
         let mut n_ckpt = 0;
-        error::check(unsafe {
-            ffi::sqlite3_wal_checkpoint_v2(self.db, self.db_name, mode, &mut n_log, &mut n_ckpt)
-        })?;
+        unsafe {
+            decode_result_raw(
+                self.db,
+                ffi::sqlite3_wal_checkpoint_v2(
+                    self.db,
+                    self.db_name,
+                    mode,
+                    &mut n_log,
+                    &mut n_ckpt,
+                ),
+            )?
+        };
         Ok((n_log, n_ckpt))
     }
 
