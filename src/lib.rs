@@ -381,15 +381,6 @@ impl DatabaseName<'_> {
             DatabaseName::C(cs)
         }
     }
-    #[cfg(feature = "hooks")]
-    pub(crate) fn from_cstr(db_name: &std::ffi::CStr) -> DatabaseName<'_> {
-        let s = db_name.to_str().expect("illegal database name");
-        match s {
-            "main" => DatabaseName::Main,
-            "temp" => DatabaseName::Temp,
-            _ => DatabaseName::Attached(s),
-        }
-    }
 }
 
 /// A connection to a SQLite database.
