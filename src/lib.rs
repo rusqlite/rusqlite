@@ -347,12 +347,12 @@ fn path_to_cstring(p: &Path) -> Result<CString> {
 pub enum DatabaseName<'a> {
     /// The main database.
     Main,
-
     /// The temporary database (e.g., any "CREATE TEMPORARY TABLE" tables).
     Temp,
-
     /// A database that has been attached via "ATTACH DATABASE ...".
     Attached(&'a str),
+    /// Optim
+    C(&'a CStr),
 }
 
 /// Shorthand for [`DatabaseName::Main`].
@@ -361,16 +361,24 @@ pub const MAIN_DB: DatabaseName<'static> = DatabaseName::Main;
 /// Shorthand for [`DatabaseName::Temp`].
 pub const TEMP_DB: DatabaseName<'static> = DatabaseName::Temp;
 
-// Currently DatabaseName is only used by the backup and blob mods, so hide
-// this (private) impl to avoid dead code warnings.
 impl DatabaseName<'_> {
     #[inline]
-    fn as_cstring(&self) -> Result<SmallCString> {
-        use self::DatabaseName::{Attached, Main, Temp};
-        match *self {
-            Main => str_to_cstring("main"), // TODO C-string literals
-            Temp => str_to_cstring("temp"),
-            Attached(s) => str_to_cstring(s),
+    fn as_cstr(&self) -> Result<std::borrow::Cow<'_, CStr>> {
+        Ok(match *self {
+            DatabaseName::Main => std::borrow::Cow::Borrowed(c"main"),
+            DatabaseName::Temp => std::borrow::Cow::Borrowed(c"temp"),
+            DatabaseName::Attached(s) => std::borrow::Cow::Owned(CString::new(s)?),
+            DatabaseName::C(s) => std::borrow::Cow::Borrowed(s),
+        })
+    }
+    #[cfg(feature = "hooks")]
+    pub(crate) fn from_cstr(cs: &std::ffi::CStr) -> DatabaseName<'_> {
+        if cs == c"main" {
+            DatabaseName::Main
+        } else if cs == c"temp" {
+            DatabaseName::Temp
+        } else {
+            DatabaseName::C(cs)
         }
     }
     #[cfg(feature = "hooks")]
@@ -647,7 +655,7 @@ impl Connection {
     pub fn path(&self) -> Option<&str> {
         unsafe {
             let db = self.handle();
-            let db_name = DatabaseName::Main.as_cstring().unwrap();
+            let db_name = DatabaseName::Main.as_cstr().unwrap();
             let db_filename = ffi::sqlite3_db_filename(db, db_name.as_ptr());
             if db_filename.is_null() {
                 None

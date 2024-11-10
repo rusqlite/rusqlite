@@ -66,7 +66,7 @@ impl Deref for Data<'_> {
 impl Connection {
     /// Serialize a database.
     pub fn serialize(&self, schema: DatabaseName) -> Result<Data> {
-        let schema = schema.as_cstring()?;
+        let schema = schema.as_cstr()?;
         let mut sz = 0;
         let mut ptr: *mut u8 = unsafe {
             ffi::sqlite3_serialize(
@@ -102,7 +102,7 @@ impl Connection {
         data: OwnedData,
         read_only: bool,
     ) -> Result<()> {
-        let schema = schema.as_cstring()?;
+        let schema = schema.as_cstr()?;
         let (data, sz) = data.into_raw();
         let sz = sz.try_into().unwrap();
         let flags = if read_only {
