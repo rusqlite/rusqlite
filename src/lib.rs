@@ -373,6 +373,7 @@ impl DatabaseName<'_> {
             Attached(s) => str_to_cstring(s),
         }
     }
+    #[cfg(feature = "hooks")]
     pub(crate) fn from_cstr(db_name: &std::ffi::CStr) -> DatabaseName<'_> {
         let s = db_name.to_str().expect("illegal database name");
         match s {
