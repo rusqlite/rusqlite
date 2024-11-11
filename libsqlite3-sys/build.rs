@@ -507,6 +507,7 @@ mod bindings {
             if name == "SQLITE_SERIALIZE_NOCOPY"
                 || name.starts_with("SQLITE_DESERIALIZE_")
                 || name.starts_with("SQLITE_PREPARE_")
+                || name.starts_with("SQLITE_TRACE_")
             {
                 Some(IntKind::UInt)
             } else {

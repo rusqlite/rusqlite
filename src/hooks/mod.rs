@@ -452,7 +452,7 @@ pub enum CheckpointMode {
     FULL = ffi::SQLITE_CHECKPOINT_FULL,
     /// Like FULL but wait for readers
     RESTART = ffi::SQLITE_CHECKPOINT_RESTART,
-    /// Like RESTART but also truncate WA
+    /// Like RESTART but also truncate WAL
     TRUNCATE = ffi::SQLITE_CHECKPOINT_TRUNCATE,
 }
 

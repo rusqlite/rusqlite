@@ -2,7 +2,7 @@
 
 use std::ffi::{CStr, CString};
 use std::mem;
-use std::os::raw::{c_char, c_int, c_void};
+use std::os::raw::{c_char, c_int, c_uint, c_void};
 use std::panic::catch_unwind;
 use std::ptr;
 use std::time::Duration;
@@ -61,6 +61,40 @@ pub fn log(err_code: c_int, msg: &str) {
     }
 }
 
+bitflags::bitflags! {
+    /// Trace event codes
+    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    #[non_exhaustive]
+    #[repr(C)]
+    pub struct TraceEventCodes: ::std::os::raw::c_uint {
+        /// Default
+        const NONE = 0;
+        /// when a prepared statement first begins running and possibly at other times during the execution
+        /// of the prepared statement, such as at the start of each trigger subprogram
+        const SQLITE_TRACE_STMT = ffi::SQLITE_TRACE_STMT;
+        /// when the statement finishes
+        const SQLITE_TRACE_PROFILE = ffi::SQLITE_TRACE_PROFILE;
+        /// whenever a prepared statement generates a single row of result
+        const SQLITE_TRACE_ROW = ffi::SQLITE_TRACE_ROW;
+        /// when a database connection closes
+        const SQLITE_TRACE_CLOSE = ffi::SQLITE_TRACE_CLOSE;
+    }
+}
+
+/// Trace event
+#[non_exhaustive]
+pub enum TraceEvent<'s> {
+    /// when a prepared statement first begins running and possibly at other times during the execution
+    /// of the prepared statement, such as at the start of each trigger subprogram
+    Stmt(/*Statement,*/ &'s str),
+    /// when the statement finishes
+    Profile(/*Statement,*/ Duration),
+    /// whenever a prepared statement generates a single row of result
+    Row(/*Statement*/),
+    /// when a database connection closes
+    Close(/*Connection*/),
+}
+
 impl Connection {
     /// Register or clear a callback function that can be
     /// used for tracing the execution of SQL statements.
@@ -68,6 +102,7 @@ impl Connection {
     /// Prepared statement placeholders are replaced/logged with their assigned
     /// values. There can only be a single tracer defined for each database
     /// connection. Setting a new tracer clears the old one.
+    #[deprecated(since = "0.33.0", note = "use trace_v2 instead")]
     pub fn trace(&mut self, trace_fn: Option<fn(&str)>) {
         unsafe extern "C" fn trace_callback(p_arg: *mut c_void, z_sql: *const c_char) {
             let trace_fn: fn(&str) = mem::transmute(p_arg);
@@ -91,6 +126,7 @@ impl Connection {
     ///
     /// There can only be a single profiler defined for each database
     /// connection. Setting a new profiler clears the old one.
+    #[deprecated(since = "0.33.0", note = "use trace_v2 instead")]
     pub fn profile(&mut self, profile_fn: Option<fn(&str, Duration)>) {
         unsafe extern "C" fn profile_callback(
             p_arg: *mut c_void,
@@ -99,12 +135,8 @@ impl Connection {
         ) {
             let profile_fn: fn(&str, Duration) = mem::transmute(p_arg);
             let s = CStr::from_ptr(z_sql).to_string_lossy();
-            const NANOS_PER_SEC: u64 = 1_000_000_000;
 
-            let duration = Duration::new(
-                nanoseconds / NANOS_PER_SEC,
-                (nanoseconds % NANOS_PER_SEC) as u32,
-            );
+            let duration = Duration::from_nanos(nanoseconds);
             drop(catch_unwind(|| profile_fn(&s, duration)));
         }
 
@@ -117,7 +149,45 @@ impl Connection {
         };
     }
 
-    // TODO sqlite3_trace_v2 (https://sqlite.org/c3ref/trace_v2.html) // 3.14.0, #977
+    /// Register or clear a trace callback function
+    pub fn trace_v2(&self, mask: TraceEventCodes, trace_fn: Option<fn(TraceEvent<'_>)>) {
+        unsafe extern "C" fn trace_callback(
+            evt: c_uint,
+            ctx: *mut c_void,
+            _p: *mut c_void,
+            x: *mut c_void,
+        ) -> c_int {
+            let trace_fn: fn(TraceEvent<'_>) = mem::transmute(ctx);
+            drop(catch_unwind(|| match evt {
+                ffi::SQLITE_TRACE_STMT => {
+                    let str = CStr::from_ptr(x as *const c_char).to_string_lossy();
+                    trace_fn(TraceEvent::Stmt(&str))
+                }
+                ffi::SQLITE_TRACE_PROFILE => {
+                    let ns = *(x as *const i64);
+                    trace_fn(TraceEvent::Profile(Duration::from_nanos(
+                        u64::try_from(ns).unwrap_or_default(),
+                    )))
+                }
+                ffi::SQLITE_TRACE_ROW => trace_fn(TraceEvent::Row()),
+                ffi::SQLITE_TRACE_CLOSE => trace_fn(TraceEvent::Close()),
+                _ => {}
+            }));
+            // The integer return value from the callback is currently ignored, though this may change in future releases.
+            // Callback implementations should return zero to ensure future compatibility.
+            ffi::SQLITE_OK
+        }
+        let c = self.db.borrow_mut();
+        if let Some(f) = trace_fn {
+            unsafe {
+                ffi::sqlite3_trace_v2(c.db(), mask.bits(), Some(trace_callback), f as *mut c_void);
+            }
+        } else {
+            unsafe {
+                ffi::sqlite3_trace_v2(c.db(), 0, None, ptr::null_mut());
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -128,6 +198,7 @@ mod test {
     use crate::{Connection, Result};
 
     #[test]
+    #[allow(deprecated)]
     fn test_trace() -> Result<()> {
         static TRACED_STMTS: LazyLock<Mutex<Vec<String>>> =
             LazyLock::new(|| Mutex::new(Vec::new()));
@@ -156,6 +227,7 @@ mod test {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_profile() -> Result<()> {
         static PROFILED: LazyLock<Mutex<Vec<(String, Duration)>>> =
             LazyLock::new(|| Mutex::new(Vec::new()));
