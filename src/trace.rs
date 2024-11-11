@@ -1,6 +1,8 @@
 //! Tracing and profiling functions. Error and warning log.
 
+use std::borrow::Cow;
 use std::ffi::{CStr, CString};
+use std::marker::PhantomData;
 use std::mem;
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 use std::panic::catch_unwind;
@@ -8,7 +10,7 @@ use std::ptr;
 use std::time::Duration;
 
 use super::ffi;
-use crate::Connection;
+use crate::{Connection, DatabaseName, StatementStatus};
 
 /// Set up the process-wide SQLite error logging callback.
 ///
@@ -86,13 +88,59 @@ bitflags::bitflags! {
 pub enum TraceEvent<'s> {
     /// when a prepared statement first begins running and possibly at other times during the execution
     /// of the prepared statement, such as at the start of each trigger subprogram
-    Stmt(/*Statement,*/ &'s str),
+    Stmt(StmtRef<'s>, &'s str),
     /// when the statement finishes
-    Profile(/*Statement,*/ Duration),
+    Profile(StmtRef<'s>, Duration),
     /// whenever a prepared statement generates a single row of result
-    Row(/*Statement*/),
+    Row(StmtRef<'s>),
     /// when a database connection closes
-    Close(/*Connection*/),
+    Close(ConnRef<'s>),
+}
+
+/// Statement reference
+pub struct StmtRef<'s> {
+    ptr: *mut ffi::sqlite3_stmt,
+    phantom: PhantomData<&'s ()>,
+}
+
+impl StmtRef<'_> {
+    fn new(ptr: *mut ffi::sqlite3_stmt) -> Self {
+        StmtRef {
+            ptr,
+            phantom: PhantomData,
+        }
+    }
+    /// SQL text
+    pub fn sql(&self) -> Cow<'_, str> {
+        unsafe { CStr::from_ptr(ffi::sqlite3_sql(self.ptr)).to_string_lossy() }
+    }
+    /// Expanded SQL text
+    pub fn expanded_sql(&self) -> Option<String> {
+        unsafe {
+            crate::raw_statement::expanded_sql(self.ptr).map(|s| s.to_string_lossy().to_string())
+        }
+    }
+    /// Get the value for one of the status counters for this statement.
+    pub fn get_status(&self, status: StatementStatus) -> i32 {
+        unsafe { crate::raw_statement::stmt_status(self.ptr, status, false) }
+    }
+}
+
+/// Connection reference
+pub struct ConnRef<'s> {
+    ptr: *mut ffi::sqlite3,
+    phantom: PhantomData<&'s ()>,
+}
+
+impl ConnRef<'_> {
+    /// Test for auto-commit mode.
+    pub fn is_autocommit(&self) -> bool {
+        unsafe { crate::inner_connection::get_autocommit(self.ptr) }
+    }
+    /// the path to the database file, if one exists and is known.
+    pub fn db_filename(&self) -> Option<&str> {
+        unsafe { crate::inner_connection::db_filename(self.ptr, DatabaseName::Main) }
+    }
 }
 
 impl Connection {
@@ -154,23 +202,32 @@ impl Connection {
         unsafe extern "C" fn trace_callback(
             evt: c_uint,
             ctx: *mut c_void,
-            _p: *mut c_void,
+            p: *mut c_void,
             x: *mut c_void,
         ) -> c_int {
             let trace_fn: fn(TraceEvent<'_>) = mem::transmute(ctx);
             drop(catch_unwind(|| match evt {
                 ffi::SQLITE_TRACE_STMT => {
                     let str = CStr::from_ptr(x as *const c_char).to_string_lossy();
-                    trace_fn(TraceEvent::Stmt(&str))
+                    trace_fn(TraceEvent::Stmt(
+                        StmtRef::new(p as *mut ffi::sqlite3_stmt),
+                        &str,
+                    ))
                 }
                 ffi::SQLITE_TRACE_PROFILE => {
                     let ns = *(x as *const i64);
-                    trace_fn(TraceEvent::Profile(Duration::from_nanos(
-                        u64::try_from(ns).unwrap_or_default(),
-                    )))
+                    trace_fn(TraceEvent::Profile(
+                        StmtRef::new(p as *mut ffi::sqlite3_stmt),
+                        Duration::from_nanos(u64::try_from(ns).unwrap_or_default()),
+                    ))
                 }
-                ffi::SQLITE_TRACE_ROW => trace_fn(TraceEvent::Row()),
-                ffi::SQLITE_TRACE_CLOSE => trace_fn(TraceEvent::Close()),
+                ffi::SQLITE_TRACE_ROW => {
+                    trace_fn(TraceEvent::Row(StmtRef::new(p as *mut ffi::sqlite3_stmt)))
+                }
+                ffi::SQLITE_TRACE_CLOSE => trace_fn(TraceEvent::Close(ConnRef {
+                    ptr: p as *mut ffi::sqlite3,
+                    phantom: PhantomData,
+                })),
                 _ => {}
             }));
             // The integer return value from the callback is currently ignored, though this may change in future releases.

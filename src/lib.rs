@@ -644,16 +644,7 @@ impl Connection {
     /// likely to be more robust.
     #[inline]
     pub fn path(&self) -> Option<&str> {
-        unsafe {
-            let db = self.handle();
-            let db_name = DatabaseName::Main.as_cstr().unwrap();
-            let db_filename = ffi::sqlite3_db_filename(db, db_name.as_ptr());
-            if db_filename.is_null() {
-                None
-            } else {
-                CStr::from_ptr(db_filename).to_str().ok()
-            }
-        }
+        unsafe { crate::inner_connection::db_filename(self.handle(), DatabaseName::Main) }
     }
 
     /// Attempts to free as much heap memory as possible from the database
