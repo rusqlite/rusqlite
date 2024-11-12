@@ -65,12 +65,10 @@ pub fn log(err_code: c_int, msg: &str) {
 
 bitflags::bitflags! {
     /// Trace event codes
-    #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     #[non_exhaustive]
     #[repr(C)]
     pub struct TraceEventCodes: ::std::os::raw::c_uint {
-        /// Default
-        const NONE = 0;
         /// when a prepared statement first begins running and possibly at other times during the execution
         /// of the prepared statement, such as at the start of each trigger subprogram
         const SQLITE_TRACE_STMT = ffi::SQLITE_TRACE_STMT;
@@ -302,6 +300,41 @@ mod test {
         let profiled = PROFILED.lock().unwrap();
         assert_eq!(profiled.len(), 1);
         assert_eq!(profiled[0].0, "PRAGMA application_id = 1");
+        Ok(())
+    }
+
+    #[test]
+    pub fn trace_v2() -> Result<()> {
+        use super::{TraceEvent, TraceEventCodes};
+        use std::borrow::Borrow;
+        use std::cmp::Ordering;
+
+        let db = Connection::open_in_memory()?;
+        db.trace_v2(
+            TraceEventCodes::all(),
+            Some(|e| match e {
+                TraceEvent::Stmt(s, sql) => {
+                    assert_eq!(s.sql(), sql);
+                }
+                TraceEvent::Profile(s, d) => {
+                    assert_eq!(s.get_status(crate::StatementStatus::Sort), 0);
+                    assert_eq!(d.cmp(&Duration::ZERO), Ordering::Greater)
+                }
+                TraceEvent::Row(s) => {
+                    assert_eq!(s.expanded_sql().as_deref(), Some(s.sql().borrow()));
+                }
+                TraceEvent::Close(db) => {
+                    assert!(db.is_autocommit());
+                    assert!(db.db_filename().is_none());
+                }
+            }),
+        );
+
+        db.one_column::<u32>("PRAGMA user_version")?;
+        drop(db);
+
+        let db = Connection::open_in_memory()?;
+        db.trace_v2(TraceEventCodes::empty(), None);
         Ok(())
     }
 }
