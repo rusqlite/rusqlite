@@ -204,13 +204,12 @@ impl RawStatement {
 
     #[inline]
     pub(crate) fn expanded_sql(&self) -> Option<SqliteMallocString> {
-        unsafe { SqliteMallocString::from_raw(ffi::sqlite3_expanded_sql(self.ptr)) }
+        unsafe { expanded_sql(self.ptr) }
     }
 
     #[inline]
     pub fn get_status(&self, status: StatementStatus, reset: bool) -> i32 {
-        assert!(!self.ptr.is_null());
-        unsafe { ffi::sqlite3_stmt_status(self.ptr, status as i32, reset as i32) }
+        unsafe { stmt_status(self.ptr, status, reset) }
     }
 
     #[inline]
@@ -231,6 +230,20 @@ impl RawStatement {
     }
 
     // TODO sqlite3_normalized_sql (https://sqlite.org/c3ref/expanded_sql.html) // 3.27.0 + SQLITE_ENABLE_NORMALIZE
+}
+
+#[inline]
+pub(crate) unsafe fn expanded_sql(ptr: *mut ffi::sqlite3_stmt) -> Option<SqliteMallocString> {
+    SqliteMallocString::from_raw(ffi::sqlite3_expanded_sql(ptr))
+}
+#[inline]
+pub(crate) unsafe fn stmt_status(
+    ptr: *mut ffi::sqlite3_stmt,
+    status: StatementStatus,
+    reset: bool,
+) -> i32 {
+    assert!(!ptr.is_null());
+    ffi::sqlite3_stmt_status(ptr, status as i32, reset as i32)
 }
 
 impl Drop for RawStatement {

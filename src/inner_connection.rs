@@ -309,7 +309,7 @@ impl InnerConnection {
 
     #[inline]
     pub fn is_autocommit(&self) -> bool {
-        unsafe { ffi::sqlite3_get_autocommit(self.db()) != 0 }
+        unsafe { get_autocommit(self.db()) }
     }
 
     pub fn is_busy(&self) -> bool {
@@ -390,6 +390,25 @@ impl InnerConnection {
     #[cfg(feature = "modern_sqlite")] // 3.41.0
     pub fn is_interrupted(&self) -> bool {
         unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
+    }
+}
+
+#[inline]
+pub(crate) unsafe fn get_autocommit(ptr: *mut ffi::sqlite3) -> bool {
+    ffi::sqlite3_get_autocommit(ptr) != 0
+}
+
+#[inline]
+pub(crate) unsafe fn db_filename(
+    ptr: *mut ffi::sqlite3,
+    db_name: crate::DatabaseName<'_>,
+) -> Option<&str> {
+    let db_name = db_name.as_cstr().unwrap();
+    let db_filename = ffi::sqlite3_db_filename(ptr, db_name.as_ptr());
+    if db_filename.is_null() {
+        None
+    } else {
+        CStr::from_ptr(db_filename).to_str().ok()
     }
 }
 
