@@ -1286,7 +1286,12 @@ mod test {
         let mut stmt = conn.prepare("")?;
         assert_eq!(0, stmt.column_count());
         stmt.parameter_index("test")?;
-        stmt.step().unwrap_err();
+        let err = stmt.step().unwrap_err();
+        assert_eq!(err.sqlite_error_code(), Some(crate::ErrorCode::ApiMisuse));
+        assert_eq!(
+            err.to_string(),
+            "bad parameter or other API misuse".to_owned()
+        );
         stmt.reset()?; // SQLITE_OMIT_AUTORESET = false
         stmt.execute([]).unwrap_err();
         Ok(())
