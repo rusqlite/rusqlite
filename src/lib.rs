@@ -2287,4 +2287,10 @@ mod test {
         assert!(db.is_interrupted());
         Ok(())
     }
+
+    #[test]
+    fn release_memory() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.release_memory()
+    }
 }
