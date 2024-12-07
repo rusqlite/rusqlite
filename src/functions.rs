@@ -176,6 +176,11 @@ impl Context<'_> {
     ///
     /// See `https://www.sqlite.org/c3ref/get_auxdata.html` for a discussion of
     /// this feature, or the unit tests of this module for an example.
+    ///
+    /// # Failure
+    ///
+    /// Will panic if `arg` is greater than or equal to
+    /// [`self.len()`](Context::len).
     pub fn get_or_create_aux<T, E, F>(&self, arg: c_int, func: F) -> Result<Arc<T>>
     where
         T: Send + Sync + 'static,
@@ -196,7 +201,13 @@ impl Context<'_> {
     /// Sets the auxiliary data associated with a particular parameter. See
     /// `https://www.sqlite.org/c3ref/get_auxdata.html` for a discussion of
     /// this feature, or the unit tests of this module for an example.
+    ///
+    /// # Failure
+    ///
+    /// Will panic if `arg` is greater than or equal to
+    /// [`self.len()`](Context::len).
     pub fn set_aux<T: Send + Sync + 'static>(&self, arg: c_int, value: T) -> Result<Arc<T>> {
+        assert!(idx < self.len());
         let orig: Arc<T> = Arc::new(value);
         let inner: AuxInner = orig.clone();
         let outer = Box::new(inner);
@@ -216,7 +227,13 @@ impl Context<'_> {
     /// [`set_aux`](Context::set_aux). Returns `Ok(None)` if no data has been
     /// associated, and Ok(Some(v)) if it has. Returns an error if the
     /// requested type does not match.
+    ///
+    /// # Failure
+    ///
+    /// Will panic if `arg` is greater than or equal to
+    /// [`self.len()`](Context::len).
     pub fn get_aux<T: Send + Sync + 'static>(&self, arg: c_int) -> Result<Option<Arc<T>>> {
+        assert!(idx < self.len());
         let p = unsafe { ffi::sqlite3_get_auxdata(self.ctx, arg) as *const AuxInner };
         if p.is_null() {
             Ok(None)
