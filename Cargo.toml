@@ -43,8 +43,6 @@ collation = []
 functions = []
 # sqlite3_log: 3.6.23 (2010-03-09)
 trace = []
-# sqlite3_db_release_memory: 3.7.10 (2012-01-16)
-release_memory = []
 bundled = ["libsqlite3-sys/bundled", "modern_sqlite"]
 bundled-sqlcipher = ["libsqlite3-sys/bundled-sqlcipher", "bundled"]
 bundled-sqlcipher-vendored-openssl = [

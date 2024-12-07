@@ -652,7 +652,6 @@ impl Connection {
     ///
     /// This calls [`sqlite3_db_release_memory`](https://www.sqlite.org/c3ref/db_release_memory.html).
     #[inline]
-    #[cfg(feature = "release_memory")]
     pub fn release_memory(&self) -> Result<()> {
         self.db.borrow_mut().release_memory()
     }
