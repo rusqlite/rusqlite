@@ -207,7 +207,7 @@ impl Context<'_> {
     /// Will panic if `arg` is greater than or equal to
     /// [`self.len()`](Context::len).
     pub fn set_aux<T: Send + Sync + 'static>(&self, arg: c_int, value: T) -> Result<Arc<T>> {
-        assert!(idx < self.len());
+        assert!(arg < self.len() as i32);
         let orig: Arc<T> = Arc::new(value);
         let inner: AuxInner = orig.clone();
         let outer = Box::new(inner);
@@ -233,7 +233,7 @@ impl Context<'_> {
     /// Will panic if `arg` is greater than or equal to
     /// [`self.len()`](Context::len).
     pub fn get_aux<T: Send + Sync + 'static>(&self, arg: c_int) -> Result<Option<Arc<T>>> {
-        assert!(idx < self.len());
+        assert!(arg < self.len() as i32);
         let p = unsafe { ffi::sqlite3_get_auxdata(self.ctx, arg) as *const AuxInner };
         if p.is_null() {
             Ok(None)
