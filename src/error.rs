@@ -414,12 +414,20 @@ pub fn error_from_sqlite_code(code: c_int, message: Option<String>) -> Error {
 
 #[cold]
 pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
-    let message = if db.is_null() {
-        None
+    error_from_sqlite_code(code, error_msg(db, code))
+}
+
+unsafe fn error_msg(db: *mut ffi::sqlite3, code: c_int) -> Option<String> {
+    if db.is_null() || ffi::sqlite3_errcode(db) != code {
+        let err_str = ffi::sqlite3_errstr(code);
+        if err_str.is_null() {
+            None
+        } else {
+            Some(errmsg_to_string(err_str))
+        }
     } else {
         Some(errmsg_to_string(ffi::sqlite3_errmsg(db)))
-    };
-    error_from_sqlite_code(code, message)
+    }
 }
 
 pub unsafe fn decode_result_raw(db: *mut ffi::sqlite3, code: c_int) -> Result<()> {
@@ -443,19 +451,19 @@ pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, sql: &str) -
         error_from_sqlite_code(code, None)
     } else {
         let error = ffi::Error::new(code);
-        let msg = errmsg_to_string(ffi::sqlite3_errmsg(db));
+        let msg = error_msg(db, code);
         if ffi::ErrorCode::Unknown == error.code {
             let offset = ffi::sqlite3_error_offset(db);
             if offset >= 0 {
                 return Error::SqlInputError {
                     error,
-                    msg,
+                    msg: msg.unwrap_or("error".to_owned()),
                     sql: sql.to_owned(),
                     offset,
                 };
             }
         }
-        Error::SqliteFailure(error, Some(msg))
+        Error::SqliteFailure(error, msg)
     }
 }
 

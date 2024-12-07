@@ -1286,7 +1286,10 @@ mod test {
         let mut stmt = conn.prepare("")?;
         assert_eq!(0, stmt.column_count());
         stmt.parameter_index("test")?;
-        stmt.step().unwrap_err();
+        let err = stmt.step().unwrap_err();
+        assert_eq!(err.sqlite_error_code(), Some(crate::ErrorCode::ApiMisuse));
+        // error msg is different with sqlcipher, so we use assert_ne:
+        assert_ne!(err.to_string(), "not an error".to_owned());
         stmt.reset()?; // SQLITE_OMIT_AUTORESET = false
         stmt.execute([]).unwrap_err();
         Ok(())
