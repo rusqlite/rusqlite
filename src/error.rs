@@ -130,7 +130,7 @@ pub enum Error {
         /// error code
         error: ffi::Error,
         /// error message
-        msg: Option<String>,
+        msg: String,
         /// SQL input
         sql: String,
         /// byte offset of the start of invalid token
@@ -324,7 +324,7 @@ impl fmt::Display for Error {
                 offset,
                 ref sql,
                 ..
-            } => write!(f, "{msg:?} in {sql} at offset {offset}"),
+            } => write!(f, "{msg} in {sql} at offset {offset}"),
             #[cfg(feature = "loadable_extension")]
             Self::InitError(ref err) => err.fmt(f),
             #[cfg(feature = "modern_sqlite")]
@@ -457,7 +457,7 @@ pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, sql: &str) -
             if offset >= 0 {
                 return Error::SqlInputError {
                     error,
-                    msg,
+                    msg: msg.unwrap_or("error".to_owned()),
                     sql: sql.to_owned(),
                     offset,
                 };
