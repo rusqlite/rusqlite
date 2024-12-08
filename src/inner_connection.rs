@@ -9,9 +9,7 @@ use std::sync::{Arc, Mutex};
 use super::ffi;
 use super::str_for_sqlite;
 use super::{Connection, InterruptHandle, OpenFlags, PrepFlags, Result};
-use crate::error::{
-    decode_result_raw, error_from_handle, error_from_sqlite_code, error_with_offset, Error,
-};
+use crate::error::{decode_result_raw, error_from_handle, error_with_offset, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
 use crate::version_number;
@@ -197,7 +195,7 @@ impl InnerConnection {
         } else {
             let message = super::errmsg_to_string(errmsg);
             ffi::sqlite3_free(errmsg.cast::<std::os::raw::c_void>());
-            Err(error_from_sqlite_code(r, Some(message)))
+            Err(crate::error::error_from_sqlite_code(r, Some(message)))
         }
     }
 
