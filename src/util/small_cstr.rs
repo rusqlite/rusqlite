@@ -146,6 +146,7 @@ mod test {
             SmallCString::new("foo").unwrap().as_bytes_without_nul(),
             b"foo",
         );
+        assert_eq!(*"foo", SmallCString::new("foo").unwrap());
 
         assert_eq!(SmallCString::new("😀").unwrap().len(), 4);
         assert_eq!(
@@ -156,6 +157,7 @@ mod test {
             SmallCString::new("😀").unwrap().as_bytes_without_nul(),
             b"\xf0\x9f\x98\x80",
         );
+        assert_eq!(SmallCString::new("😀").unwrap(), *"😀");
 
         assert_eq!(SmallCString::new("").unwrap().len(), 0);
         assert!(SmallCString::new("").unwrap().is_empty());

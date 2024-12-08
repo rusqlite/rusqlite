@@ -236,4 +236,10 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn test_alloc() {
+        let err = alloc("error");
+        unsafe { ffi::sqlite3_free(err.cast()) };
+    }
 }
