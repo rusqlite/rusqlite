@@ -412,6 +412,21 @@ pub fn error_from_sqlite_code(code: c_int, message: Option<String>) -> Error {
     Error::SqliteFailure(ffi::Error::new(code), message)
 }
 
+macro_rules! err {
+    ($code:expr $(,)?) => {
+        $crate::error::error_from_sqlite_code($code, None)
+    };
+    ($code:expr, $msg:literal $(,)?) => {
+        $crate::error::error_from_sqlite_code($code, Some(format!($msg)))
+    };
+    ($code:expr, $err:expr $(,)?) => {
+        $crate::error::error_from_sqlite_code($code, Some(format!($err)))
+    };
+    ($code:expr, $fmt:expr, $($arg:tt)*) => {
+        $crate::error::error_from_sqlite_code($code, Some(format!($fmt, $($arg)*)))
+    };
+}
+
 #[cold]
 pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     error_from_sqlite_code(code, error_msg(db, code))

@@ -608,10 +608,7 @@ impl Statement<'_> {
             }
             #[cfg(feature = "functions")]
             ToSqlOutput::Arg(_) => {
-                return Err(Error::SqliteFailure(
-                    ffi::Error::new(ffi::SQLITE_MISUSE),
-                    Some(format!("Unsupported value \"{value:?}\"")),
-                ));
+                return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
             }
             #[cfg(feature = "array")]
             ToSqlOutput::Array(a) => {
