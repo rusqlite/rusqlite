@@ -12,7 +12,7 @@ use crate::vtab::{
     eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConfig, VTabConnection,
     VTabCursor, Values,
 };
-use crate::{Connection, Error, Result};
+use crate::{error::error_from_sqlite_code, Connection, Result};
 
 /// Register the `generate_series` module.
 pub fn load_module(conn: &Connection) -> Result<()> {
@@ -108,10 +108,7 @@ unsafe impl<'vtab> VTab<'vtab> for SeriesTab {
             debug_assert_eq!(Ok("BINARY"), info.collation(*j));
         }
         if !(unusable_mask & !idx_num).is_empty() {
-            return Err(Error::SqliteFailure(
-                ffi::Error::new(ffi::SQLITE_CONSTRAINT),
-                None,
-            ));
+            return Err(error_from_sqlite_code(ffi::SQLITE_CONSTRAINT, None));
         }
         if idx_num.contains(QueryPlanFlags::BOTH) {
             // Both start= and stop= boundaries are available.

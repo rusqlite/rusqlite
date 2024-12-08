@@ -501,10 +501,7 @@ impl IndexInfo {
         let idx = constraint_idx as c_int;
         let collation = unsafe { ffi::sqlite3_vtab_collation(self.0, idx) };
         if collation.is_null() {
-            return Err(Error::SqliteFailure(
-                ffi::Error::new(ffi::SQLITE_MISUSE),
-                Some(format!("{constraint_idx} is out of range")),
-            ));
+            return Err(err!(ffi::SQLITE_MISUSE, "{constraint_idx} is out of range"));
         }
         Ok(unsafe { CStr::from_ptr(collation) }.to_str()?)
     }

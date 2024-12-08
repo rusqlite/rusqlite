@@ -93,6 +93,7 @@ pub use crate::version::*;
 #[doc(hidden)]
 pub use rusqlite_macros::__bind;
 
+#[macro_use]
 mod error;
 
 #[cfg(not(feature = "loadable_extension"))]
@@ -321,10 +322,7 @@ fn str_for_sqlite(s: &[u8]) -> Result<(*const c_char, c_int, ffi::sqlite3_destru
 // failed.
 fn len_as_c_int(len: usize) -> Result<c_int> {
     if len >= (c_int::MAX as usize) {
-        Err(Error::SqliteFailure(
-            ffi::Error::new(ffi::SQLITE_TOOBIG),
-            None,
-        ))
+        Err(err!(ffi::SQLITE_TOOBIG))
     } else {
         Ok(len as c_int)
     }

@@ -1,6 +1,6 @@
 //! Run-Time Limits
 
-use crate::{ffi, Connection, Error, Result};
+use crate::{ffi, Connection, Result};
 use std::os::raw::c_int;
 
 /// Run-Time limit categories, for use with [`Connection::limit`] and
@@ -57,10 +57,7 @@ impl Connection {
         let c = self.db.borrow();
         let rc = unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, -1) };
         if rc < 0 {
-            return Err(Error::SqliteFailure(
-                ffi::Error::new(ffi::SQLITE_RANGE),
-                Some(format!("{limit:?} is invalid")),
-            ));
+            return Err(err!(ffi::SQLITE_RANGE, "{limit:?} is invalid"));
         }
         Ok(rc)
     }
@@ -71,18 +68,12 @@ impl Connection {
     #[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
     pub fn set_limit(&self, limit: Limit, new_val: i32) -> Result<i32> {
         if new_val < 0 {
-            return Err(Error::SqliteFailure(
-                ffi::Error::new(ffi::SQLITE_RANGE),
-                Some(format!("{new_val} is invalid")),
-            ));
+            return Err(err!(ffi::SQLITE_RANGE, "{new_val} is invalid"));
         }
         let c = self.db.borrow_mut();
         let rc = unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, new_val) };
         if rc < 0 {
-            return Err(Error::SqliteFailure(
-                ffi::Error::new(ffi::SQLITE_RANGE),
-                Some(format!("{limit:?} is invalid")),
-            ));
+            return Err(err!(ffi::SQLITE_RANGE, "{limit:?} is invalid"));
         }
         Ok(rc)
     }
