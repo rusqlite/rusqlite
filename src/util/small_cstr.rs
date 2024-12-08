@@ -107,20 +107,6 @@ impl std::ops::Deref for SmallCString {
     }
 }
 
-impl PartialEq<SmallCString> for str {
-    #[inline]
-    fn eq(&self, s: &SmallCString) -> bool {
-        s.as_bytes_without_nul() == self.as_bytes()
-    }
-}
-
-impl PartialEq<str> for SmallCString {
-    #[inline]
-    fn eq(&self, s: &str) -> bool {
-        self.as_bytes_without_nul() == s.as_bytes()
-    }
-}
-
 impl std::borrow::Borrow<str> for SmallCString {
     #[inline]
     fn borrow(&self) -> &str {
@@ -146,7 +132,6 @@ mod test {
             SmallCString::new("foo").unwrap().as_bytes_without_nul(),
             b"foo",
         );
-        assert_eq!(*"foo", SmallCString::new("foo").unwrap());
 
         assert_eq!(SmallCString::new("😀").unwrap().len(), 4);
         assert_eq!(
@@ -157,7 +142,6 @@ mod test {
             SmallCString::new("😀").unwrap().as_bytes_without_nul(),
             b"\xf0\x9f\x98\x80",
         );
-        assert_eq!(SmallCString::new("😀").unwrap(), *"😀");
 
         assert_eq!(SmallCString::new("").unwrap().len(), 0);
         assert!(SmallCString::new("").unwrap().is_empty());

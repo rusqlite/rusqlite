@@ -164,18 +164,6 @@ impl Drop for SqliteMallocString {
     }
 }
 
-impl std::fmt::Debug for SqliteMallocString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_string_lossy().fmt(f)
-    }
-}
-
-impl std::fmt::Display for SqliteMallocString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_string_lossy().fmt(f)
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
