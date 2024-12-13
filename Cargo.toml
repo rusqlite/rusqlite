@@ -125,7 +125,7 @@ time = { version = "0.3.36", features = [
     "parsing",
 ], optional = true }
 bitflags = "2.6.0"
-hashlink = "0.9"
+hashlink = "0.10"
 chrono = { version = "0.4.38", optional = true, default-features = false, features = [
     "clock",
 ] }
