@@ -215,6 +215,7 @@ jobs:
     name: Generate code coverage
     runs-on: ubuntu-latest
     steps:
+      - run: sudo apt-get install libsqlite3-dev
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
