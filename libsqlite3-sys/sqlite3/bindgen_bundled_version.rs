@@ -23,10 +23,10 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 
-pub const SQLITE_VERSION: &[u8; 7] = b"3.47.2\0";
+pub const SQLITE_VERSION: &::std::ffi::CStr = c"3.47.2";
 pub const SQLITE_VERSION_NUMBER: i32 = 3047002;
-pub const SQLITE_SOURCE_ID: &[u8; 85] =
-    b"2024-12-07 20:39:59 2aabe05e2e8cae4847a802ee2daddc1d7413d8fc560254d93ee3e72c14685b6c\0";
+pub const SQLITE_SOURCE_ID: &::std::ffi::CStr =
+    c"2024-12-07 20:39:59 2aabe05e2e8cae4847a802ee2daddc1d7413d8fc560254d93ee3e72c14685b6c";
 pub const SQLITE_OK: i32 = 0;
 pub const SQLITE_ERROR: i32 = 1;
 pub const SQLITE_INTERNAL: i32 = 2;
