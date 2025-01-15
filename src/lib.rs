@@ -1250,6 +1250,8 @@ bitflags::bitflags! {
         const SQLITE_PREPARE_PERSISTENT = 0x01;
         /// Causes the SQL compiler to return an error (error code SQLITE_ERROR) if the statement uses any virtual tables.
         const SQLITE_PREPARE_NO_VTAB = 0x04;
+        /// Prevents SQL compiler errors from being sent to the error log.
+        const SQLITE_PREPARE_DONT_LOG = 0x10;
     }
 }
 
