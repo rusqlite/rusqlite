@@ -99,7 +99,7 @@ fn respan(ts: TokenStream, span: Span) -> TokenStream {
             }
             _ => tt,
         };
-        res.extend(Some(tt))
+        res.extend(Some(tt));
     }
     res
 }
