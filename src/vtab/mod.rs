@@ -764,6 +764,14 @@ impl Values<'_> {
         }
     }
 
+    /// Return raw pointer at `idx`
+    #[cfg(feature = "pointer")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "pointer")))]
+    pub unsafe fn get_pointer(&self, idx: usize, ptr_type: &'static std::ffi::CStr) -> *mut c_void {
+        let arg = self.args[idx];
+        unsafe { ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr()) }
+    }
+
     /// Turns `Values` into an iterator.
     #[inline]
     #[must_use]

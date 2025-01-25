@@ -622,6 +622,12 @@ impl Statement<'_> {
                     )
                 });
             }
+            #[cfg(feature = "pointer")]
+            ToSqlOutput::Pointer(p) => {
+                return self.conn.decode_result(unsafe {
+                    ffi::sqlite3_bind_pointer(ptr, col as c_int, p.0, p.1.as_ptr(), p.2)
+                });
+            }
         };
         self.conn.decode_result(match value {
             ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, col as c_int) },
