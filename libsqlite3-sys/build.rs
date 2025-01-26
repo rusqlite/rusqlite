@@ -430,7 +430,11 @@ mod build_linked {
             let pkgconfig_path = Path::new(&dir).join("pkgconfig");
             env::set_var("PKG_CONFIG_PATH", pkgconfig_path);
             #[cfg(not(feature = "loadable_extension"))]
-            if pkg_config::Config::new().probe(link_lib).is_err() {
+            if pkg_config::Config::new()
+                .atleast_version("3.14.0")
+                .probe(link_lib)
+                .is_err()
+            {
                 // Otherwise just emit the bare minimum link commands.
                 println!("cargo:rustc-link-lib={}={link_lib}", find_link_mode());
                 println!("cargo:rustc-link-search={dir}");
@@ -444,6 +448,7 @@ mod build_linked {
 
         // See if pkg-config can do everything for us.
         if let Ok(mut lib) = pkg_config::Config::new()
+            .atleast_version("3.14.0")
             .print_system_libs(false)
             .probe(link_lib)
         {
