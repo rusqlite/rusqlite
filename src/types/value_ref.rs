@@ -36,7 +36,7 @@ impl ValueRef<'_> {
 
 impl<'a> ValueRef<'a> {
     /// If `self` is case `Integer`, returns the integral value. Otherwise,
-    /// returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+    /// returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
     #[inline]
     pub fn as_i64(&self) -> FromSqlResult<i64> {
         match *self {
@@ -47,7 +47,7 @@ impl<'a> ValueRef<'a> {
 
     /// If `self` is case `Null` returns None.
     /// If `self` is case `Integer`, returns the integral value.
-    /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+    /// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
     #[inline]
     pub fn as_i64_or_null(&self) -> FromSqlResult<Option<i64>> {
         match *self {
@@ -58,7 +58,7 @@ impl<'a> ValueRef<'a> {
     }
 
     /// If `self` is case `Real`, returns the floating point value. Otherwise,
-    /// returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+    /// returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
     #[inline]
     pub fn as_f64(&self) -> FromSqlResult<f64> {
         match *self {
@@ -69,7 +69,7 @@ impl<'a> ValueRef<'a> {
 
     /// If `self` is case `Null` returns None.
     /// If `self` is case `Real`, returns the floating point value.
-    /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+    /// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
     #[inline]
     pub fn as_f64_or_null(&self) -> FromSqlResult<Option<f64>> {
         match *self {
@@ -80,7 +80,7 @@ impl<'a> ValueRef<'a> {
     }
 
     /// If `self` is case `Text`, returns the string value. Otherwise, returns
-    /// [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+    /// [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
     #[inline]
     pub fn as_str(&self) -> FromSqlResult<&'a str> {
         match *self {
@@ -93,7 +93,7 @@ impl<'a> ValueRef<'a> {
 
     /// If `self` is case `Null` returns None.
     /// If `self` is case `Text`, returns the string value.
-    /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+    /// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
     #[inline]
     pub fn as_str_or_null(&self) -> FromSqlResult<Option<&'a str>> {
         match *self {
@@ -106,7 +106,7 @@ impl<'a> ValueRef<'a> {
     }
 
     /// If `self` is case `Blob`, returns the byte slice. Otherwise, returns
-    /// [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+    /// [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
     #[inline]
     pub fn as_blob(&self) -> FromSqlResult<&'a [u8]> {
         match *self {
@@ -117,7 +117,7 @@ impl<'a> ValueRef<'a> {
 
     /// If `self` is case `Null` returns None.
     /// If `self` is case `Blob`, returns the byte slice.
-    /// Otherwise, returns [`Err(Error::InvalidColumnType)`](crate::Error::InvalidColumnType).
+    /// Otherwise, returns [`Err(FromSqlError::InvalidType)`](crate::types::from_sql::FromSqlError::InvalidType).
     #[inline]
     pub fn as_blob_or_null(&self) -> FromSqlResult<Option<&'a [u8]>> {
         match *self {
