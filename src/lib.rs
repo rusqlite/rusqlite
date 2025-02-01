@@ -436,10 +436,10 @@ impl Connection {
     ///   for details).
     /// - Disables the use of a per-connection mutex.
     ///
-    ///     Rusqlite enforces thread-safety at compile time, so additional
-    ///     locking is not needed and provides no benefit. (See the
-    ///     documentation on [`OpenFlags::SQLITE_OPEN_FULL_MUTEX`] for some
-    ///     additional discussion about this).
+    ///   Rusqlite enforces thread-safety at compile time, so additional
+    ///   locking is not needed and provides no benefit. (See the
+    ///   documentation on [`OpenFlags::SQLITE_OPEN_FULL_MUTEX`] for some
+    ///   additional discussion about this).
     ///
     /// Most of these are also the default settings for the C API, although
     /// technically the default locking behavior is controlled by the flags used

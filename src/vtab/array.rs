@@ -43,7 +43,7 @@ use crate::{Connection, Result};
 pub(crate) const ARRAY_TYPE: *const c_char = c"rarray".as_ptr();
 
 pub(crate) unsafe extern "C" fn free_array(p: *mut c_void) {
-    drop(Rc::from_raw(p as *const Vec<Value>));
+    Rc::decrement_strong_count(p as *const Vec<Value>);
 }
 
 /// Array parameter / pointer
