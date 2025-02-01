@@ -6,12 +6,8 @@ use std::ptr;
 use std::slice;
 
 use crate::ffi;
+use crate::util::free_boxed_value;
 use crate::{str_to_cstring, Connection, InnerConnection, Result};
-
-// FIXME copy/paste from function.rs
-unsafe extern "C" fn free_boxed_value<T>(p: *mut c_void) {
-    drop(Box::from_raw(p.cast::<T>()));
-}
 
 impl Connection {
     /// Add or modify a collation.
