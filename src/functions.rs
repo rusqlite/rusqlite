@@ -67,7 +67,7 @@ use crate::ffi::sqlite3_value;
 
 use crate::context::set_result;
 use crate::types::{FromSql, FromSqlError, ToSql, ToSqlOutput, ValueRef};
-
+use crate::util::free_boxed_value;
 use crate::{str_to_cstring, Connection, Error, InnerConnection, Result};
 
 unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
@@ -82,10 +82,6 @@ unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
             ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
         }
     }
-}
-
-unsafe extern "C" fn free_boxed_value<T>(p: *mut c_void) {
-    drop(Box::from_raw(p.cast::<T>()));
 }
 
 /// Context is a wrapper for the SQLite function
