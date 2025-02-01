@@ -60,16 +60,8 @@ impl Sql {
         let value = match value {
             ToSqlOutput::Borrowed(v) => v,
             ToSqlOutput::Owned(ref v) => ValueRef::from(v),
-            #[cfg(feature = "blob")]
-            ToSqlOutput::ZeroBlob(_) => {
-                return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
-            }
-            #[cfg(feature = "functions")]
-            ToSqlOutput::Arg(_) => {
-                return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
-            }
-            #[cfg(feature = "array")]
-            ToSqlOutput::Array(_) => {
+            #[cfg(any(feature = "blob", feature = "functions", feature = "array"))]
+            _ => {
                 return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
             }
         };
