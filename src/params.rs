@@ -221,7 +221,7 @@ impl Sealed for &[(&str, &dyn ToSql)] {}
 impl Params for &[(&str, &dyn ToSql)] {
     #[inline]
     fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
-        stmt.bind_parameters_named(self)
+        stmt.bind_parameters_named(self.iter().copied())
     }
 }
 
@@ -301,7 +301,7 @@ macro_rules! impl_for_array_ref {
         impl<T: ToSql + ?Sized> Sealed for &[(&str, &T); $N] {}
         impl<T: ToSql + ?Sized> Params for &[(&str, &T); $N] {
             fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
-                stmt.bind_parameters_named(self)
+                stmt.bind_parameters_named(self.iter().copied())
             }
         }
         impl<T: ToSql> Sealed for [T; $N] {}
@@ -449,5 +449,44 @@ where
     #[inline]
     fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
         stmt.bind_parameters(self.0)
+    }
+}
+
+/// Adapter type which allows any iterator over `(&str, ToSql)` values to
+/// implement [`Params`].
+///
+/// This struct is created by the [`params_named_from_iter`] function.
+///
+/// This struct is similar to [`ParamsFromIter`]. See its documentation for more
+/// details. The difference is that this struct works on named parameters. The
+/// iterator yields the `ToSql` parameter and its name.
+pub struct ParamsNamedFromIter<I>(I);
+
+/// Constructor function for a [`ParamsNamedFromIter`]. See its documentation
+/// for more.
+#[inline]
+pub fn params_named_from_iter<'a, I, T>(iter: I) -> ParamsNamedFromIter<I>
+where
+    I: IntoIterator<Item = (&'a str, T)>,
+    T: ToSql,
+{
+    ParamsNamedFromIter(iter)
+}
+
+impl<'a, I, T> Sealed for ParamsNamedFromIter<I>
+where
+    I: IntoIterator<Item = (&'a str, T)>,
+    T: ToSql,
+{
+}
+
+impl<'a, I, T> Params for ParamsNamedFromIter<I>
+where
+    I: IntoIterator<Item = (&'a str, T)>,
+    T: ToSql,
+{
+    #[inline]
+    fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
+        stmt.bind_parameters_named(self.0)
     }
 }

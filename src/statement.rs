@@ -479,11 +479,12 @@ impl Statement<'_> {
     }
 
     #[inline]
-    pub(crate) fn bind_parameters_named<T: ?Sized + ToSql>(
-        &mut self,
-        params: &[(&str, &T)],
-    ) -> Result<()> {
-        for &(name, value) in params {
+    pub(crate) fn bind_parameters_named<'a, P, T>(&mut self, params: P) -> Result<()>
+    where
+        P: IntoIterator<Item = (&'a str, T)>,
+        T: ToSql,
+    {
+        for (name, value) in params {
             if let Some(i) = self.parameter_index(name)? {
                 let ts: &dyn ToSql = &value;
                 self.bind_parameter(ts, i)?;
@@ -896,31 +897,27 @@ pub enum StatementStatus {
 #[cfg(test)]
 mod test {
     use crate::types::ToSql;
-    use crate::{params_from_iter, Connection, Error, Result};
+    use crate::{params_from_iter, params_named_from_iter, Connection, Error, Result};
 
     #[test]
     fn test_execute_named() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER)")?;
 
-        assert_eq!(
-            db.execute("INSERT INTO foo(x) VALUES (:x)", &[(":x", &1i32)])?,
-            1
-        );
-        assert_eq!(
-            db.execute("INSERT INTO foo(x) VALUES (:x)", &[(":x", &2i32)])?,
-            1
-        );
-        assert_eq!(
-            db.execute(
-                "INSERT INTO foo(x) VALUES (:x)",
-                crate::named_params! {":x": 3i32}
-            )?,
-            1
-        );
+        let query = "INSERT INTO foo(x) VALUES (:x)";
+        assert_eq!(db.execute(query, &[(":x", &1i32)])?, 1);
+        assert_eq!(db.execute(query, &[(":x", &2i32)])?, 1);
+        assert_eq!(db.execute(query, crate::named_params! {":x": 3i32})?, 1);
+        let params = [(":x", 4i32)];
+        assert_eq!(db.execute(query, params_named_from_iter(params))?, 1);
+        let params = [(":x", &5i32)];
+        assert_eq!(db.execute(query, params_named_from_iter(params))?, 1);
+        let params = &[(":x", 6i32)];
+        let iter = params.iter().copied();
+        assert_eq!(db.execute(query, params_named_from_iter(iter))?, 1);
 
         assert_eq!(
-            6i32,
+            21i32,
             db.query_row::<i32, _, _>(
                 "SELECT SUM(x) FROM foo WHERE x > :x",
                 &[(":x", &0i32)],
@@ -928,7 +925,7 @@ mod test {
             )?
         );
         assert_eq!(
-            5i32,
+            20i32,
             db.query_row::<i32, _, _>(
                 "SELECT SUM(x) FROM foo WHERE x > :x",
                 &[(":x", &1i32)],
