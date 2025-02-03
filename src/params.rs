@@ -465,24 +465,27 @@ pub struct ParamsNamedFromIter<I>(I);
 /// Constructor function for a [`ParamsNamedFromIter`]. See its documentation
 /// for more.
 #[inline]
-pub fn params_named_from_iter<'a, I, T>(iter: I) -> ParamsNamedFromIter<I>
+pub fn params_named_from_iter<I, S, T>(iter: I) -> ParamsNamedFromIter<I>
 where
-    I: IntoIterator<Item = (&'a str, T)>,
+    I: IntoIterator<Item = (S, T)>,
+    S: AsRef<str>,
     T: ToSql,
 {
     ParamsNamedFromIter(iter)
 }
 
-impl<'a, I, T> Sealed for ParamsNamedFromIter<I>
+impl<I, S, T> Sealed for ParamsNamedFromIter<I>
 where
-    I: IntoIterator<Item = (&'a str, T)>,
+    I: IntoIterator<Item = (S, T)>,
+    S: AsRef<str>,
     T: ToSql,
 {
 }
 
-impl<'a, I, T> Params for ParamsNamedFromIter<I>
+impl<I, S, T> Params for ParamsNamedFromIter<I>
 where
-    I: IntoIterator<Item = (&'a str, T)>,
+    I: IntoIterator<Item = (S, T)>,
+    S: AsRef<str>,
     T: ToSql,
 {
     #[inline]

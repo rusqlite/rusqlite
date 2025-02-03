@@ -479,17 +479,18 @@ impl Statement<'_> {
     }
 
     #[inline]
-    pub(crate) fn bind_parameters_named<'a, P, T>(&mut self, params: P) -> Result<()>
+    pub(crate) fn bind_parameters_named<P, S, T>(&mut self, params: P) -> Result<()>
     where
-        P: IntoIterator<Item = (&'a str, T)>,
+        P: IntoIterator<Item = (S, T)>,
+        S: AsRef<str>,
         T: ToSql,
     {
         for (name, value) in params {
-            if let Some(i) = self.parameter_index(name)? {
+            if let Some(i) = self.parameter_index(name.as_ref())? {
                 let ts: &dyn ToSql = &value;
                 self.bind_parameter(ts, i)?;
             } else {
-                return Err(Error::InvalidParameterName(name.into()));
+                return Err(Error::InvalidParameterName(name.as_ref().to_owned()));
             }
         }
         Ok(())
