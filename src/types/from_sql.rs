@@ -107,6 +107,8 @@ macro_rules! from_sql_integral(
     )
 );
 
+pub use from_sql_integral;
+
 from_sql_integral!(i8);
 from_sql_integral!(i16);
 from_sql_integral!(i32);
