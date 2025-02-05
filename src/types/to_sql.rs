@@ -63,6 +63,9 @@ macro_rules! from_value(
         }
     )
 );
+
+pub(crate) use from_value;
+
 from_value!(String);
 from_value!(Null);
 from_value!(bool);
@@ -176,6 +179,8 @@ macro_rules! to_sql_self(
         }
     )
 );
+
+pub(crate) use to_sql_self;
 
 to_sql_self!(Null);
 to_sql_self!(bool);
