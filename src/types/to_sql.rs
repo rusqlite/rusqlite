@@ -64,7 +64,7 @@ macro_rules! from_value(
     )
 );
 
-pub(crate) use from_value;
+pub use from_value;
 
 from_value!(String);
 from_value!(Null);
@@ -180,7 +180,7 @@ macro_rules! to_sql_self(
     )
 );
 
-pub(crate) use to_sql_self;
+pub use to_sql_self;
 
 to_sql_self!(Null);
 to_sql_self!(bool);
@@ -244,6 +244,8 @@ macro_rules! to_sql_self_fallible(
         }
     )
 );
+
+pub use to_sql_self_fallible;
 
 // Special implementations for usize and u64 because these conversions can fail.
 to_sql_self_fallible!(u64);
