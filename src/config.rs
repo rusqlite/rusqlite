@@ -68,6 +68,16 @@ pub enum DbConfig {
     /// Changes the default order in which tables and indexes are scanned
     #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_REVERSE_SCANORDER = 1019, // 3.42.0
+    /// Enables or disables the ability of the ATTACH DATABASE SQL command
+    /// to create a new database file if the database filed named in the ATTACH command does not already exist.
+    #[cfg(feature = "modern_sqlite")]
+    SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE = 1020, // 3.49.0
+    /// Enables or disables the ability of the ATTACH DATABASE SQL command to open a database for writing.
+    #[cfg(feature = "modern_sqlite")]
+    SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE = 1021, // 3.49.0
+    /// Enables or disables the ability to include comments in SQL text.
+    #[cfg(feature = "modern_sqlite")]
+    SQLITE_DBCONFIG_ENABLE_COMMENTS = 1022, // 3.49.0
 }
 
 impl Connection {
