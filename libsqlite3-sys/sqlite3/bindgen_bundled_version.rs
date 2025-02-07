@@ -23,10 +23,10 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 
-pub const SQLITE_VERSION: &::std::ffi::CStr = c"3.48.0";
-pub const SQLITE_VERSION_NUMBER: i32 = 3048000;
+pub const SQLITE_VERSION: &::std::ffi::CStr = c"3.49.0";
+pub const SQLITE_VERSION_NUMBER: i32 = 3049000;
 pub const SQLITE_SOURCE_ID: &::std::ffi::CStr =
-    c"2025-01-14 11:05:00 d2fe6b05f38d9d7cd78c5d252e99ac59f1aea071d669830c1ffe4e8966e84010";
+    c"2025-02-06 11:55:18 4a7dd425dc2a0e5082a9049c9b4a9d4f199a71583d014c24b4cfe276c5a77cde";
 pub const SQLITE_OK: i32 = 0;
 pub const SQLITE_ERROR: i32 = 1;
 pub const SQLITE_INTERNAL: i32 = 2;
@@ -284,7 +284,10 @@ pub const SQLITE_DBCONFIG_LEGACY_FILE_FORMAT: i32 = 1016;
 pub const SQLITE_DBCONFIG_TRUSTED_SCHEMA: i32 = 1017;
 pub const SQLITE_DBCONFIG_STMT_SCANSTATUS: i32 = 1018;
 pub const SQLITE_DBCONFIG_REVERSE_SCANORDER: i32 = 1019;
-pub const SQLITE_DBCONFIG_MAX: i32 = 1019;
+pub const SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE: i32 = 1020;
+pub const SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE: i32 = 1021;
+pub const SQLITE_DBCONFIG_ENABLE_COMMENTS: i32 = 1022;
+pub const SQLITE_DBCONFIG_MAX: i32 = 1022;
 pub const SQLITE_DENY: i32 = 1;
 pub const SQLITE_IGNORE: i32 = 2;
 pub const SQLITE_CREATE_INDEX: i32 = 1;
