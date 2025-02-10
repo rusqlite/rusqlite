@@ -159,6 +159,17 @@ smallvec = "1.6.1"
 # WIP comptime checks
 rusqlite-macros = { path = "rusqlite-macros", version = "0.4.1", optional = true }
 
+[target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
+libsqlite3-sys = { path = "libsqlite3-sys", version = "0.35.0" }
+
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
+sqlite-wasm-rs = "0.2"
+
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
+# Something is dependent on it, so we use feature to override it.
+getrandom = { version = "0.2", features = ["js"] }
+wasm-bindgen-test = "0.3.49"
+
 [dev-dependencies]
 doc-comment = "0.3"
 tempfile = "3.1.0"
@@ -169,10 +180,6 @@ self_cell = "1.1.0"
 # Use `bencher` over criterion because it builds much faster,
 # and we don't have many benchmarks
 bencher = "0.1"
-
-[dependencies.libsqlite3-sys]
-path = "libsqlite3-sys"
-version = "0.35.0"
 
 [[test]]
 name = "auto_ext"

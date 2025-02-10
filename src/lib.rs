@@ -56,7 +56,11 @@
 
 pub use fallible_iterator;
 pub use fallible_streaming_iterator;
+
+#[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
 pub use libsqlite3_sys as ffi;
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+pub use sqlite_wasm_rs::export as ffi;
 
 use std::cell::RefCell;
 use std::default::Default;
