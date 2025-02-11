@@ -237,7 +237,6 @@ mod test {
     }
 
     #[rusqlite_test_helper::test]
-    #[expect(clippy::cognitive_complexity)]
     fn test_mismatched_types() -> Result<()> {
         fn is_invalid_column_type(err: Error) -> bool {
             matches!(err, Error::InvalidColumnType(..))

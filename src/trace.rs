@@ -339,7 +339,7 @@ mod test {
                     // https://www.sqlite.org/c3ref/db_filename.html
                     // if database N is a temporary or in-memory database,
                     // then this function will return either a NULL pointer or an empty string.
-                    assert!(db.db_filename().map_or(true, |s| s.is_empty()));
+                    assert!(db.db_filename().is_none_or(|s| s.is_empty()));
                 }
             }),
         );
