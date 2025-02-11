@@ -127,7 +127,7 @@ modern-full = [
 
 # Same as `modern-full` feature, but without `load_extension` and `unlock_notify`,
 # because they are not supported on `wasm32-unknown-unknown`
-modern-full-wasm32-unknown = [
+modern-full-wasm32-unknown-unknown = [
     "array",
     "backup",
     "blob",

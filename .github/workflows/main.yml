@@ -68,12 +68,12 @@ jobs:
 
       - name: Build for wasm32-unknown-unknown target
         run: rustup target add wasm32-unknown-unknown
-        run: cargo build --target wasm32-unknown-unknown --features modern-full-wasm32-unknown
+        run: cargo build --target wasm32-unknown-unknown --features modern-full-wasm32-unknown-unknown
 
       - name: Test for wasm32-unknown-unknown target
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: cargo install wasm-pack
-        run: wasm-pack test --chrome --headless --features modern-full-wasm32-unknown
+        run: wasm-pack test --chrome --headless --features modern-full-wasm32-unknown-unknown
 
       - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --all-targets --workspace --verbose
       - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --doc --workspace --verbose
