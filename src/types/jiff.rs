@@ -74,7 +74,7 @@ mod test {
         Ok(db)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_date() -> Result<()> {
         let db = checked_memory_handle()?;
         let date = Date::constant(2016, 2, 23);
@@ -94,7 +94,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_time() -> Result<()> {
         let db = checked_memory_handle()?;
         let time = Time::constant(23, 56, 4, 0);
@@ -114,7 +114,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_date_time() -> Result<()> {
         let db = checked_memory_handle()?;
         let dt = DateTime::constant(2016, 2, 23, 23, 56, 4, 0);

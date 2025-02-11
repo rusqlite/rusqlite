@@ -172,7 +172,7 @@ mod test {
         Ok(db)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_naive_date() -> Result<()> {
         let db = checked_memory_handle()?;
         let date = NaiveDate::from_ymd_opt(2016, 2, 23).unwrap();
@@ -185,7 +185,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_naive_time() -> Result<()> {
         let db = checked_memory_handle()?;
         let time = NaiveTime::from_hms_opt(23, 56, 4).unwrap();
@@ -198,7 +198,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_naive_date_time() -> Result<()> {
         let db = checked_memory_handle()?;
         let date = NaiveDate::from_ymd_opt(2016, 2, 23).unwrap();
@@ -218,7 +218,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_date_time_utc() -> Result<()> {
         let db = checked_memory_handle()?;
         let date = NaiveDate::from_ymd_opt(2016, 2, 23).unwrap();
@@ -245,7 +245,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_date_time_local() -> Result<()> {
         let db = checked_memory_handle()?;
         let date = NaiveDate::from_ymd_opt(2016, 2, 23).unwrap();
@@ -264,7 +264,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_date_time_fixed() -> Result<()> {
         let db = checked_memory_handle()?;
         let time = DateTime::parse_from_rfc3339("2020-04-07T11:23:45+04:00").unwrap();
@@ -281,7 +281,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_sqlite_functions() -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Result<NaiveTime> = db.one_column("SELECT CURRENT_TIME");
@@ -295,7 +295,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_naive_date_time_param() -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Result<bool> = db.query_row("SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')", [Utc::now().naive_utc()], |r| r.get(0));
@@ -303,7 +303,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_date_time_param() -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Result<bool> = db.query_row("SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')", [Utc::now()], |r| r.get(0));
@@ -311,7 +311,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_lenient_parse_timezone() {
         DateTime::<Utc>::column_result(ValueRef::Text(b"1970-01-01T00:00:00Z")).unwrap();
         DateTime::<Utc>::column_result(ValueRef::Text(b"1970-01-01T00:00:00+00")).unwrap();
