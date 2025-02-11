@@ -557,7 +557,7 @@ mod test {
         Ok(db)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_drop() -> Result<()> {
         let mut db = checked_memory_handle()?;
         {
@@ -587,7 +587,7 @@ mod test {
         }
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_unchecked_nesting() -> Result<()> {
         let db = checked_memory_handle()?;
 
@@ -612,7 +612,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_explicit_rollback_commit() -> Result<()> {
         let mut db = checked_memory_handle()?;
         {
@@ -638,7 +638,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_savepoint() -> Result<()> {
         let mut db = checked_memory_handle()?;
         {
@@ -673,7 +673,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_ignore_drop_behavior() -> Result<()> {
         let mut db = checked_memory_handle()?;
 
@@ -695,7 +695,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_savepoint_drop_behavior_releases() -> Result<()> {
         let mut db = checked_memory_handle()?;
 
@@ -713,7 +713,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_savepoint_release_error() -> Result<()> {
         let mut db = checked_memory_handle()?;
 
@@ -729,7 +729,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_savepoint_names() -> Result<()> {
         let mut db = checked_memory_handle()?;
 
@@ -760,7 +760,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_rc() -> Result<()> {
         use std::rc::Rc;
         let mut conn = Connection::open_in_memory()?;
@@ -780,7 +780,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "modern_sqlite")]
     fn txn_state() -> Result<()> {
         use super::TransactionState;
@@ -798,7 +798,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "modern_sqlite")]
     fn auto_commit() -> Result<()> {
         use super::TransactionState;

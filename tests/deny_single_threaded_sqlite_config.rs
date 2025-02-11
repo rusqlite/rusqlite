@@ -2,7 +2,7 @@
 //! would violate safety if multiple Rust threads tried to use connections.
 
 #[cfg(not(feature = "loadable_extension"))]
-#[test]
+#[rusqlite_test_helper::test]
 fn test_error_when_singlethread_mode() {
     use rusqlite::ffi;
     use rusqlite::Connection;

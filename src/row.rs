@@ -465,7 +465,7 @@ tuples_try_from_row!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
 mod tests {
     use crate::{Connection, Result};
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_try_from_row_for_tuple_1() -> Result<()> {
         use crate::ToSql;
         use std::convert::TryFrom;
@@ -483,7 +483,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_try_from_row_for_tuple_2() -> Result<()> {
         use std::convert::TryFrom;
 
@@ -501,7 +501,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_try_from_row_for_tuple_16() -> Result<()> {
         use std::convert::TryFrom;
 
@@ -588,7 +588,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "bundled")]
     fn pathological_case() -> Result<()> {
         let conn = Connection::open_in_memory()?;
@@ -614,7 +614,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn as_ref() -> Result<()> {
         let conn = Connection::open_in_memory()?;
         let mut stmt = conn.prepare("SELECT 'Lisa' as name, 1 as id")?;
@@ -623,7 +623,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn debug() -> Result<()> {
         let conn = Connection::open_in_memory()?;
         let mut stmt = conn.prepare(

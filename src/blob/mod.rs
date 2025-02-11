@@ -434,7 +434,7 @@ mod test {
         Ok((db, rowid))
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_blob() -> Result<()> {
         let (db, rowid) = db_with_test_blob()?;
 
@@ -486,7 +486,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_blob_in_bufreader() -> Result<()> {
         let (db, rowid) = db_with_test_blob()?;
 
@@ -510,7 +510,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_blob_in_bufwriter() -> Result<()> {
         let (db, rowid) = db_with_test_blob()?;
 
@@ -551,7 +551,7 @@ mod test {
         }
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn zero_blob() -> Result<()> {
         use crate::types::ToSql;
         let zb = super::ZeroBlob(1);

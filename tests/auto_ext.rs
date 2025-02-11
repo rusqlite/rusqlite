@@ -1,5 +1,5 @@
 #[cfg(all(feature = "bundled", not(feature = "loadable_extension")))]
-#[test]
+#[rusqlite_test_helper::test]
 fn auto_ext() -> rusqlite::Result<()> {
     use rusqlite::auto_extension::*;
     use rusqlite::{ffi, Connection, Error, Result};

@@ -196,7 +196,7 @@ mod test {
     // to ensure we don't modify seek pos
     use std::io::Seek as _;
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_pos_io() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE test_table(content BLOB);")?;

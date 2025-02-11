@@ -30,7 +30,7 @@ maintenance = { status = "actively-developed" }
 name = "rusqlite"
 
 [workspace]
-members = ["libsqlite3-sys"]
+members = ["libsqlite3-sys", "rusqlite-test-helper"]
 
 [features]
 # if not SQLITE_OMIT_LOAD_EXTENSION
@@ -125,6 +125,34 @@ modern-full = [
     "window",
 ]
 
+# Same as `modern-full` feature, but without `load_extension` and `unlock_notify`,
+# because they are not supported on `wasm32-unknown-unknown`
+modern-full-wasm32-unknown = [
+    "array",
+    "backup",
+    "blob",
+    "modern_sqlite",
+    "chrono/wasmbind",
+    "collation",
+    "column_decltype",
+    "csvtab",
+    "extra_check",
+    "functions",
+    "hooks",
+    "i128_blob",
+    "jiff/js",
+    "limits",
+    "serde_json",
+    "serialize",
+    "series",
+    "time/wasm-bindgen",
+    "trace",
+    "url",
+    "uuid",
+    "vtab",
+    "window",
+]
+
 bundled-full = ["modern-full", "bundled"]
 
 [dependencies]
@@ -163,7 +191,9 @@ rusqlite-macros = { path = "rusqlite-macros", version = "0.4.1", optional = true
 libsqlite3-sys = { path = "libsqlite3-sys", version = "0.35.0" }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
-sqlite-wasm-rs = "0.2"
+#sqlite-wasm-rs = "0.2"
+# temp
+sqlite-wasm-rs = { git = "https://github.com/Spxg/sqlite-wasm-rs.git" }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
 # Something is dependent on it, so we use feature to override it.
@@ -180,6 +210,7 @@ self_cell = "1.1.0"
 # Use `bencher` over criterion because it builds much faster,
 # and we don't have many benchmarks
 bencher = "0.1"
+rusqlite-test-helper = { path = "rusqlite-test-helper" }
 
 [[test]]
 name = "auto_ext"

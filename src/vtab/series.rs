@@ -285,7 +285,7 @@ mod test {
     use crate::{Connection, Result};
     use fallible_iterator::FallibleIterator;
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_series_module() -> Result<()> {
         let version = unsafe { ffi::sqlite3_libversion_number() };
         if version < 3_008_012 {

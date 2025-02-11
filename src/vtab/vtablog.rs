@@ -294,7 +294,7 @@ unsafe impl VTabCursor for VTabLogCursor<'_> {
 #[cfg(test)]
 mod test {
     use crate::{Connection, Result};
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_module() -> Result<()> {
         let db = Connection::open_in_memory()?;
         super::load_module(&db)?;

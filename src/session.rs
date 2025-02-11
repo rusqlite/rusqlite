@@ -813,7 +813,7 @@ mod test {
         Ok(output)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_changeset() -> Result<()> {
         let changeset = one_changeset_insert()?;
         let mut iter = changeset.iter()?;
@@ -835,7 +835,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_changeset_strm() -> Result<()> {
         let output = one_changeset_strm()?;
         assert!(!output.is_empty());
@@ -848,7 +848,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_changeset_values() -> Result<()> {
         let changeset = one_changeset_update()?;
         let mut iter = changeset.iter()?;
@@ -861,7 +861,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_changeset_apply() -> Result<()> {
         let changeset = one_changeset_insert()?;
 
@@ -900,7 +900,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_changeset_apply_strm() -> Result<()> {
         let output = one_changeset_strm()?;
 
@@ -921,7 +921,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_session_empty() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")?;
@@ -936,7 +936,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_session_set_enabled() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -947,7 +947,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_session_set_indirect() -> Result<()> {
         let db = Connection::open_in_memory()?;
 

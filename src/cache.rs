@@ -194,7 +194,7 @@ mod test {
         }
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_cache() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let cache = &db.cache;
@@ -223,7 +223,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_set_capacity() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let cache = &db.cache;
@@ -256,7 +256,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_discard() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let cache = &db.cache;
@@ -272,7 +272,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_ddl() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch(
@@ -306,7 +306,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_connection_close() -> Result<()> {
         let conn = Connection::open_in_memory()?;
         conn.prepare_cached("SELECT * FROM sqlite_master;")?;
@@ -315,7 +315,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_cache_key() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let cache = &db.cache;
@@ -339,7 +339,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_empty_stmt() -> Result<()> {
         let conn = Connection::open_in_memory()?;
         conn.prepare_cached("")?;

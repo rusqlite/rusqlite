@@ -165,7 +165,7 @@ mod test {
         Ok(db)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_offset_date_time() -> Result<()> {
         let db = checked_memory_handle()?;
 
@@ -194,7 +194,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_offset_date_time_parsing() -> Result<()> {
         let db = checked_memory_handle()?;
         let tests = vec![
@@ -269,7 +269,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_date() -> Result<()> {
         let db = checked_memory_handle()?;
         let date = date!(2016 - 02 - 23);
@@ -282,7 +282,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_time() -> Result<()> {
         let db = checked_memory_handle()?;
         let time = time!(23:56:04.00001);
@@ -295,7 +295,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_primitive_date_time() -> Result<()> {
         let db = checked_memory_handle()?;
         let dt = date!(2016 - 02 - 23).with_time(time!(23:56:04));
@@ -313,7 +313,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_date_parsing() -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Date = db.one_column("SELECT ?1", ["2013-10-07"])?;
@@ -321,7 +321,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_time_parsing() -> Result<()> {
         let db = checked_memory_handle()?;
         let tests = vec![
@@ -337,7 +337,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_primitive_date_time_parsing() -> Result<()> {
         let db = checked_memory_handle()?;
 
@@ -357,7 +357,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_sqlite_functions() -> Result<()> {
         let db = checked_memory_handle()?;
         db.one_column::<Time, _>("SELECT CURRENT_TIME", [])?;
@@ -367,7 +367,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_time_param() -> Result<()> {
         let db = checked_memory_handle()?;
         let now = OffsetDateTime::now_utc().time();
@@ -379,7 +379,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_date_param() -> Result<()> {
         let db = checked_memory_handle()?;
         let now = OffsetDateTime::now_utc().date();
@@ -391,7 +391,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_primitive_date_time_param() -> Result<()> {
         let db = checked_memory_handle()?;
         let now = PrimitiveDateTime::new(
@@ -406,7 +406,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_offset_date_time_param() -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Result<bool> = db.one_column(

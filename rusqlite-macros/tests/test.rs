@@ -34,7 +34,7 @@ fn test_raw_string() {
 }
 
 /* FIXME
-#[test]
+#[rusqlite_test_helper::test]
 fn test_const() {
     const SQL: &str = "SELECT 1";
     let stmt = ();

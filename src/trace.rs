@@ -147,6 +147,7 @@ impl Connection {
     /// Prepared statement placeholders are replaced/logged with their assigned
     /// values. There can only be a single tracer defined for each database
     /// connection. Setting a new tracer clears the old one.
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     #[deprecated(since = "0.33.0", note = "use trace_v2 instead")]
     pub fn trace(&mut self, trace_fn: Option<fn(&str)>) {
         unsafe extern "C" fn trace_callback(p_arg: *mut c_void, z_sql: *const c_char) {
@@ -171,6 +172,7 @@ impl Connection {
     ///
     /// There can only be a single profiler defined for each database
     /// connection. Setting a new profiler clears the old one.
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     #[deprecated(since = "0.33.0", note = "use trace_v2 instead")]
     pub fn profile(&mut self, profile_fn: Option<fn(&str, Duration)>) {
         unsafe extern "C" fn profile_callback(
@@ -246,12 +248,14 @@ impl Connection {
 
 #[cfg(test)]
 mod test {
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     use std::sync::{LazyLock, Mutex};
     use std::time::Duration;
 
     use crate::{Connection, Result};
 
-    #[test]
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+    #[rusqlite_test_helper::test]
     #[allow(deprecated)]
     fn test_trace() -> Result<()> {
         static TRACED_STMTS: LazyLock<Mutex<Vec<String>>> =
@@ -280,7 +284,8 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+    #[rusqlite_test_helper::test]
     #[allow(deprecated)]
     fn test_profile() -> Result<()> {
         static PROFILED: LazyLock<Mutex<Vec<(String, Duration)>>> =
@@ -302,7 +307,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     pub fn trace_v2() -> Result<()> {
         use super::{TraceEvent, TraceEventCodes};
         use std::borrow::Borrow;
@@ -317,14 +322,24 @@ mod test {
                 }
                 TraceEvent::Profile(s, d) => {
                     assert_eq!(s.get_status(crate::StatementStatus::Sort), 0);
-                    assert_eq!(d.cmp(&Duration::ZERO), Ordering::Greater)
+                    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+                    assert_eq!(d.cmp(&Duration::ZERO), Ordering::Greater);
+                    // Timers on the web are not very accurate
+                    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+                    assert!(matches!(
+                        d.cmp(&Duration::ZERO),
+                        Ordering::Equal | Ordering::Greater
+                    ));
                 }
                 TraceEvent::Row(s) => {
                     assert_eq!(s.expanded_sql().as_deref(), Some(s.sql().borrow()));
                 }
                 TraceEvent::Close(db) => {
                     assert!(db.is_autocommit());
-                    assert!(db.db_filename().is_none());
+                    // https://www.sqlite.org/c3ref/db_filename.html
+                    // if database N is a temporary or in-memory database,
+                    // then this function will return either a NULL pointer or an empty string.
+                    assert!(db.db_filename().map_or(true, |s| s.is_empty()));
                 }
             }),
         );
