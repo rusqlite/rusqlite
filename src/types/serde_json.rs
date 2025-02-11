@@ -72,7 +72,7 @@ mod test {
         Ok(db)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_json_value() -> Result<()> {
         let db = checked_memory_handle()?;
 
@@ -90,7 +90,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_to_sql() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -107,7 +107,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_from_sql() -> Result<()> {
         let db = Connection::open_in_memory()?;
 

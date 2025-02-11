@@ -324,7 +324,11 @@ mod test {
     use crate::{Connection, Result, MAIN_DB, TEMP_DB};
     use std::time::Duration;
 
-    #[test]
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
+    #[rusqlite_test_helper::test]
     fn backup_to_path() -> Result<()> {
         let src = Connection::open_in_memory()?;
         src.execute_batch("CREATE TABLE foo AS SELECT 42 AS x")?;
@@ -342,7 +346,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_backup() -> Result<()> {
         let src = Connection::open_in_memory()?;
         let sql = "BEGIN;
@@ -372,7 +376,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_backup_temp() -> Result<()> {
         let src = Connection::open_in_memory()?;
         let sql = "BEGIN;
@@ -402,7 +406,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_backup_attached() -> Result<()> {
         let src = Connection::open_in_memory()?;
         let sql = "ATTACH DATABASE ':memory:' AS my_attached;

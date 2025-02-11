@@ -190,7 +190,7 @@ mod test {
         UniCase::new(s1).cmp(&UniCase::new(s2))
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_unicase() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_collation(c"unicase", unicase_compare)?;
@@ -217,14 +217,14 @@ mod test {
         }
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_collation_needed() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.collation_needed(collation_needed)?;
         collate(db)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn remove_collation() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_collation(c"unicase", unicase_compare)?;

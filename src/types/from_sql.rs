@@ -302,7 +302,7 @@ mod test {
     use std::rc::Rc;
     use std::sync::Arc;
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_integral_ranges() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -342,7 +342,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_nonzero_ranges() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -408,7 +408,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_cow() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -430,7 +430,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_heap_slice() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
