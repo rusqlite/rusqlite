@@ -54,6 +54,19 @@
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+#[cfg(test)]
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_dedicated_worker);
+
+#[cfg(all(
+    target_family = "wasm",
+    target_os = "unknown",
+    any(feature = "load_extension", feature = "unlock_notify")
+))]
+compile_error! {
+    "wasm32-unknown-unknown target not support load_extension and unlock_notify feature"
+}
+
 pub use fallible_iterator;
 pub use fallible_streaming_iterator;
 
@@ -1309,7 +1322,11 @@ mod test {
         Connection::open_in_memory().unwrap()
     }
 
-    #[test]
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
+    #[rusqlite_test_helper::test]
     fn test_concurrent_transactions_busy_commit() -> Result<()> {
         use std::time::Duration;
         let tmp = tempfile::tempdir().unwrap();
@@ -1351,7 +1368,11 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
+    #[rusqlite_test_helper::test]
     fn test_persistence() -> Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir.path().join("test.db3");
@@ -1373,7 +1394,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_open() {
         Connection::open_in_memory().unwrap();
 
@@ -1381,7 +1402,11 @@ mod test {
         db.close().unwrap();
     }
 
-    #[test]
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
+    #[rusqlite_test_helper::test]
     fn test_path() -> Result<()> {
         let tmp = tempfile::tempdir().unwrap();
         let db = Connection::open("")?;
@@ -1396,7 +1421,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_open_failure() {
         let filename = "no_such_file.db";
         let result = Connection::open_with_flags(filename, OpenFlags::SQLITE_OPEN_READ_ONLY);
@@ -1414,7 +1439,7 @@ mod test {
     }
 
     #[cfg(unix)]
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_invalid_unicode_file_names() -> Result<()> {
         use std::ffi::OsStr;
         use std::fs::File;
@@ -1443,7 +1468,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_close_retry() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -1485,7 +1510,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_open_with_flags() {
         for bad_flags in &[
             OpenFlags::empty(),
@@ -1496,7 +1521,7 @@ mod test {
         }
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_execute_batch() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "BEGIN;
@@ -1514,7 +1539,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_execute() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER)")?;
@@ -1526,7 +1551,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "extra_check")]
     fn test_execute_select_with_no_row() {
         let db = checked_memory_handle();
@@ -1538,14 +1563,14 @@ mod test {
         );
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_execute_select_with_row() {
         let db = checked_memory_handle();
         let err = db.execute("SELECT 1", []).unwrap_err();
         assert_eq!(err, Error::ExecuteReturnedResults);
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "extra_check")]
     fn test_execute_multiple() {
         let db = checked_memory_handle();
@@ -1561,7 +1586,7 @@ mod test {
         }
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_prepare_column_names() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER);")?;
@@ -1576,7 +1601,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_prepare_execute() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER);")?;
@@ -1597,7 +1622,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_prepare_query() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER);")?;
@@ -1632,7 +1657,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_query_map() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "BEGIN;
@@ -1651,7 +1676,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_query_row() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "BEGIN;
@@ -1677,7 +1702,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_optional() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -1701,7 +1726,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_pragma_query_row() -> Result<()> {
         let db = Connection::open_in_memory()?;
         assert_eq!("memory", db.one_column::<String>("PRAGMA journal_mode")?);
@@ -1726,7 +1751,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_prepare_failures() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER);")?;
@@ -1736,7 +1761,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_last_insert_rowid() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER PRIMARY KEY)")?;
@@ -1752,7 +1777,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_total_changes() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "CREATE TABLE foo(x INTEGER PRIMARY KEY, value TEXT default '' NOT NULL,
@@ -1775,7 +1800,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_is_autocommit() -> Result<()> {
         let db = Connection::open_in_memory()?;
         assert!(
@@ -1785,7 +1810,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_is_busy() -> Result<()> {
         let db = Connection::open_in_memory()?;
         assert!(!db.is_busy());
@@ -1802,7 +1827,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_statement_debugging() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let query = "SELECT 12345";
@@ -1812,7 +1837,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_notnull_constraint_error() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x NOT NULL)")?;
@@ -1829,7 +1854,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_version_string() {
         let n = version_number();
         let major = n / 1_000_000;
@@ -1839,7 +1864,7 @@ mod test {
         assert!(version().contains(&format!("{major}.{minor}.{patch}")));
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "functions")]
     fn test_interrupt() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -1868,7 +1893,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_interrupt_close() {
         let db = checked_memory_handle();
         let handle = db.get_interrupt_handle();
@@ -1884,7 +1909,7 @@ mod test {
         // degree of reliability.
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_get_raw() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(i, x);")?;
@@ -1917,7 +1942,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_from_handle() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let handle = unsafe { db.handle() };
@@ -1929,7 +1954,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_from_handle_owned() -> Result<()> {
         let mut handle: *mut ffi::sqlite3 = std::ptr::null_mut();
         let r = unsafe { ffi::sqlite3_open(c":memory:".as_ptr(), &mut handle) };
@@ -1979,7 +2004,7 @@ mod test {
 
         type CustomResult<T> = Result<T, CustomError>;
 
-        #[test]
+        #[rusqlite_test_helper::test]
         fn test_query_and_then() -> Result<()> {
             let db = Connection::open_in_memory()?;
             let sql = "BEGIN;
@@ -1999,7 +2024,7 @@ mod test {
             Ok(())
         }
 
-        #[test]
+        #[rusqlite_test_helper::test]
         fn test_query_and_then_fails() -> Result<()> {
             let db = Connection::open_in_memory()?;
             let sql = "BEGIN;
@@ -2029,7 +2054,7 @@ mod test {
             Ok(())
         }
 
-        #[test]
+        #[rusqlite_test_helper::test]
         fn test_query_and_then_custom_error() -> CustomResult<()> {
             let db = Connection::open_in_memory()?;
             let sql = "BEGIN;
@@ -2050,7 +2075,7 @@ mod test {
             Ok(())
         }
 
-        #[test]
+        #[rusqlite_test_helper::test]
         fn test_query_and_then_custom_error_fails() -> Result<()> {
             let db = Connection::open_in_memory()?;
             let sql = "BEGIN;
@@ -2092,7 +2117,7 @@ mod test {
             Ok(())
         }
 
-        #[test]
+        #[rusqlite_test_helper::test]
         fn test_query_row_and_then_custom_error() -> CustomResult<()> {
             let db = Connection::open_in_memory()?;
             let sql = "BEGIN;
@@ -2109,7 +2134,7 @@ mod test {
             Ok(())
         }
 
-        #[test]
+        #[rusqlite_test_helper::test]
         fn test_query_row_and_then_custom_error_fails() -> Result<()> {
             let db = Connection::open_in_memory()?;
             let sql = "BEGIN;
@@ -2146,7 +2171,7 @@ mod test {
         }
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_dynamic() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "BEGIN;
@@ -2160,7 +2185,7 @@ mod test {
             Ok(())
         })
     }
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_dyn_box() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER);")?;
@@ -2172,7 +2197,7 @@ mod test {
         })
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_params() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.query_row(
@@ -2192,7 +2217,7 @@ mod test {
         )
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(not(feature = "extra_check"))]
     fn test_alter_table() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -2202,7 +2227,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_batch() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = r"
@@ -2216,7 +2241,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_invalid_batch() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = r"
@@ -2232,7 +2257,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "modern_sqlite")]
     fn test_returning() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -2242,20 +2267,20 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_cache_flush() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.cache_flush()
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn db_readonly() -> Result<()> {
         let db = Connection::open_in_memory()?;
         assert!(!db.is_readonly(MAIN_DB)?);
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "rusqlite-macros")]
     fn prepare_and_bind() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -2271,7 +2296,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "modern_sqlite")]
     fn test_db_name() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -2283,7 +2308,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "modern_sqlite")]
     fn test_is_interrupted() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -2293,7 +2318,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn release_memory() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.release_memory()
