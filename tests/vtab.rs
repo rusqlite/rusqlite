@@ -1,5 +1,8 @@
 //! Ensure Virtual tables can be declared outside `rusqlite` crate.
 
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_dedicated_worker);
+
 #[cfg(feature = "vtab")]
 #[rusqlite_test_helper::test]
 fn test_dummy_module() -> rusqlite::Result<()> {
