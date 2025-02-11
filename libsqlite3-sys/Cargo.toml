@@ -51,7 +51,7 @@ vcpkg = { version = "0.2.15", optional = true }
 # for loadable_extension:
 prettyplease = { version = "0.2.20", optional = true }
 # like bindgen
-quote = { version = "1.0.36", optional = true, default-features = false }
+quote = { version = "1.0.38", optional = true, default-features = false }
 # like bindgen
 syn = { version = "2.0.72", optional = true, features = [
     "full",
