@@ -66,6 +66,12 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      - name: Install wasm-pack for wasm32-unknown-unknown target
+        run: cargo install wasm-pack
+
+      - name: Test wasm32-unknown-unknown
+        run: wasm-pack test --chrome --headless --features modern-full-wasm32-unknown
+
       - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --all-targets --workspace --verbose
       - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --doc --workspace --verbose
 
