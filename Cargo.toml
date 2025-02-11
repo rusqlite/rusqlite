@@ -198,7 +198,7 @@ sqlite-wasm-rs = ">=0.2.4, <0.3.0"
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
 # Something is dependent on it, we use feature to override it.
 getrandom = { version = "0.2", features = ["js"] }
-wasm-bindgen-test = "0.3.49"
+wasm-bindgen-test = "0.3.50"
 
 [dev-dependencies]
 doc-comment = "0.3"
