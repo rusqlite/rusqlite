@@ -81,7 +81,7 @@ mod test {
     use super::*;
     use crate::Result;
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_limit_values() {
         assert_eq!(Limit::SQLITE_LIMIT_LENGTH as i32, ffi::SQLITE_LIMIT_LENGTH,);
         assert_eq!(
@@ -127,7 +127,7 @@ mod test {
         );
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_limit() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.set_limit(Limit::SQLITE_LIMIT_LENGTH, 1024)?;
@@ -161,7 +161,12 @@ mod test {
         assert_eq!(32, db.limit(Limit::SQLITE_LIMIT_TRIGGER_DEPTH)?);
 
         db.set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, 2)?;
+        #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
         assert_eq!(2, db.limit(Limit::SQLITE_LIMIT_WORKER_THREADS)?);
+
+        // DSQLITE_THREADSAFE=0
+        #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+        assert_eq!(0, db.limit(Limit::SQLITE_LIMIT_WORKER_THREADS)?);
 
         assert!(db
             .set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, -1)

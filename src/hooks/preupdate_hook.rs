@@ -234,7 +234,7 @@ mod test {
     use super::PreUpdateCase;
     use crate::{Connection, Result};
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_preupdate_hook_insert() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -267,7 +267,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_preupdate_hook_delete() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -303,7 +303,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_preupdate_hook_update() -> Result<()> {
         let db = Connection::open_in_memory()?;
 

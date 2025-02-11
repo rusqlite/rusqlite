@@ -306,7 +306,7 @@ mod test {
 
     fn is_to_sql<T: ToSql>() {}
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn to_sql() -> Result<()> {
         assert_eq!(
             ToSqlOutput::Borrowed(ValueRef::Null).to_sql()?,
@@ -319,7 +319,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_integral_types() {
         is_to_sql::<i8>();
         is_to_sql::<i16>();
@@ -333,7 +333,7 @@ mod test {
         is_to_sql::<usize>();
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_nonzero_types() {
         is_to_sql::<std::num::NonZeroI8>();
         is_to_sql::<std::num::NonZeroI16>();
@@ -347,7 +347,7 @@ mod test {
         is_to_sql::<std::num::NonZeroUsize>();
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_u8_array() {
         let a: [u8; 99] = [0u8; 99];
         let _a: &[&dyn ToSql] = crate::params![a];
@@ -356,7 +356,7 @@ mod test {
         r.unwrap();
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_cow_str() {
         use std::borrow::Cow;
         let s = "str";
@@ -370,7 +370,7 @@ mod test {
         let _p: &[&dyn ToSql] = crate::params![cow];
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_box_dyn() {
         let s: Box<dyn ToSql> = Box::new("Hello world!");
         let _s: &[&dyn ToSql] = crate::params![s];
@@ -379,7 +379,7 @@ mod test {
         r.unwrap();
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_box_deref() {
         let s: Box<str> = "Hello world!".into();
         let _s: &[&dyn ToSql] = crate::params![s];
@@ -388,7 +388,7 @@ mod test {
         r.unwrap();
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_box_direct() {
         let s: Box<str> = "Hello world!".into();
         let _s: &[&dyn ToSql] = crate::params![s];
@@ -397,7 +397,7 @@ mod test {
         r.unwrap();
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_cells() {
         use std::{rc::Rc, sync::Arc};
 
@@ -435,7 +435,7 @@ mod test {
     }
 
     #[cfg(feature = "i128_blob")]
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_i128() -> Result<()> {
         use crate::Connection;
         let db = Connection::open_in_memory()?;
@@ -474,7 +474,7 @@ mod test {
     }
 
     #[cfg(feature = "i128_blob")]
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_non_zero_i128() -> Result<()> {
         use std::num::NonZeroI128;
         macro_rules! nz {
@@ -522,7 +522,7 @@ mod test {
     }
 
     #[cfg(feature = "uuid")]
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_uuid() -> Result<()> {
         use crate::{params, Connection};
         use uuid::Uuid;

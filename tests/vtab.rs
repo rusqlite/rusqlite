@@ -1,7 +1,7 @@
 //! Ensure Virtual tables can be declared outside `rusqlite` crate.
 
 #[cfg(feature = "vtab")]
-#[test]
+#[rusqlite_test_helper::test]
 fn test_dummy_module() -> rusqlite::Result<()> {
     use rusqlite::vtab::{
         eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context, Filters, IndexInfo,

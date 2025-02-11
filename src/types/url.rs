@@ -40,7 +40,7 @@ mod test {
         db.one_column("SELECT v FROM urls WHERE i = ?", [id])
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_sql_url() -> Result<()> {
         let db = &checked_memory_handle()?;
 
