@@ -152,7 +152,7 @@ mod test {
         Ok(db)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_blob() -> Result<()> {
         let db = checked_memory_handle()?;
 
@@ -164,7 +164,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_empty_blob() -> Result<()> {
         let db = checked_memory_handle()?;
 
@@ -176,7 +176,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_str() -> Result<()> {
         let db = checked_memory_handle()?;
 
@@ -188,7 +188,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_string() -> Result<()> {
         let db = checked_memory_handle()?;
 
@@ -200,7 +200,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_value() -> Result<()> {
         let db = checked_memory_handle()?;
 
@@ -210,7 +210,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_option() -> Result<()> {
         let db = checked_memory_handle()?;
 
@@ -241,7 +241,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[expect(clippy::cognitive_complexity)]
     fn test_mismatched_types() -> Result<()> {
         fn is_invalid_column_type(err: Error) -> bool {
@@ -337,7 +337,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_dynamic_type() -> Result<()> {
         use super::Value;
         let db = checked_memory_handle()?;
@@ -387,7 +387,7 @@ mod test {
         };
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[expect(clippy::float_cmp)]
     fn test_numeric_conversions() -> Result<()> {
         // Test what happens when we store an f32 and retrieve an i32 etc.
