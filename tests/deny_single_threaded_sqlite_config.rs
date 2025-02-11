@@ -1,6 +1,9 @@
 //! Ensure we reject connections when SQLite is in single-threaded mode, as it
 //! would violate safety if multiple Rust threads tried to use connections.
 
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_dedicated_worker);
+
 #[cfg(not(feature = "loadable_extension"))]
 #[rusqlite_test_helper::test]
 fn test_error_when_singlethread_mode() {
