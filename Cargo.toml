@@ -191,12 +191,12 @@ rusqlite-macros = { path = "rusqlite-macros", version = "0.4.1", optional = true
 libsqlite3-sys = { path = "libsqlite3-sys", version = "0.35.0" }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
-#sqlite-wasm-rs = "0.2"
-# temp
+# Something is dependent on it in windows, we use feature to override it.
+uuid = { version = "1.0", features = ["js"] }
 sqlite-wasm-rs = { git = "https://github.com/Spxg/sqlite-wasm-rs.git" }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
-# Something is dependent on it, so we use feature to override it.
+# Something is dependent on it, we use feature to override it.
 getrandom = { version = "0.2", features = ["js"] }
 wasm-bindgen-test = "0.3.49"
 
