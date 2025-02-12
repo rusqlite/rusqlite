@@ -207,7 +207,8 @@ mod test {
 
         let mut dst = Connection::open_in_memory()?;
         let read = data.deref();
-        dst.deserialize_read_exact(DatabaseName::Main, read, read.len(), true)?;
+        dst.deserialize_read_exact(DatabaseName::Main, read, read.len(), false)?;
+        dst.execute("DELETE FROM x", [])?;
         Ok(())
     }
 
