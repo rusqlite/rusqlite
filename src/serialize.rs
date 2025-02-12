@@ -1,6 +1,6 @@
 //! Serialize a database.
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::ptr::NonNull;
 
 use crate::error::{error_from_handle, error_from_sqlite_code};
@@ -60,15 +60,6 @@ impl Deref for Data<'_> {
             Data::Shared(SharedData { ptr, sz, .. }) => (ptr.as_ptr(), *sz),
         };
         unsafe { std::slice::from_raw_parts(ptr, sz) }
-    }
-}
-impl DerefMut for Data<'_> {
-    fn deref_mut(&mut self) -> &mut [u8] {
-        let (ptr, sz) = match self {
-            Data::Owned(OwnedData { ptr, sz }) => (ptr.as_ptr(), *sz),
-            Data::Shared(SharedData { ptr, sz, .. }) => (ptr.as_ptr(), *sz),
-        };
-        unsafe { std::slice::from_raw_parts_mut(ptr, sz) }
     }
 }
 
