@@ -1,9 +1,9 @@
 //! Serialize a database.
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 
-use crate::error::error_from_handle;
+use crate::error::{error_from_handle, error_from_sqlite_code};
 use crate::ffi;
 use crate::{Connection, DatabaseName, Error, Result};
 
@@ -62,6 +62,15 @@ impl Deref for Data<'_> {
         unsafe { std::slice::from_raw_parts(ptr, sz) }
     }
 }
+impl DerefMut for Data<'_> {
+    fn deref_mut(&mut self) -> &mut [u8] {
+        let (ptr, sz) = match self {
+            Data::Owned(OwnedData { ptr, sz }) => (ptr.as_ptr(), *sz),
+            Data::Shared(SharedData { ptr, sz, .. }) => (ptr.as_ptr(), *sz),
+        };
+        unsafe { std::slice::from_raw_parts_mut(ptr, sz) }
+    }
+}
 
 impl Connection {
     /// Serialize a database.
@@ -96,22 +105,25 @@ impl Connection {
     }
 
     /// Deserialize from stream
-    pub fn deserialize_read(
+    pub fn deserialize_read_exact<R: std::io::Read>(
         &mut self,
         schema: DatabaseName<'_>,
-        read: &mut dyn std::io::Read,
+        mut read: R,
         sz: usize,
         read_only: bool,
     ) -> Result<()> {
         let ptr = unsafe { ffi::sqlite3_malloc(sz.try_into().unwrap()) }.cast::<u8>();
+        if ptr.is_null() {
+            return Err(error_from_sqlite_code(ffi::SQLITE_NOMEM, None));
+        }
         let buf = unsafe { std::slice::from_raw_parts_mut(ptr, sz) };
         read.read_exact(buf).map_err(|e| {
             Error::SqliteFailure(
                 ffi::Error {
                     code: ffi::ErrorCode::CannotOpen,
-                    extended_code: ffi::SQLITE_CANTOPEN,
+                    extended_code: ffi::SQLITE_IOERR,
                 },
-                Some("TODO".to_owned()),
+                Some(format!("{}", e)),
             )
         })?;
         let ptr = NonNull::new(ptr).unwrap();
@@ -193,6 +205,18 @@ mod test {
             panic!("expected OwnedData")
         };
         assert!(data.sz > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn deserialize_read_exact() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
+        let data = db.serialize(DatabaseName::Main)?;
+
+        let mut dst = Connection::open_in_memory()?;
+        let read = data.deref();
+        dst.deserialize_read_exact(DatabaseName::Main, read, read.len(), true)?;
         Ok(())
     }
 
