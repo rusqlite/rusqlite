@@ -3,9 +3,9 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
 
-use crate::error::error_from_handle;
+use crate::error::{error_from_handle, error_from_sqlite_code};
 use crate::ffi;
-use crate::{Connection, DatabaseName, Result};
+use crate::{Connection, DatabaseName, Error, Result};
 
 /// Shared (SQLITE_SERIALIZE_NOCOPY) serialized database
 pub struct SharedData<'conn> {
@@ -95,6 +95,48 @@ impl Connection {
         })
     }
 
+    /// Deserialize from stream
+    pub fn deserialize_read_exact<R: std::io::Read>(
+        &mut self,
+        schema: DatabaseName<'_>,
+        mut read: R,
+        sz: usize,
+        read_only: bool,
+    ) -> Result<()> {
+        let ptr = unsafe { ffi::sqlite3_malloc(sz.try_into().unwrap()) }.cast::<u8>();
+        if ptr.is_null() {
+            return Err(error_from_sqlite_code(ffi::SQLITE_NOMEM, None));
+        }
+        let buf = unsafe { std::slice::from_raw_parts_mut(ptr, sz) };
+        read.read_exact(buf).map_err(|e| {
+            Error::SqliteFailure(
+                ffi::Error {
+                    code: ffi::ErrorCode::CannotOpen,
+                    extended_code: ffi::SQLITE_IOERR,
+                },
+                Some(format!("{}", e)),
+            )
+        })?;
+        let ptr = NonNull::new(ptr).unwrap();
+        let data = unsafe { OwnedData::from_raw_nonnull(ptr, sz) };
+        self.deserialize(schema, data, read_only)
+    }
+
+    /// Deserialize `include_bytes` as a read only database
+    pub fn deserialize_bytes(
+        &mut self,
+        schema: DatabaseName<'_>,
+        data: &'static [u8],
+    ) -> Result<()> {
+        let sz = data.len().try_into().unwrap();
+        self.deserialize_(
+            schema,
+            data.as_ptr() as *mut _,
+            sz,
+            ffi::SQLITE_DESERIALIZE_READONLY,
+        )
+    }
+
     /// Deserialize a database.
     pub fn deserialize(
         &mut self,
@@ -102,7 +144,6 @@ impl Connection {
         data: OwnedData,
         read_only: bool,
     ) -> Result<()> {
-        let schema = schema.as_cstr()?;
         let (data, sz) = data.into_raw();
         let sz = sz.try_into().unwrap();
         let flags = if read_only {
@@ -110,13 +151,7 @@ impl Connection {
         } else {
             ffi::SQLITE_DESERIALIZE_FREEONCLOSE | ffi::SQLITE_DESERIALIZE_RESIZEABLE
         };
-        let rc = unsafe {
-            ffi::sqlite3_deserialize(self.handle(), schema.as_ptr(), data, sz, sz, flags)
-        };
-        if rc != ffi::SQLITE_OK {
-            // TODO sqlite3_free(data) ?
-            return Err(unsafe { error_from_handle(self.handle(), rc) });
-        }
+        self.deserialize_(schema, data, sz, flags)
         /* TODO
         if let Some(mxSize) = mxSize {
             unsafe {
@@ -128,6 +163,22 @@ impl Connection {
                 )
             };
         }*/
+    }
+
+    fn deserialize_(
+        &mut self,
+        schema: DatabaseName<'_>,
+        data: *mut u8,
+        sz: ffi::sqlite_int64,
+        flags: std::os::raw::c_uint,
+    ) -> Result<()> {
+        let schema = schema.as_cstr()?;
+        let rc = unsafe {
+            ffi::sqlite3_deserialize(self.handle(), schema.as_ptr(), data, sz, sz, flags)
+        };
+        if rc != ffi::SQLITE_OK {
+            return Err(unsafe { error_from_handle(self.handle(), rc) });
+        }
         Ok(())
     }
 }
@@ -145,6 +196,27 @@ mod test {
             panic!("expected OwnedData")
         };
         assert!(data.sz > 0);
+        Ok(())
+    }
+
+    #[test]
+    fn deserialize_read_exact() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
+        let data = db.serialize(DatabaseName::Main)?;
+
+        let mut dst = Connection::open_in_memory()?;
+        let read = data.deref();
+        dst.deserialize_read_exact(DatabaseName::Main, read, read.len(), false)?;
+        dst.execute("DELETE FROM x", [])?;
+        Ok(())
+    }
+
+    #[test]
+    fn deserialize_bytes() -> Result<()> {
+        let data = b"";
+        let mut dst = Connection::open_in_memory()?;
+        dst.deserialize_bytes(DatabaseName::Main, data)?;
         Ok(())
     }
 
