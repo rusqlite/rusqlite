@@ -193,7 +193,8 @@ libsqlite3-sys = { path = "libsqlite3-sys", version = "0.35.0" }
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
 # Something is dependent on it in windows, we use feature to override it.
 uuid = { version = "1.0", features = ["js"] }
-sqlite-wasm-rs = ">=0.2.4, <0.3.0"
+# https://github.com/Spxg/sqlite-wasm-rs#why-provide-precompiled-library
+sqlite-wasm-rs = { version = ">=0.3.0, <0.4.0", default-features = false, features = ["precompiled"] }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
 # Something is dependent on it, we use feature to override it.
