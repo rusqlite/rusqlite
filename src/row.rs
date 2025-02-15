@@ -404,7 +404,7 @@ mod sealed {
 ///
 /// It is only implemented for `usize` and `&str`.
 pub trait RowIndex: sealed::Sealed {
-    /// Returns the index of the appropriate column, or `None` if no such
+    /// Returns the index of the appropriate column, or `Error` if no such
     /// column exists.
     fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;
 }

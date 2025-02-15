@@ -15,8 +15,8 @@ mod sealed {
 ///
 /// It is only implemented for `usize` and `&str` and `&CStr`.
 pub trait BindIndex: sealed::Sealed {
-    /// Returns the index of the appropriate column, or `None` if no such
-    /// column exists.
+    /// Returns the index of the associated parameter, or `Error` if no such
+    /// parameter exists.
     fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;
 }
 
