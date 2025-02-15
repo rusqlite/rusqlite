@@ -9,6 +9,7 @@ use super::{len_as_c_int, str_for_sqlite};
 use super::{
     AndThenRows, Connection, Error, MappedRows, Params, RawStatement, Result, Row, Rows, ValueRef,
 };
+use crate::bind::BindIndex;
 use crate::types::{ToSql, ToSqlOutput};
 #[cfg(feature = "array")]
 use crate::vtab::array::{free_array, ARRAY_TYPE};
@@ -533,8 +534,7 @@ impl Statement<'_> {
     /// # use rusqlite::{Connection, Result};
     /// fn query(conn: &Connection) -> Result<()> {
     ///     let mut stmt = conn.prepare("SELECT * FROM test WHERE name = :name AND value > ?2")?;
-    ///     let name_index = stmt.parameter_index(":name")?.expect("No such parameter");
-    ///     stmt.raw_bind_parameter(name_index, "foo")?;
+    ///     stmt.raw_bind_parameter(c":name", "foo")?;
     ///     stmt.raw_bind_parameter(2, 100)?;
     ///     let mut rows = stmt.raw_query();
     ///     while let Some(row) = rows.next()? {
@@ -544,14 +544,14 @@ impl Statement<'_> {
     /// }
     /// ```
     #[inline]
-    pub fn raw_bind_parameter<T: ToSql>(
+    pub fn raw_bind_parameter<I: BindIndex, T: ToSql>(
         &mut self,
-        one_based_col_index: usize,
+        one_based_col_index: I,
         param: T,
     ) -> Result<()> {
         // This is the same as `bind_parameter` but slightly more ergonomic and
         // correctly takes `&mut self`.
-        self.bind_parameter(&param, one_based_col_index)
+        self.bind_parameter(&param, one_based_col_index.idx(self)?)
     }
 
     /// Low level API to execute a statement given that all parameters were
@@ -756,6 +756,10 @@ impl Statement<'_> {
     /// Reset all bindings
     pub fn clear_bindings(&mut self) {
         self.stmt.clear_bindings();
+    }
+
+    pub(crate) unsafe fn ptr(&self) -> *mut ffi::sqlite3_stmt {
+        self.stmt.ptr()
     }
 }
 
@@ -1047,8 +1051,8 @@ mod test {
         {
             let mut stmt = db.prepare("INSERT INTO test (name, value) VALUES (:name, ?3)")?;
 
-            let name_idx = stmt.parameter_index(":name")?.unwrap();
-            stmt.raw_bind_parameter(name_idx, "example")?;
+            stmt.raw_bind_parameter(c":name", "example")?;
+            stmt.raw_bind_parameter(":name", "example")?;
             stmt.raw_bind_parameter(3, 50i32)?;
             let n = stmt.raw_execute()?;
             assert_eq!(n, 1);

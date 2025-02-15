@@ -393,7 +393,7 @@ impl std::fmt::Debug for Row<'_> {
 }
 
 mod sealed {
-    /// This trait exists just to ensure that the only impls of `trait Params`
+    /// This trait exists just to ensure that the only impls of `trait RowIndex`
     /// that are allowed are ones in this crate.
     pub trait Sealed {}
     impl Sealed for usize {}
@@ -404,7 +404,7 @@ mod sealed {
 ///
 /// It is only implemented for `usize` and `&str`.
 pub trait RowIndex: sealed::Sealed {
-    /// Returns the index of the appropriate column, or `None` if no such
+    /// Returns the index of the appropriate column, or `Error` if no such
     /// column exists.
     fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;
 }
