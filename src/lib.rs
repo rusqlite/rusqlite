@@ -74,6 +74,7 @@ use crate::inner_connection::InnerConnection;
 use crate::raw_statement::RawStatement;
 use crate::types::ValueRef;
 
+pub use crate::bind::BindIndex;
 pub use crate::cache::CachedStatement;
 #[cfg(feature = "column_decltype")]
 pub use crate::column::Column;
@@ -101,6 +102,7 @@ pub mod auto_extension;
 #[cfg(feature = "backup")]
 #[cfg_attr(docsrs, doc(cfg(feature = "backup")))]
 pub mod backup;
+mod bind;
 #[cfg(feature = "blob")]
 #[cfg_attr(docsrs, doc(cfg(feature = "blob")))]
 pub mod blob;

@@ -393,7 +393,7 @@ impl std::fmt::Debug for Row<'_> {
 }
 
 mod sealed {
-    /// This trait exists just to ensure that the only impls of `trait Params`
+    /// This trait exists just to ensure that the only impls of `trait RowIndex`
     /// that are allowed are ones in this crate.
     pub trait Sealed {}
     impl Sealed for usize {}
