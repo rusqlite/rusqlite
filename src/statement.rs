@@ -480,17 +480,14 @@ impl Statement<'_> {
     }
 
     #[inline]
-    pub(crate) fn bind_parameters_named<T: ?Sized + ToSql>(
+    pub(crate) fn bind_parameters_named<S: BindIndex, T: ?Sized + ToSql>(
         &mut self,
-        params: &[(&str, &T)],
+        params: &[(S, &T)],
     ) -> Result<()> {
-        for &(name, value) in params {
-            if let Some(i) = self.parameter_index(name)? {
-                let ts: &dyn ToSql = &value;
-                self.bind_parameter(ts, i)?;
-            } else {
-                return Err(Error::InvalidParameterName(name.into()));
-            }
+        for (name, value) in params {
+            let i = name.idx(self)?;
+            let ts: &dyn ToSql = &value;
+            self.bind_parameter(ts, i)?;
         }
         Ok(())
     }
@@ -546,12 +543,12 @@ impl Statement<'_> {
     #[inline]
     pub fn raw_bind_parameter<I: BindIndex, T: ToSql>(
         &mut self,
-        one_based_col_index: I,
+        one_based_index: I,
         param: T,
     ) -> Result<()> {
         // This is the same as `bind_parameter` but slightly more ergonomic and
         // correctly takes `&mut self`.
-        self.bind_parameter(&param, one_based_col_index.idx(self)?)
+        self.bind_parameter(&param, one_based_index.idx(self)?)
     }
 
     /// Low level API to execute a statement given that all parameters were
@@ -591,7 +588,7 @@ impl Statement<'_> {
     }
 
     // generic because many of these branches can constant fold away.
-    fn bind_parameter<P: ?Sized + ToSql>(&self, param: &P, col: usize) -> Result<()> {
+    fn bind_parameter<P: ?Sized + ToSql>(&self, param: &P, ndx: usize) -> Result<()> {
         let value = param.to_sql()?;
 
         let ptr = unsafe { self.stmt.ptr() };
@@ -604,7 +601,7 @@ impl Statement<'_> {
                 // TODO sqlite3_bind_zeroblob64 // 3.8.11
                 return self
                     .conn
-                    .decode_result(unsafe { ffi::sqlite3_bind_zeroblob(ptr, col as c_int, len) });
+                    .decode_result(unsafe { ffi::sqlite3_bind_zeroblob(ptr, ndx as c_int, len) });
             }
             #[cfg(feature = "functions")]
             ToSqlOutput::Arg(_) => {
@@ -615,7 +612,7 @@ impl Statement<'_> {
                 return self.conn.decode_result(unsafe {
                     ffi::sqlite3_bind_pointer(
                         ptr,
-                        col as c_int,
+                        ndx as c_int,
                         Rc::into_raw(a) as *mut c_void,
                         ARRAY_TYPE,
                         Some(free_array),
@@ -624,23 +621,23 @@ impl Statement<'_> {
             }
         };
         self.conn.decode_result(match value {
-            ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, col as c_int) },
-            ValueRef::Integer(i) => unsafe { ffi::sqlite3_bind_int64(ptr, col as c_int, i) },
-            ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, col as c_int, r) },
+            ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, ndx as c_int) },
+            ValueRef::Integer(i) => unsafe { ffi::sqlite3_bind_int64(ptr, ndx as c_int, i) },
+            ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, ndx as c_int, r) },
             ValueRef::Text(s) => unsafe {
                 let (c_str, len, destructor) = str_for_sqlite(s)?;
                 // TODO sqlite3_bind_text64 // 3.8.7
-                ffi::sqlite3_bind_text(ptr, col as c_int, c_str, len, destructor)
+                ffi::sqlite3_bind_text(ptr, ndx as c_int, c_str, len, destructor)
             },
             ValueRef::Blob(b) => unsafe {
                 let length = len_as_c_int(b.len())?;
                 if length == 0 {
-                    ffi::sqlite3_bind_zeroblob(ptr, col as c_int, 0)
+                    ffi::sqlite3_bind_zeroblob(ptr, ndx as c_int, 0)
                 } else {
                     // TODO sqlite3_bind_blob64 // 3.8.7
                     ffi::sqlite3_bind_blob(
                         ptr,
-                        col as c_int,
+                        ndx as c_int,
                         b.as_ptr().cast::<c_void>(),
                         length,
                         ffi::SQLITE_TRANSIENT(),
