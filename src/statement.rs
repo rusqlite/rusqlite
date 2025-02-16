@@ -480,9 +480,9 @@ impl Statement<'_> {
     }
 
     #[inline]
-    pub(crate) fn bind_parameters_named<S: BindIndex, T: ?Sized + ToSql>(
+    pub(crate) fn bind_parameters_named<S: BindIndex, T: ToSql>(
         &mut self,
-        params: &[(S, &T)],
+        params: &[(S, T)],
     ) -> Result<()> {
         for (name, value) in params {
             let i = name.idx(self)?;
