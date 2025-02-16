@@ -947,7 +947,8 @@ mod test {
         db.execute_batch(sql)?;
 
         let mut stmt = db.prepare("INSERT INTO test (name) VALUES (:name)")?;
-        stmt.execute(&[(":name", &"one")])?;
+        stmt.execute(&[(":name", "one")])?;
+        stmt.execute(vec![(":name", "one")].as_slice())?;
 
         let mut stmt = db.prepare("SELECT COUNT(*) FROM test WHERE name = :name")?;
         assert_eq!(
@@ -1034,7 +1035,7 @@ mod test {
         db.execute_batch(sql)?;
 
         let mut stmt = db.prepare("INSERT INTO test (x, y) VALUES (:x, :y)")?;
-        stmt.execute(&[(":x", &"one")])?;
+        stmt.execute(&[(":x", "one")])?;
 
         let result: Option<String> = db.one_column("SELECT y FROM test WHERE x = 'one'")?;
         assert!(result.is_none());
