@@ -1080,7 +1080,7 @@ mod test {
 
         let mut stmt = db.prepare("INSERT INTO test (x, y) VALUES (:x, :y)")?;
         stmt.execute(&[(":x", "one")])?;
-        stmt.execute(&[(":y", "two")])?;
+        stmt.execute(&[(c":y", "two")])?;
 
         let result: String = db.one_column("SELECT x FROM test WHERE y = 'two'")?;
         assert_eq!(result, "one");
