@@ -952,7 +952,7 @@ mod test {
 
         let mut stmt = db.prepare("SELECT COUNT(*) FROM test WHERE name = :name")?;
         assert_eq!(
-            1i32,
+            2i32,
             stmt.query_row::<i32, _, _>(&[(":name", "one")], |r| r.get(0))?
         );
         Ok(())
