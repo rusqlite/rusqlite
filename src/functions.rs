@@ -53,9 +53,9 @@
 //! }
 //! ```
 use std::any::Any;
+use std::ffi::{c_int, c_uint, c_void};
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::os::raw::{c_int, c_void};
 use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
 use std::ptr;
 use std::slice;
@@ -160,7 +160,7 @@ impl Context<'_> {
     ///
     /// Will panic if `idx` is greater than or equal to
     /// [`self.len()`](Context::len).
-    pub fn get_subtype(&self, idx: usize) -> std::os::raw::c_uint {
+    pub fn get_subtype(&self, idx: usize) -> c_uint {
         let arg = self.args[idx];
         unsafe { ffi::sqlite3_value_subtype(arg) }
     }
@@ -276,7 +276,7 @@ impl Deref for ConnectionRef<'_> {
 type AuxInner = Arc<dyn Any + Send + Sync + 'static>;
 
 /// Subtype of an SQL function
-pub type SubType = Option<std::os::raw::c_uint>;
+pub type SubType = Option<c_uint>;
 
 /// Result of an SQL function
 pub trait SqlFnOutput {
@@ -858,7 +858,7 @@ where
 #[cfg(test)]
 mod test {
     use regex::Regex;
-    use std::os::raw::c_double;
+    use std::ffi::c_double;
 
     #[cfg(feature = "window")]
     use crate::functions::WindowAggregate;
@@ -1154,7 +1154,7 @@ mod test {
             Ok(ctx.get_subtype(0) as i32)
         }
         fn test_setsubtype(ctx: &Context<'_>) -> Result<(SqlFnArg, SubType)> {
-            use std::os::raw::c_uint;
+            use std::ffi::c_uint;
             let value = ctx.get_arg(0);
             let sub_type = ctx.get::<c_uint>(1)?;
             Ok((value, Some(sub_type)))

@@ -10,8 +10,8 @@
 //!
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
 use std::borrow::Cow::{self, Borrowed, Owned};
+use std::ffi::{c_char, c_int, c_void, CStr};
 use std::marker::PhantomData;
-use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::slice;
 
@@ -497,7 +497,6 @@ impl IndexInfo {
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
     #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn collation(&self, constraint_idx: usize) -> Result<&str> {
-        use std::ffi::CStr;
         let idx = constraint_idx as c_int;
         let collation = unsafe { ffi::sqlite3_vtab_collation(self.0, idx) };
         if collation.is_null() {
@@ -614,7 +613,7 @@ impl IndexConstraintUsage<'_> {
     /// if `omit`, do not code a test for this constraint
     #[inline]
     pub fn set_omit(&mut self, omit: bool) {
-        self.0.omit = omit as std::os::raw::c_uchar;
+        self.0.omit = omit as std::ffi::c_uchar;
     }
 }
 
@@ -938,8 +937,6 @@ unsafe extern "C" fn rust_create<'vtab, T>(
 where
     T: CreateVTab<'vtab>,
 {
-    use std::ffi::CStr;
-
     let mut conn = VTabConnection(db);
     let aux = aux.cast::<T::Aux>();
     let args = slice::from_raw_parts(argv, argc as usize);
@@ -980,8 +977,6 @@ unsafe extern "C" fn rust_connect<'vtab, T>(
 where
     T: VTab<'vtab>,
 {
-    use std::ffi::CStr;
-
     let mut conn = VTabConnection(db);
     let aux = aux.cast::<T::Aux>();
     let args = slice::from_raw_parts(argv, argc as usize);
@@ -1119,7 +1114,6 @@ unsafe extern "C" fn rust_filter<C>(
 where
     C: VTabCursor,
 {
-    use std::ffi::CStr;
     use std::str;
     let idx_name = if idx_str.is_null() {
         None

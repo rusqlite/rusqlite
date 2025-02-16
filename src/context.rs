@@ -1,7 +1,7 @@
 //! Code related to `sqlite3_context` common to `functions` and `vtab` modules.
 
 use libsqlite3_sys::sqlite3_value;
-use std::os::raw::{c_int, c_void};
+use std::ffi::{c_int, c_void};
 #[cfg(feature = "array")]
 use std::rc::Rc;
 

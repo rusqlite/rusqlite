@@ -1,10 +1,9 @@
 //! Tracing and profiling functions. Error and warning log.
 
 use std::borrow::Cow;
-use std::ffi::{CStr, CString};
+use std::ffi::{c_char, c_int, c_uint, c_void, CStr, CString};
 use std::marker::PhantomData;
 use std::mem;
-use std::os::raw::{c_char, c_int, c_uint, c_void};
 use std::panic::catch_unwind;
 use std::ptr;
 use std::time::Duration;
@@ -68,7 +67,7 @@ bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     #[non_exhaustive]
     #[repr(C)]
-    pub struct TraceEventCodes: ::std::os::raw::c_uint {
+    pub struct TraceEventCodes: c_uint {
         /// when a prepared statement first begins running and possibly at other times during the execution
         /// of the prepared statement, such as at the start of each trigger subprogram
         const SQLITE_TRACE_STMT = ffi::SQLITE_TRACE_STMT;

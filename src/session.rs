@@ -1,10 +1,9 @@
 //! [Session Extension](https://sqlite.org/sessionintro.html)
 #![expect(non_camel_case_types)]
 
-use std::ffi::CStr;
+use std::ffi::{c_char, c_int, c_uchar, c_void, CStr};
 use std::io::{Read, Write};
 use std::marker::PhantomData;
-use std::os::raw::{c_char, c_int, c_uchar, c_void};
 use std::panic::catch_unwind;
 use std::ptr;
 use std::slice::{from_raw_parts, from_raw_parts_mut};

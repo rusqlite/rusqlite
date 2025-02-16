@@ -2,8 +2,7 @@ use super::ffi;
 use super::StatementStatus;
 use crate::util::ParamIndexCache;
 use crate::util::SqliteMallocString;
-use std::ffi::CStr;
-use std::os::raw::c_int;
+use std::ffi::{c_int, CStr};
 use std::ptr;
 use std::sync::Arc;
 

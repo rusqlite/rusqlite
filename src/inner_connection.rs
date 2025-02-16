@@ -1,5 +1,4 @@
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int};
+use std::ffi::{c_char, c_int, CStr};
 #[cfg(feature = "load_extension")]
 use std::path::Path;
 use std::ptr;
@@ -24,17 +23,17 @@ pub struct InnerConnection {
     // interrupt would only acquire the lock after the query's completion.
     interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
     #[cfg(feature = "hooks")]
-    pub free_commit_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
+    pub free_commit_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
     #[cfg(feature = "hooks")]
-    pub free_rollback_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
+    pub free_rollback_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
     #[cfg(feature = "hooks")]
-    pub free_update_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
+    pub free_update_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
     #[cfg(feature = "hooks")]
     pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
     pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
     #[cfg(feature = "preupdate_hook")]
-    pub free_preupdate_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
+    pub free_preupdate_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
     owned: bool,
 }
 
@@ -194,7 +193,7 @@ impl InnerConnection {
             Ok(())
         } else {
             let message = super::errmsg_to_string(errmsg);
-            ffi::sqlite3_free(errmsg.cast::<std::os::raw::c_void>());
+            ffi::sqlite3_free(errmsg.cast::<std::ffi::c_void>());
             Err(crate::error::error_from_sqlite_code(r, Some(message)))
         }
     }

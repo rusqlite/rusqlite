@@ -1,7 +1,7 @@
 //! Commit, Data Change and Rollback Notification Callbacks
 #![expect(non_camel_case_types)]
 
-use std::os::raw::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_void, CStr};
 use std::panic::catch_unwind;
 use std::ptr;
 
@@ -488,7 +488,7 @@ impl Wal {
 
     /// Name of the database that was written to
     pub fn name(&self) -> DatabaseName<'_> {
-        DatabaseName::from_cstr(unsafe { std::ffi::CStr::from_ptr(self.db_name) })
+        DatabaseName::from_cstr(unsafe { CStr::from_ptr(self.db_name) })
     }
 }
 
@@ -845,7 +845,7 @@ unsafe fn expect_optional_utf8<'a>(
     if p_str.is_null() {
         return None;
     }
-    std::ffi::CStr::from_ptr(p_str)
+    CStr::from_ptr(p_str)
         .to_str()
         .unwrap_or_else(|_| panic!("received non-utf8 string as {description}"))
         .into()

@@ -1,6 +1,6 @@
 //! Configure database connections
 
-use std::os::raw::c_int;
+use std::ffi::c_int;
 
 use crate::error::check;
 use crate::ffi;

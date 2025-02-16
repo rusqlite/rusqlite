@@ -235,7 +235,7 @@ impl Connection {
                 table.as_ptr(),
                 column.as_ptr(),
                 row_id,
-                !read_only as std::os::raw::c_int,
+                !read_only as std::ffi::c_int,
                 &mut blob,
             )
         };

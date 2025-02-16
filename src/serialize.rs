@@ -170,7 +170,7 @@ impl Connection {
         schema: DatabaseName<'_>,
         data: *mut u8,
         sz: ffi::sqlite_int64,
-        flags: std::os::raw::c_uint,
+        flags: std::ffi::c_uint,
     ) -> Result<()> {
         let schema = schema.as_cstr()?;
         let rc = unsafe {

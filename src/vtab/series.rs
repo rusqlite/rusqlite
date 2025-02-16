@@ -3,8 +3,8 @@
 //! Port of C [generate series
 //! "function"](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/series.c):
 //! `https://www.sqlite.org/series.html`
+use std::ffi::c_int;
 use std::marker::PhantomData;
-use std::os::raw::c_int;
 
 use crate::ffi;
 use crate::types::Type;
