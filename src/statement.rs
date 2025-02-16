@@ -480,9 +480,9 @@ impl Statement<'_> {
     }
 
     #[inline]
-    pub(crate) fn bind_parameters_named<S: BindIndex, T: ?Sized + ToSql>(
+    pub(crate) fn bind_parameters_named<S: BindIndex, T: ToSql>(
         &mut self,
-        params: &[(S, &T)],
+        params: &[(S, T)],
     ) -> Result<()> {
         for (name, value) in params {
             let i = name.idx(self)?;
@@ -947,11 +947,12 @@ mod test {
         db.execute_batch(sql)?;
 
         let mut stmt = db.prepare("INSERT INTO test (name) VALUES (:name)")?;
-        stmt.execute(&[(":name", &"one")])?;
+        stmt.execute(&[(":name", "one")])?;
+        stmt.execute(vec![(":name", "one")].as_slice())?;
 
         let mut stmt = db.prepare("SELECT COUNT(*) FROM test WHERE name = :name")?;
         assert_eq!(
-            1i32,
+            2i32,
             stmt.query_row::<i32, _, _>(&[(":name", "one")], |r| r.get(0))?
         );
         Ok(())
@@ -1034,7 +1035,7 @@ mod test {
         db.execute_batch(sql)?;
 
         let mut stmt = db.prepare("INSERT INTO test (x, y) VALUES (:x, :y)")?;
-        stmt.execute(&[(":x", &"one")])?;
+        stmt.execute(&[(":x", "one")])?;
 
         let result: Option<String> = db.one_column("SELECT y FROM test WHERE x = 'one'")?;
         assert!(result.is_none());
@@ -1080,7 +1081,7 @@ mod test {
 
         let mut stmt = db.prepare("INSERT INTO test (x, y) VALUES (:x, :y)")?;
         stmt.execute(&[(":x", "one")])?;
-        stmt.execute(&[(":y", "two")])?;
+        stmt.execute(&[(c":y", "two")])?;
 
         let result: String = db.one_column("SELECT x FROM test WHERE y = 'two'")?;
         assert_eq!(result, "one");
