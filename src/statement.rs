@@ -480,17 +480,14 @@ impl Statement<'_> {
     }
 
     #[inline]
-    pub(crate) fn bind_parameters_named<T: ?Sized + ToSql>(
+    pub(crate) fn bind_parameters_named<S: BindIndex, T: ?Sized + ToSql>(
         &mut self,
-        params: &[(&str, &T)],
+        params: &[(S, &T)],
     ) -> Result<()> {
-        for &(name, value) in params {
-            if let Some(i) = self.parameter_index(name)? {
-                let ts: &dyn ToSql = &value;
-                self.bind_parameter(ts, i)?;
-            } else {
-                return Err(Error::InvalidParameterName(name.into()));
-            }
+        for (name, value) in params {
+            let i = name.idx(self)?;
+            let ts: &dyn ToSql = &value;
+            self.bind_parameter(ts, i)?;
         }
         Ok(())
     }
