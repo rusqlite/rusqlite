@@ -1,4 +1,4 @@
-use std::os::raw::{c_int, c_void};
+use std::ffi::{c_int, c_void};
 #[cfg(feature = "array")]
 use std::rc::Rc;
 use std::slice::from_raw_parts;

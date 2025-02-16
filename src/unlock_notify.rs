@@ -1,7 +1,6 @@
 //! [Unlock Notification](http://sqlite.org/unlock_notify.html)
 
-use std::os::raw::c_int;
-use std::os::raw::c_void;
+use std::ffi::{c_int, c_void};
 use std::panic::catch_unwind;
 use std::sync::{Condvar, Mutex};
 

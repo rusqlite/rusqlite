@@ -2,8 +2,8 @@ use crate::types::FromSqlError;
 use crate::types::Type;
 use crate::{errmsg_to_string, ffi, Result};
 use std::error;
+use std::ffi::{c_char, c_int, NulError};
 use std::fmt;
-use std::os::raw::c_int;
 use std::path::PathBuf;
 use std::str;
 
@@ -33,7 +33,7 @@ pub enum Error {
 
     /// Error converting a string to a C-compatible string because it contained
     /// an embedded nul.
-    NulError(std::ffi::NulError),
+    NulError(NulError),
 
     /// Error when using SQL named parameters and passing a parameter name not
     /// present in the SQL.
@@ -219,9 +219,9 @@ impl From<str::Utf8Error> for Error {
     }
 }
 
-impl From<std::ffi::NulError> for Error {
+impl From<NulError> for Error {
     #[cold]
-    fn from(err: std::ffi::NulError) -> Self {
+    fn from(err: NulError) -> Self {
         Self::NulError(err)
     }
 }
@@ -493,7 +493,7 @@ pub fn check(code: c_int) -> Result<()> {
 /// Transform Rust error to SQLite error (message and code).
 /// # Safety
 /// This function is unsafe because it uses raw pointer
-pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut std::os::raw::c_char) -> c_int {
+pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut c_char) -> c_int {
     use crate::util::alloc;
     match e {
         Error::SqliteFailure(err, s) => {

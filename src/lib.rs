@@ -60,9 +60,8 @@ pub use libsqlite3_sys as ffi;
 
 use std::cell::RefCell;
 use std::default::Default;
-use std::ffi::{CStr, CString};
+use std::ffi::{c_char, c_int, c_uint, CStr, CString};
 use std::fmt;
-use std::os::raw::{c_char, c_int};
 
 use std::path::Path;
 use std::result;
@@ -372,7 +371,7 @@ impl DatabaseName<'_> {
         })
     }
     #[cfg(feature = "hooks")]
-    pub(crate) fn from_cstr(cs: &std::ffi::CStr) -> DatabaseName<'_> {
+    pub(crate) fn from_cstr(cs: &CStr) -> DatabaseName<'_> {
         if cs == c"main" {
             DatabaseName::Main
         } else if cs == c"temp" {
@@ -1247,7 +1246,7 @@ bitflags::bitflags! {
     /// [sqlite3_prepare_v3](https://sqlite.org/c3ref/c_prepare_normalize.html) for details.
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
     #[repr(C)]
-    pub struct PrepFlags: ::std::os::raw::c_uint {
+    pub struct PrepFlags: c_uint {
         /// A hint to the query planner that the prepared statement will be retained for a long time and probably reused many times.
         const SQLITE_PREPARE_PERSISTENT = 0x01;
         /// Causes the SQL compiler to return an error (error code SQLITE_ERROR) if the statement uses any virtual tables.
@@ -1449,7 +1448,7 @@ mod test {
         // statement first.
         let raw_stmt = {
             use super::str_to_cstring;
-            use std::os::raw::c_int;
+            use std::ffi::c_int;
             use std::ptr;
 
             let raw_db = db.db.borrow_mut().db;

@@ -1,6 +1,6 @@
 //! Busy handler (when the database is locked)
+use std::ffi::{c_int, c_void};
 use std::mem;
-use std::os::raw::{c_int, c_void};
 use std::panic::catch_unwind;
 use std::ptr;
 use std::time::Duration;

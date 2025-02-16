@@ -1,6 +1,6 @@
 //! Add, remove, or modify a collation
 use std::cmp::Ordering;
-use std::os::raw::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_void, CStr};
 use std::panic::catch_unwind;
 use std::ptr;
 use std::slice;
@@ -132,7 +132,6 @@ impl InnerConnection {
             e_text_rep: c_int,
             arg3: *const c_char,
         ) {
-            use std::ffi::CStr;
             use std::str;
 
             if e_text_rep != ffi::SQLITE_UTF8 {

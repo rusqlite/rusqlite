@@ -1,7 +1,7 @@
 //! Run-Time Limits
 
 use crate::{ffi, Connection, Result};
-use std::os::raw::c_int;
+use std::ffi::c_int;
 
 /// Run-Time limit categories, for use with [`Connection::limit`] and
 /// [`Connection::set_limit`].

@@ -144,7 +144,7 @@ impl fmt::Display for Type {
 mod test {
     use super::Value;
     use crate::{params, Connection, Error, Result, Statement};
-    use std::os::raw::{c_double, c_int};
+    use std::ffi::{c_double, c_int};
 
     fn checked_memory_handle() -> Result<Connection> {
         let db = Connection::open_in_memory()?;

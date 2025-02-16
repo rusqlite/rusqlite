@@ -1,6 +1,6 @@
 //! Port of C [vtablog](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/vtablog.c)
+use std::ffi::c_int;
 use std::marker::PhantomData;
-use std::os::raw::c_int;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

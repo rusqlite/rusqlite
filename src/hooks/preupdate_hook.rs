@@ -1,5 +1,5 @@
+use std::ffi::{c_char, c_int, c_void};
 use std::fmt::Debug;
-use std::os::raw::{c_char, c_int, c_void};
 use std::panic::catch_unwind;
 use std::ptr;
 

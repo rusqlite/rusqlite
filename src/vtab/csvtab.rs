@@ -21,9 +21,9 @@
 //!     Ok(())
 //! }
 //! ```
+use std::ffi::c_int;
 use std::fs::File;
 use std::marker::PhantomData;
-use std::os::raw::c_int;
 use std::path::Path;
 use std::str;
 
