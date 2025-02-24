@@ -107,20 +107,6 @@ impl std::ops::Deref for SmallCString {
     }
 }
 
-impl PartialEq<SmallCString> for str {
-    #[inline]
-    fn eq(&self, s: &SmallCString) -> bool {
-        s.as_bytes_without_nul() == self.as_bytes()
-    }
-}
-
-impl PartialEq<str> for SmallCString {
-    #[inline]
-    fn eq(&self, s: &str) -> bool {
-        self.as_bytes_without_nul() == s.as_bytes()
-    }
-}
-
 impl std::borrow::Borrow<str> for SmallCString {
     #[inline]
     fn borrow(&self) -> &str {
