@@ -45,13 +45,16 @@ collation = []
 functions = []
 # sqlite3_log: 3.6.23 (2010-03-09)
 trace = []
-bundled = ["libsqlite3-sys/bundled", "modern_sqlite"]
+# sqlite-wasm-rs
+# https://github.com/Spxg/sqlite-wasm-rs#why-provide-precompiled-library
+precompiled-wasm = ["sqlite-wasm-rs/precompiled"]
+bundled = ["libsqlite3-sys/bundled", "sqlite-wasm-rs/bundled", "modern_sqlite"]
 bundled-sqlcipher = ["libsqlite3-sys/bundled-sqlcipher", "bundled"]
 bundled-sqlcipher-vendored-openssl = [
     "libsqlite3-sys/bundled-sqlcipher-vendored-openssl",
     "bundled-sqlcipher",
 ]
-buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
+buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen", "sqlite-wasm-rs/buildtime-bindgen"]
 limits = []
 loadable_extension = ["libsqlite3-sys/loadable_extension"]
 hooks = []
@@ -193,8 +196,7 @@ libsqlite3-sys = { path = "libsqlite3-sys", version = "0.35.0" }
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
 # Something is dependent on it in windows, we use feature to override it.
 uuid = { version = "1.0", features = ["js"] }
-# https://github.com/Spxg/sqlite-wasm-rs#why-provide-precompiled-library
-sqlite-wasm-rs = { version = ">=0.3.0, <0.4.0", default-features = false, features = ["precompiled"] }
+sqlite-wasm-rs = { version = ">=0.3.0, <0.4.0", default-features = false }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
 # Something is dependent on it, we use feature to override it.
