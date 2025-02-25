@@ -857,7 +857,7 @@ mod test {
     use crate::{Connection, DatabaseName, Result};
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_commit_hook() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -871,7 +871,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_fn_commit_hook() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -885,7 +885,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_rollback_hook() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -898,7 +898,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_update_hook() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -916,7 +916,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_progress_handler() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -933,7 +933,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_progress_handler_interrupt() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
@@ -947,7 +947,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_authorizer() -> Result<()> {
         use super::{AuthAction, AuthContext, Authorization};
 
@@ -981,7 +981,11 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
+    #[rusqlite_test_helper::test]
     fn wal_hook() -> Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir.path().join("wal-hook.db3");

@@ -899,7 +899,7 @@ mod test {
     use crate::types::ToSql;
     use crate::{params_from_iter, Connection, Error, Result};
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_execute_named() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER)")?;
@@ -939,7 +939,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_stmt_execute_named() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "CREATE TABLE test (id INTEGER PRIMARY KEY NOT NULL, name TEXT NOT NULL, flag \
@@ -958,7 +958,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_query_named() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = r#"
@@ -974,7 +974,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_query_map_named() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = r#"
@@ -994,7 +994,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_query_and_then_by_name() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = r#"
@@ -1028,7 +1028,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_unbound_parameters_are_null() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "CREATE TABLE test (x TEXT, y TEXT)";
@@ -1042,7 +1042,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_raw_binding() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE test (name TEXT, value INTEGER)")?;
@@ -1073,7 +1073,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_unbound_parameters_are_reused() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "CREATE TABLE test (x TEXT, y TEXT)";
@@ -1088,7 +1088,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_insert() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER UNIQUE)")?;
@@ -1107,7 +1107,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_insert_different_tables() -> Result<()> {
         // Test for https://github.com/rusqlite/rusqlite/issues/171
         let db = Connection::open_in_memory()?;
@@ -1123,7 +1123,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_exists() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "BEGIN;
@@ -1138,7 +1138,7 @@ mod test {
         assert!(!stmt.exists([0i32])?);
         Ok(())
     }
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_tuple_params() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let s = db.query_row("SELECT printf('[%s]', ?1)", ("abc",), |r| {
@@ -1174,7 +1174,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_query_row() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "BEGIN;
@@ -1189,7 +1189,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_query_by_column_name() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "BEGIN;
@@ -1203,7 +1203,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_query_by_column_name_ignore_case() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let sql = "BEGIN;
@@ -1217,7 +1217,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_expanded_sql() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let stmt = db.prepare("SELECT ?1")?;
@@ -1226,7 +1226,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_bind_parameters() -> Result<()> {
         let db = Connection::open_in_memory()?;
         // dynamic slice:
@@ -1268,7 +1268,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_parameter_name() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE test (name TEXT, value INTEGER)")?;
@@ -1279,7 +1279,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_empty_stmt() -> Result<()> {
         let conn = Connection::open_in_memory()?;
         let mut stmt = conn.prepare("")?;
@@ -1294,14 +1294,14 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_comment_stmt() -> Result<()> {
         let conn = Connection::open_in_memory()?;
         conn.prepare("/*SELECT 1;*/")?;
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_comment_and_sql_stmt() -> Result<()> {
         let conn = Connection::open_in_memory()?;
         let stmt = conn.prepare("/*...*/ SELECT 1;")?;
@@ -1309,7 +1309,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_semi_colon_stmt() -> Result<()> {
         let conn = Connection::open_in_memory()?;
         let stmt = conn.prepare(";")?;
@@ -1317,7 +1317,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_utf16_conversion() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.pragma_update(None, "encoding", "UTF-16le")?;
@@ -1331,7 +1331,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_nul_byte() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let expected = "a\x00b";
@@ -1340,7 +1340,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "modern_sqlite")]
     fn is_explain() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -1349,7 +1349,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn readonly() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let stmt = db.prepare("SELECT 1;")?;
@@ -1357,7 +1357,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     fn test_error_offset() -> Result<()> {
         use crate::ffi::ErrorCode;

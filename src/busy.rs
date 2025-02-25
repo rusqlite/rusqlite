@@ -83,7 +83,11 @@ mod test {
     use crate::{Connection, ErrorCode, Result, TransactionBehavior};
     use std::sync::atomic::{AtomicBool, Ordering};
 
-    #[test]
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
+    #[rusqlite_test_helper::test]
     fn test_default_busy() -> Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir.path().join("test.db3");
@@ -99,7 +103,11 @@ mod test {
         tx1.rollback()
     }
 
-    #[test]
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
+    #[rusqlite_test_helper::test]
     fn test_busy_handler() -> Result<()> {
         static CALLED: AtomicBool = AtomicBool::new(false);
         fn busy_handler(n: i32) -> bool {

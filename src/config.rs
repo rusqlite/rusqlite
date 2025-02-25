@@ -145,7 +145,7 @@ mod test {
     use super::DbConfig;
     use crate::{Connection, Result};
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_db_config() -> Result<()> {
         let db = Connection::open_in_memory()?;
 

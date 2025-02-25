@@ -305,7 +305,7 @@ mod test {
     use crate::pragma;
     use crate::{Connection, DatabaseName, Result};
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn pragma_query_value() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let user_version: i32 = db.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -313,7 +313,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "modern_sqlite")]
     fn pragma_func_query_value() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -322,7 +322,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn pragma_query_no_schema() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let mut user_version = -1;
@@ -334,7 +334,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn pragma_query_with_schema() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let mut user_version = -1;
@@ -346,7 +346,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn pragma() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let mut columns = Vec::new();
@@ -359,7 +359,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "modern_sqlite")]
     fn pragma_func() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -375,13 +375,13 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn pragma_update() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.pragma_update(None, "user_version", 1)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn pragma_update_and_check() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let journal_mode: String =
@@ -402,7 +402,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn is_identifier() {
         assert!(pragma::is_identifier("full"));
         assert!(pragma::is_identifier("r2d2"));
@@ -410,21 +410,21 @@ mod test {
         assert!(!pragma::is_identifier("semi;colon"));
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn double_quote() {
         let mut sql = Sql::new();
         sql.push_schema_name(DatabaseName::Attached(r#"schema";--"#));
         assert_eq!(r#""schema"";--""#, sql.as_str());
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn wrap_and_escape() {
         let mut sql = Sql::new();
         sql.push_string_literal("value'; --");
         assert_eq!("'value''; --'", sql.as_str());
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn locking_mode() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let r = db.pragma_update(None, "locking_mode", "exclusive");
