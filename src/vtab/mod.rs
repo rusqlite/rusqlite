@@ -21,7 +21,7 @@ use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
 use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
 use crate::util::{alloc, free_boxed_value};
-use crate::{str_to_cstring, Connection, Error, InnerConnection, Result};
+use crate::{str_to_cstring, Connection, Error, InnerConnection, Name, Result};
 
 // let conn: Connection = ...;
 // let mod: Module = ...; // VTab builder
@@ -811,9 +811,9 @@ impl Connection {
     /// Step 3 of [Creating New Virtual Table
     /// Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
     #[inline]
-    pub fn create_module<'vtab, T: VTab<'vtab>>(
+    pub fn create_module<'vtab, T: VTab<'vtab>, M: Name>(
         &self,
-        module_name: &str,
+        module_name: M,
         module: &'static Module<'vtab, T>,
         aux: Option<T::Aux>,
     ) -> Result<()> {
@@ -822,9 +822,9 @@ impl Connection {
 }
 
 impl InnerConnection {
-    fn create_module<'vtab, T: VTab<'vtab>>(
+    fn create_module<'vtab, T: VTab<'vtab>, M: Name>(
         &mut self,
-        module_name: &str,
+        module_name: M,
         module: &'static Module<'vtab, T>,
         aux: Option<T::Aux>,
     ) -> Result<()> {
@@ -835,7 +835,7 @@ impl InnerConnection {
                 version::version()
             )));
         }
-        let c_name = str_to_cstring(module_name)?;
+        let c_name = module_name.as_cstr()?;
         let r = match aux {
             Some(aux) => {
                 let boxed_aux: *mut T::Aux = Box::into_raw(Box::new(aux));

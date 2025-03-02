@@ -17,7 +17,11 @@ use crate::{error::error_from_sqlite_code, Connection, Result};
 /// Register the `generate_series` module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module("generate_series", eponymous_only_module::<SeriesTab>(), aux)
+    conn.create_module(
+        c"generate_series",
+        eponymous_only_module::<SeriesTab>(),
+        aux,
+    )
 }
 
 // Column numbers

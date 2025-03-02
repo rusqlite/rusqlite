@@ -88,6 +88,7 @@ pub use crate::statement::{Statement, StatementStatus};
 pub use crate::transaction::TransactionState;
 pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
 pub use crate::types::ToSql;
+pub use crate::util::Name;
 pub use crate::version::*;
 #[cfg(feature = "rusqlite-macros")]
 #[doc(hidden)]
@@ -361,15 +362,6 @@ pub const MAIN_DB: DatabaseName<'static> = DatabaseName::Main;
 pub const TEMP_DB: DatabaseName<'static> = DatabaseName::Temp;
 
 impl DatabaseName<'_> {
-    #[inline]
-    fn as_cstr(&self) -> Result<std::borrow::Cow<'_, CStr>> {
-        Ok(match *self {
-            DatabaseName::Main => std::borrow::Cow::Borrowed(c"main"),
-            DatabaseName::Temp => std::borrow::Cow::Borrowed(c"temp"),
-            DatabaseName::Attached(s) => std::borrow::Cow::Owned(CString::new(s)?),
-            DatabaseName::C(s) => std::borrow::Cow::Borrowed(s),
-        })
-    }
     #[cfg(feature = "hooks")]
     pub(crate) fn from_cstr(cs: &CStr) -> DatabaseName<'_> {
         if cs == c"main" {
@@ -498,13 +490,13 @@ impl Connection {
     /// Will return `Err` if either `path` or `vfs` cannot be converted to a
     /// C-compatible string or if the underlying SQLite open call fails.
     #[inline]
-    pub fn open_with_flags_and_vfs<P: AsRef<Path>>(
+    pub fn open_with_flags_and_vfs<P: AsRef<Path>, V: Name>(
         path: P,
         flags: OpenFlags,
-        vfs: &str,
+        vfs: V,
     ) -> Result<Self> {
         let c_path = path_to_cstring(path.as_ref())?;
-        let c_vfs = str_to_cstring(vfs)?;
+        let c_vfs = vfs.as_cstr()?;
         InnerConnection::open_with_flags(&c_path, flags, Some(&c_vfs)).map(|db| Self {
             db: RefCell::new(db),
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
@@ -536,7 +528,7 @@ impl Connection {
     /// Will return `Err` if `vfs` cannot be converted to a C-compatible
     /// string or if the underlying SQLite open call fails.
     #[inline]
-    pub fn open_in_memory_with_flags_and_vfs(flags: OpenFlags, vfs: &str) -> Result<Self> {
+    pub fn open_in_memory_with_flags_and_vfs<V: Name>(flags: OpenFlags, vfs: V) -> Result<Self> {
         Self::open_with_flags_and_vfs(":memory:", flags, vfs)
     }
 
@@ -643,7 +635,13 @@ impl Connection {
     /// likely to be more robust.
     #[inline]
     pub fn path(&self) -> Option<&str> {
-        unsafe { crate::inner_connection::db_filename(self.handle(), DatabaseName::Main) }
+        let db_name = DatabaseName::Main.as_cstr().unwrap();
+        let db_filename = unsafe { ffi::sqlite3_db_filename(self.handle(), db_name.as_ptr()) };
+        if db_filename.is_null() {
+            None
+        } else {
+            unsafe { CStr::from_ptr(db_filename) }.to_str().ok()
+        }
     }
 
     /// Attempts to free as much heap memory as possible from the database
@@ -909,10 +907,10 @@ impl Connection {
     #[cfg(feature = "load_extension")]
     #[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
     #[inline]
-    pub unsafe fn load_extension<P: AsRef<Path>>(
+    pub unsafe fn load_extension<P: AsRef<Path>, N: Name>(
         &self,
         dylib_path: P,
-        entry_point: Option<&str>,
+        entry_point: Option<N>,
     ) -> Result<()> {
         self.db
             .borrow_mut()
@@ -1055,7 +1053,7 @@ impl Connection {
     }
 
     /// Determine if a database is read-only
-    pub fn is_readonly(&self, db_name: DatabaseName<'_>) -> Result<bool> {
+    pub fn is_readonly<N: Name>(&self, db_name: N) -> Result<bool> {
         self.db.borrow().db_readonly(db_name)
     }
 

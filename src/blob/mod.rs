@@ -192,7 +192,7 @@ use std::ptr;
 
 use super::ffi;
 use super::types::{ToSql, ToSqlOutput};
-use crate::{Connection, DatabaseName, Result};
+use crate::{Connection, Name, Result};
 
 mod pos_io;
 
@@ -215,19 +215,19 @@ impl Connection {
     /// C-compatible string or if the underlying SQLite BLOB open call
     /// fails.
     #[inline]
-    pub fn blob_open<'a>(
+    pub fn blob_open<'a, D: Name, N: Name>(
         &'a self,
-        db: DatabaseName<'_>,
-        table: &str,
-        column: &str,
+        db: D,
+        table: N,
+        column: N,
         row_id: i64,
         read_only: bool,
     ) -> Result<Blob<'a>> {
         let c = self.db.borrow_mut();
         let mut blob = ptr::null_mut();
         let db = db.as_cstr()?;
-        let table = super::str_to_cstring(table)?;
-        let column = super::str_to_cstring(column)?;
+        let table = table.as_cstr()?;
+        let column = column.as_cstr()?;
         let rc = unsafe {
             ffi::sqlite3_blob_open(
                 c.db(),
@@ -438,7 +438,7 @@ mod test {
     fn test_blob() -> Result<()> {
         let (db, rowid) = db_with_test_blob()?;
 
-        let mut blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false)?;
+        let mut blob = db.blob_open(DatabaseName::Main, c"test", c"content", rowid, false)?;
         assert!(!blob.is_empty());
         assert_eq!(10, blob.len());
         assert_eq!(4, blob.write(b"Clob").unwrap());
@@ -449,7 +449,7 @@ mod test {
         blob.reopen(rowid)?;
         blob.close()?;
 
-        blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, true)?;
+        blob = db.blob_open(DatabaseName::Main, c"test", c"content", rowid, true)?;
         let mut bytes = [0u8; 5];
         assert_eq!(5, blob.read(&mut bytes[..]).unwrap());
         assert_eq!(&bytes, b"Clob5");
@@ -490,7 +490,7 @@ mod test {
     fn test_blob_in_bufreader() -> Result<()> {
         let (db, rowid) = db_with_test_blob()?;
 
-        let mut blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false)?;
+        let mut blob = db.blob_open(c"main", c"test", c"content", rowid, false)?;
         assert_eq!(8, blob.write(b"one\ntwo\n").unwrap());
 
         blob.reopen(rowid)?;
@@ -515,7 +515,7 @@ mod test {
         let (db, rowid) = db_with_test_blob()?;
 
         {
-            let blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false)?;
+            let blob = db.blob_open(DatabaseName::Main, c"test", c"content", rowid, false)?;
             let mut writer = BufWriter::new(blob);
 
             // trying to write too much and then flush should fail
@@ -526,14 +526,14 @@ mod test {
 
         {
             // ... but it should've written the first 10 bytes
-            let mut blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false)?;
+            let mut blob = db.blob_open(DatabaseName::Main, c"test", c"content", rowid, false)?;
             let mut bytes = [0u8; 10];
             assert_eq!(10, blob.read(&mut bytes[..]).unwrap());
             assert_eq!(b"0123456701", &bytes);
         }
 
         {
-            let blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false)?;
+            let blob = db.blob_open(DatabaseName::Main, c"test", c"content", rowid, false)?;
             let mut writer = BufWriter::new(blob);
 
             // trying to write_all too much should fail
@@ -543,7 +543,7 @@ mod test {
 
         {
             // ... but it should've written the first 10 bytes
-            let mut blob = db.blob_open(DatabaseName::Main, "test", "content", rowid, false)?;
+            let mut blob = db.blob_open(DatabaseName::Main, c"test", c"content", rowid, false)?;
             let mut bytes = [0u8; 10];
             assert_eq!(10, blob.read(&mut bytes[..]).unwrap());
             assert_eq!(b"aaaaaaaaaa", &bytes);
