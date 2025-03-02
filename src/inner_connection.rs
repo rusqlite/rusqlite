@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use super::ffi;
 use super::str_for_sqlite;
-use super::{Connection, InterruptHandle, OpenFlags, PrepFlags, Result};
+use super::{Connection, InterruptHandle, Name, OpenFlags, PrepFlags, Result};
 use crate::error::{decode_result_raw, error_from_handle, error_with_offset, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
@@ -176,15 +176,15 @@ impl InnerConnection {
     }
 
     #[cfg(feature = "load_extension")]
-    pub unsafe fn load_extension(
+    pub unsafe fn load_extension<N: Name>(
         &self,
         dylib_path: &Path,
-        entry_point: Option<&str>,
+        entry_point: Option<N>,
     ) -> Result<()> {
         let dylib_str = super::path_to_cstring(dylib_path)?;
         let mut errmsg: *mut c_char = ptr::null_mut();
         let r = if let Some(entry_point) = entry_point {
-            let c_entry = crate::str_to_cstring(entry_point)?;
+            let c_entry = entry_point.as_cstr()?;
             ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry.as_ptr(), &mut errmsg)
         } else {
             ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), ptr::null(), &mut errmsg)
@@ -332,7 +332,7 @@ impl InnerConnection {
     #[inline]
     fn remove_preupdate_hook(&mut self) {}
 
-    pub fn db_readonly(&self, db_name: super::DatabaseName<'_>) -> Result<bool> {
+    pub fn db_readonly<N: Name>(&self, db_name: N) -> Result<bool> {
         let name = db_name.as_cstr()?;
         let r = unsafe { ffi::sqlite3_db_readonly(self.db, name.as_ptr()) };
         match r {
@@ -347,9 +347,9 @@ impl InnerConnection {
     }
 
     #[cfg(feature = "modern_sqlite")] // 3.37.0
-    pub fn txn_state(
+    pub fn txn_state<N: Name>(
         &self,
-        db_name: Option<super::DatabaseName<'_>>,
+        db_name: Option<N>,
     ) -> Result<super::transaction::TransactionState> {
         let r = if let Some(ref name) = db_name {
             let name = name.as_cstr()?;
@@ -383,20 +383,6 @@ impl InnerConnection {
 #[inline]
 pub(crate) unsafe fn get_autocommit(ptr: *mut ffi::sqlite3) -> bool {
     ffi::sqlite3_get_autocommit(ptr) != 0
-}
-
-#[inline]
-pub(crate) unsafe fn db_filename(
-    ptr: *mut ffi::sqlite3,
-    db_name: crate::DatabaseName<'_>,
-) -> Option<&str> {
-    let db_name = db_name.as_cstr().unwrap();
-    let db_filename = ffi::sqlite3_db_filename(ptr, db_name.as_ptr());
-    if db_filename.is_null() {
-        None
-    } else {
-        CStr::from_ptr(db_filename).to_str().ok()
-    }
 }
 
 impl Drop for InnerConnection {

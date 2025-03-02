@@ -203,7 +203,7 @@ mod test {
         db.execute("INSERT INTO test_table(content) VALUES (ZEROBLOB(10))", [])?;
 
         let rowid = db.last_insert_rowid();
-        let mut blob = db.blob_open(DatabaseName::Main, "test_table", "content", rowid, false)?;
+        let mut blob = db.blob_open(DatabaseName::Main, c"test_table", c"content", rowid, false)?;
         // modify the seek pos to ensure we aren't using it or modifying it.
         blob.seek(std::io::SeekFrom::Start(1)).unwrap();
 

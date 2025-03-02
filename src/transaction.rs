@@ -1,4 +1,4 @@
-use crate::{Connection, Result};
+use crate::{Connection, Name, Result};
 use std::ops::Deref;
 
 /// Options for transaction behavior. See [BEGIN
@@ -512,10 +512,7 @@ impl Connection {
     /// Determine the transaction state of a database
     #[cfg(feature = "modern_sqlite")] // 3.37.0
     #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-    pub fn transaction_state(
-        &self,
-        db_name: Option<crate::DatabaseName<'_>>,
-    ) -> Result<TransactionState> {
+    pub fn transaction_state<N: Name>(&self, db_name: Option<N>) -> Result<TransactionState> {
         self.db.borrow().txn_state(db_name)
     }
 
@@ -793,13 +790,13 @@ mod test {
             TransactionState::None,
             db.transaction_state(Some(DatabaseName::Main))?
         );
-        assert_eq!(TransactionState::None, db.transaction_state(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
         db.execute_batch("BEGIN")?;
-        assert_eq!(TransactionState::None, db.transaction_state(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
         let _: i32 = db.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+        assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
         db.pragma_update(None, "user_version", 1)?;
-        assert_eq!(TransactionState::Write, db.transaction_state(None)?);
+        assert_eq!(TransactionState::Write, db.transaction_state::<&str>(None)?);
         db.execute_batch("ROLLBACK")?;
         Ok(())
     }
@@ -812,17 +809,17 @@ mod test {
         db.execute_batch("CREATE TABLE t(i UNIQUE);")?;
         assert!(db.is_autocommit());
         let mut stmt = db.prepare("SELECT name FROM sqlite_master")?;
-        assert_eq!(TransactionState::None, db.transaction_state(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
         {
             let mut rows = stmt.query([])?;
             assert!(rows.next()?.is_some()); // start reading
-            assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+            assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
             db.execute("INSERT INTO t VALUES (1)", [])?; // auto-commit
-            assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+            assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
             assert!(rows.next()?.is_some()); // still reading
-            assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+            assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
             assert!(rows.next()?.is_none()); // end
-            assert_eq!(TransactionState::None, db.transaction_state(None)?);
+            assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
         }
         Ok(())
     }
