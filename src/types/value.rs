@@ -161,4 +161,10 @@ mod test {
         assert_eq!(Value::Text(String::new()).data_type(), Type::Text);
         assert_eq!(Value::Blob(vec![]).data_type(), Type::Blob);
     }
+
+    #[test]
+    fn from_option() {
+        assert_eq!(Value::from(None as Option<i64>), Value::Null);
+        assert_eq!(Value::from(Some(0)), Value::Integer(0));
+    }
 }
