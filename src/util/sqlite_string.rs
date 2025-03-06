@@ -179,7 +179,7 @@ impl std::fmt::Display for SqliteMallocString {
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_from_str() {
         let to_check = [
             ("", ""),
@@ -200,7 +200,7 @@ mod test {
     }
 
     // This will trigger an asan error if into_raw still freed the ptr.
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_lossy() {
         let p = SqliteMallocString::from_str("abcd").into_raw();
         // Make invalid
@@ -212,7 +212,7 @@ mod test {
     }
 
     // This will trigger an asan error if into_raw still freed the ptr.
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_into_raw() {
         let mut v = vec![];
         for i in 0..1000 {

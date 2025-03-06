@@ -187,7 +187,7 @@ impl Connection {
 mod test {
     use super::*;
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn serialize() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
@@ -199,7 +199,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn deserialize_read_exact() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
@@ -212,7 +212,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn deserialize_bytes() -> Result<()> {
         let data = b"";
         let mut dst = Connection::open_in_memory()?;
@@ -220,7 +220,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn deserialize() -> Result<()> {
         let src = Connection::open_in_memory()?;
         src.execute_batch("CREATE TABLE x AS SELECT 'data'")?;

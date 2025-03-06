@@ -1292,7 +1292,7 @@ mod vtablog;
 
 #[cfg(test)]
 mod test {
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_dequote() {
         assert_eq!("", super::dequote(""));
         assert_eq!("'", super::dequote("'"));
@@ -1304,7 +1304,7 @@ mod test {
         assert_eq!("x", super::dequote("\"x\""));
         assert_eq!("x", super::dequote("x"));
     }
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_parse_boolean() {
         assert_eq!(None, super::parse_boolean(""));
         assert_eq!(Some(true), super::parse_boolean("1"));
