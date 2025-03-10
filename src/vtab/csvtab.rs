@@ -48,7 +48,7 @@ use crate::{Connection, Error, Result};
 /// ```
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module("csv", read_only_module::<CsvTab>(), aux)
+    conn.create_module(c"csv", read_only_module::<CsvTab>(), aux)
 }
 
 /// An instance of the CSV virtual table

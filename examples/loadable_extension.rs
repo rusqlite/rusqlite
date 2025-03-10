@@ -36,7 +36,7 @@ pub unsafe extern "C" fn sqlite3_extension_init(
 
 fn extension_init(db: Connection) -> Result<bool> {
     db.create_scalar_function(
-        "rusqlite_test_function",
+        c"rusqlite_test_function",
         0,
         FunctionFlags::SQLITE_DETERMINISTIC,
         |_ctx| {

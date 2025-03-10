@@ -59,7 +59,7 @@ impl ToSql for Array {
 /// Register the "rarray" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module("rarray", eponymous_only_module::<ArrayTab>(), aux)
+    conn.create_module(c"rarray", eponymous_only_module::<ArrayTab>(), aux)
 }
 
 // Column numbers
