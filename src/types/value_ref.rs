@@ -332,4 +332,18 @@ mod test {
         assert_eq!(ValueRef::Blob(b"").as_bytes_or_null(), Ok(Some(&b""[..])));
         Ok(())
     }
+    #[test]
+    fn from_value() {
+        use crate::types::Value;
+        assert_eq!(
+            ValueRef::from(&Value::Text("".to_owned())),
+            ValueRef::Text(b"")
+        );
+        assert_eq!(ValueRef::from(&Value::Blob(vec![])), ValueRef::Blob(b""));
+    }
+    #[test]
+    fn from_option() {
+        assert_eq!(ValueRef::from(None as Option<&str>), ValueRef::Null);
+        assert_eq!(ValueRef::from(Some("")), ValueRef::Text(b""));
+    }
 }
