@@ -104,15 +104,18 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
   gives `std::io::{Read, Write, Seek}` access to SQL BLOBs.
 * [`limits`](https://docs.rs/rusqlite/~0/rusqlite/struct.Connection.html#method.limit)
   allows you to set and retrieve SQLite's per connection limits.
-* `chrono` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
-  and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for various
-  types from the [`chrono` crate](https://crates.io/crates/chrono).
 * `serde_json` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
   `Value` type from the [`serde_json` crate](https://crates.io/crates/serde_json).
+* `chrono` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
+  and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for various
+  types from the [`chrono` crate](https://crates.io/crates/chrono).
 * `time` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for various
   types from the [`time` crate](https://crates.io/crates/time).
+* `jiff` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
+  and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
+  `Value` type from the [`jiff` crate](https://crates.io/crates/jiff).
 * `url` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
   `Url` type from the [`url` crate](https://crates.io/crates/url).
@@ -136,6 +139,10 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
 * `column_decltype` provides `columns()` method for Statements and Rows; omit if linking to a version of SQLite/SQLCipher compiled with `-DSQLITE_OMIT_DECLTYPE`.
 * `collation` exposes [`sqlite3_create_collation_v2`](https://sqlite.org/c3ref/create_collation.html).
 * `serialize` exposes [`sqlite3_serialize`](http://sqlite.org/c3ref/serialize.html) (3.23.0).
+* `rusqlite-macros` enables the use of the [`prepare_and_bind`](https://docs.rs/rusqlite/~0/rusqlite/macro.prepare_and_bind.html)
+  and [`prepare_cached_and_bind`](https://docs.rs/rusqlite/~0/rusqlite/macro.prepare_cached_and_bind.html)
+  procedural macros, which allow capturing identifiers in SQL statements.
+
 
 ## Notes on building rusqlite and libsqlite3-sys
 
