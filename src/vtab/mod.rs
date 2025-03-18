@@ -15,7 +15,7 @@ use std::marker::PhantomData;
 use std::ptr;
 use std::slice;
 
-use crate::context::set_result;
+use crate::context::{no_change, set_result};
 use crate::error::{error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
@@ -704,7 +704,11 @@ impl Context {
         Ok(())
     }
 
-    // TODO sqlite3_vtab_nochange (http://sqlite.org/c3ref/vtab_nochange.html) // 3.22.0 & xColumn
+    /// sqlite3_vtab_nochange (http://sqlite.org/c3ref/vtab_nochange.html)
+    #[inline]
+    pub fn no_change(&mut self) -> bool {
+        unsafe { no_change(self.0) }
+    }
 }
 
 /// Wrapper to [`VTabCursor::filter`] arguments, the values
@@ -742,6 +746,13 @@ impl Values<'_> {
             }
             FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
         })
+    }
+
+    /// True if the column is unchanged in an UPDATE against a virtual table.
+    #[inline]
+    #[must_use]
+    pub fn no_change(&self, idx: usize) -> bool {
+        unsafe { ffi::sqlite3_value_nochange(self.args[idx]) != 0 }
     }
 
     // `sqlite3_value_type` returns `SQLITE_NULL` for pointer.
