@@ -878,7 +878,7 @@ mod test {
         Ok(value / 2f64)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_function_half() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_scalar_function(
@@ -893,7 +893,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_remove_function() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_scalar_function(
@@ -934,7 +934,7 @@ mod test {
         Ok(is_match)
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_function_regexp_with_auxiliary() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch(
@@ -963,7 +963,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_varargs_function() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_scalar_function(
@@ -993,7 +993,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_get_aux_type_checking() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_scalar_function("example", 2, FunctionFlags::default(), |ctx| {
@@ -1046,7 +1046,7 @@ mod test {
         }
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_sum() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_aggregate_function(
@@ -1072,7 +1072,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_count() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_aggregate_function(
@@ -1105,7 +1105,7 @@ mod test {
         }
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "window")]
     fn test_window() -> Result<()> {
         use fallible_iterator::FallibleIterator;
@@ -1148,7 +1148,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_sub_type() -> Result<()> {
         fn test_getsubtype(ctx: &Context<'_>) -> Result<i32> {
             Ok(ctx.get_subtype(0) as i32)

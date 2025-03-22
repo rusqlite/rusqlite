@@ -196,7 +196,7 @@ mod test {
     use crate::{Connection, Result};
     use std::rc::Rc;
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_array_module() -> Result<()> {
         let db = Connection::open_in_memory()?;
         array::load_module(&db)?;
