@@ -91,15 +91,12 @@ from_value!(non_zero std::num::NonZeroU32);
 // `i128` needs in `Into<Value>`, but it's probably fine for the moment, and not
 // worth adding another case to Value.
 #[cfg(feature = "i128_blob")]
-#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 from_value!(i128);
 
 #[cfg(feature = "i128_blob")]
-#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 from_value!(non_zero std::num::NonZeroI128);
 
 #[cfg(feature = "uuid")]
-#[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
 from_value!(uuid::Uuid);
 
 impl ToSql for ToSqlOutput<'_> {
@@ -200,15 +197,12 @@ to_sql_self!(std::num::NonZeroU16);
 to_sql_self!(std::num::NonZeroU32);
 
 #[cfg(feature = "i128_blob")]
-#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 to_sql_self!(i128);
 
 #[cfg(feature = "i128_blob")]
-#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 to_sql_self!(std::num::NonZeroI128);
 
 #[cfg(feature = "uuid")]
-#[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
 to_sql_self!(uuid::Uuid);
 
 macro_rules! to_sql_self_fallible(

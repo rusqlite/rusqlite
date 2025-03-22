@@ -124,7 +124,6 @@ from_sql_integral!(non_zero std::num::NonZeroI16, i16);
 from_sql_integral!(non_zero std::num::NonZeroI32, i32);
 from_sql_integral!(non_zero std::num::NonZeroI64, i64);
 #[cfg(feature = "i128_blob")]
-#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 from_sql_integral!(non_zero std::num::NonZeroI128, i128);
 
 from_sql_integral!(non_zero std::num::NonZeroUsize, usize);
