@@ -790,6 +790,7 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
+    #[allow(clippy::result_large_err)]
     #[inline]
     pub fn close(self) -> Result<(), (Self, Error)> {
         self.flush_prepared_statement_cache();
