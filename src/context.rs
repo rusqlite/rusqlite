@@ -81,3 +81,9 @@ pub(super) unsafe fn set_result(
         }
     }
 }
+
+#[inline]
+#[must_use]
+pub(super) unsafe fn no_change(ctx: *mut sqlite3_context) -> bool {
+    ffi::sqlite3_vtab_nochange(ctx) != 0
+}
