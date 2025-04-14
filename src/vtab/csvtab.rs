@@ -346,7 +346,11 @@ mod test {
     use crate::{Connection, Result};
     use fallible_iterator::FallibleIterator;
 
-    #[test]
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
+    #[rusqlite_test_helper::test]
     fn test_csv_module() -> Result<()> {
         let db = Connection::open_in_memory()?;
         csvtab::load_module(&db)?;
@@ -368,7 +372,11 @@ mod test {
         db.execute_batch("DROP TABLE vtab")
     }
 
-    #[test]
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
+    #[rusqlite_test_helper::test]
     fn test_csv_cursor() -> Result<()> {
         let db = Connection::open_in_memory()?;
         csvtab::load_module(&db)?;
