@@ -3,7 +3,7 @@ use std::str;
 use crate::{Error, Result, Statement};
 
 /// Information about a column of a SQLite query.
-#[cfg(feature = "column_decltype")]
+#[cfg(any(feature = "column_decltype", feature = "column_metadata"))]
 #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
 #[derive(Debug)]
 pub struct Column<'stmt> {
@@ -11,7 +11,7 @@ pub struct Column<'stmt> {
     decl_type: Option<&'stmt str>,
 }
 
-#[cfg(feature = "column_decltype")]
+#[cfg(any(feature = "column_decltype", feature = "column_metadata"))]
 #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
 impl Column<'_> {
     /// Returns the name of the column.
@@ -26,6 +26,42 @@ impl Column<'_> {
     #[must_use]
     pub fn decl_type(&self) -> Option<&str> {
         self.decl_type
+    }
+}
+
+#[cfg(feature = "column_metadata")]
+#[derive(Debug)]
+pub struct ColumnMetadata<'stmt> {
+    name: &'stmt str,
+    database_name: Option<&'stmt str>,
+    table_name: Option<&'stmt str>,
+    origin_name: Option<&'stmt str>,
+}
+
+#[cfg(feature = "column_metadata")]
+impl ColumnMetadata<'_> {
+    #[inline]
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.name
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn database_name(&self) -> Option<&str> {
+        self.database_name
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn table_name(&self) -> Option<&str> {
+        self.table_name
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn origin_name(&self) -> Option<&str> {
+        self.origin_name
     }
 }
 
@@ -157,6 +193,34 @@ impl Statement<'_> {
             cols.push(Column { name, decl_type });
         }
         cols
+    }
+
+    #[cfg(feature = "column_metadata")]
+    pub fn columns_with_metadata(&self) -> Vec<ColumnMetadata> {
+        let n = self.column_count();
+        let mut col_mets = Vec::with_capacity(n);
+        for i in 0..n {
+            let name = self.column_name_unwrap(i);
+            let db_slice = self.stmt.column_database_name(i);
+            let tbl_slice = self.stmt.column_table_name(i);
+            let origin_slice = self.stmt.column_origin_name(i);
+            col_mets.push(ColumnMetadata {
+                name,
+                database_name: db_slice.map(|s| {
+                    s.to_str()
+                        .expect("Invalid UTF-8 sequence in column db name")
+                }),
+                table_name: tbl_slice.map(|s| {
+                    s.to_str()
+                        .expect("Invalid UTF-8 sequence in column table name")
+                }),
+                origin_name: origin_slice.map(|s| {
+                    s.to_str()
+                        .expect("Invalid UTF-8 sequence in column origin name")
+                }),
+            })
+        }
+        col_mets
     }
 }
 
