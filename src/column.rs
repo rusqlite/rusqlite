@@ -266,23 +266,20 @@ mod test {
 
         let col_mets = query.columns_with_metadata();
         for col in &col_mets {
-            assert_eq!(&col.database_name.map(str::to_lowercase), &Some("main".to_owned()));
-            assert_eq!(&col.table_name.map(str::to_lowercase), &Some("sqlite_master".to_owned()));
+            assert_eq!(&col.database_name, &Some("main"));
+            assert_eq!(&col.table_name, &Some("sqlite_master"));
         }
 
-        let col_origins: Vec<Option<String>> = col_mets
-            .iter()
-            .map(|col| col.origin_name.map(str::to_lowercase))
-            .collect();
+        let col_origins: Vec<Option<&str>> = col_mets.iter().map(|col| col.origin_name).collect();
 
         assert_eq!(
             &col_origins[..5],
             &[
-                Some("type".to_owned()),
-                Some("name".to_owned()),
-                Some("tbl_name".to_owned()),
-                Some("rootpage".to_owned()),
-                Some("sql".to_owned()),
+                Some("type"),
+                Some("name"),
+                Some("tbl_name"),
+                Some("rootpage"),
+                Some("sql"),
             ]
         );
 
