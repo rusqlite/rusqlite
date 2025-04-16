@@ -195,10 +195,10 @@ impl Statement<'_> {
         cols
     }
 
-    // Returns the names of the database, table, and row from which
-    // each column of this query's results originate.
-    //
-    // Computed or otherwise derived columns will have None values for these fields.
+    /// Returns the names of the database, table, and row from which
+    /// each column of this query's results originate.
+    ///
+    /// Computed or otherwise derived columns will have None values for these fields.
     #[cfg(feature = "column_metadata")]
     pub fn columns_with_metadata(&self) -> Vec<ColumnMetadata> {
         let n = self.column_count();
@@ -264,15 +264,23 @@ mod test {
     #[cfg(feature = "column_metadata")]
     fn test_columns_with_metadata() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        let query = db.prepare("SELECT * FROM sqlite_master")?;
+        let query = db.prepare("SELECT *, 1 FROM sqlite_master")?;
 
         let col_mets = query.columns_with_metadata();
-        for col in &col_mets {
-            assert_eq!(&col.database_name, &Some("main"));
-            assert_eq!(&col.table_name, &Some("sqlite_master"));
+
+        assert_eq!(col_mets.len(), 6);
+
+        for col in col_mets.iter().take(5) {
+            assert_eq!(&col.database_name(), &Some("main"));
+            assert_eq!(&col.table_name(), &Some("sqlite_master"));
         }
 
-        let col_origins: Vec<Option<&str>> = col_mets.iter().map(|col| col.origin_name).collect();
+        assert!(col_mets[5].database_name().is_none());
+        assert!(col_mets[5].table_name().is_none());
+        assert!(col_mets[5].origin_name().is_none());
+
+
+        let col_origins: Vec<Option<&str>> = col_mets.iter().map(|col| col.origin_name()).collect();
 
         assert_eq!(
             &col_origins[..5],
