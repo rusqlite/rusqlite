@@ -1,5 +1,8 @@
-use super::{Type, Value};
-use crate::types::{FromSqlError, FromSqlResult};
+use super::{ToSql, ToSqlOutput, Type, Value};
+use crate::{
+    types::{FromSqlError, FromSqlResult},
+    Result,
+};
 
 /// A non-owning [dynamic type value](http://sqlite.org/datatype3.html). Typically, the
 /// memory backing this value is owned by SQLite.
@@ -204,6 +207,12 @@ where
             Some(x) => x.into(),
             None => ValueRef::Null,
         }
+    }
+}
+
+impl ToSql for ValueRef<'_> {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::Borrowed(*self))
     }
 }
 
