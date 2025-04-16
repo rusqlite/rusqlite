@@ -26,6 +26,7 @@ bundled_bindings = []
 loadable_extension = ["prettyplease", "quote", "syn"]
 # sqlite3_unlock_notify >= 3.6.12
 unlock_notify = []
+column_metadata = []
 # 3.13.0
 preupdate_hook = ["buildtime_bindgen"]
 # 3.13.0

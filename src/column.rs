@@ -257,6 +257,39 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "column_metadata")]
+    fn test_columns_with_metadata() -> Result<()> {
+        use super::Column;
+
+        let db = Connection::open_in_memory()?;
+        let query = db.prepare("SELECT * FROM sqlite_master")?;
+
+        let col_mets = query.columns_with_metadata();
+        for col in &col_mets {
+            assert_eq!(&col.database_name.map(str::to_lowercase), &Some("main".to_owned()));
+            assert_eq!(&col.table_name.map(str::to_lowercase), &Some("sqlite_master".to_owned()));
+        }
+
+        let col_origins: Vec<Option<String>> = col_mets
+            .iter()
+            .map(|col| col.origin_name.map(str::to_lowercase))
+            .collect();
+
+        assert_eq!(
+            &col_origins[..5],
+            &[
+                Some("type".to_owned()),
+                Some("name".to_owned()),
+                Some("tbl_name".to_owned()),
+                Some("rootpage".to_owned()),
+                Some("sql".to_owned()),
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_column_name_in_error() -> Result<()> {
         use crate::{types::Type, Error};
         let db = Connection::open_in_memory()?;
