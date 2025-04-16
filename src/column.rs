@@ -195,6 +195,10 @@ impl Statement<'_> {
         cols
     }
 
+    // Returns the names of the database, table, and row from which
+    // each column of this query's results originate.
+    //
+    // Computed or otherwise derived columns will have None values for these fields.
     #[cfg(feature = "column_metadata")]
     pub fn columns_with_metadata(&self) -> Vec<ColumnMetadata> {
         let n = self.column_count();
@@ -259,8 +263,6 @@ mod test {
     #[test]
     #[cfg(feature = "column_metadata")]
     fn test_columns_with_metadata() -> Result<()> {
-        use super::Column;
-
         let db = Connection::open_in_memory()?;
         let query = db.prepare("SELECT * FROM sqlite_master")?;
 
