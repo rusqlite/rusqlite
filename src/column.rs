@@ -3,7 +3,7 @@ use std::str;
 use crate::{Error, Result, Statement};
 
 /// Information about a column of a SQLite query.
-#[cfg(any(feature = "column_decltype", feature = "column_metadata"))]
+#[cfg(feature = "column_decltype")]
 #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
 #[derive(Debug)]
 pub struct Column<'stmt> {
@@ -11,7 +11,7 @@ pub struct Column<'stmt> {
     decl_type: Option<&'stmt str>,
 }
 
-#[cfg(any(feature = "column_decltype", feature = "column_metadata"))]
+#[cfg(feature = "column_decltype")]
 #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
 impl Column<'_> {
     /// Returns the name of the column.
