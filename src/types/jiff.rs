@@ -78,10 +78,10 @@ impl ToSql for Timestamp {
 /// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") into `Timestamp`.
 impl FromSql for Timestamp {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        Ok(value
+        value
             .as_str()?
             .parse::<Timestamp>()
-            .map_err(|err| FromSqlError::Other(Box::new(err)))?)
+            .map_err(|err| FromSqlError::Other(Box::new(err)))
     }
 }
 
