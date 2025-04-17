@@ -292,6 +292,13 @@ impl ToSql for Value {
     }
 }
 
+impl ToSql for ValueRef<'_> {
+    #[inline]
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::Borrowed(*self))
+    }
+}
+
 impl<T: ToSql> ToSql for Option<T> {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
@@ -319,6 +326,11 @@ mod test {
             ToSqlOutput::Owned(Value::Null).to_sql()?,
             ToSqlOutput::Borrowed(ValueRef::Null)
         );
+        assert_eq!(
+            ValueRef::Null.to_sql()?,
+            ToSqlOutput::Borrowed(ValueRef::Null)
+        );
+        assert_eq!(Value::Null.to_sql()?, ToSqlOutput::Borrowed(ValueRef::Null));
         Ok(())
     }
 
@@ -348,6 +360,12 @@ mod test {
         is_to_sql::<std::num::NonZeroU32>();
         is_to_sql::<std::num::NonZeroU64>();
         is_to_sql::<std::num::NonZeroUsize>();
+    }
+
+    #[test]
+    fn test_value_types() {
+        is_to_sql::<Value>();
+        is_to_sql::<ValueRef>();
     }
 
     #[test]
