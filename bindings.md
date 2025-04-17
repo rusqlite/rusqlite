@@ -120,9 +120,9 @@
 - [X] `sqlite3_column_count`
 - [ ] `sqlite3_data_count`
 - [X] `sqlite3_column_name`
-- [ ] `sqlite3_column_database_name`
-- [ ] `sqlite3_column_table_name`
-- [ ] `sqlite3_column_origin_name`
+- [X] `sqlite3_column_database_name`
+- [X] `sqlite3_column_table_name`
+- [X] `sqlite3_column_origin_name`
 - [X] `sqlite3_column_decltype`
 
 - [X] `sqlite3_step`
