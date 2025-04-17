@@ -29,6 +29,7 @@ impl Column<'_> {
     }
 }
 
+/// Metadata about the origin of a column of a SQLite query
 #[cfg(feature = "column_metadata")]
 #[derive(Debug)]
 pub struct ColumnMetadata<'stmt> {
@@ -42,24 +43,28 @@ pub struct ColumnMetadata<'stmt> {
 impl ColumnMetadata<'_> {
     #[inline]
     #[must_use]
+    /// Returns the name of the column in the query results
     pub fn name(&self) -> &str {
         self.name
     }
 
     #[inline]
     #[must_use]
+    /// Returns the database name from which the column originates
     pub fn database_name(&self) -> Option<&str> {
         self.database_name
     }
 
     #[inline]
     #[must_use]
+    /// Returns the table name from which the column originates
     pub fn table_name(&self) -> Option<&str> {
         self.table_name
     }
 
     #[inline]
     #[must_use]
+    /// Returns the column name from which the column originates
     pub fn origin_name(&self) -> Option<&str> {
         self.origin_name
     }

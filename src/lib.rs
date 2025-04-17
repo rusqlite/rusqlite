@@ -77,6 +77,8 @@ pub use crate::bind::BindIndex;
 pub use crate::cache::CachedStatement;
 #[cfg(feature = "column_decltype")]
 pub use crate::column::Column;
+#[cfg(feature = "column_metadata")]
+pub use crate::column::ColumnMetadata;
 pub use crate::error::{to_sqlite_error, Error};
 pub use crate::ffi::ErrorCode;
 #[cfg(feature = "load_extension")]
