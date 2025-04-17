@@ -279,7 +279,6 @@ mod test {
         assert!(col_mets[5].table_name().is_none());
         assert!(col_mets[5].origin_name().is_none());
 
-
         let col_origins: Vec<Option<&str>> = col_mets.iter().map(|col| col.origin_name()).collect();
 
         assert_eq!(
