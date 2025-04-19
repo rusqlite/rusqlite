@@ -567,9 +567,11 @@ impl Connection {
         let mut sql = sql;
         while !sql.is_empty() {
             let stmt = self.prepare(sql)?;
-            if !stmt.stmt.is_null() && stmt.step()? && cfg!(feature = "extra_check") {
+            if !stmt.stmt.is_null() && stmt.step()? {
                 // Some PRAGMA may return rows
-                return Err(Error::ExecuteReturnedResults);
+                if false {
+                    return Err(Error::ExecuteReturnedResults);
+                }
             }
             let tail = stmt.stmt.tail();
             if tail == 0 || tail >= sql.len() {
@@ -1510,6 +1512,8 @@ mod test {
         db.execute_batch("UPDATE foo SET x = 3 WHERE x < 3")?;
 
         db.execute_batch("INVALID SQL").unwrap_err();
+
+        db.execute_batch("PRAGMA locking_mode = EXCLUSIVE")?;
         Ok(())
     }
 
@@ -1557,6 +1561,11 @@ mod test {
         match err {
             Error::MultipleStatement => (),
             _ => panic!("Unexpected error: {err}"),
+        }
+        if false {
+            // FIXME
+            db.execute("CREATE TABLE t(c); -- bim", [])
+                .expect("Tail comment should be ignored");
         }
     }
 
@@ -2192,7 +2201,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(not(feature = "extra_check"))]
     fn test_alter_table() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x(t);")?;
