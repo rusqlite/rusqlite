@@ -672,7 +672,6 @@ impl Statement<'_> {
     #[cfg(feature = "extra_check")]
     #[inline]
     fn check_update(&self) -> Result<()> {
-        // sqlite3_column_count works for DML but not for DDL (ie ALTER)
         if self.column_count() > 0 && self.stmt.readonly() {
             return Err(Error::ExecuteReturnedResults);
         }
@@ -721,23 +720,6 @@ impl Statement<'_> {
     #[inline]
     pub fn readonly(&self) -> bool {
         self.stmt.readonly()
-    }
-
-    #[cfg(feature = "extra_check")]
-    #[inline]
-    pub(crate) fn check_no_tail(&self) -> Result<()> {
-        if self.stmt.has_tail() {
-            Err(Error::MultipleStatement)
-        } else {
-            Ok(())
-        }
-    }
-
-    #[cfg(not(feature = "extra_check"))]
-    #[inline]
-    #[expect(clippy::unnecessary_wraps)]
-    pub(crate) fn check_no_tail(&self) -> Result<()> {
-        Ok(())
     }
 
     /// Safety: This is unsafe, because using `sqlite3_stmt` after the

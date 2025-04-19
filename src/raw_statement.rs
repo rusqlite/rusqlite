@@ -251,12 +251,6 @@ impl RawStatement {
     }
 
     #[inline]
-    #[cfg(feature = "extra_check")]
-    pub fn has_tail(&self) -> bool {
-        self.tail != 0
-    }
-
-    #[inline]
     pub fn tail(&self) -> usize {
         self.tail
     }

@@ -634,8 +634,10 @@ impl Connection {
     /// or if the underlying SQLite call fails.
     #[inline]
     pub fn execute<P: Params>(&self, sql: &str, params: P) -> Result<usize> {
-        self.prepare(sql)
-            .and_then(|mut stmt| stmt.check_no_tail().and_then(|()| stmt.execute(params)))
+        self.prepare(sql).and_then(|mut stmt| {
+            self.check_no_tail(&stmt, sql)
+                .and_then(|()| stmt.execute(params))
+        })
     }
 
     /// Returns the path to the database file, if one exists and is known.
@@ -702,8 +704,18 @@ impl Connection {
         F: FnOnce(&Row<'_>) -> Result<T>,
     {
         let mut stmt = self.prepare(sql)?;
-        stmt.check_no_tail()?;
+        self.check_no_tail(&stmt, sql)?;
         stmt.query_row(params, f)
+    }
+
+    #[inline]
+    fn check_no_tail(&self, stmt: &Statement, sql: &str) -> Result<()> {
+        let tail = stmt.stmt.tail();
+        if tail != 0 && !self.prepare(&sql[tail..])?.stmt.is_null() {
+            Err(Error::MultipleStatement)
+        } else {
+            Ok(())
+        }
     }
 
     // https://sqlite.org/tclsqlite.html#onecolumn
@@ -745,7 +757,7 @@ impl Connection {
         E: From<Error>,
     {
         let mut stmt = self.prepare(sql)?;
-        stmt.check_no_tail()?;
+        self.check_no_tail(&stmt, sql)?;
         let mut rows = stmt.query(params)?;
 
         rows.get_expected_row().map_err(E::from).and_then(f)
@@ -1549,7 +1561,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "extra_check")]
     fn test_execute_multiple() {
         let db = checked_memory_handle();
         let err = db
@@ -1562,11 +1573,8 @@ mod test {
             Error::MultipleStatement => (),
             _ => panic!("Unexpected error: {err}"),
         }
-        if false {
-            // FIXME
-            db.execute("CREATE TABLE t(c); -- bim", [])
-                .expect("Tail comment should be ignored");
-        }
+        db.execute("CREATE TABLE t(c); -- bim", [])
+            .expect("Tail comment should be ignored");
     }
 
     #[test]
@@ -1679,9 +1687,12 @@ mod test {
             err => panic!("Unexpected error {err}"),
         }
 
-        let bad_query_result = db.query_row("NOT A PROPER QUERY; test123", [], |_| Ok(()));
+        db.query_row("NOT A PROPER QUERY; test123", [], |_| Ok(()))
+            .unwrap_err();
 
-        bad_query_result.unwrap_err();
+        db.query_row("SELECT 1; SELECT 2;", [], |_| Ok(()))
+            .unwrap_err();
+
         Ok(())
     }
 
