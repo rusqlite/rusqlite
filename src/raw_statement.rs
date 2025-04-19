@@ -10,7 +10,6 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct RawStatement {
     ptr: *mut ffi::sqlite3_stmt,
-    tail: usize,
     // Cached indices of named parameters, computed on the fly.
     cache: ParamIndexCache,
     // Cached SQL (trimmed) that we use as the key when we're in the statement
@@ -28,10 +27,9 @@ pub struct RawStatement {
 
 impl RawStatement {
     #[inline]
-    pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt, tail: usize) -> Self {
+    pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt) -> Self {
         Self {
             ptr: stmt,
-            tail,
             cache: ParamIndexCache::default(),
             statement_cache_key: None,
         }
@@ -248,11 +246,6 @@ impl RawStatement {
     #[inline]
     pub fn get_status(&self, status: StatementStatus, reset: bool) -> i32 {
         unsafe { stmt_status(self.ptr, status, reset) }
-    }
-
-    #[inline]
-    pub fn tail(&self) -> usize {
-        self.tail
     }
 
     #[inline]
