@@ -10,7 +10,6 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct RawStatement {
     ptr: *mut ffi::sqlite3_stmt,
-    tail: usize,
     // Cached indices of named parameters, computed on the fly.
     cache: ParamIndexCache,
     // Cached SQL (trimmed) that we use as the key when we're in the statement
@@ -28,10 +27,9 @@ pub struct RawStatement {
 
 impl RawStatement {
     #[inline]
-    pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt, tail: usize) -> Self {
+    pub unsafe fn new(stmt: *mut ffi::sqlite3_stmt) -> Self {
         Self {
             ptr: stmt,
-            tail,
             cache: ParamIndexCache::default(),
             statement_cache_key: None,
         }
@@ -66,6 +64,45 @@ impl RawStatement {
     #[inline]
     pub fn column_type(&self, idx: usize) -> c_int {
         unsafe { ffi::sqlite3_column_type(self.ptr, idx as c_int) }
+    }
+
+    #[inline]
+    #[cfg(feature = "column_metadata")]
+    pub fn column_database_name(&self, idx: usize) -> Option<&CStr> {
+        unsafe {
+            let db_name = ffi::sqlite3_column_database_name(self.ptr, idx as c_int);
+            if db_name.is_null() {
+                None
+            } else {
+                Some(CStr::from_ptr(db_name))
+            }
+        }
+    }
+
+    #[inline]
+    #[cfg(feature = "column_metadata")]
+    pub fn column_table_name(&self, idx: usize) -> Option<&CStr> {
+        unsafe {
+            let tbl_name = ffi::sqlite3_column_table_name(self.ptr, idx as c_int);
+            if tbl_name.is_null() {
+                None
+            } else {
+                Some(CStr::from_ptr(tbl_name))
+            }
+        }
+    }
+
+    #[inline]
+    #[cfg(feature = "column_metadata")]
+    pub fn column_origin_name(&self, idx: usize) -> Option<&CStr> {
+        unsafe {
+            let origin_name = ffi::sqlite3_column_origin_name(self.ptr, idx as c_int);
+            if origin_name.is_null() {
+                None
+            } else {
+                Some(CStr::from_ptr(origin_name))
+            }
+        }
     }
 
     #[inline]
@@ -209,17 +246,6 @@ impl RawStatement {
     #[inline]
     pub fn get_status(&self, status: StatementStatus, reset: bool) -> i32 {
         unsafe { stmt_status(self.ptr, status, reset) }
-    }
-
-    #[inline]
-    #[cfg(feature = "extra_check")]
-    pub fn has_tail(&self) -> bool {
-        self.tail != 0
-    }
-
-    #[inline]
-    pub fn tail(&self) -> usize {
-        self.tail
     }
 
     #[inline]

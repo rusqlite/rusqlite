@@ -1,7 +1,7 @@
 [package]
 name = "rusqlite"
 # Note: Update version in README.md when you change this.
-version = "0.33.0"
+version = "0.35.0"
 authors = ["The rusqlite developers"]
 edition = "2021"
 description = "Ergonomic wrapper for SQLite"
@@ -76,6 +76,7 @@ in_gecko = ["modern_sqlite", "libsqlite3-sys/in_gecko"]
 bundled-windows = ["libsqlite3-sys/bundled-windows"]
 # Build bundled sqlite with -fsanitize=address
 with-asan = ["libsqlite3-sys/with-asan"]
+column_metadata = ["libsqlite3-sys/column_metadata"]
 column_decltype = []
 wasm32-wasi-vfs = ["libsqlite3-sys/wasm32-wasi-vfs"]
 # 3.23.0
@@ -92,6 +93,7 @@ modern-full = [
     "modern_sqlite",
     "chrono",
     "collation",
+    "column_metadata",
     "column_decltype",
     "csvtab",
     "extra_check",
@@ -151,7 +153,7 @@ bencher = "0.1"
 
 [dependencies.libsqlite3-sys]
 path = "libsqlite3-sys"
-version = "0.31.0"
+version = "0.33.0"
 
 [[test]]
 name = "auto_ext"

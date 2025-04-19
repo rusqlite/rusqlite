@@ -3,7 +3,7 @@ use std::ffi::CStr;
 
 mod sealed {
     use std::ffi::CStr;
-    /// This trait exists just to ensure that the only impls of `trait Params`
+    /// This trait exists just to ensure that the only impls of `trait BindIndex`
     /// that are allowed are ones in this crate.
     pub trait Sealed {}
     impl Sealed for usize {}

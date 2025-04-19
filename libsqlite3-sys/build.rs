@@ -256,6 +256,9 @@ mod build_bundled {
         if cfg!(feature = "unlock_notify") {
             cfg.flag("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
         }
+        if cfg!(feature = "column_metadata") {
+            cfg.flag("-DSQLITE_ENABLE_COLUMN_METADATA");
+        }
         if cfg!(feature = "preupdate_hook") {
             cfg.flag("-DSQLITE_ENABLE_PREUPDATE_HOOK");
         }

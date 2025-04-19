@@ -208,7 +208,7 @@ impl InnerConnection {
         conn: &'a Connection,
         sql: &str,
         flags: PrepFlags,
-    ) -> Result<Statement<'a>> {
+    ) -> Result<(Statement<'a>, usize)> {
         let mut c_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
         let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
         let mut c_tail: *const c_char = ptr::null();
@@ -246,9 +246,10 @@ impl InnerConnection {
                 n as usize
             }
         };
-        Ok(Statement::new(conn, unsafe {
-            RawStatement::new(c_stmt, tail)
-        }))
+        Ok((
+            Statement::new(conn, unsafe { RawStatement::new(c_stmt) }),
+            tail,
+        ))
     }
 
     #[inline]

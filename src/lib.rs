@@ -77,6 +77,8 @@ pub use crate::bind::BindIndex;
 pub use crate::cache::CachedStatement;
 #[cfg(feature = "column_decltype")]
 pub use crate::column::Column;
+#[cfg(feature = "column_metadata")]
+pub use crate::column::ColumnMetadata;
 pub use crate::error::{to_sqlite_error, Error};
 pub use crate::ffi::ErrorCode;
 #[cfg(feature = "load_extension")]
@@ -556,12 +558,16 @@ impl Connection {
     pub fn execute_batch(&self, sql: &str) -> Result<()> {
         let mut sql = sql;
         while !sql.is_empty() {
-            let stmt = self.prepare(sql)?;
-            if !stmt.stmt.is_null() && stmt.step()? && cfg!(feature = "extra_check") {
+            let (stmt, tail) = self
+                .db
+                .borrow_mut()
+                .prepare(self, sql, PrepFlags::default())?;
+            if !stmt.stmt.is_null() && stmt.step()? {
                 // Some PRAGMA may return rows
-                return Err(Error::ExecuteReturnedResults);
+                if false {
+                    return Err(Error::ExecuteReturnedResults);
+                }
             }
-            let tail = stmt.stmt.tail();
             if tail == 0 || tail >= sql.len() {
                 break;
             }
@@ -622,8 +628,7 @@ impl Connection {
     /// or if the underlying SQLite call fails.
     #[inline]
     pub fn execute<P: Params>(&self, sql: &str, params: P) -> Result<usize> {
-        self.prepare(sql)
-            .and_then(|mut stmt| stmt.check_no_tail().and_then(|()| stmt.execute(params)))
+        self.prepare(sql).and_then(|mut stmt| stmt.execute(params))
     }
 
     /// Returns the path to the database file, if one exists and is known.
@@ -696,7 +701,6 @@ impl Connection {
         F: FnOnce(&Row<'_>) -> Result<T>,
     {
         let mut stmt = self.prepare(sql)?;
-        stmt.check_no_tail()?;
         stmt.query_row(params, f)
     }
 
@@ -739,7 +743,6 @@ impl Connection {
         E: From<Error>,
     {
         let mut stmt = self.prepare(sql)?;
-        stmt.check_no_tail()?;
         let mut rows = stmt.query(params)?;
 
         rows.get_expected_row().map_err(E::from).and_then(f)
@@ -776,7 +779,12 @@ impl Connection {
     /// or if the underlying SQLite call fails.
     #[inline]
     pub fn prepare_with_flags(&self, sql: &str, flags: PrepFlags) -> Result<Statement<'_>> {
-        self.db.borrow_mut().prepare(self, sql, flags)
+        let (stmt, tail) = self.db.borrow_mut().prepare(self, sql, flags)?;
+        if tail != 0 && !self.prepare(&sql[tail..])?.stmt.is_null() {
+            Err(Error::MultipleStatement)
+        } else {
+            Ok(stmt)
+        }
     }
 
     /// Close the SQLite connection.
@@ -788,6 +796,7 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
+    #[allow(clippy::result_large_err)]
     #[inline]
     pub fn close(self) -> Result<(), (Self, Error)> {
         self.flush_prepared_statement_cache();
@@ -1139,8 +1148,11 @@ impl<'conn> fallible_iterator::FallibleIterator for Batch<'conn, '_> {
     fn next(&mut self) -> Result<Option<Statement<'conn>>> {
         while self.tail < self.sql.len() {
             let sql = &self.sql[self.tail..];
-            let next = self.conn.prepare(sql)?;
-            let tail = next.stmt.tail();
+            let (next, tail) =
+                self.conn
+                    .db
+                    .borrow_mut()
+                    .prepare(self.conn, sql, PrepFlags::default())?;
             if tail == 0 {
                 self.tail = self.sql.len();
             } else {
@@ -1505,6 +1517,8 @@ mod test {
         db.execute_batch("UPDATE foo SET x = 3 WHERE x < 3")?;
 
         db.execute_batch("INVALID SQL").unwrap_err();
+
+        db.execute_batch("PRAGMA locking_mode = EXCLUSIVE")?;
         Ok(())
     }
 
@@ -1540,7 +1554,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "extra_check")]
     fn test_execute_multiple() {
         let db = checked_memory_handle();
         let err = db
@@ -1553,6 +1566,8 @@ mod test {
             Error::MultipleStatement => (),
             _ => panic!("Unexpected error: {err}"),
         }
+        db.execute("CREATE TABLE t(c); -- bim", [])
+            .expect("Tail comment should be ignored");
     }
 
     #[test]
@@ -1665,9 +1680,12 @@ mod test {
             err => panic!("Unexpected error {err}"),
         }
 
-        let bad_query_result = db.query_row("NOT A PROPER QUERY; test123", [], |_| Ok(()));
+        db.query_row("NOT A PROPER QUERY; test123", [], |_| Ok(()))
+            .unwrap_err();
 
-        bad_query_result.unwrap_err();
+        db.query_row("SELECT 1; SELECT 2;", [], |_| Ok(()))
+            .unwrap_err();
+
         Ok(())
     }
 
@@ -2187,7 +2205,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(not(feature = "extra_check"))]
     fn test_alter_table() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x(t);")?;

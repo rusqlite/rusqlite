@@ -29,6 +29,47 @@ impl Column<'_> {
     }
 }
 
+/// Metadata about the origin of a column of a SQLite query
+#[cfg(feature = "column_metadata")]
+#[derive(Debug)]
+pub struct ColumnMetadata<'stmt> {
+    name: &'stmt str,
+    database_name: Option<&'stmt str>,
+    table_name: Option<&'stmt str>,
+    origin_name: Option<&'stmt str>,
+}
+
+#[cfg(feature = "column_metadata")]
+impl ColumnMetadata<'_> {
+    #[inline]
+    #[must_use]
+    /// Returns the name of the column in the query results
+    pub fn name(&self) -> &str {
+        self.name
+    }
+
+    #[inline]
+    #[must_use]
+    /// Returns the database name from which the column originates
+    pub fn database_name(&self) -> Option<&str> {
+        self.database_name
+    }
+
+    #[inline]
+    #[must_use]
+    /// Returns the table name from which the column originates
+    pub fn table_name(&self) -> Option<&str> {
+        self.table_name
+    }
+
+    #[inline]
+    #[must_use]
+    /// Returns the column name from which the column originates
+    pub fn origin_name(&self) -> Option<&str> {
+        self.origin_name
+    }
+}
+
 impl Statement<'_> {
     /// Get all the column names in the result set of the prepared statement.
     ///
@@ -158,6 +199,38 @@ impl Statement<'_> {
         }
         cols
     }
+
+    /// Returns the names of the database, table, and row from which
+    /// each column of this query's results originate.
+    ///
+    /// Computed or otherwise derived columns will have None values for these fields.
+    #[cfg(feature = "column_metadata")]
+    pub fn columns_with_metadata(&self) -> Vec<ColumnMetadata> {
+        let n = self.column_count();
+        let mut col_mets = Vec::with_capacity(n);
+        for i in 0..n {
+            let name = self.column_name_unwrap(i);
+            let db_slice = self.stmt.column_database_name(i);
+            let tbl_slice = self.stmt.column_table_name(i);
+            let origin_slice = self.stmt.column_origin_name(i);
+            col_mets.push(ColumnMetadata {
+                name,
+                database_name: db_slice.map(|s| {
+                    s.to_str()
+                        .expect("Invalid UTF-8 sequence in column db name")
+                }),
+                table_name: tbl_slice.map(|s| {
+                    s.to_str()
+                        .expect("Invalid UTF-8 sequence in column table name")
+                }),
+                origin_name: origin_slice.map(|s| {
+                    s.to_str()
+                        .expect("Invalid UTF-8 sequence in column origin name")
+                }),
+            })
+        }
+        col_mets
+    }
 }
 
 #[cfg(test)]
@@ -189,6 +262,41 @@ mod test {
                 Some("text".to_owned()),
             ]
         );
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "column_metadata")]
+    fn test_columns_with_metadata() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let query = db.prepare("SELECT *, 1 FROM sqlite_master")?;
+
+        let col_mets = query.columns_with_metadata();
+
+        assert_eq!(col_mets.len(), 6);
+
+        for col in col_mets.iter().take(5) {
+            assert_eq!(&col.database_name(), &Some("main"));
+            assert_eq!(&col.table_name(), &Some("sqlite_master"));
+        }
+
+        assert!(col_mets[5].database_name().is_none());
+        assert!(col_mets[5].table_name().is_none());
+        assert!(col_mets[5].origin_name().is_none());
+
+        let col_origins: Vec<Option<&str>> = col_mets.iter().map(|col| col.origin_name()).collect();
+
+        assert_eq!(
+            &col_origins[..5],
+            &[
+                Some("type"),
+                Some("name"),
+                Some("tbl_name"),
+                Some("rootpage"),
+                Some("sql"),
+            ]
+        );
+
         Ok(())
     }
 

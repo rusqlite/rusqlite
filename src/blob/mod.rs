@@ -327,7 +327,7 @@ impl io::Read for Blob<'_> {
                 self.pos += n;
                 n as usize
             })
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+            .map_err(io::Error::other)
     }
 }
 
@@ -357,7 +357,7 @@ impl io::Write for Blob<'_> {
                 self.pos += n;
                 n as usize
             })
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))
+            .map_err(io::Error::other)
     }
 
     #[inline]

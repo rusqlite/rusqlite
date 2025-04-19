@@ -1,6 +1,9 @@
 //! Convert some `jiff` types.
 
-use jiff::civil::{Date, DateTime, Time};
+use jiff::{
+    civil::{Date, DateTime, Time},
+    Timestamp,
+};
 use std::str::FromStr;
 
 use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
@@ -63,10 +66,32 @@ impl FromSql for DateTime {
     }
 }
 
+/// UTC time => UTC RFC3339 timestamp
+/// ("YYYY-MM-DDTHH:MM:SS.SSSZ").
+impl ToSql for Timestamp {
+    #[inline]
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::from(self.to_string()))
+    }
+}
+
+/// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") into `Timestamp`.
+impl FromSql for Timestamp {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value
+            .as_str()?
+            .parse::<Timestamp>()
+            .map_err(|err| FromSqlError::Other(Box::new(err)))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{Connection, Result};
-    use jiff::civil::{Date, DateTime, Time};
+    use jiff::{
+        civil::{Date, DateTime, Time},
+        Timestamp,
+    };
 
     fn checked_memory_handle() -> Result<Connection> {
         let db = Connection::open_in_memory()?;
@@ -132,6 +157,61 @@ mod test {
 
         let r: Result<DateTime> = db.one_column("SELECT '2023-02-29T00:00:00'");
         assert!(r.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_timestamp() -> Result<()> {
+        let db = checked_memory_handle()?;
+        let ts: Timestamp = "2016-02-23 23:56:04Z".parse().unwrap();
+
+        db.execute("INSERT INTO foo (t) VALUES (?1)", [ts])?;
+
+        let s: String = db.one_column("SELECT t FROM foo")?;
+        assert_eq!("2016-02-23T23:56:04Z", s);
+        let v: Timestamp = db.one_column("SELECT t FROM foo")?;
+        assert_eq!(ts, v);
+
+        let r: Result<Timestamp> = db.one_column("SELECT '2023-02-29T00:00:00Z'");
+        assert!(r.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_timestamp_various_formats() -> Result<()> {
+        let db = checked_memory_handle()?;
+        // Copied over from a test in `src/types/time.rs`. The format numbers
+        // come from <https://sqlite.org/lang_datefunc.html>.
+        let tests = vec![
+            // Rfc3339
+            "2013-10-07T08:23:19.123456789Z",
+            "2013-10-07 08:23:19.123456789Z",
+            // Format 2
+            "2013-10-07 08:23Z",
+            "2013-10-07 08:23+04:00",
+            // Format 3
+            "2013-10-07 08:23:19Z",
+            "2013-10-07 08:23:19+04:00",
+            // Format 4
+            "2013-10-07 08:23:19.123Z",
+            "2013-10-07 08:23:19.123+04:00",
+            // Format 5
+            "2013-10-07T08:23Z",
+            "2013-10-07T08:23+04:00",
+            // Format 6
+            "2013-10-07T08:23:19Z",
+            "2013-10-07T08:23:19+04:00",
+            // Format 7
+            "2013-10-07T08:23:19.123Z",
+            "2013-10-07T08:23:19.123+04:00",
+        ];
+
+        for string in tests {
+            let expected: Timestamp = string.parse().unwrap();
+            let result: Timestamp = db.query_row("SELECT ?1", [string], |r| r.get(0))?;
+            assert_eq!(result, expected);
+        }
         Ok(())
     }
 }
