@@ -711,9 +711,6 @@ impl Connection {
     #[inline]
     fn check_no_tail(&self, stmt: &Statement, sql: &str) -> Result<()> {
         let tail = stmt.stmt.tail();
-        if tail != 0 {
-            eprintln!("TAIL: {}", &sql[tail..]);
-        }
         if tail != 0 && !self.prepare(&sql[tail..])?.stmt.is_null() {
             Err(Error::MultipleStatement)
         } else {
