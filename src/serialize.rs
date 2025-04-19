@@ -5,7 +5,7 @@ use std::ptr::NonNull;
 
 use crate::error::{error_from_handle, error_from_sqlite_code};
 use crate::ffi;
-use crate::{Connection, DatabaseName, Error, Result};
+use crate::{Connection, Error, Name, Result};
 
 /// Shared (SQLITE_SERIALIZE_NOCOPY) serialized database
 pub struct SharedData<'conn> {
@@ -65,7 +65,7 @@ impl Deref for Data<'_> {
 
 impl Connection {
     /// Serialize a database.
-    pub fn serialize(&self, schema: DatabaseName) -> Result<Data> {
+    pub fn serialize<N: Name>(&self, schema: N) -> Result<Data> {
         let schema = schema.as_cstr()?;
         let mut sz = 0;
         let mut ptr: *mut u8 = unsafe {
@@ -96,9 +96,9 @@ impl Connection {
     }
 
     /// Deserialize from stream
-    pub fn deserialize_read_exact<R: std::io::Read>(
+    pub fn deserialize_read_exact<N: Name, R: std::io::Read>(
         &mut self,
-        schema: DatabaseName<'_>,
+        schema: N,
         mut read: R,
         sz: usize,
         read_only: bool,
@@ -123,11 +123,7 @@ impl Connection {
     }
 
     /// Deserialize `include_bytes` as a read only database
-    pub fn deserialize_bytes(
-        &mut self,
-        schema: DatabaseName<'_>,
-        data: &'static [u8],
-    ) -> Result<()> {
+    pub fn deserialize_bytes<N: Name>(&mut self, schema: N, data: &'static [u8]) -> Result<()> {
         let sz = data.len().try_into().unwrap();
         self.deserialize_(
             schema,
@@ -138,9 +134,9 @@ impl Connection {
     }
 
     /// Deserialize a database.
-    pub fn deserialize(
+    pub fn deserialize<N: Name>(
         &mut self,
-        schema: DatabaseName<'_>,
+        schema: N,
         data: OwnedData,
         read_only: bool,
     ) -> Result<()> {
@@ -165,9 +161,9 @@ impl Connection {
         }*/
     }
 
-    fn deserialize_(
+    fn deserialize_<N: Name>(
         &mut self,
-        schema: DatabaseName<'_>,
+        schema: N,
         data: *mut u8,
         sz: ffi::sqlite_int64,
         flags: std::ffi::c_uint,
@@ -186,6 +182,7 @@ impl Connection {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::DatabaseName;
 
     #[test]
     fn serialize() -> Result<()> {

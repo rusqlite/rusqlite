@@ -490,7 +490,7 @@ mod test {
     fn test_blob_in_bufreader() -> Result<()> {
         let (db, rowid) = db_with_test_blob()?;
 
-        let mut blob = db.blob_open(c"main", c"test", c"content", rowid, false)?;
+        let mut blob = db.blob_open(DatabaseName::Main, c"test", c"content", rowid, false)?;
         assert_eq!(8, blob.write(b"one\ntwo\n").unwrap());
 
         blob.reopen(rowid)?;

@@ -153,7 +153,6 @@ mod version;
 pub mod vtab;
 
 pub(crate) mod util;
-pub(crate) use util::SmallCString;
 
 // Number of cached prepared statements we'll hold on to.
 const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
@@ -301,8 +300,9 @@ unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
     CStr::from_ptr(errmsg).to_string_lossy().into_owned()
 }
 
-fn str_to_cstring(s: &str) -> Result<SmallCString> {
-    Ok(SmallCString::new(s)?)
+#[cfg(any(feature = "functions", feature = "vtab", test))]
+fn str_to_cstring(s: &str) -> Result<util::SmallCString> {
+    Ok(util::SmallCString::new(s)?)
 }
 
 /// Returns `Ok((string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT))`
@@ -640,12 +640,12 @@ impl Connection {
     /// likely to be more robust.
     #[inline]
     pub fn path(&self) -> Option<&str> {
-        let db_name = DatabaseName::Main.as_cstr().unwrap();
-        let db_filename = unsafe { ffi::sqlite3_db_filename(self.handle(), db_name.as_ptr()) };
-        if db_filename.is_null() {
-            None
-        } else {
-            unsafe { CStr::from_ptr(db_filename) }.to_str().ok()
+        unsafe {
+            crate::inner_connection::db_filename(
+                std::marker::PhantomData,
+                self.handle(),
+                DatabaseName::Main,
+            )
         }
     }
 

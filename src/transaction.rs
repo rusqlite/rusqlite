@@ -1,4 +1,4 @@
-use crate::{Connection, Name, Result};
+use crate::{Connection, Result};
 use std::ops::Deref;
 
 /// Options for transaction behavior. See [BEGIN
@@ -512,7 +512,10 @@ impl Connection {
     /// Determine the transaction state of a database
     #[cfg(feature = "modern_sqlite")] // 3.37.0
     #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-    pub fn transaction_state<N: Name>(&self, db_name: Option<N>) -> Result<TransactionState> {
+    pub fn transaction_state<N: crate::Name>(
+        &self,
+        db_name: Option<N>,
+    ) -> Result<TransactionState> {
         self.db.borrow().txn_state(db_name)
     }
 

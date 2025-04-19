@@ -136,7 +136,7 @@ impl ConnRef<'_> {
     }
     /// the path to the database file, if one exists and is known.
     pub fn db_filename(&self) -> Option<&str> {
-        unsafe { crate::inner_connection::db_filename(self.ptr, DatabaseName::Main) }
+        unsafe { crate::inner_connection::db_filename(self.phantom, self.ptr, DatabaseName::Main) }
     }
 }
 
