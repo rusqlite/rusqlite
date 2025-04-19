@@ -44,7 +44,7 @@ use std::time::Duration;
 use crate::ffi;
 
 use crate::error::error_from_handle;
-use crate::{Connection, DatabaseName, Result};
+use crate::{Connection, DatabaseName, Name, Result};
 
 impl Connection {
     /// Back up the `name` database to the given
@@ -61,9 +61,9 @@ impl Connection {
     ///
     /// Will return `Err` if the destination path cannot be opened
     /// or if the backup fails.
-    pub fn backup<P: AsRef<Path>>(
+    pub fn backup<N: Name, P: AsRef<Path>>(
         &self,
-        name: DatabaseName<'_>,
+        name: N,
         dst_path: P,
         progress: Option<fn(Progress)>,
     ) -> Result<()> {
@@ -99,9 +99,9 @@ impl Connection {
     ///
     /// Will return `Err` if the destination path cannot be opened
     /// or if the restore fails.
-    pub fn restore<P: AsRef<Path>, F: Fn(Progress)>(
+    pub fn restore<N: Name, P: AsRef<Path>, F: Fn(Progress)>(
         &mut self,
-        name: DatabaseName<'_>,
+        name: N,
         src_path: P,
         progress: Option<F>,
     ) -> Result<()> {
@@ -201,11 +201,11 @@ impl Backup<'_, '_> {
     ///
     /// Will return `Err` if the underlying `sqlite3_backup_init` call returns
     /// `NULL`.
-    pub fn new_with_names<'a, 'b>(
+    pub fn new_with_names<'a, 'b, F: Name, T: Name>(
         from: &'a Connection,
-        from_name: DatabaseName<'_>,
+        from_name: F,
         to: &'b mut Connection,
-        to_name: DatabaseName<'_>,
+        to_name: T,
     ) -> Result<Backup<'a, 'b>> {
         let to_name = to_name.as_cstr()?;
         let from_name = from_name.as_cstr()?;

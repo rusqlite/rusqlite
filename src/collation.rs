@@ -7,12 +7,12 @@ use std::slice;
 
 use crate::ffi;
 use crate::util::free_boxed_value;
-use crate::{str_to_cstring, Connection, InnerConnection, Result};
+use crate::{Connection, InnerConnection, Name, Result};
 
 impl Connection {
     /// Add or modify a collation.
     #[inline]
-    pub fn create_collation<C>(&self, collation_name: &str, x_compare: C) -> Result<()>
+    pub fn create_collation<C, N: Name>(&self, collation_name: N, x_compare: C) -> Result<()>
     where
         C: Fn(&str, &str) -> Ordering + Send + 'static,
     {
@@ -29,7 +29,7 @@ impl Connection {
 
     /// Remove collation.
     #[inline]
-    pub fn remove_collation(&self, collation_name: &str) -> Result<()> {
+    pub fn remove_collation<N: Name>(&self, collation_name: N) -> Result<()> {
         self.db.borrow_mut().remove_collation(collation_name)
     }
 }
@@ -57,7 +57,7 @@ impl InnerConnection {
     ///     Ok(())
     /// }
     /// ```
-    fn create_collation<C>(&mut self, collation_name: &str, x_compare: C) -> Result<()>
+    fn create_collation<C, N: Name>(&mut self, collation_name: N, x_compare: C) -> Result<()>
     where
         C: Fn(&str, &str) -> Ordering + Send + 'static,
     {
@@ -99,7 +99,7 @@ impl InnerConnection {
         }
 
         let boxed_f: *mut C = Box::into_raw(Box::new(x_compare));
-        let c_name = str_to_cstring(collation_name)?;
+        let c_name = collation_name.as_cstr()?;
         let flags = ffi::SQLITE_UTF8;
         let r = unsafe {
             ffi::sqlite3_create_collation_v2(
@@ -163,8 +163,8 @@ impl InnerConnection {
     }
 
     #[inline]
-    fn remove_collation(&mut self, collation_name: &str) -> Result<()> {
-        let c_name = str_to_cstring(collation_name)?;
+    fn remove_collation<N: Name>(&mut self, collation_name: N) -> Result<()> {
+        let c_name = collation_name.as_cstr()?;
         let r = unsafe {
             ffi::sqlite3_create_collation_v2(
                 self.db(),
@@ -193,7 +193,7 @@ mod test {
     #[test]
     fn test_unicase() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        db.create_collation("unicase", unicase_compare)?;
+        db.create_collation(c"unicase", unicase_compare)?;
         collate(db)
     }
 
@@ -227,7 +227,7 @@ mod test {
     #[test]
     fn remove_collation() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        db.create_collation("unicase", unicase_compare)?;
-        db.remove_collation("unicase")
+        db.create_collation(c"unicase", unicase_compare)?;
+        db.remove_collation(c"unicase")
     }
 }
