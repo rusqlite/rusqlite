@@ -135,7 +135,7 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
 * `i128_blob` allows storing values of type `i128` type in SQLite databases. Internally, the data is stored as a 16 byte big-endian blob, with the most significant bit flipped, which allows ordering and comparison between different blobs storing i128s to work as expected.
 * `uuid` allows storing and retrieving `Uuid` values from the [`uuid`](https://docs.rs/uuid/) crate using blobs.
 * [`session`](https://sqlite.org/sessionintro.html), Session module extension. Requires `buildtime_bindgen` feature. (Implies `hooks`.)
-* `extra_check` fail when a query passed to execute is readonly or has a column count > 0.
+* `extra_check` fails when a query passed to `execute` has tail or is readonly and has a column count > 0.
 * `column_decltype` provides `columns()` method for Statements and Rows; omit if linking to a version of SQLite/SQLCipher compiled with `-DSQLITE_OMIT_DECLTYPE`.
 * `collation` exposes [`sqlite3_create_collation_v2`](https://sqlite.org/c3ref/create_collation.html).
 * `serialize` exposes [`sqlite3_serialize`](http://sqlite.org/c3ref/serialize.html) (3.23.0).
@@ -256,4 +256,3 @@ Both of these are quite permissive, have no bearing on the license of the code i
 ## Minimum supported Rust version (MSRV)
 
 Latest stable Rust version at the time of release. It might compile with older versions.
-
