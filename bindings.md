@@ -6,7 +6,7 @@
 - [ ] `sqlite3_compileoption_used`
 - [ ] `sqlite3_compileoption_get`
 
-- [-] `sqlite3_threadsafe`
+- [X] `sqlite3_threadsafe` (internal use only)
 
 - [X] `sqlite3_close`
 - [ ] `sqlite3_close_v2`
@@ -18,10 +18,10 @@
 - [ ] `sqlite3_os_init`
 - [ ] `sqlite3_os_end`
 
-- [-] `sqlite3_config`
+- [-] `sqlite3_config` (callback)
 - [X] `sqlite3_db_config`
 
-- [-] `sqlite3_extended_result_codes`
+- [X] `sqlite3_extended_result_codes` (not public, internal use only)
 
 - [X] `sqlite3_last_insert_rowid`
 - [ ] `sqlite3_set_last_insert_rowid`
@@ -36,7 +36,7 @@
 
 - [ ] `sqlite3_complete`
 
-- [X] `sqlite3_busy_handler`
+- [X] `sqlite3_busy_handler` (callback)
 - [X] `sqlite3_busy_timeout`
 
 - [ ] `sqlite3_get_table`
@@ -46,11 +46,11 @@
 - [ ] `sqlite3_snprintf`
 - [ ] `sqlite3_vsnprintf`
 
-- [-] `sqlite3_malloc`
+- [X] `sqlite3_malloc` (not public, internal use only)
 - [ ] `sqlite3_malloc64`
 - [ ] `sqlite3_realloc`
 - [ ] `sqlite3_realloc64`
-- [-] `sqlite3_free`
+- [X] `sqlite3_free` (not public, internal use only)
 - [ ] `sqlite3_msize`
 
 - [ ] `sqlite3_memory_used`
@@ -58,11 +58,11 @@
 
 - [ ] `sqlite3_randomness`
 
-- [X] `sqlite3_set_authorizer`
-- [X] `sqlite3_trace`
-- [X] `sqlite3_profile`
-- [X] `sqlite3_trace_v2`
-- [X] `sqlite3_progress_handler`
+- [X] `sqlite3_set_authorizer` (callback)
+- [X] `sqlite3_trace` deprecated (callback)
+- [X] `sqlite3_profile` deprecated (callback)
+- [X] `sqlite3_trace_v2` (callback)
+- [X] `sqlite3_progress_handler` (callback)
 
 - [ ] `sqlite3_open`
 - [X] `sqlite3_open_v2`
@@ -80,8 +80,8 @@
 
 - [X] `sqlite3_errcode`
 - [X] `sqlite3_extended_errcode`
-- [-] `sqlite3_errmsg`
-- [-] `sqlite3_errstr`
+- [X] `sqlite3_errmsg` (not public, internal use only)
+- [X] `sqlite3_errstr` (not public, internal use only)
 - [X] `sqlite3_error_offset`
 
 - [X] `sqlite3_limit`
@@ -90,7 +90,7 @@
 - [X] `sqlite3_prepare_v2`
 - [X] `sqlite3_prepare_v3`
 
-- [-] `sqlite3_sql`
+- [X] `sqlite3_sql` (not public, internal use only)
 - [X] `sqlite3_expanded_sql`
 - [ ] `sqlite3_normalized_sql`
 
@@ -108,7 +108,7 @@
 - [X] `sqlite3_bind_text`
 - [ ] `sqlite3_bind_text64`
 - [ ] `sqlite3_bind_value`
-- [-] `sqlite3_bind_pointer`
+- [X] `sqlite3_bind_pointer` (not public, internal use only)
 - [X] `sqlite3_bind_zeroblob`
 - [ ] `sqlite3_bind_zeroblob64`
 
@@ -133,23 +133,23 @@
 - [X] `sqlite3_column_int64`
 - [X] `sqlite3_column_text`
 - [X] `sqlite3_column_value`
-- [-] `sqlite3_column_bytes`
+- [X] `sqlite3_column_bytes` (not public, internal use only)
 - [X] `sqlite3_column_type`
 
 - [X] `sqlite3_finalize`
-- [-] `sqlite3_reset`
+- [X] `sqlite3_reset` (not public, internal use only)
 
 - [ ] `sqlite3_create_function`
-- [X] `sqlite3_create_function_v2`
-- [X] `sqlite3_create_window_function`
+- [X] `sqlite3_create_function_v2` (callback)
+- [X] `sqlite3_create_window_function` (callback)
 
 - [X] `sqlite3_value_blob`
 - [X] `sqlite3_value_double`
 - [ ] `sqlite3_value_int`
 - [X] `sqlite3_value_int64`
-- [-] `sqlite3_value_pointer`
+- [X] `sqlite3_value_pointer` (not public, internal use only)
 - [X] `sqlite3_value_text`
-- [-] `sqlite3_value_bytes`
+- [X] `sqlite3_value_bytes` (not public, internal use only)
 - [X] `sqlite3_value_type`
 - [ ] `sqlite3_value_numeric_type`
 - [ ] `sqlite3_value_nochange`
@@ -160,8 +160,8 @@
 - [ ] `sqlite3_value_dup`
 - [ ] `sqlite3_value_free`
 
-- [-] `sqlite3_aggregate_context`
-- [-] `sqlite3_user_data`
+- [X] `sqlite3_aggregate_context` (not public, internal use only)
+- [X] `sqlite3_user_data` (not public, internal use only)
 - [X] `sqlite3_context_db_handle`
 - [X] `sqlite3_get_auxdata`
 - [X] `sqlite3_set_auxdata`
@@ -179,32 +179,32 @@
 - [X] `sqlite3_result_int64`
 - [X] `sqlite3_result_null`
 - [X] `sqlite3_result_text`
-- [ ] `sqlite3_result_text`
+- [ ] `sqlite3_result_text64`
 - [X] `sqlite3_result_value`
-- [-] `sqlite3_result_pointer`
+- [X] `sqlite3_result_pointer` (not public, internal use only)
 - [X] `sqlite3_result_zeroblob`
 - [ ] `sqlite3_result_zeroblob64`
 - [X] `sqlite3_result_subtype`
 
 - [ ] `sqlite3_create_collation`
-- [X] `sqlite3_create_collation_v2`
-- [X] `sqlite3_collation_needed`
+- [X] `sqlite3_create_collation_v2` (callback)
+- [X] `sqlite3_collation_needed` (callback)
 
 - [ ] `sqlite3_sleep`
 
 - [X] `sqlite3_get_autocommit`
 
-- [-] `sqlite3_db_handle`
+- [X] `sqlite3_db_handle` (not public, internal use only)
 - [X] `sqlite3_db_name`
-- [-] `sqlite3_db_filename`
+- [X] `sqlite3_db_filename`
 - [X] `sqlite3_db_readonly`
 - [X] `sqlite3_txn_state`
-- [-] `sqlite3_next_stmt`
+- [X] `sqlite3_next_stmt` (not public, internal use only)
 
-- [X] `sqlite3_commit_hook`
-- [X] `sqlite3_rollback_hook`
+- [X] `sqlite3_commit_hook` (callback)
+- [X] `sqlite3_rollback_hook` (callback)
 - [ ] `sqlite3_autovacuum_pages`
-- [X] `sqlite3_update_hook`
+- [X] `sqlite3_update_hook` (callback)
 
 - [ ] `sqlite3_enable_shared_cache`
 - [ ] `sqlite3_release_memory`
@@ -245,8 +245,8 @@
 - [ ] `sqlite3_mutex_notheld`
 - [ ] `sqlite3_db_mutex`
 
-- [-] `sqlite3_file_control`
-- [-] `sqlite3_test_control`
+- [X] `sqlite3_file_control` (not public, internal use only)
+- [ ] `sqlite3_test_control`
 
 - [ ] `sqlite3_keyword_count`
 - [ ] `sqlite3_keyword_name`
@@ -271,8 +271,7 @@
 - [X] `sqlite3_backup_remaining`
 - [X] `sqlite3_backup_pagecount`
 
-- [X] `sqlite3_unlock_notify`
-- [X] `sqlite3_unlock_notify`
+- [X] `sqlite3_unlock_notify` (callback)
 
 - [ ] `sqlite3_stricmp`
 - [ ] `sqlite3_strnicmp`
@@ -281,7 +280,7 @@
 
 - [X] `sqlite3_log`
 
-- [X] `sqlite3_wal_hook`
+- [X] `sqlite3_wal_hook` (callback)
 - [X] `sqlite3_wal_autocheckpoint`
 - [X] `sqlite3_wal_checkpoint`
 - [X] `sqlite3_wal_checkpoint_v2`
@@ -302,7 +301,7 @@
 
 - [X] `sqlite3_db_cacheflush`
 
-- [X] `sqlite3_preupdate_hook`
+- [X] `sqlite3_preupdate_hook` (callback)
 - [X] `sqlite3_preupdate_old`
 - [X] `sqlite3_preupdate_count`
 - [X] `sqlite3_preupdate_depth`
