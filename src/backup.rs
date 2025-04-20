@@ -44,7 +44,7 @@ use std::time::Duration;
 use crate::ffi;
 
 use crate::error::error_from_handle;
-use crate::{Connection, DatabaseName, Name, Result};
+use crate::{Connection, Name, Result, MAIN_DB};
 
 impl Connection {
     /// Back up the `name` database to the given
@@ -69,7 +69,7 @@ impl Connection {
     ) -> Result<()> {
         use self::StepResult::{Busy, Done, Locked, More};
         let mut dst = Self::open(dst_path)?;
-        let backup = Backup::new_with_names(self, name, &mut dst, DatabaseName::Main)?;
+        let backup = Backup::new_with_names(self, name, &mut dst, MAIN_DB)?;
 
         let mut r = More;
         while r == More {
@@ -107,7 +107,7 @@ impl Connection {
     ) -> Result<()> {
         use self::StepResult::{Busy, Done, Locked, More};
         let src = Self::open(src_path)?;
-        let restore = Backup::new_with_names(&src, DatabaseName::Main, self, name)?;
+        let restore = Backup::new_with_names(&src, MAIN_DB, self, name)?;
 
         let mut r = More;
         let mut busy_count = 0_i32;
@@ -189,7 +189,7 @@ impl Backup<'_, '_> {
     /// `NULL`.
     #[inline]
     pub fn new<'a, 'b>(from: &'a Connection, to: &'b mut Connection) -> Result<Backup<'a, 'b>> {
-        Backup::new_with_names(from, DatabaseName::Main, to, DatabaseName::Main)
+        Backup::new_with_names(from, MAIN_DB, to, MAIN_DB)
     }
 
     /// Attempt to create a new handle that will allow backups from the
@@ -321,7 +321,7 @@ impl Drop for Backup<'_, '_> {
 #[cfg(test)]
 mod test {
     use super::{Backup, Progress};
-    use crate::{Connection, DatabaseName, Result};
+    use crate::{Connection, Result, MAIN_DB, TEMP_DB};
     use std::time::Duration;
 
     #[test]
@@ -334,10 +334,10 @@ mod test {
 
         fn progress(_: Progress) {}
 
-        src.backup(DatabaseName::Main, path.as_path(), Some(progress))?;
+        src.backup(MAIN_DB, path.as_path(), Some(progress))?;
 
         let mut dst = Connection::open_in_memory()?;
-        dst.restore(DatabaseName::Main, path, Some(progress))?;
+        dst.restore(MAIN_DB, path, Some(progress))?;
 
         Ok(())
     }
@@ -385,8 +385,7 @@ mod test {
         let mut dst = Connection::open_in_memory()?;
 
         {
-            let backup =
-                Backup::new_with_names(&src, DatabaseName::Temp, &mut dst, DatabaseName::Main)?;
+            let backup = Backup::new_with_names(&src, TEMP_DB, &mut dst, MAIN_DB)?;
             backup.step(-1)?;
         }
 
@@ -396,8 +395,7 @@ mod test {
         src.execute_batch("INSERT INTO foo VALUES(43)")?;
 
         {
-            let backup =
-                Backup::new_with_names(&src, DatabaseName::Temp, &mut dst, DatabaseName::Main)?;
+            let backup = Backup::new_with_names(&src, TEMP_DB, &mut dst, MAIN_DB)?;
             backup.run_to_completion(5, Duration::from_millis(250), None)?;
         }
 
@@ -419,12 +417,7 @@ mod test {
         let mut dst = Connection::open_in_memory()?;
 
         {
-            let backup = Backup::new_with_names(
-                &src,
-                DatabaseName::Attached("my_attached"),
-                &mut dst,
-                DatabaseName::Main,
-            )?;
+            let backup = Backup::new_with_names(&src, c"my_attached", &mut dst, MAIN_DB)?;
             backup.step(-1)?;
         }
 
@@ -434,12 +427,7 @@ mod test {
         src.execute_batch("INSERT INTO foo VALUES(43)")?;
 
         {
-            let backup = Backup::new_with_names(
-                &src,
-                DatabaseName::Attached("my_attached"),
-                &mut dst,
-                DatabaseName::Main,
-            )?;
+            let backup = Backup::new_with_names(&src, c"my_attached", &mut dst, MAIN_DB)?;
             backup.run_to_completion(5, Duration::from_millis(250), None)?;
         }
 

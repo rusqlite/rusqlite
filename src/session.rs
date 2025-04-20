@@ -14,7 +14,7 @@ use crate::error::{check, error_from_sqlite_code, Error};
 use crate::ffi;
 use crate::hooks::Action;
 use crate::types::ValueRef;
-use crate::{errmsg_to_string, Connection, DatabaseName, Name, Result};
+use crate::{errmsg_to_string, Connection, Name, Result, MAIN_DB};
 
 // https://sqlite.org/session.html
 
@@ -32,7 +32,7 @@ impl Session<'_> {
     /// Create a new session object
     #[inline]
     pub fn new(db: &Connection) -> Result<Session<'_>> {
-        Session::new_with_name(db, DatabaseName::Main)
+        Session::new_with_name(db, MAIN_DB)
     }
 
     /// Create a new session object

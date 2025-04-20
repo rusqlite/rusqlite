@@ -787,12 +787,9 @@ mod test {
     #[cfg(feature = "modern_sqlite")]
     fn txn_state() -> Result<()> {
         use super::TransactionState;
-        use crate::DatabaseName;
+        use crate::MAIN_DB;
         let db = Connection::open_in_memory()?;
-        assert_eq!(
-            TransactionState::None,
-            db.transaction_state(Some(DatabaseName::Main))?
-        );
+        assert_eq!(TransactionState::None, db.transaction_state(Some(MAIN_DB))?);
         assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
         db.execute_batch("BEGIN")?;
         assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);

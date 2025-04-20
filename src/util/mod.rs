@@ -13,7 +13,7 @@ pub(crate) unsafe extern "C" fn free_boxed_value<T>(p: *mut std::ffi::c_void) {
     drop(Box::from_raw(p.cast::<T>()));
 }
 
-use crate::{DatabaseName, Result};
+use crate::Result;
 use std::ffi::CStr;
 
 pub enum Named<'a> {
@@ -33,7 +33,7 @@ impl std::ops::Deref for Named<'_> {
 
 /// Database, table, column, collation, function, module, vfs name
 pub trait Name: std::fmt::Debug {
-    /// FIXME
+    /// As C string
     fn as_cstr(&self) -> Result<Named>;
 }
 impl Name for &str {
@@ -46,17 +46,5 @@ impl Name for &CStr {
     #[inline]
     fn as_cstr(&self) -> Result<Named> {
         Ok(Named::C(self))
-    }
-}
-
-impl Name for DatabaseName<'_> {
-    #[inline]
-    fn as_cstr(&self) -> Result<Named> {
-        Ok(match self {
-            DatabaseName::Main => Named::C(c"main"),
-            DatabaseName::Temp => Named::C(c"temp"),
-            DatabaseName::Attached(s) => s.as_cstr()?,
-            DatabaseName::C(s) => Named::C(s),
-        })
     }
 }

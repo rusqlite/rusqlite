@@ -9,7 +9,7 @@ use std::ptr;
 use std::time::Duration;
 
 use super::ffi;
-use crate::{Connection, DatabaseName, StatementStatus};
+use crate::{Connection, StatementStatus, MAIN_DB};
 
 /// Set up the process-wide SQLite error logging callback.
 ///
@@ -136,7 +136,7 @@ impl ConnRef<'_> {
     }
     /// the path to the database file, if one exists and is known.
     pub fn db_filename(&self) -> Option<&str> {
-        unsafe { crate::inner_connection::db_filename(self.phantom, self.ptr, DatabaseName::Main) }
+        unsafe { crate::inner_connection::db_filename(self.phantom, self.ptr, MAIN_DB) }
     }
 }
 

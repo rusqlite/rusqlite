@@ -344,37 +344,10 @@ fn path_to_cstring(p: &Path) -> Result<CString> {
     Ok(CString::new(s)?)
 }
 
-/// Name for a database within a SQLite connection.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum DatabaseName<'a> {
-    /// The main database.
-    Main,
-    /// The temporary database (e.g., any "CREATE TEMPORARY TABLE" tables).
-    Temp,
-    /// A database that has been attached via "ATTACH DATABASE ...".
-    Attached(&'a str),
-    /// Optim
-    C(&'a CStr),
-}
-
-/// Shorthand for [`DatabaseName::Main`].
-pub const MAIN_DB: DatabaseName<'static> = DatabaseName::Main;
-
-/// Shorthand for [`DatabaseName::Temp`].
-pub const TEMP_DB: DatabaseName<'static> = DatabaseName::Temp;
-
-impl DatabaseName<'_> {
-    #[cfg(feature = "hooks")]
-    pub(crate) fn from_cstr(cs: &CStr) -> DatabaseName<'_> {
-        if cs == c"main" {
-            DatabaseName::Main
-        } else if cs == c"temp" {
-            DatabaseName::Temp
-        } else {
-            DatabaseName::C(cs)
-        }
-    }
-}
+/// Shorthand for `Main` database.
+pub const MAIN_DB: &'static CStr = c"main";
+/// Shorthand for `Temp` database.
+pub const TEMP_DB: &'static CStr = c"temp";
 
 /// A connection to a SQLite database.
 pub struct Connection {
@@ -641,11 +614,7 @@ impl Connection {
     #[inline]
     pub fn path(&self) -> Option<&str> {
         unsafe {
-            crate::inner_connection::db_filename(
-                std::marker::PhantomData,
-                self.handle(),
-                DatabaseName::Main,
-            )
+            crate::inner_connection::db_filename(std::marker::PhantomData, self.handle(), MAIN_DB)
         }
     }
 

@@ -182,13 +182,13 @@ impl Connection {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::DatabaseName;
+    use crate::MAIN_DB;
 
     #[test]
     fn serialize() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
-        let data = db.serialize(DatabaseName::Main)?;
+        let data = db.serialize(MAIN_DB)?;
         let Data::Owned(data) = data else {
             panic!("expected OwnedData")
         };
@@ -200,11 +200,11 @@ mod test {
     fn deserialize_read_exact() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
-        let data = db.serialize(DatabaseName::Main)?;
+        let data = db.serialize(MAIN_DB)?;
 
         let mut dst = Connection::open_in_memory()?;
         let read = data.deref();
-        dst.deserialize_read_exact(DatabaseName::Main, read, read.len(), false)?;
+        dst.deserialize_read_exact(MAIN_DB, read, read.len(), false)?;
         dst.execute("DELETE FROM x", [])?;
         Ok(())
     }
@@ -213,7 +213,7 @@ mod test {
     fn deserialize_bytes() -> Result<()> {
         let data = b"";
         let mut dst = Connection::open_in_memory()?;
-        dst.deserialize_bytes(DatabaseName::Main, data)?;
+        dst.deserialize_bytes(MAIN_DB, data)?;
         Ok(())
     }
 
@@ -221,13 +221,13 @@ mod test {
     fn deserialize() -> Result<()> {
         let src = Connection::open_in_memory()?;
         src.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
-        let data = src.serialize(DatabaseName::Main)?;
+        let data = src.serialize(MAIN_DB)?;
         let Data::Owned(data) = data else {
             panic!("expected OwnedData")
         };
 
         let mut dst = Connection::open_in_memory()?;
-        dst.deserialize(DatabaseName::Main, data, false)?;
+        dst.deserialize(MAIN_DB, data, false)?;
         dst.execute("DELETE FROM x", [])?;
         Ok(())
     }
