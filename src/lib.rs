@@ -345,9 +345,9 @@ fn path_to_cstring(p: &Path) -> Result<CString> {
 }
 
 /// Shorthand for `Main` database.
-pub const MAIN_DB: &'static CStr = c"main";
+pub const MAIN_DB: &CStr = c"main";
 /// Shorthand for `Temp` database.
-pub const TEMP_DB: &'static CStr = c"temp";
+pub const TEMP_DB: &CStr = c"temp";
 
 /// A connection to a SQLite database.
 pub struct Connection {
