@@ -7,7 +7,7 @@ use std::ptr;
 
 use crate::ffi;
 
-use crate::{error::decode_result_raw, Connection, DatabaseName, InnerConnection, Result};
+use crate::{error::decode_result_raw, Connection, InnerConnection, Result};
 
 #[cfg(feature = "preupdate_hook")]
 pub use preupdate_hook::*;
@@ -487,8 +487,8 @@ impl Wal {
     }
 
     /// Name of the database that was written to
-    pub fn name(&self) -> DatabaseName<'_> {
-        DatabaseName::from_cstr(unsafe { CStr::from_ptr(self.db_name) })
+    pub fn name(&self) -> &CStr {
+        unsafe { CStr::from_ptr(self.db_name) }
     }
 }
 
@@ -854,7 +854,7 @@ unsafe fn expect_optional_utf8<'a>(
 #[cfg(test)]
 mod test {
     use super::Action;
-    use crate::{Connection, DatabaseName, Result};
+    use crate::{Connection, Result, MAIN_DB};
     use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]
@@ -993,7 +993,7 @@ mod test {
 
         static CALLED: AtomicBool = AtomicBool::new(false);
         db.wal_hook(Some(|wal, pages| {
-            assert_eq!(wal.name(), DatabaseName::Main);
+            assert_eq!(wal.name(), MAIN_DB);
             assert!(pages > 0);
             CALLED.swap(true, Ordering::Relaxed);
             wal.checkpoint()

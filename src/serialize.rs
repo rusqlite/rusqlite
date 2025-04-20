@@ -5,7 +5,7 @@ use std::ptr::NonNull;
 
 use crate::error::{error_from_handle, error_from_sqlite_code};
 use crate::ffi;
-use crate::{Connection, DatabaseName, Error, Result};
+use crate::{Connection, Error, Name, Result};
 
 /// Shared (SQLITE_SERIALIZE_NOCOPY) serialized database
 pub struct SharedData<'conn> {
@@ -65,7 +65,7 @@ impl Deref for Data<'_> {
 
 impl Connection {
     /// Serialize a database.
-    pub fn serialize(&self, schema: DatabaseName) -> Result<Data> {
+    pub fn serialize<N: Name>(&self, schema: N) -> Result<Data> {
         let schema = schema.as_cstr()?;
         let mut sz = 0;
         let mut ptr: *mut u8 = unsafe {
@@ -96,9 +96,9 @@ impl Connection {
     }
 
     /// Deserialize from stream
-    pub fn deserialize_read_exact<R: std::io::Read>(
+    pub fn deserialize_read_exact<N: Name, R: std::io::Read>(
         &mut self,
-        schema: DatabaseName<'_>,
+        schema: N,
         mut read: R,
         sz: usize,
         read_only: bool,
@@ -123,11 +123,7 @@ impl Connection {
     }
 
     /// Deserialize `include_bytes` as a read only database
-    pub fn deserialize_bytes(
-        &mut self,
-        schema: DatabaseName<'_>,
-        data: &'static [u8],
-    ) -> Result<()> {
+    pub fn deserialize_bytes<N: Name>(&mut self, schema: N, data: &'static [u8]) -> Result<()> {
         let sz = data.len().try_into().unwrap();
         self.deserialize_(
             schema,
@@ -138,9 +134,9 @@ impl Connection {
     }
 
     /// Deserialize a database.
-    pub fn deserialize(
+    pub fn deserialize<N: Name>(
         &mut self,
-        schema: DatabaseName<'_>,
+        schema: N,
         data: OwnedData,
         read_only: bool,
     ) -> Result<()> {
@@ -165,9 +161,9 @@ impl Connection {
         }*/
     }
 
-    fn deserialize_(
+    fn deserialize_<N: Name>(
         &mut self,
-        schema: DatabaseName<'_>,
+        schema: N,
         data: *mut u8,
         sz: ffi::sqlite_int64,
         flags: std::ffi::c_uint,
@@ -186,12 +182,13 @@ impl Connection {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::MAIN_DB;
 
     #[test]
     fn serialize() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
-        let data = db.serialize(DatabaseName::Main)?;
+        let data = db.serialize(MAIN_DB)?;
         let Data::Owned(data) = data else {
             panic!("expected OwnedData")
         };
@@ -203,11 +200,11 @@ mod test {
     fn deserialize_read_exact() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
-        let data = db.serialize(DatabaseName::Main)?;
+        let data = db.serialize(MAIN_DB)?;
 
         let mut dst = Connection::open_in_memory()?;
         let read = data.deref();
-        dst.deserialize_read_exact(DatabaseName::Main, read, read.len(), false)?;
+        dst.deserialize_read_exact(MAIN_DB, read, read.len(), false)?;
         dst.execute("DELETE FROM x", [])?;
         Ok(())
     }
@@ -216,7 +213,7 @@ mod test {
     fn deserialize_bytes() -> Result<()> {
         let data = b"";
         let mut dst = Connection::open_in_memory()?;
-        dst.deserialize_bytes(DatabaseName::Main, data)?;
+        dst.deserialize_bytes(MAIN_DB, data)?;
         Ok(())
     }
 
@@ -224,13 +221,13 @@ mod test {
     fn deserialize() -> Result<()> {
         let src = Connection::open_in_memory()?;
         src.execute_batch("CREATE TABLE x AS SELECT 'data'")?;
-        let data = src.serialize(DatabaseName::Main)?;
+        let data = src.serialize(MAIN_DB)?;
         let Data::Owned(data) = data else {
             panic!("expected OwnedData")
         };
 
         let mut dst = Connection::open_in_memory()?;
-        dst.deserialize(DatabaseName::Main, data, false)?;
+        dst.deserialize(MAIN_DB, data, false)?;
         dst.execute("DELETE FROM x", [])?;
         Ok(())
     }

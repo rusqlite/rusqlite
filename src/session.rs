@@ -14,7 +14,7 @@ use crate::error::{check, error_from_sqlite_code, Error};
 use crate::ffi;
 use crate::hooks::Action;
 use crate::types::ValueRef;
-use crate::{errmsg_to_string, str_to_cstring, Connection, DatabaseName, Result};
+use crate::{errmsg_to_string, Connection, Name, Result, MAIN_DB};
 
 // https://sqlite.org/session.html
 
@@ -32,15 +32,12 @@ impl Session<'_> {
     /// Create a new session object
     #[inline]
     pub fn new(db: &Connection) -> Result<Session<'_>> {
-        Session::new_with_name(db, DatabaseName::Main)
+        Session::new_with_name(db, MAIN_DB)
     }
 
     /// Create a new session object
     #[inline]
-    pub fn new_with_name<'conn>(
-        db: &'conn Connection,
-        name: DatabaseName<'_>,
-    ) -> Result<Session<'conn>> {
+    pub fn new_with_name<N: Name>(db: &Connection, name: N) -> Result<Session<'_>> {
         let name = name.as_cstr()?;
 
         let db = db.db.borrow_mut().db;
@@ -97,13 +94,9 @@ impl Session<'_> {
     }
 
     /// Attach a table. `None` means all tables.
-    pub fn attach(&mut self, table: Option<&str>) -> Result<()> {
-        let table = if let Some(table) = table {
-            Some(str_to_cstring(table)?)
-        } else {
-            None
-        };
-        let table = table.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+    pub fn attach<N: Name>(&mut self, table: Option<N>) -> Result<()> {
+        let cs = table.as_ref().map(N::as_cstr).transpose()?;
+        let table = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
         check(unsafe { ffi::sqlite3session_attach(self.s, table) })
     }
 
@@ -152,9 +145,9 @@ impl Session<'_> {
     }
 
     /// Load the difference between tables.
-    pub fn diff(&mut self, from: DatabaseName<'_>, table: &str) -> Result<()> {
+    pub fn diff<D: Name, N: Name>(&mut self, from: N, table: N) -> Result<()> {
         let from = from.as_cstr()?;
-        let table = str_to_cstring(table)?;
+        let table = table.as_cstr()?;
         let table = table.as_ptr();
         unsafe {
             let mut errmsg = ptr::null_mut();
@@ -785,7 +778,7 @@ mod test {
         let mut session = Session::new(&db)?;
         assert!(session.is_empty());
 
-        session.attach(None)?;
+        session.attach::<&str>(None)?;
         db.execute("INSERT INTO foo (t) VALUES (?1);", ["bar"])?;
 
         session.changeset()
@@ -799,7 +792,7 @@ mod test {
         db.execute_batch("INSERT INTO foo (t) VALUES ('bar');")?;
 
         let mut session = Session::new(&db)?;
-        session.attach(None)?;
+        session.attach::<&str>(None)?;
         db.execute("UPDATE foo SET i=100 WHERE t='bar';", [])?;
 
         session.changeset()
@@ -812,7 +805,7 @@ mod test {
         let mut session = Session::new(&db)?;
         assert!(session.is_empty());
 
-        session.attach(None)?;
+        session.attach::<&str>(None)?;
         db.execute("INSERT INTO foo (t) VALUES (?1);", ["bar"])?;
 
         let mut output = Vec::new();
@@ -936,7 +929,7 @@ mod test {
         let mut session = Session::new(&db)?;
         assert!(session.is_empty());
 
-        session.attach(None)?;
+        session.attach::<&str>(None)?;
         db.execute("INSERT INTO foo (t) VALUES (?1);", ["bar"])?;
 
         assert!(!session.is_empty());

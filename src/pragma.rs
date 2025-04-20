@@ -4,7 +4,7 @@ use std::ops::Deref;
 
 use crate::ffi;
 use crate::types::{ToSql, ToSqlOutput, ValueRef};
-use crate::{Connection, DatabaseName, Result, Row};
+use crate::{Connection, Result, Row};
 
 pub struct Sql {
     buf: String,
@@ -15,11 +15,7 @@ impl Sql {
         Self { buf: String::new() }
     }
 
-    pub fn push_pragma(
-        &mut self,
-        schema_name: Option<DatabaseName<'_>>,
-        pragma_name: &str,
-    ) -> Result<()> {
+    pub fn push_pragma(&mut self, schema_name: Option<&str>, pragma_name: &str) -> Result<()> {
         self.push_keyword("PRAGMA")?;
         self.push_space();
         if let Some(schema_name) = schema_name {
@@ -38,13 +34,8 @@ impl Sql {
         }
     }
 
-    pub fn push_schema_name(&mut self, schema_name: DatabaseName<'_>) {
-        match schema_name {
-            DatabaseName::Main => self.buf.push_str("main"),
-            DatabaseName::Temp => self.buf.push_str("temp"),
-            DatabaseName::Attached(s) => self.push_identifier(s),
-            DatabaseName::C(s) => self.push_identifier(s.to_str().expect("invalid database name")),
-        };
+    pub fn push_schema_name(&mut self, schema_name: &str) {
+        self.push_identifier(schema_name);
     }
 
     pub fn push_identifier(&mut self, s: &str) {
@@ -151,7 +142,7 @@ impl Connection {
     /// `SELECT user_version FROM pragma_user_version;`
     pub fn pragma_query_value<T, F>(
         &self,
-        schema_name: Option<DatabaseName<'_>>,
+        schema_name: Option<&str>,
         pragma_name: &str,
         f: F,
     ) -> Result<T>
@@ -169,7 +160,7 @@ impl Connection {
     /// `SELECT * FROM pragma_collation_list;`
     pub fn pragma_query<F>(
         &self,
-        schema_name: Option<DatabaseName<'_>>,
+        schema_name: Option<&str>,
         pragma_name: &str,
         mut f: F,
     ) -> Result<()>
@@ -198,7 +189,7 @@ impl Connection {
     /// `SELECT * FROM pragma_table_info(?1);`
     pub fn pragma<F, V>(
         &self,
-        schema_name: Option<DatabaseName<'_>>,
+        schema_name: Option<&str>,
         pragma_name: &str,
         pragma_value: V,
         mut f: F,
@@ -230,7 +221,7 @@ impl Connection {
     /// with this method.
     pub fn pragma_update<V>(
         &self,
-        schema_name: Option<DatabaseName<'_>>,
+        schema_name: Option<&str>,
         pragma_name: &str,
         pragma_value: V,
     ) -> Result<()>
@@ -252,7 +243,7 @@ impl Connection {
     /// Only few pragmas automatically return the updated value.
     pub fn pragma_update_and_check<F, T, V>(
         &self,
-        schema_name: Option<DatabaseName<'_>>,
+        schema_name: Option<&str>,
         pragma_name: &str,
         pragma_value: V,
         f: F,
@@ -303,7 +294,7 @@ fn is_identifier_continue(c: char) -> bool {
 mod test {
     use super::Sql;
     use crate::pragma;
-    use crate::{Connection, DatabaseName, Result};
+    use crate::{Connection, Result};
 
     #[test]
     fn pragma_query_value() -> Result<()> {
@@ -338,7 +329,7 @@ mod test {
     fn pragma_query_with_schema() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let mut user_version = -1;
-        db.pragma_query(Some(DatabaseName::Main), "user_version", |row| {
+        db.pragma_query(Some("main"), "user_version", |row| {
             user_version = row.get(0)?;
             Ok(())
         })?;
@@ -413,7 +404,7 @@ mod test {
     #[test]
     fn double_quote() {
         let mut sql = Sql::new();
-        sql.push_schema_name(DatabaseName::Attached(r#"schema";--"#));
+        sql.push_schema_name(r#"schema";--"#);
         assert_eq!(r#""schema"";--""#, sql.as_str());
     }
 

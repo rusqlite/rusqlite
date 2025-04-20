@@ -14,7 +14,7 @@ use crate::{Connection, Error, Result};
 /// Register the "vtablog" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module("vtablog", update_module::<VTabLog>(), aux)
+    conn.create_module(c"vtablog", update_module::<VTabLog>(), aux)
 }
 
 /// An instance of the vtablog virtual table

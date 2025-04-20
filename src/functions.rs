@@ -68,7 +68,7 @@ use crate::ffi::sqlite3_value;
 use crate::context::set_result;
 use crate::types::{FromSql, FromSqlError, ToSql, ToSqlOutput, ValueRef};
 use crate::util::free_boxed_value;
-use crate::{str_to_cstring, Connection, Error, InnerConnection, Result};
+use crate::{str_to_cstring, Connection, Error, InnerConnection, Name, Result};
 
 unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
     if let Error::SqliteFailure(ref err, ref s) = *err {
@@ -451,9 +451,9 @@ impl Connection {
     ///
     /// Will return Err if the function could not be attached to the connection.
     #[inline]
-    pub fn create_scalar_function<F, T>(
+    pub fn create_scalar_function<F, N: Name, T>(
         &self,
-        fn_name: &str,
+        fn_name: N,
         n_arg: c_int,
         flags: FunctionFlags,
         x_func: F,
@@ -474,9 +474,9 @@ impl Connection {
     ///
     /// Will return Err if the function could not be attached to the connection.
     #[inline]
-    pub fn create_aggregate_function<A, D, T>(
+    pub fn create_aggregate_function<A, D, N: Name, T>(
         &self,
-        fn_name: &str,
+        fn_name: N,
         n_arg: c_int,
         flags: FunctionFlags,
         aggr: D,
@@ -499,9 +499,9 @@ impl Connection {
     #[cfg(feature = "window")]
     #[cfg_attr(docsrs, doc(cfg(feature = "window")))]
     #[inline]
-    pub fn create_window_function<A, W, T>(
+    pub fn create_window_function<A, N: Name, W, T>(
         &self,
-        fn_name: &str,
+        fn_name: N,
         n_arg: c_int,
         flags: FunctionFlags,
         aggr: W,
@@ -527,7 +527,7 @@ impl Connection {
     ///
     /// Will return Err if the function could not be removed.
     #[inline]
-    pub fn remove_function(&self, fn_name: &str, n_arg: c_int) -> Result<()> {
+    pub fn remove_function<N: Name>(&self, fn_name: N, n_arg: c_int) -> Result<()> {
         self.db.borrow_mut().remove_function(fn_name, n_arg)
     }
 }
@@ -554,9 +554,9 @@ impl InnerConnection {
     ///     Ok(())
     /// }
     /// ```
-    fn create_scalar_function<F, T>(
+    fn create_scalar_function<F, N: Name, T>(
         &mut self,
-        fn_name: &str,
+        fn_name: N,
         n_arg: c_int,
         flags: FunctionFlags,
         x_func: F,
@@ -591,7 +591,7 @@ impl InnerConnection {
         }
 
         let boxed_f: *mut F = Box::into_raw(Box::new(x_func));
-        let c_name = str_to_cstring(fn_name)?;
+        let c_name = fn_name.as_cstr()?;
         let r = unsafe {
             ffi::sqlite3_create_function_v2(
                 self.db(),
@@ -608,9 +608,9 @@ impl InnerConnection {
         self.decode_result(r)
     }
 
-    fn create_aggregate_function<A, D, T>(
+    fn create_aggregate_function<A, D, N: Name, T>(
         &mut self,
-        fn_name: &str,
+        fn_name: N,
         n_arg: c_int,
         flags: FunctionFlags,
         aggr: D,
@@ -621,7 +621,7 @@ impl InnerConnection {
         T: SqlFnOutput,
     {
         let boxed_aggr: *mut D = Box::into_raw(Box::new(aggr));
-        let c_name = str_to_cstring(fn_name)?;
+        let c_name = fn_name.as_cstr()?;
         let r = unsafe {
             ffi::sqlite3_create_function_v2(
                 self.db(),
@@ -639,9 +639,9 @@ impl InnerConnection {
     }
 
     #[cfg(feature = "window")]
-    fn create_window_function<A, W, T>(
+    fn create_window_function<A, N: Name, W, T>(
         &mut self,
-        fn_name: &str,
+        fn_name: N,
         n_arg: c_int,
         flags: FunctionFlags,
         aggr: W,
@@ -652,7 +652,7 @@ impl InnerConnection {
         T: SqlFnOutput,
     {
         let boxed_aggr: *mut W = Box::into_raw(Box::new(aggr));
-        let c_name = str_to_cstring(fn_name)?;
+        let c_name = fn_name.as_cstr()?;
         let r = unsafe {
             ffi::sqlite3_create_window_function(
                 self.db(),
@@ -670,8 +670,8 @@ impl InnerConnection {
         self.decode_result(r)
     }
 
-    fn remove_function(&mut self, fn_name: &str, n_arg: c_int) -> Result<()> {
-        let c_name = str_to_cstring(fn_name)?;
+    fn remove_function<N: Name>(&mut self, fn_name: N, n_arg: c_int) -> Result<()> {
+        let c_name = fn_name.as_cstr()?;
         let r = unsafe {
             ffi::sqlite3_create_function_v2(
                 self.db(),
@@ -882,7 +882,7 @@ mod test {
     fn test_function_half() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_scalar_function(
-            "half",
+            c"half",
             1,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             half,
@@ -897,7 +897,7 @@ mod test {
     fn test_remove_function() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_scalar_function(
-            "half",
+            c"half",
             1,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             half,
@@ -905,7 +905,7 @@ mod test {
         let result: f64 = db.one_column("SELECT half(6)")?;
         assert!((3f64 - result).abs() < f64::EPSILON);
 
-        db.remove_function("half", 1)?;
+        db.remove_function(c"half", 1)?;
         let result: Result<f64> = db.one_column("SELECT half(6)");
         result.unwrap_err();
         Ok(())
@@ -946,7 +946,7 @@ mod test {
              END;",
         )?;
         db.create_scalar_function(
-            "regexp",
+            c"regexp",
             2,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             regexp_with_auxiliary,
@@ -967,7 +967,7 @@ mod test {
     fn test_varargs_function() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_scalar_function(
-            "my_concat",
+            c"my_concat",
             -1,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             |ctx| {
@@ -996,7 +996,7 @@ mod test {
     #[test]
     fn test_get_aux_type_checking() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        db.create_scalar_function("example", 2, FunctionFlags::default(), |ctx| {
+        db.create_scalar_function(c"example", 2, FunctionFlags::default(), |ctx| {
             if !ctx.get::<bool>(1)? {
                 ctx.set_aux::<i64>(0, 100)?;
             } else {
@@ -1050,7 +1050,7 @@ mod test {
     fn test_sum() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_aggregate_function(
-            "my_sum",
+            c"my_sum",
             1,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             Sum,
@@ -1076,7 +1076,7 @@ mod test {
     fn test_count() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.create_aggregate_function(
-            "my_count",
+            c"my_count",
             -1,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             Count,
@@ -1112,7 +1112,7 @@ mod test {
 
         let db = Connection::open_in_memory()?;
         db.create_window_function(
-            "sumint",
+            c"sumint",
             1,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             Sum,
@@ -1161,13 +1161,13 @@ mod test {
         }
         let db = Connection::open_in_memory()?;
         db.create_scalar_function(
-            "test_getsubtype",
+            c"test_getsubtype",
             1,
             FunctionFlags::SQLITE_UTF8,
             test_getsubtype,
         )?;
         db.create_scalar_function(
-            "test_setsubtype",
+            c"test_setsubtype",
             2,
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_RESULT_SUBTYPE,
             test_setsubtype,
