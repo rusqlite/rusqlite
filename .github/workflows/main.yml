@@ -61,6 +61,7 @@ jobs:
       - run: cargo build --features bundled --workspace --all-targets --verbose
       - run: cargo test --features bundled --workspace --all-targets --verbose
       - run: cargo test --features bundled --workspace --doc --verbose
+      - run: cargo test --no-default-features --lib --verbose
 
       - name: Add llvm path on Windows
         if: matrix.os == 'windows-latest'

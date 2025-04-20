@@ -4,6 +4,7 @@ use crate::util::ParamIndexCache;
 use crate::util::SqliteMallocString;
 use std::ffi::{c_int, CStr};
 use std::ptr;
+#[cfg(feature = "cache")]
 use std::sync::Arc;
 
 // Private newtype for raw sqlite3_stmts that finalize themselves when dropped.
@@ -22,6 +23,7 @@ pub struct RawStatement {
     //
     // One example of a case where the result of `sqlite_sql` and the value in
     // `statement_cache_key` might differ is if the statement has a `tail`.
+    #[cfg(feature = "cache")]
     statement_cache_key: Option<Arc<str>>,
 }
 
@@ -31,6 +33,7 @@ impl RawStatement {
         Self {
             ptr: stmt,
             cache: ParamIndexCache::default(),
+            #[cfg(feature = "cache")]
             statement_cache_key: None,
         }
     }
@@ -41,11 +44,13 @@ impl RawStatement {
     }
 
     #[inline]
+    #[cfg(feature = "cache")]
     pub(crate) fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
         self.statement_cache_key = Some(p.into());
     }
 
     #[inline]
+    #[cfg(feature = "cache")]
     pub(crate) fn statement_cache_key(&self) -> Option<Arc<str>> {
         self.statement_cache_key.clone()
     }

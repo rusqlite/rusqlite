@@ -726,6 +726,7 @@ impl Statement<'_> {
     /// connection has closed is illegal, but `RawStatement` does not enforce
     /// this, as it loses our protective `'conn` lifetime bound.
     #[inline]
+    #[cfg(feature = "cache")]
     pub(crate) unsafe fn into_raw(mut self) -> RawStatement {
         let mut stmt = RawStatement::new(ptr::null_mut());
         mem::swap(&mut stmt, &mut self.stmt);

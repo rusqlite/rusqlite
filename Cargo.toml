@@ -38,6 +38,7 @@ load_extension = []
 backup = []
 # sqlite3_blob_reopen: 3.7.4
 blob = []
+cache = ["hashlink"]
 collation = []
 # sqlite3_create_function_v2: 3.7.3 (2010-10-08)
 functions = []
@@ -116,6 +117,7 @@ modern-full = [
 ]
 
 bundled-full = ["modern-full", "bundled"]
+default = ["cache"]
 
 [dependencies]
 jiff = { version = "0.2", optional = true, default-features = false, features = [
@@ -127,7 +129,7 @@ time = { version = "0.3.36", features = [
     "parsing",
 ], optional = true }
 bitflags = "2.6.0"
-hashlink = "0.10"
+hashlink = { version = "0.10", optional = true }
 chrono = { version = "0.4.38", optional = true, default-features = false, features = [
     "clock",
 ] }
