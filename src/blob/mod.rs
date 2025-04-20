@@ -215,14 +215,14 @@ impl Connection {
     /// C-compatible string or if the underlying SQLite BLOB open call
     /// fails.
     #[inline]
-    pub fn blob_open<'a, D: Name, N: Name>(
-        &'a self,
+    pub fn blob_open<D: Name, N: Name>(
+        &self,
         db: D,
         table: N,
         column: N,
         row_id: i64,
         read_only: bool,
-    ) -> Result<Blob<'a>> {
+    ) -> Result<Blob<'_>> {
         let c = self.db.borrow_mut();
         let mut blob = ptr::null_mut();
         let db = db.as_cstr()?;
