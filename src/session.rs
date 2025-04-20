@@ -37,7 +37,7 @@ impl Session<'_> {
 
     /// Create a new session object
     #[inline]
-    pub fn new_with_name<'conn, N: Name>(db: &'conn Connection, name: N) -> Result<Session<'conn>> {
+    pub fn new_with_name<N: Name>(db: &Connection, name: N) -> Result<Session<'_>> {
         let name = name.as_cstr()?;
 
         let db = db.db.borrow_mut().db;
