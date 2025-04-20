@@ -821,7 +821,7 @@ impl Connection {
     ///     // while extension loading is enabled.
     ///     unsafe {
     ///         conn.load_extension_enable()?;
-    ///         let r = conn.load_extension("my/trusted/extension", None);
+    ///         let r = conn.load_extension("my/trusted/extension", None::<&str>);
     ///         conn.load_extension_disable()?;
     ///         r
     ///     }
@@ -896,7 +896,7 @@ impl Connection {
     ///     // extension loading is enabled.
     ///     let _guard = unsafe { LoadExtensionGuard::new(conn)? };
     ///     // Safety: `my_sqlite_extension` is highly trustworthy.
-    ///     unsafe { conn.load_extension("my_sqlite_extension", None) }
+    ///     unsafe { conn.load_extension("my_sqlite_extension", None::<&str>) }
     /// }
     /// ```
     ///

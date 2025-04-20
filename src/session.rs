@@ -96,12 +96,7 @@ impl Session<'_> {
     /// Attach a table. `None` means all tables.
     pub fn attach<N: Name>(&mut self, table: Option<N>) -> Result<()> {
         let cs = table.as_ref().map(N::as_cstr).transpose()?;
-        let table = if let Some(table) = cs {
-            Some(table)
-        } else {
-            None
-        };
-        let table = table.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let table = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
         check(unsafe { ffi::sqlite3session_attach(self.s, table) })
     }
 
