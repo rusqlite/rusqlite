@@ -237,7 +237,6 @@ impl<const N: usize> FromSql for [u8; N] {
 }
 
 #[cfg(feature = "i128_blob")]
-#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 impl FromSql for i128 {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
@@ -247,7 +246,6 @@ impl FromSql for i128 {
 }
 
 #[cfg(feature = "uuid")]
-#[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
 impl FromSql for uuid::Uuid {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {

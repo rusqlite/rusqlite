@@ -18,17 +18,14 @@ pub enum ToSqlOutput<'a> {
     /// A BLOB of the given length that is filled with
     /// zeroes.
     #[cfg(feature = "blob")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "blob")))]
     ZeroBlob(i32),
 
     /// n-th arg of an SQL scalar function
     #[cfg(feature = "functions")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
     Arg(usize),
 
     /// `feature = "array"`
     #[cfg(feature = "array")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "array")))]
     Array(Array),
 }
 

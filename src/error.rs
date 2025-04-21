@@ -71,18 +71,15 @@ pub enum Error {
     /// [`functions::Context::get`](crate::functions::Context::get) when the
     /// function argument cannot be converted to the requested type.
     #[cfg(feature = "functions")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
     InvalidFunctionParameterType(usize, Type),
     /// Error returned by [`vtab::Values::get`](crate::vtab::Values::get) when
     /// the filter argument cannot be converted to the requested type.
     #[cfg(feature = "vtab")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "vtab")))]
     InvalidFilterParameterType(usize, Type),
 
     /// An error case available for implementors of custom user functions (e.g.,
     /// [`create_scalar_function`](crate::Connection::create_scalar_function)).
     #[cfg(feature = "functions")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
     UserFunctionError(Box<dyn error::Error + Send + Sync + 'static>),
 
     /// Error available for the implementors of the
@@ -95,7 +92,6 @@ pub enum Error {
     /// An error case available for implementors of custom modules (e.g.,
     /// [`create_module`](crate::Connection::create_module)).
     #[cfg(feature = "vtab")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "vtab")))]
     ModuleError(String),
 
     /// An unwinding panic occurs in a UDF (user-defined function).
@@ -106,7 +102,6 @@ pub enum Error {
     /// retrieve data of a different type than what had been stored using
     /// [`Context::set_aux`](crate::functions::Context::set_aux).
     #[cfg(feature = "functions")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
     GetAuxWrongType,
 
     /// Error when the SQL contains multiple statements.
@@ -121,11 +116,9 @@ pub enum Error {
     /// [`Blob::raw_read_at_exact`](crate::blob::Blob::raw_read_at_exact) will
     /// return it if the blob has insufficient data.
     #[cfg(feature = "blob")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "blob")))]
     BlobSizeError,
     /// Error referencing a specific token in the input SQL
     #[cfg(feature = "modern_sqlite")] // 3.38.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     SqlInputError {
         /// error code
         error: ffi::Error,
@@ -138,12 +131,10 @@ pub enum Error {
     },
     /// Loadable extension initialization error
     #[cfg(feature = "loadable_extension")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "loadable_extension")))]
     InitError(ffi::InitError),
     /// Error when the schema of a particular database is requested, but the index
     /// is out of range.
     #[cfg(feature = "modern_sqlite")] // 3.39.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     InvalidDatabaseIndex(usize),
 }
 
