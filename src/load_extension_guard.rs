@@ -14,7 +14,6 @@ use crate::{Connection, Result};
 ///     }
 /// }
 /// ```
-#[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
 pub struct LoadExtensionGuard<'conn> {
     conn: &'conn Connection,
 }

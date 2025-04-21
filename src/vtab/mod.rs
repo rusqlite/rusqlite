@@ -495,7 +495,6 @@ impl IndexInfo {
 
     /// Determine the collation for a virtual table constraint
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn collation(&self, constraint_idx: usize) -> Result<&str> {
         let idx = constraint_idx as c_int;
         let collation = unsafe { ffi::sqlite3_vtab_collation(self.0, idx) };
@@ -507,14 +506,12 @@ impl IndexInfo {
 
     /*/// Determine if a virtual table query is DISTINCT
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn distinct(&self) -> c_int {
         unsafe { ffi::sqlite3_vtab_distinct(self.0) }
     }
 
     /// Constraint values
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn set_rhs_value(&mut self, constraint_idx: c_int, value: ValueRef) -> Result<()> {
         // TODO ValueRef to sqlite3_value
         crate::error::check(unsafe { ffi::sqlite3_vtab_rhs_value(self.O, constraint_idx, value) })
@@ -522,7 +519,6 @@ impl IndexInfo {
 
     /// Identify and handle IN constraints
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn set_in_constraint(&mut self, constraint_idx: c_int, b_handle: c_int) -> bool {
         unsafe { ffi::sqlite3_vtab_in(self.0, constraint_idx, b_handle) != 0 }
     } // TODO sqlite3_vtab_in_first / sqlite3_vtab_in_next https://sqlite.org/c3ref/vtab_in_first.html
@@ -747,7 +743,6 @@ impl Values<'_> {
     // `sqlite3_value_type` returns `SQLITE_NULL` for pointer.
     // So it seems not possible to enhance `ValueRef::from_value`.
     #[cfg(feature = "array")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "array")))]
     fn get_array(&self, idx: usize) -> Option<array::Array> {
         use crate::types::Value;
         let arg = self.args[idx];
@@ -1279,13 +1274,10 @@ unsafe fn result_error<T>(ctx: *mut ffi::sqlite3_context, result: Result<T>) -> 
 }
 
 #[cfg(feature = "array")]
-#[cfg_attr(docsrs, doc(cfg(feature = "array")))]
 pub mod array;
 #[cfg(feature = "csvtab")]
-#[cfg_attr(docsrs, doc(cfg(feature = "csvtab")))]
 pub mod csvtab;
 #[cfg(feature = "series")]
-#[cfg_attr(docsrs, doc(cfg(feature = "series")))]
 pub mod series; // SQLite >= 3.9.0
 #[cfg(all(test, feature = "modern_sqlite"))]
 mod vtablog;

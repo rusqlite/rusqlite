@@ -711,7 +711,6 @@ impl Statement<'_> {
     /// or 0 if it is an ordinary statement or a NULL pointer.
     #[inline]
     #[cfg(feature = "modern_sqlite")] // 3.28.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn is_explain(&self) -> i32 {
         self.stmt.is_explain()
     }

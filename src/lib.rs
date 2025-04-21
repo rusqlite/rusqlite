@@ -52,7 +52,7 @@
 //! }
 //! ```
 #![warn(missing_docs)]
-#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 pub use fallible_iterator;
 pub use fallible_streaming_iterator;
@@ -102,30 +102,24 @@ mod error;
 #[cfg(not(feature = "loadable_extension"))]
 pub mod auto_extension;
 #[cfg(feature = "backup")]
-#[cfg_attr(docsrs, doc(cfg(feature = "backup")))]
 pub mod backup;
 mod bind;
 #[cfg(feature = "blob")]
-#[cfg_attr(docsrs, doc(cfg(feature = "blob")))]
 pub mod blob;
 mod busy;
 mod cache;
 #[cfg(feature = "collation")]
-#[cfg_attr(docsrs, doc(cfg(feature = "collation")))]
 mod collation;
 mod column;
 pub mod config;
 #[cfg(any(feature = "functions", feature = "vtab"))]
 mod context;
 #[cfg(feature = "functions")]
-#[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
 pub mod functions;
 #[cfg(feature = "hooks")]
-#[cfg_attr(docsrs, doc(cfg(feature = "hooks")))]
 pub mod hooks;
 mod inner_connection;
 #[cfg(feature = "limits")]
-#[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
 pub mod limits;
 #[cfg(feature = "load_extension")]
 mod load_extension_guard;
@@ -134,14 +128,11 @@ mod pragma;
 mod raw_statement;
 mod row;
 #[cfg(feature = "serialize")]
-#[cfg_attr(docsrs, doc(cfg(feature = "serialize")))]
 pub mod serialize;
 #[cfg(feature = "session")]
-#[cfg_attr(docsrs, doc(cfg(feature = "session")))]
 pub mod session;
 mod statement;
 #[cfg(feature = "trace")]
-#[cfg_attr(docsrs, doc(cfg(feature = "trace")))]
 pub mod trace;
 mod transaction;
 pub mod types;
@@ -149,7 +140,6 @@ pub mod types;
 mod unlock_notify;
 mod version;
 #[cfg(feature = "vtab")]
-#[cfg_attr(docsrs, doc(cfg(feature = "vtab")))]
 pub mod vtab;
 
 pub(crate) mod util;
@@ -247,7 +237,6 @@ macro_rules! named_params {
 /// }
 /// ```
 #[cfg(feature = "rusqlite-macros")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
 #[macro_export]
 macro_rules! prepare_and_bind {
     ($conn:expr, $sql:literal) => {{
@@ -263,7 +252,6 @@ macro_rules! prepare_and_bind {
 ///   work).
 /// * `$x.y` expression does not work.
 #[cfg(feature = "rusqlite-macros")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rusqlite-macros")))]
 #[macro_export]
 macro_rules! prepare_cached_and_bind {
     ($conn:expr, $sql:literal) => {{
@@ -826,7 +814,6 @@ impl Connection {
     ///
     /// [loadext]: https://www.sqlite.org/lang_corefunc.html#load_extension
     #[cfg(feature = "load_extension")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
     #[inline]
     pub unsafe fn load_extension_enable(&self) -> Result<()> {
         self.db.borrow_mut().enable_load_extension(1)
@@ -840,7 +827,6 @@ impl Connection {
     ///
     /// Will return `Err` if the underlying SQLite call fails.
     #[cfg(feature = "load_extension")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
     #[inline]
     pub fn load_extension_disable(&self) -> Result<()> {
         // It's always safe to turn off extension loading.
@@ -883,7 +869,6 @@ impl Connection {
     /// sound, trusted, correctly use the SQLite APIs, and not contain any
     /// memory or thread safety errors.
     #[cfg(feature = "load_extension")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
     #[inline]
     pub unsafe fn load_extension<P: AsRef<Path>, N: Name>(
         &self,
@@ -937,7 +922,6 @@ impl Connection {
     /// # Safety
     /// * Results are undefined if `init` does not just register features.
     #[cfg(feature = "loadable_extension")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "loadable_extension")))]
     pub unsafe fn extension_init2(
         db: *mut ffi::sqlite3,
         pz_err_msg: *mut *mut c_char,
@@ -1041,7 +1025,6 @@ impl Connection {
     ///
     /// Return an `Error::InvalidDatabaseIndex` if `index` is out of range.
     #[cfg(feature = "modern_sqlite")] // 3.39.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn db_name(&self, index: usize) -> Result<String> {
         unsafe {
             let db = self.handle();
@@ -1056,7 +1039,6 @@ impl Connection {
 
     /// Determine whether an interrupt is currently in effect
     #[cfg(feature = "modern_sqlite")] // 3.41.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn is_interrupted(&self) -> bool {
         self.db.borrow().is_interrupted()
     }

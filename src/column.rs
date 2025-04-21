@@ -4,7 +4,6 @@ use crate::{Error, Result, Statement};
 
 /// Information about a column of a SQLite query.
 #[cfg(feature = "column_decltype")]
-#[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
 #[derive(Debug)]
 pub struct Column<'stmt> {
     name: &'stmt str,
@@ -12,7 +11,6 @@ pub struct Column<'stmt> {
 }
 
 #[cfg(feature = "column_decltype")]
-#[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
 impl Column<'_> {
     /// Returns the name of the column.
     #[inline]
@@ -184,7 +182,6 @@ impl Statement<'_> {
     /// sure that current statement has already been stepped once before
     /// calling this method.
     #[cfg(feature = "column_decltype")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
     pub fn columns(&self) -> Vec<Column> {
         let n = self.column_count();
         let mut cols = Vec::with_capacity(n);

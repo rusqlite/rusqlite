@@ -375,7 +375,6 @@ impl Drop for Savepoint<'_> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 #[cfg(feature = "modern_sqlite")] // 3.37.0
-#[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
 pub enum TransactionState {
     /// Equivalent to `SQLITE_TXN_NONE`
     None,
@@ -511,7 +510,6 @@ impl Connection {
 
     /// Determine the transaction state of a database
     #[cfg(feature = "modern_sqlite")] // 3.37.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn transaction_state<N: crate::Name>(
         &self,
         db_name: Option<N>,

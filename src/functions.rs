@@ -361,7 +361,6 @@ where
 /// `WindowAggregate` is the callback interface for
 /// user-defined aggregate window function.
 #[cfg(feature = "window")]
-#[cfg_attr(docsrs, doc(cfg(feature = "window")))]
 pub trait WindowAggregate<A, T>: Aggregate<A, T>
 where
     A: RefUnwindSafe + UnwindSafe,
@@ -497,7 +496,6 @@ impl Connection {
     /// See `https://sqlite.org/windowfunctions.html#udfwinfunc` for more
     /// information.
     #[cfg(feature = "window")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "window")))]
     #[inline]
     pub fn create_window_function<A, N: Name, W, T>(
         &self,
