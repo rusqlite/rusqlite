@@ -2,11 +2,11 @@
 #![expect(non_camel_case_types)]
 
 use std::ffi::{c_char, c_int, c_void, CStr};
-use std::panic::catch_unwind;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 
 use crate::ffi;
-
+use crate::util::ThinBoxAny;
 use crate::{error::decode_result_raw, Connection, InnerConnection, Result};
 
 #[cfg(feature = "preupdate_hook")]
@@ -295,9 +295,6 @@ impl<'c> AuthAction<'c> {
     }
 }
 
-pub(crate) type BoxedAuthorizer =
-    Box<dyn for<'c> FnMut(AuthContext<'c>) -> Authorization + Send + 'static>;
-
 /// A transaction operation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
@@ -389,30 +386,38 @@ impl Connection {
     /// Calling `wal_hook` replaces any previously registered write-ahead log callback.
     /// Note that the `sqlite3_wal_autocheckpoint()` interface and the `wal_autocheckpoint` pragma
     /// both invoke `sqlite3_wal_hook()` and will overwrite any prior `sqlite3_wal_hook()` settings.
-    pub fn wal_hook(&self, hook: Option<fn(&Wal, c_int) -> Result<()>>) {
-        unsafe extern "C" fn wal_hook_callback(
+    pub fn wal_hook<F>(&self, hook: Option<F>)
+    where
+        F: Fn(&Wal, c_int) -> Result<()> + Send + Sync + 'static,
+    {
+        unsafe extern "C" fn wal_hook_callback<F>(
             client_data: *mut c_void,
             db: *mut ffi::sqlite3,
             db_name: *const c_char,
             pages: c_int,
-        ) -> c_int {
-            let hook_fn: fn(&Wal, c_int) -> Result<()> = std::mem::transmute(client_data);
+        ) -> c_int
+        where
+            F: Fn(&Wal, c_int) -> Result<()> + Send + Sync + 'static,
+        {
+            let hook_fn: &F = unsafe { &*client_data.cast::<F>() };
             let wal = Wal { db, db_name };
-            catch_unwind(|| match hook_fn(&wal, pages) {
+            catch_unwind(AssertUnwindSafe(|| match hook_fn(&wal, pages) {
                 Ok(_) => ffi::SQLITE_OK,
                 Err(e) => e
                     .sqlite_error()
                     .map_or(ffi::SQLITE_ERROR, |x| x.extended_code),
-            })
+            }))
             .unwrap_or_default()
         }
-        let c = self.db.borrow_mut();
+        let mut c = self.db.borrow_mut();
+        let (boxed, hook) = ThinBoxAny::new_option(hook);
         match hook {
             Some(f) => unsafe {
-                ffi::sqlite3_wal_hook(c.db(), Some(wal_hook_callback), f as *mut c_void)
+                ffi::sqlite3_wal_hook(c.db(), Some(wal_hook_callback::<F>), f.cast())
             },
             None => unsafe { ffi::sqlite3_wal_hook(c.db(), None, ptr::null_mut()) },
         };
+        c.wal_hook = boxed;
     }
 
     /// Register a query progress callback.
@@ -538,34 +543,14 @@ impl InnerConnection {
             c_int::from(r.unwrap_or_default())
         }
 
-        // unlike `sqlite3_create_function_v2`, we cannot specify a `xDestroy` with
-        // `sqlite3_commit_hook`. so we keep the `xDestroy` function in
-        // `InnerConnection.free_boxed_hook`.
-        let free_commit_hook = if hook.is_some() {
-            Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
-        } else {
-            None
-        };
-
-        let previous_hook = match hook {
-            Some(hook) => {
-                let boxed_hook: *mut F = Box::into_raw(Box::new(hook));
-                unsafe {
-                    ffi::sqlite3_commit_hook(
-                        self.db(),
-                        Some(call_boxed_closure::<F>),
-                        boxed_hook.cast(),
-                    )
-                }
-            }
+        let (boxed, hook) = ThinBoxAny::new_option(hook);
+        match hook {
+            Some(hook) => unsafe {
+                ffi::sqlite3_commit_hook(self.db(), Some(call_boxed_closure::<F>), hook.cast())
+            },
             _ => unsafe { ffi::sqlite3_commit_hook(self.db(), None, ptr::null_mut()) },
         };
-        if !previous_hook.is_null() {
-            if let Some(free_boxed_hook) = self.free_commit_hook {
-                unsafe { free_boxed_hook(previous_hook) };
-            }
-        }
-        self.free_commit_hook = free_commit_hook;
+        self.commit_hook = boxed;
     }
 
     /// ```compile_fail
@@ -602,31 +587,14 @@ impl InnerConnection {
             }));
         }
 
-        let free_rollback_hook = if hook.is_some() {
-            Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
-        } else {
-            None
-        };
-
-        let previous_hook = match hook {
-            Some(hook) => {
-                let boxed_hook: *mut F = Box::into_raw(Box::new(hook));
-                unsafe {
-                    ffi::sqlite3_rollback_hook(
-                        self.db(),
-                        Some(call_boxed_closure::<F>),
-                        boxed_hook.cast(),
-                    )
-                }
-            }
+        let (boxed, hook) = ThinBoxAny::new_option(hook);
+        match hook {
+            Some(hook) => unsafe {
+                ffi::sqlite3_rollback_hook(self.db(), Some(call_boxed_closure::<F>), hook.cast())
+            },
             _ => unsafe { ffi::sqlite3_rollback_hook(self.db(), None, ptr::null_mut()) },
         };
-        if !previous_hook.is_null() {
-            if let Some(free_boxed_hook) = self.free_rollback_hook {
-                unsafe { free_boxed_hook(previous_hook) };
-            }
-        }
-        self.free_rollback_hook = free_rollback_hook;
+        self.rollback_hook = boxed;
     }
 
     /// ```compile_fail
@@ -667,31 +635,14 @@ impl InnerConnection {
             }));
         }
 
-        let free_update_hook = if hook.is_some() {
-            Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
-        } else {
-            None
-        };
-
-        let previous_hook = match hook {
-            Some(hook) => {
-                let boxed_hook: *mut F = Box::into_raw(Box::new(hook));
-                unsafe {
-                    ffi::sqlite3_update_hook(
-                        self.db(),
-                        Some(call_boxed_closure::<F>),
-                        boxed_hook.cast(),
-                    )
-                }
-            }
+        let (boxed, hook) = ThinBoxAny::new_option(hook);
+        match hook {
+            Some(hook) => unsafe {
+                ffi::sqlite3_update_hook(self.db(), Some(call_boxed_closure::<F>), hook.cast())
+            },
             _ => unsafe { ffi::sqlite3_update_hook(self.db(), None, ptr::null_mut()) },
         };
-        if !previous_hook.is_null() {
-            if let Some(free_boxed_hook) = self.free_update_hook {
-                unsafe { free_boxed_hook(previous_hook) };
-            }
-        }
-        self.free_update_hook = free_update_hook;
+        self.update_hook = boxed;
     }
 
     /// ```compile_fail
@@ -729,21 +680,21 @@ impl InnerConnection {
             c_int::from(r.unwrap_or_default())
         }
 
+        let (boxed, handler) = ThinBoxAny::new_option(handler);
+
         if let Some(handler) = handler {
-            let boxed_handler = Box::new(handler);
             unsafe {
                 ffi::sqlite3_progress_handler(
                     self.db(),
                     num_ops,
                     Some(call_boxed_closure::<F>),
-                    &*boxed_handler as *const F as *mut _,
+                    handler.cast::<c_void>(),
                 );
             }
-            self.progress_handler = Some(boxed_handler);
         } else {
             unsafe { ffi::sqlite3_progress_handler(self.db(), num_ops, None, ptr::null_mut()) }
-            self.progress_handler = None;
         };
+        self.progress_handler = boxed;
     }
 
     /// ```compile_fail
@@ -801,19 +752,17 @@ impl InnerConnection {
         let callback_fn = authorizer
             .as_ref()
             .map(|_| call_boxed_closure::<'c, F> as unsafe extern "C" fn(_, _, _, _, _, _) -> _);
-        let boxed_authorizer = authorizer.map(Box::new);
+        let (boxed, boxed_hook) = ThinBoxAny::new_option(authorizer);
 
         match unsafe {
             ffi::sqlite3_set_authorizer(
                 self.db(),
                 callback_fn,
-                boxed_authorizer
-                    .as_ref()
-                    .map_or_else(ptr::null_mut, |f| &**f as *const F as *mut _),
+                boxed_hook.map_or_else(ptr::null_mut, |f| f.cast::<c_void>()),
             )
         } {
             ffi::SQLITE_OK => {
-                self.authorizer = boxed_authorizer.map(|ba| ba as _);
+                self.authorizer = boxed;
             }
             err_code => {
                 // The only error that `sqlite3_set_authorizer` returns is `SQLITE_MISUSE`
@@ -827,10 +776,6 @@ impl InnerConnection {
             }
         }
     }
-}
-
-unsafe fn free_boxed_hook<F>(p: *mut c_void) {
-    drop(Box::from_raw(p.cast::<F>()));
 }
 
 unsafe fn expect_utf8<'a>(p_str: *const c_char, description: &'static str) -> &'a str {
@@ -854,7 +799,7 @@ unsafe fn expect_optional_utf8<'a>(
 #[cfg(test)]
 mod test {
     use super::Action;
-    use crate::{Connection, Result, MAIN_DB};
+    use crate::{hooks::Wal, Connection, Result, MAIN_DB};
     use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]
@@ -992,7 +937,7 @@ mod test {
         assert_eq!(journal_mode, "wal");
 
         static CALLED: AtomicBool = AtomicBool::new(false);
-        db.wal_hook(Some(|wal, pages| {
+        db.wal_hook(Some(|wal: &Wal, pages| {
             assert_eq!(wal.name(), MAIN_DB);
             assert!(pages > 0);
             CALLED.swap(true, Ordering::Relaxed);
@@ -1001,7 +946,7 @@ mod test {
         db.execute_batch("CREATE TABLE x(c);")?;
         assert!(CALLED.load(Ordering::Relaxed));
 
-        db.wal_hook(Some(|wal, pages| {
+        db.wal_hook(Some(|wal: &Wal, pages| {
             assert!(pages > 0);
             let (log, ckpt) = wal.checkpoint_v2(super::CheckpointMode::TRUNCATE)?;
             assert_eq!(log, 0);
@@ -1010,7 +955,7 @@ mod test {
         }));
         db.execute_batch("CREATE TABLE y(c);")?;
 
-        db.wal_hook(None);
+        db.wal_hook(None::<fn(&Wal, _) -> _>);
         Ok(())
     }
 }

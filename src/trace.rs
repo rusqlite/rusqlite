@@ -5,10 +5,12 @@ use std::ffi::{c_char, c_int, c_uint, c_void, CStr, CString};
 use std::marker::PhantomData;
 use std::mem;
 use std::panic::catch_unwind;
+use std::panic::AssertUnwindSafe;
 use std::ptr;
 use std::time::Duration;
 
 use super::ffi;
+use crate::util::ThinBoxAny;
 use crate::{Connection, StatementStatus, MAIN_DB};
 
 /// Set up the process-wide SQLite error logging callback.
@@ -26,19 +28,27 @@ use crate::{Connection, StatementStatus, MAIN_DB};
 ///
 /// cf [The Error And Warning Log](http://sqlite.org/errlog.html).
 #[cfg(not(feature = "loadable_extension"))]
-pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> crate::Result<()> {
-    extern "C" fn log_callback(p_arg: *mut c_void, err: c_int, msg: *const c_char) {
+pub unsafe fn config_log<F>(callback: Option<F>) -> crate::Result<()>
+where
+    F: Fn(c_int, &str) + Send + Sync + 'static,
+{
+    extern "C" fn log_callback<F>(p_arg: *mut c_void, err: c_int, msg: *const c_char)
+    where
+        F: Fn(c_int, &str) + Send + Sync + 'static,
+    {
         let s = unsafe { CStr::from_ptr(msg).to_string_lossy() };
-        let callback: fn(c_int, &str) = unsafe { mem::transmute(p_arg) };
+        let callback: &F = unsafe { &*p_arg.cast::<F>() };
 
-        drop(catch_unwind(|| callback(err, &s)));
+        drop(catch_unwind(AssertUnwindSafe(|| callback(err, &s))));
     }
+
+    let callback = callback.map(|f| ptr::NonNull::from(Box::leak(Box::new(f))));
 
     let rc = if let Some(f) = callback {
         ffi::sqlite3_config(
             ffi::SQLITE_CONFIG_LOG,
-            log_callback as extern "C" fn(_, _, _),
-            f as *mut c_void,
+            log_callback::<F> as extern "C" fn(_, _, _),
+            f.as_ptr() as *mut c_void,
         )
     } else {
         let nullptr: *mut c_void = ptr::null_mut();
@@ -46,6 +56,20 @@ pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> crate::Result<()>
     };
 
     if rc == ffi::SQLITE_OK {
+        // Remember the previous pointer so we can free it. It is safe to access this `static mut`
+        // because this function is not thread-safe. We use `NonNull` instead of `Box` because the
+        // latter has too strict aliasing requirements for this use case.
+        #[expect(clippy::type_complexity)]
+        static mut PREVIOUS: Option<ptr::NonNull<dyn Fn(c_int, &str) + Send + Sync>> = None;
+
+        #[expect(static_mut_refs)]
+        if let Some(ptr) = unsafe { PREVIOUS.take() } {
+            drop(unsafe { Box::from_raw(ptr.as_ptr()) });
+        }
+        if let Some(callback) = callback {
+            unsafe { PREVIOUS = Some(callback) };
+        }
+
         Ok(())
     } else {
         Err(crate::error::error_from_sqlite_code(rc, None))
@@ -195,15 +219,18 @@ impl Connection {
     }
 
     /// Register or clear a trace callback function
-    pub fn trace_v2(&self, mask: TraceEventCodes, trace_fn: Option<fn(TraceEvent<'_>)>) {
-        unsafe extern "C" fn trace_callback(
+    pub fn trace_v2<F>(&self, mask: TraceEventCodes, trace_fn: Option<F>)
+    where
+        F: Fn(TraceEvent<'_>) + Send + Sync + 'static,
+    {
+        unsafe extern "C" fn trace_callback<F: Fn(TraceEvent<'_>) + Send + Sync + 'static>(
             evt: c_uint,
             ctx: *mut c_void,
             p: *mut c_void,
             x: *mut c_void,
         ) -> c_int {
-            let trace_fn: fn(TraceEvent<'_>) = mem::transmute(ctx);
-            drop(catch_unwind(|| match evt {
+            let trace_fn: &F = unsafe { &*ctx.cast::<F>() };
+            drop(catch_unwind(AssertUnwindSafe(|| match evt {
                 ffi::SQLITE_TRACE_STMT => {
                     let str = CStr::from_ptr(x as *const c_char).to_string_lossy();
                     trace_fn(TraceEvent::Stmt(
@@ -226,21 +253,30 @@ impl Connection {
                     phantom: PhantomData,
                 })),
                 _ => {}
-            }));
+            })));
             // The integer return value from the callback is currently ignored, though this may change in future releases.
             // Callback implementations should return zero to ensure future compatibility.
             ffi::SQLITE_OK
         }
-        let c = self.db.borrow_mut();
+
+        let mut c = self.db.borrow_mut();
+
+        let (boxed, trace_fn) = ThinBoxAny::new_option(trace_fn);
         if let Some(f) = trace_fn {
             unsafe {
-                ffi::sqlite3_trace_v2(c.db(), mask.bits(), Some(trace_callback), f as *mut c_void);
+                ffi::sqlite3_trace_v2(
+                    c.db(),
+                    mask.bits(),
+                    Some(trace_callback::<F>),
+                    f as *mut c_void,
+                );
             }
         } else {
             unsafe {
                 ffi::sqlite3_trace_v2(c.db(), 0, None, ptr::null_mut());
             }
         }
+        c.trace_v2 = boxed;
     }
 }
 
@@ -311,7 +347,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         db.trace_v2(
             TraceEventCodes::all(),
-            Some(|e| match e {
+            Some(|e: TraceEvent<'_>| match e {
                 TraceEvent::Stmt(s, sql) => {
                     assert_eq!(s.sql(), sql);
                 }
@@ -333,7 +369,7 @@ mod test {
         drop(db);
 
         let db = Connection::open_in_memory()?;
-        db.trace_v2(TraceEventCodes::empty(), None);
+        db.trace_v2(TraceEventCodes::empty(), None::<fn(TraceEvent<'_>)>);
         Ok(())
     }
 }

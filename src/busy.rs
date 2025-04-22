@@ -1,11 +1,11 @@
 //! Busy handler (when the database is locked)
 use std::ffi::{c_int, c_void};
-use std::mem;
-use std::panic::catch_unwind;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 use std::time::Duration;
 
 use crate::ffi;
+use crate::util::ThinBoxAny;
 use crate::{Connection, InnerConnection, Result};
 
 impl Connection {
@@ -54,19 +54,34 @@ impl Connection {
     /// Newly created connections default to a
     /// [`busy_timeout()`](Connection::busy_timeout) handler with a timeout
     /// of 5000ms, although this is subject to change.
-    pub fn busy_handler(&self, callback: Option<fn(i32) -> bool>) -> Result<()> {
-        unsafe extern "C" fn busy_handler_callback(p_arg: *mut c_void, count: c_int) -> c_int {
-            let handler_fn: fn(i32) -> bool = mem::transmute(p_arg);
-            c_int::from(catch_unwind(|| handler_fn(count)).unwrap_or_default())
+    pub fn busy_handler<F>(&self, callback: Option<F>) -> Result<()>
+    where
+        F: Fn(i32) -> bool + Send + Sync + 'static,
+    {
+        unsafe extern "C" fn busy_handler_callback<F>(p_arg: *mut c_void, count: c_int) -> c_int
+        where
+            F: Fn(i32) -> bool + Send + Sync + 'static,
+        {
+            let handler_fn: &F = unsafe { &*p_arg.cast::<F>() };
+            c_int::from(catch_unwind(AssertUnwindSafe(|| handler_fn(count))).unwrap_or_default())
         }
-        let c = self.db.borrow_mut();
+        let mut c = self.db.borrow_mut();
+        let (boxed, callback) = ThinBoxAny::new_option(callback);
         let r = match callback {
             Some(f) => unsafe {
-                ffi::sqlite3_busy_handler(c.db(), Some(busy_handler_callback), f as *mut c_void)
+                ffi::sqlite3_busy_handler(
+                    c.db(),
+                    Some(busy_handler_callback::<F>),
+                    f as *mut c_void,
+                )
             },
             None => unsafe { ffi::sqlite3_busy_handler(c.db(), None, ptr::null_mut()) },
         };
-        c.decode_result(r)
+        let res = c.decode_result(r);
+        if res.is_ok() {
+            c.busy_handler = boxed;
+        }
+        res
     }
 }
 
@@ -121,7 +136,7 @@ mod test {
         let err = db2.prepare("SELECT * FROM t").unwrap_err();
         assert_eq!(err.sqlite_error_code(), Some(ErrorCode::DatabaseBusy));
         assert!(CALLED.load(Ordering::Relaxed));
-        db1.busy_handler(None)?;
+        db1.busy_handler(None::<fn(_) -> _>)?;
         Ok(())
     }
 }

@@ -61,11 +61,11 @@ impl Connection {
     ///
     /// Will return `Err` if the destination path cannot be opened
     /// or if the backup fails.
-    pub fn backup<N: Name, P: AsRef<Path>>(
+    pub fn backup<N: Name, P: AsRef<Path>, F: FnMut(Progress)>(
         &self,
         name: N,
         dst_path: P,
-        progress: Option<fn(Progress)>,
+        mut progress: Option<F>,
     ) -> Result<()> {
         use self::StepResult::{Busy, Done, Locked, More};
         let mut dst = Self::open(dst_path)?;
@@ -74,7 +74,7 @@ impl Connection {
         let mut r = More;
         while r == More {
             r = backup.step(100)?;
-            if let Some(f) = progress {
+            if let Some(f) = progress.as_mut() {
                 f(backup.progress());
             }
         }
@@ -288,11 +288,11 @@ impl Backup<'_, '_> {
     ///
     /// Will return `Err` if any of the calls to [`step`](Backup::step) return
     /// `Err`.
-    pub fn run_to_completion(
+    pub fn run_to_completion<F: FnMut(Progress)>(
         &self,
         pages_per_step: c_int,
         pause_between_pages: Duration,
-        progress: Option<fn(Progress)>,
+        mut progress: Option<F>,
     ) -> Result<()> {
         use self::StepResult::{Busy, Done, Locked, More};
 
@@ -300,7 +300,7 @@ impl Backup<'_, '_> {
 
         loop {
             let r = self.step(pages_per_step)?;
-            if let Some(progress) = progress {
+            if let Some(progress) = progress.as_mut() {
                 progress(self.progress());
             }
             match r {
@@ -365,7 +365,7 @@ mod test {
 
         {
             let backup = Backup::new(&src, &mut dst)?;
-            backup.run_to_completion(5, Duration::from_millis(250), None)?;
+            backup.run_to_completion(5, Duration::from_millis(250), None::<fn(_)>)?;
         }
 
         let the_answer: i64 = dst.one_column("SELECT SUM(x) FROM foo")?;
@@ -396,7 +396,7 @@ mod test {
 
         {
             let backup = Backup::new_with_names(&src, TEMP_DB, &mut dst, MAIN_DB)?;
-            backup.run_to_completion(5, Duration::from_millis(250), None)?;
+            backup.run_to_completion(5, Duration::from_millis(250), None::<fn(_)>)?;
         }
 
         let the_answer: i64 = dst.one_column("SELECT SUM(x) FROM foo")?;
@@ -428,7 +428,7 @@ mod test {
 
         {
             let backup = Backup::new_with_names(&src, c"my_attached", &mut dst, MAIN_DB)?;
-            backup.run_to_completion(5, Duration::from_millis(250), None)?;
+            backup.run_to_completion(5, Duration::from_millis(250), None::<fn(_)>)?;
         }
 
         let the_answer: i64 = dst.one_column("SELECT SUM(x) FROM foo")?;

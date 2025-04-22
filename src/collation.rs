@@ -1,12 +1,12 @@
 //! Add, remove, or modify a collation
 use std::cmp::Ordering;
 use std::ffi::{c_char, c_int, c_void, CStr};
-use std::panic::catch_unwind;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 use std::slice;
 
 use crate::ffi;
-use crate::util::free_boxed_value;
+use crate::util::{free_boxed_value, ThinBoxAny};
 use crate::{Connection, InnerConnection, Name, Result};
 
 impl Connection {
@@ -23,7 +23,10 @@ impl Connection {
 
     /// Collation needed callback
     #[inline]
-    pub fn collation_needed(&self, x_coll_needed: fn(&Self, &str) -> Result<()>) -> Result<()> {
+    pub fn collation_needed<F>(&self, x_coll_needed: F) -> Result<()>
+    where
+        F: Fn(&Self, &str) -> Result<()> + Send + Sync + 'static,
+    {
         self.db.borrow_mut().collation_needed(x_coll_needed)
     }
 
@@ -120,46 +123,53 @@ impl InnerConnection {
         res
     }
 
-    fn collation_needed(
-        &mut self,
-        x_coll_needed: fn(&Connection, &str) -> Result<()>,
-    ) -> Result<()> {
-        use std::mem;
+    fn collation_needed<F>(&mut self, x_coll_needed: F) -> Result<()>
+    where
+        F: Fn(&Connection, &str) -> Result<()> + Send + Sync + 'static,
+    {
         #[expect(clippy::needless_return)]
-        unsafe extern "C" fn collation_needed_callback(
+        unsafe extern "C" fn collation_needed_callback<F>(
             arg1: *mut c_void,
             arg2: *mut ffi::sqlite3,
             e_text_rep: c_int,
             arg3: *const c_char,
-        ) {
-            use std::str;
-
+        ) where
+            F: Fn(&Connection, &str) -> Result<()> + Send + Sync + 'static,
+        {
             if e_text_rep != ffi::SQLITE_UTF8 {
                 // TODO: validate
                 return;
             }
 
-            let callback: fn(&Connection, &str) -> Result<()> = mem::transmute(arg1);
-            let res = catch_unwind(|| {
+            let callback: &F = unsafe { &*arg1.cast::<F>() };
+            let res = catch_unwind(AssertUnwindSafe(|| {
                 let conn = Connection::from_handle(arg2).unwrap();
                 let collation_name = CStr::from_ptr(arg3)
                     .to_str()
                     .expect("illegal collation sequence name");
                 callback(&conn, collation_name)
-            });
+            }));
             if res.is_err() {
                 return; // FIXME How ?
             }
         }
 
+        let (boxed, x_coll_needed) = ThinBoxAny::new(x_coll_needed);
+
         let r = unsafe {
             ffi::sqlite3_collation_needed(
                 self.db(),
                 x_coll_needed as *mut c_void,
-                Some(collation_needed_callback),
+                Some(collation_needed_callback::<F>),
             )
         };
-        self.decode_result(r)
+        let res = self.decode_result(r);
+
+        if res.is_ok() {
+            self.x_coll_needed = boxed;
+        }
+
+        res
     }
 
     #[inline]

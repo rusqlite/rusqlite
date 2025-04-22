@@ -926,7 +926,7 @@ impl Connection {
         db: *mut ffi::sqlite3,
         pz_err_msg: *mut *mut c_char,
         p_api: *mut ffi::sqlite3_api_routines,
-        init: fn(Self) -> Result<bool>,
+        init: impl FnOnce(Self) -> Result<bool>,
     ) -> c_int {
         if p_api.is_null() {
             return ffi::SQLITE_ERROR;
