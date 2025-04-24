@@ -144,6 +144,10 @@ pub mod vtab;
 
 pub(crate) mod util;
 
+// Actually, only sqlite3_enable_load_extension is disabled (not sqlite3_load_extension)
+#[cfg(all(feature = "loadable_extension", feature = "load_extension"))]
+compile_error!("feature \"loadable_extension\" and feature \"load_extension\" cannot be enabled at the same time");
+
 // Number of cached prepared statements we'll hold on to.
 const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
 
