@@ -12,6 +12,7 @@
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::ptr;
 use std::slice;
 
@@ -315,7 +316,7 @@ pub trait UpdateVTab<'vtab>: CreateVTab<'vtab> {
     fn insert(&mut self, args: &Values<'_>) -> Result<i64>;
     /// Update: `args[0] != NULL: old rowid or PK, args[1]: new row id or PK,
     /// args[2]: ...`
-    fn update(&mut self, args: &Values<'_>) -> Result<()>;
+    fn update(&mut self, args: &Updates<'_>) -> Result<()>;
 }
 
 /// Index constraint operator.
@@ -700,7 +701,13 @@ impl Context {
         Ok(())
     }
 
-    // TODO sqlite3_vtab_nochange (http://sqlite.org/c3ref/vtab_nochange.html) // 3.22.0 & xColumn
+    /// Determine if column access is for UPDATE
+    #[inline]
+    #[must_use]
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
+    pub fn no_change(&self) -> bool {
+        unsafe { ffi::sqlite3_vtab_nochange(self.0) != 0 }
+    }
 }
 
 /// Wrapper to [`VTabCursor::filter`] arguments, the values
@@ -797,6 +804,29 @@ impl<'a> Iterator for ValueIter<'a> {
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.iter.size_hint()
+    }
+}
+
+/// Wrapper to [`UpdateVTab::update`] arguments
+pub struct Updates<'a> {
+    values: Values<'a>,
+}
+impl<'a> Deref for Updates<'a> {
+    type Target = Values<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.values
+    }
+}
+impl Updates<'_> {
+    /// Returns `true` if and only
+    /// - if the column corresponding to `idx` is unchanged by the UPDATE operation that the [`UpdateVTab::update`] method call was invoked to implement
+    /// - and if and the prior [`VTabCursor::column`] method call that was invoked to extracted the value for that column returned without setting a result.
+    #[inline]
+    #[must_use]
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
+    pub fn no_change(&self, idx: usize) -> bool {
+        unsafe { ffi::sqlite3_value_nochange(self.values.args[idx]) != 0 }
     }
 }
 
@@ -1194,7 +1224,7 @@ where
         }
     } else {
         let values = Values { args };
-        (*vt).update(&values)
+        (*vt).update(&Updates { values })
     };
     match r {
         Ok(_) => ffi::SQLITE_OK,

@@ -152,7 +152,7 @@
 - [X] `sqlite3_value_bytes` (not public, internal use only)
 - [X] `sqlite3_value_type`
 - [ ] `sqlite3_value_numeric_type`
-- [ ] `sqlite3_value_nochange`
+- [X] `sqlite3_value_nochange`
 - [ ] `sqlite3_value_frombind`
 - [ ] `sqlite3_value_encoding`
 - [X] `sqlite3_value_subtype`
@@ -287,13 +287,13 @@
 
 - [X] `sqlite3_vtab_config`
 - [ ] `sqlite3_vtab_on_conflict`
-- [ ] `sqlite3_vtab_nochange`
+- [X] `sqlite3_vtab_nochange`
 - [X] `sqlite3_vtab_collation`
-- [X] `sqlite3_vtab_distinct`
-- [X] `sqlite3_vtab_in`
+- [ ] `sqlite3_vtab_distinct`
+- [ ] `sqlite3_vtab_in`
 - [ ] `sqlite3_vtab_in_first`
 - [ ] `sqlite3_vtab_in_next`
-- [X] `sqlite3_vtab_rhs_value`
+- [ ] `sqlite3_vtab_rhs_value`
 
 - [ ] `sqlite3_stmt_scanstatus`
 - [ ] `sqlite3_stmt_scanstatus_v2`
