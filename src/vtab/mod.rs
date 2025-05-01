@@ -700,7 +700,12 @@ impl Context {
         Ok(())
     }
 
-    // TODO sqlite3_vtab_nochange (http://sqlite.org/c3ref/vtab_nochange.html) // 3.22.0 & xColumn
+    /// Determine if column access is for UPDATE
+    #[inline]
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
+    pub fn no_change(&self) -> bool {
+        unsafe { ffi::sqlite3_vtab_nochange(self.0) != 0 }
+    }
 }
 
 /// Wrapper to [`VTabCursor::filter`] arguments, the values

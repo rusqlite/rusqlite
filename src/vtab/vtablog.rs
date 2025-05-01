@@ -235,6 +235,15 @@ unsafe impl VTabCursor for VTabLogCursor<'_> {
     }
 
     fn column(&self, ctx: &mut Context, i: c_int) -> Result<()> {
+        if ctx.no_change() {
+            println!(
+                "VTabLogCursor::column(tab={}, cursor={}, i={}): no change",
+                self.vtab().i_inst,
+                self.i_cursor,
+                i,
+            );
+            return Ok(());
+        }
         let value = if i < 26 {
             format!(
                 "{}{}",
