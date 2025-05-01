@@ -5,8 +5,8 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::vtab::{
-    update_module, Context, CreateVTab, IndexInfo, UpdateVTab, VTab, VTabConnection, VTabCursor,
-    VTabKind, Values,
+    update_module, Context, CreateVTab, IndexInfo, UpdateVTab, Updates, VTab, VTabConnection,
+    VTabCursor, VTabKind, Values,
 };
 use crate::{ffi, ValueRef};
 use crate::{Connection, Error, Result};
@@ -162,11 +162,14 @@ impl UpdateVTab<'_> for VTabLog {
         Ok(self.n_row)
     }
 
-    fn update(&mut self, args: &Values<'_>) -> Result<()> {
+    fn update(&mut self, args: &Updates<'_>) -> Result<()> {
         println!(
             "VTabLog::update({}, {:?})",
             self.i_inst,
-            args.iter().collect::<Vec<ValueRef<'_>>>()
+            args.iter()
+                .enumerate()
+                .map(|(i, v)| (v, args.no_change(i)))
+                .collect::<Vec<(ValueRef<'_>, bool)>>()
         );
         Ok(())
     }

@@ -152,7 +152,7 @@
 - [X] `sqlite3_value_bytes` (not public, internal use only)
 - [X] `sqlite3_value_type`
 - [ ] `sqlite3_value_numeric_type`
-- [ ] `sqlite3_value_nochange`
+- [X] `sqlite3_value_nochange`
 - [ ] `sqlite3_value_frombind`
 - [ ] `sqlite3_value_encoding`
 - [X] `sqlite3_value_subtype`
