@@ -1,5 +1,5 @@
 use std::ffi::{c_char, c_int, CStr};
-#[cfg(feature = "load_extension")]
+#[cfg(all(feature = "load_extension", not(feature = "loadable_extension")))]
 use std::path::Path;
 use std::ptr;
 use std::str;
@@ -32,7 +32,7 @@ pub struct InnerConnection {
     pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
     pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
-    #[cfg(feature = "preupdate_hook")]
+    #[cfg(all(feature = "preupdate_hook", not(feature = "loadable_extension")))]
     pub free_preupdate_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
     owned: bool,
 }
@@ -56,7 +56,7 @@ impl InnerConnection {
             progress_handler: None,
             #[cfg(feature = "hooks")]
             authorizer: None,
-            #[cfg(feature = "preupdate_hook")]
+            #[cfg(all(feature = "preupdate_hook", not(feature = "loadable_extension")))]
             free_preupdate_hook: None,
             owned,
         }
@@ -169,13 +169,13 @@ impl InnerConnection {
     }
 
     #[inline]
-    #[cfg(feature = "load_extension")]
+    #[cfg(all(feature = "load_extension", not(feature = "loadable_extension")))]
     pub unsafe fn enable_load_extension(&mut self, onoff: c_int) -> Result<()> {
         let r = ffi::sqlite3_enable_load_extension(self.db, onoff);
         self.decode_result(r)
     }
 
-    #[cfg(feature = "load_extension")]
+    #[cfg(all(feature = "load_extension", not(feature = "loadable_extension")))]
     pub unsafe fn load_extension<N: Name>(
         &self,
         dylib_path: &Path,
@@ -329,7 +329,7 @@ impl InnerConnection {
     #[inline]
     fn remove_hooks(&mut self) {}
 
-    #[cfg(not(feature = "preupdate_hook"))]
+    #[cfg(not(all(feature = "preupdate_hook", not(feature = "loadable_extension"))))]
     #[inline]
     fn remove_preupdate_hook(&mut self) {}
 

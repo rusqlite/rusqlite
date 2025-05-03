@@ -9,10 +9,10 @@ use crate::ffi;
 
 use crate::{error::decode_result_raw, Connection, InnerConnection, Result};
 
-#[cfg(feature = "preupdate_hook")]
+#[cfg(all(feature = "preupdate_hook", not(feature = "loadable_extension")))]
 pub use preupdate_hook::*;
 
-#[cfg(feature = "preupdate_hook")]
+#[cfg(all(feature = "preupdate_hook", not(feature = "loadable_extension")))]
 mod preupdate_hook;
 
 /// Action Codes

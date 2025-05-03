@@ -81,7 +81,7 @@ pub use crate::column::Column;
 pub use crate::column::ColumnMetadata;
 pub use crate::error::{to_sqlite_error, Error};
 pub use crate::ffi::ErrorCode;
-#[cfg(feature = "load_extension")]
+#[cfg(all(feature = "load_extension", not(feature = "loadable_extension")))]
 pub use crate::load_extension_guard::LoadExtensionGuard;
 pub use crate::params::{params_from_iter, Params, ParamsFromIter};
 pub use crate::row::{AndThenRows, Map, MappedRows, Row, RowIndex, Rows};
@@ -121,7 +121,7 @@ pub mod hooks;
 mod inner_connection;
 #[cfg(feature = "limits")]
 pub mod limits;
-#[cfg(feature = "load_extension")]
+#[cfg(all(feature = "load_extension", not(feature = "loadable_extension")))]
 mod load_extension_guard;
 mod params;
 mod pragma;
@@ -129,7 +129,7 @@ mod raw_statement;
 mod row;
 #[cfg(feature = "serialize")]
 pub mod serialize;
-#[cfg(feature = "session")]
+#[cfg(all(feature = "session", not(feature = "loadable_extension")))]
 pub mod session;
 mod statement;
 #[cfg(feature = "trace")]
@@ -817,7 +817,7 @@ impl Connection {
     /// [`Connection::load_extension_disable`]).
     ///
     /// [loadext]: https://www.sqlite.org/lang_corefunc.html#load_extension
-    #[cfg(feature = "load_extension")]
+    #[cfg(all(feature = "load_extension", not(feature = "loadable_extension")))]
     #[inline]
     pub unsafe fn load_extension_enable(&self) -> Result<()> {
         self.db.borrow_mut().enable_load_extension(1)
@@ -830,7 +830,7 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    #[cfg(feature = "load_extension")]
+    #[cfg(all(feature = "load_extension", not(feature = "loadable_extension")))]
     #[inline]
     pub fn load_extension_disable(&self) -> Result<()> {
         // It's always safe to turn off extension loading.
@@ -872,7 +872,7 @@ impl Connection {
     /// That is to say: to safely use this, the code in the extension must be
     /// sound, trusted, correctly use the SQLite APIs, and not contain any
     /// memory or thread safety errors.
-    #[cfg(feature = "load_extension")]
+    #[cfg(all(feature = "load_extension", not(feature = "loadable_extension")))]
     #[inline]
     pub unsafe fn load_extension<P: AsRef<Path>, N: Name>(
         &self,
