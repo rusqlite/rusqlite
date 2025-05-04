@@ -630,7 +630,7 @@ mod bindings {
         let bindings = bindings
             .layout_tests(false)
             .generate()
-            .unwrap_or_else(|_| panic!("could not run bindgen on header {}", header));
+            .unwrap_or_else(|_| panic!("could not run bindgen on header {header}"));
 
         #[cfg(feature = "loadable_extension")]
         {
@@ -641,12 +641,12 @@ mod bindings {
             let mut output = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
             super::loadable_extension::generate_functions(&mut output);
             std::fs::write(out_path, output.as_bytes())
-                .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
+                .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
         }
         #[cfg(not(feature = "loadable_extension"))]
         bindings
             .write_to_file(out_path)
-            .unwrap_or_else(|_| panic!("Could not write to {:?}", out_path));
+            .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
     }
 }
 

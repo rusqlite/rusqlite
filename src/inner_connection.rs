@@ -23,17 +23,21 @@ pub struct InnerConnection {
     // interrupt would only acquire the lock after the query's completion.
     interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
     #[cfg(feature = "hooks")]
-    pub free_commit_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    pub commit_hook: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
-    pub free_rollback_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    pub rollback_hook: Option<Box<dyn FnMut() + Send>>,
     #[cfg(feature = "hooks")]
-    pub free_update_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    #[expect(clippy::type_complexity)]
+    pub update_hook: Option<Box<dyn FnMut(crate::hooks::Action, &str, &str, i64) + Send>>,
     #[cfg(feature = "hooks")]
     pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
     pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
     #[cfg(feature = "preupdate_hook")]
-    pub free_preupdate_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    #[expect(clippy::type_complexity)]
+    pub preupdate_hook: Option<
+        Box<dyn FnMut(crate::hooks::Action, &str, &str, &crate::hooks::PreUpdateCase) + Send>,
+    >,
     owned: bool,
 }
 
@@ -47,17 +51,17 @@ impl InnerConnection {
             db,
             interrupt_lock: Arc::new(Mutex::new(if owned { db } else { ptr::null_mut() })),
             #[cfg(feature = "hooks")]
-            free_commit_hook: None,
+            commit_hook: None,
             #[cfg(feature = "hooks")]
-            free_rollback_hook: None,
+            rollback_hook: None,
             #[cfg(feature = "hooks")]
-            free_update_hook: None,
+            update_hook: None,
             #[cfg(feature = "hooks")]
             progress_handler: None,
             #[cfg(feature = "hooks")]
             authorizer: None,
             #[cfg(feature = "preupdate_hook")]
-            free_preupdate_hook: None,
+            preupdate_hook: None,
             owned,
         }
     }
