@@ -4,12 +4,12 @@ use std::panic::catch_unwind;
 use std::ptr;
 
 use super::expect_utf8;
-use super::free_boxed_hook;
 use super::Action;
 use crate::error::check;
 use crate::ffi;
 use crate::inner_connection::InnerConnection;
 use crate::types::ValueRef;
+use crate::util::ThinBoxAny;
 use crate::Connection;
 use crate::Result;
 
@@ -207,31 +207,15 @@ impl InnerConnection {
             }));
         }
 
-        let free_preupdate_hook = if hook.is_some() {
-            Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
-        } else {
-            None
-        };
+        let (boxed, hook) = ThinBoxAny::new_option(hook);
 
-        let previous_hook = match hook {
-            Some(hook) => {
-                let boxed_hook: *mut F = Box::into_raw(Box::new(hook));
-                unsafe {
-                    ffi::sqlite3_preupdate_hook(
-                        self.db(),
-                        Some(call_boxed_closure::<F>),
-                        boxed_hook.cast(),
-                    )
-                }
-            }
+        match hook {
+            Some(hook) => unsafe {
+                ffi::sqlite3_preupdate_hook(self.db(), Some(call_boxed_closure::<F>), hook.cast())
+            },
             _ => unsafe { ffi::sqlite3_preupdate_hook(self.db(), None, ptr::null_mut()) },
         };
-        if !previous_hook.is_null() {
-            if let Some(free_boxed_hook) = self.free_preupdate_hook {
-                unsafe { free_boxed_hook(previous_hook) };
-            }
-        }
-        self.free_preupdate_hook = free_preupdate_hook;
+        self.preupdate_hook = boxed;
     }
 }
 

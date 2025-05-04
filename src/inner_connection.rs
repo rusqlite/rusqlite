@@ -11,6 +11,7 @@ use super::{Connection, InterruptHandle, Name, OpenFlags, PrepFlags, Result};
 use crate::error::{decode_result_raw, error_from_handle, error_with_offset, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
+use crate::util::ThinBoxAny;
 use crate::version_number;
 
 pub struct InnerConnection {
@@ -23,17 +24,24 @@ pub struct InnerConnection {
     // interrupt would only acquire the lock after the query's completion.
     interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
     #[cfg(feature = "hooks")]
-    pub free_commit_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    pub commit_hook: ThinBoxAny,
     #[cfg(feature = "hooks")]
-    pub free_rollback_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    pub rollback_hook: ThinBoxAny,
     #[cfg(feature = "hooks")]
-    pub free_update_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    pub update_hook: ThinBoxAny,
     #[cfg(feature = "hooks")]
-    pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
+    pub wal_hook: ThinBoxAny,
     #[cfg(feature = "hooks")]
-    pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
+    pub progress_handler: ThinBoxAny,
+    #[cfg(feature = "hooks")]
+    pub authorizer: ThinBoxAny,
     #[cfg(feature = "preupdate_hook")]
-    pub free_preupdate_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    pub preupdate_hook: ThinBoxAny,
+    #[cfg(feature = "trace")]
+    pub trace_v2: ThinBoxAny,
+    #[cfg(feature = "collation")]
+    pub x_coll_needed: ThinBoxAny,
+    pub busy_handler: ThinBoxAny,
     owned: bool,
 }
 
@@ -47,17 +55,24 @@ impl InnerConnection {
             db,
             interrupt_lock: Arc::new(Mutex::new(if owned { db } else { ptr::null_mut() })),
             #[cfg(feature = "hooks")]
-            free_commit_hook: None,
+            commit_hook: ThinBoxAny::default(),
             #[cfg(feature = "hooks")]
-            free_rollback_hook: None,
+            rollback_hook: ThinBoxAny::default(),
             #[cfg(feature = "hooks")]
-            free_update_hook: None,
+            update_hook: ThinBoxAny::default(),
             #[cfg(feature = "hooks")]
-            progress_handler: None,
+            wal_hook: ThinBoxAny::default(),
             #[cfg(feature = "hooks")]
-            authorizer: None,
+            progress_handler: ThinBoxAny::default(),
+            #[cfg(feature = "hooks")]
+            authorizer: ThinBoxAny::default(),
             #[cfg(feature = "preupdate_hook")]
-            free_preupdate_hook: None,
+            preupdate_hook: ThinBoxAny::default(),
+            #[cfg(feature = "trace")]
+            trace_v2: ThinBoxAny::default(),
+            #[cfg(feature = "collation")]
+            x_coll_needed: ThinBoxAny::default(),
+            busy_handler: ThinBoxAny::default(),
             owned,
         }
     }
