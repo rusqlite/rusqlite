@@ -63,8 +63,8 @@
 - [X] `sqlite3_set_authorizer` (`FnMut` callback, reference kept)
 - [X] `sqlite3_trace` deprecated (`fn` callback)
 - [X] `sqlite3_profile` deprecated (`fn` callback)
-- [X] `sqlite3_trace_v2` (`fn` callback)
-- [X] `sqlite3_progress_handler` (`FnMut` callback, manual destroy)
+- [X] `sqlite3_trace_v2` (`fn` callback, no context data)
+- [X] `sqlite3_progress_handler` (`FnMut` callback, reference kept)
 
 - [ ] `sqlite3_open`
 - [X] `sqlite3_open_v2`
@@ -203,10 +203,10 @@
 - [X] `sqlite3_txn_state`
 - [X] `sqlite3_next_stmt` (not public, internal use only)
 
-- [X] `sqlite3_commit_hook` (`FnMut` callback, manual destroy)
-- [X] `sqlite3_rollback_hook` (`FnMut` callback, manual destroy)
+- [X] `sqlite3_commit_hook` (`FnMut` callback, reference kept)
+- [X] `sqlite3_rollback_hook` (`FnMut` callback, reference kept)
 - [ ] `sqlite3_autovacuum_pages`
-- [X] `sqlite3_update_hook` (`FnMut` callback, manual destroy)
+- [X] `sqlite3_update_hook` (`FnMut` callback, reference kept)
 
 - [ ] `sqlite3_enable_shared_cache`
 - [ ] `sqlite3_release_memory`
@@ -303,7 +303,7 @@
 
 - [X] `sqlite3_db_cacheflush`
 
-- [X] `sqlite3_preupdate_hook` (`FnMut` callback, manual destroy)
+- [X] `sqlite3_preupdate_hook` (`FnMut` callback, reference kept)
 - [X] `sqlite3_preupdate_old`
 - [X] `sqlite3_preupdate_count`
 - [X] `sqlite3_preupdate_depth`
