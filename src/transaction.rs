@@ -95,7 +95,7 @@ pub struct Savepoint<'conn> {
     committed: bool,
 }
 
-impl Transaction<'_> {
+impl<'conn> Transaction<'conn> {
     /// Begin a new transaction. Cannot be nested; see `savepoint` for nested
     /// transactions.
     ///
@@ -126,6 +126,17 @@ impl Transaction<'_> {
             conn,
             drop_behavior: DropBehavior::Rollback,
         })
+    }
+
+    /// Returns the connection used by the transaction.
+    ///
+    /// Unlike the [`Deref`] implementation below which binds the lifetime of the connection
+    /// to the lifetime of the transaction, this method uses the entire lifetime of the
+    /// connection. This makes it possible for a transaction to create objects (such as
+    /// prepared statements) which outlive the transaction itself.
+    #[inline]
+    pub fn connection(&self) -> &'conn Connection {
+        self.conn
     }
 
     /// Starts a new [savepoint](http://www.sqlite.org/lang_savepoint.html), allowing nested
