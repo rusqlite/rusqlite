@@ -284,7 +284,7 @@ impl FromSql for Value {
 
 #[cfg(test)]
 mod test {
-    use super::FromSql;
+    use super::{FromSql, FromSqlError};
     use crate::{Connection, Error, Result};
     use std::borrow::Cow;
     use std::rc::Rc;
@@ -423,6 +423,10 @@ mod test {
         let db = Connection::open_in_memory()?;
 
         assert_eq!(
+            db.query_row("SELECT 'text'", [], |r| r.get::<_, Box<str>>(0)),
+            Ok(Box::from("text")),
+        );
+        assert_eq!(
             db.query_row("SELECT 'Some string slice!'", [], |r| r
                 .get::<_, Rc<str>>(0)),
             Ok(Rc::from("Some string slice!")),
@@ -452,5 +456,25 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn from_sql_error() {
+        use std::error::Error as _;
+        assert_ne!(FromSqlError::InvalidType, FromSqlError::OutOfRange(0));
+        assert_ne!(FromSqlError::OutOfRange(0), FromSqlError::OutOfRange(1));
+        assert_ne!(
+            FromSqlError::InvalidBlobSize {
+                expected_size: 0,
+                blob_size: 0
+            },
+            FromSqlError::InvalidBlobSize {
+                expected_size: 0,
+                blob_size: 1
+            }
+        );
+        assert!(FromSqlError::InvalidType.source().is_none());
+        let err = std::io::Error::from(std::io::ErrorKind::UnexpectedEof);
+        assert!(FromSqlError::Other(Box::new(err)).source().is_some());
     }
 }
