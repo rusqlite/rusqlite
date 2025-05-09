@@ -43,7 +43,7 @@ openssl-sys = { version = "0.9.103", optional = true }
 
 [build-dependencies]
 bindgen = { version = "0.71", optional = true, default-features = false, features = [
-    "runtime",
+    "prettyplease", "runtime",
 ] }
 pkg-config = { version = "0.3.19", optional = true }
 cc = { version = "1.1.6", optional = true }
