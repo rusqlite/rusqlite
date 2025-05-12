@@ -187,12 +187,9 @@ impl InnerConnection {
     ) -> Result<()> {
         let dylib_str = super::path_to_cstring(dylib_path)?;
         let mut errmsg: *mut c_char = ptr::null_mut();
-        let r = if let Some(entry_point) = entry_point {
-            let c_entry = entry_point.as_cstr()?;
-            ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry.as_ptr(), &mut errmsg)
-        } else {
-            ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), ptr::null(), &mut errmsg)
-        };
+        let cs = entry_point.as_ref().map(N::as_cstr).transpose()?;
+        let c_entry = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let r = ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry, &mut errmsg);
         if r == ffi::SQLITE_OK {
             Ok(())
         } else {
@@ -356,12 +353,9 @@ impl InnerConnection {
         &self,
         db_name: Option<N>,
     ) -> Result<super::transaction::TransactionState> {
-        let r = if let Some(ref name) = db_name {
-            let name = name.as_cstr()?;
-            unsafe { ffi::sqlite3_txn_state(self.db, name.as_ptr()) }
-        } else {
-            unsafe { ffi::sqlite3_txn_state(self.db, ptr::null()) }
-        };
+        let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
+        let name = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let r = unsafe { ffi::sqlite3_txn_state(self.db, name) };
         match r {
             0 => Ok(super::transaction::TransactionState::None),
             1 => Ok(super::transaction::TransactionState::Read),

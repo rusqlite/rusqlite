@@ -16,7 +16,7 @@ use crate::vtab::array::{free_array, ARRAY_TYPE};
 
 /// A prepared statement.
 pub struct Statement<'conn> {
-    conn: &'conn Connection,
+    pub(crate) conn: &'conn Connection,
     pub(crate) stmt: RawStatement,
 }
 

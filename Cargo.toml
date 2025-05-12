@@ -128,25 +128,32 @@ modern-full = [
 bundled-full = ["modern-full", "bundled"]
 
 [dependencies]
+# Jiff Date/Time/Timestamp persistence
 jiff = { version = "0.2", optional = true, default-features = false, features = [
     "std",
 ] }
+# Date/Time/Timestamp persistence
 time = { version = "0.3.36", features = [
     "formatting",
     "macros",
     "parsing",
 ], optional = true }
 bitflags = "2.6.0"
+# LRU cache of statement
 hashlink = "0.10"
+# Chrono Date/Time/Timestamp persistence
 chrono = { version = "0.4.38", optional = true, default-features = false, features = [
     "clock",
 ] }
+# JSON persistence
 serde_json = { version = "1.0", optional = true }
 # Virtual table
 csv = { version = "1.1", optional = true }
+# Url persistence
 url = { version = "2.1", optional = true }
 fallible-iterator = "0.3"
 fallible-streaming-iterator = "0.1"
+# Uuid persistence
 uuid = { version = "1.0", optional = true }
 smallvec = "1.6.1"
 # WIP comptime checks
