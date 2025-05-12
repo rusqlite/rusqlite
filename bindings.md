@@ -164,7 +164,7 @@
 
 - [X] `sqlite3_aggregate_context` (not public, internal use only)
 - [X] `sqlite3_user_data` (not public, internal use only)
-- [X] `sqlite3_context_db_handle`
+- [X] `sqlite3_context_db_handle` (Connection ref)
 - [X] `sqlite3_get_auxdata`
 - [X] `sqlite3_set_auxdata`
 - [ ] `sqlite3_get_clientdata`
@@ -196,7 +196,7 @@
 
 - [X] `sqlite3_get_autocommit`
 
-- [X] `sqlite3_db_handle` (not public, internal use only)
+- [X] `sqlite3_db_handle` (not public, internal use only, Connection ref)
 - [X] `sqlite3_db_name`
 - [X] `sqlite3_db_filename`
 - [X] `sqlite3_db_readonly`
@@ -214,11 +214,11 @@
 - [ ] `sqlite3_soft_heap_limit64`
 - [ ] `sqlite3_hard_heap_limit64`
 
-- [ ] `sqlite3_table_column_metadata`
+- [X] `sqlite3_table_column_metadata`
 
 - [X] `sqlite3_load_extension`
 - [X] `sqlite3_enable_load_extension`
-- [X] `sqlite3_auto_extension`
+- [X] `sqlite3_auto_extension` (`fn` callbak with Connection ref)
 - [X] `sqlite3_reset_auto_extension`
 
 - [ ] `sqlite3_create_module`
@@ -282,7 +282,7 @@
 
 - [X] `sqlite3_log`
 
-- [X] `sqlite3_wal_hook` (`fn` callback)
+- [X] `sqlite3_wal_hook` (`fn` callback with Connection ref)
 - [X] `sqlite3_wal_autocheckpoint`
 - [X] `sqlite3_wal_checkpoint`
 - [X] `sqlite3_wal_checkpoint_v2`
@@ -303,7 +303,7 @@
 
 - [X] `sqlite3_db_cacheflush`
 
-- [X] `sqlite3_preupdate_hook` (`FnMut` callback, reference kept)
+- [X] `sqlite3_preupdate_hook` (`FnMut` callback with Connection ref, reference kept)
 - [X] `sqlite3_preupdate_old`
 - [X] `sqlite3_preupdate_count`
 - [X] `sqlite3_preupdate_depth`
