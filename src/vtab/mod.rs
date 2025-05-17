@@ -16,6 +16,8 @@ use std::ops::Deref;
 use std::ptr;
 use std::slice;
 
+use libsqlite3_sys::sqlite3_free;
+
 use crate::context::set_result;
 use crate::error::{error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
@@ -208,8 +210,6 @@ impl VTabConnection {
         crate::error::check(unsafe { ffi::sqlite3_vtab_config(self.0, config as c_int) })
     }
 
-    // TODO sqlite3_vtab_on_conflict (http://sqlite.org/c3ref/vtab_on_conflict.html) & xUpdate
-
     /// Get access to the underlying SQLite database connection handle.
     ///
     /// # Warning
@@ -313,7 +313,7 @@ pub trait UpdateVTab<'vtab>: CreateVTab<'vtab> {
     ///
     /// Return the new rowid.
     // TODO Make the distinction between argv[1] == NULL and argv[1] != NULL ?
-    fn insert(&mut self, args: &Values<'_>) -> Result<i64>;
+    fn insert(&mut self, args: &Inserts<'_>) -> Result<i64>;
     /// Update: `args[0] != NULL: old rowid or PK, args[1]: new row id or PK,
     /// args[2]: ...`
     fn update(&mut self, args: &Updates<'_>) -> Result<()>;
@@ -453,8 +453,21 @@ impl IndexInfo {
     /// String used to identify the index
     pub fn set_idx_str(&mut self, idx_str: &str) {
         unsafe {
+            if (*self.0).needToFreeIdxStr == 1 {
+                sqlite3_free((*self.0).idxStr as _);
+            }
             (*self.0).idxStr = alloc(idx_str);
             (*self.0).needToFreeIdxStr = 1;
+        }
+    }
+    /// String used to identify the index
+    pub fn set_idx_cstr(&mut self, idx_str: &'static CStr) {
+        unsafe {
+            if (*self.0).needToFreeIdxStr == 1 {
+                sqlite3_free((*self.0).idxStr as _);
+            }
+            (*self.0).idxStr = idx_str.as_ptr() as _;
+            (*self.0).needToFreeIdxStr = 0;
         }
     }
 
@@ -505,13 +518,20 @@ impl IndexInfo {
         Ok(unsafe { CStr::from_ptr(collation) }.to_str()?)
     }
 
-    /*/// Determine if a virtual table query is DISTINCT
+    /// Determine if a virtual table query is DISTINCT
+    #[must_use]
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
-    pub fn distinct(&self) -> c_int {
-        unsafe { ffi::sqlite3_vtab_distinct(self.0) }
+    pub fn distinct(&self) -> DistinctMode {
+        match unsafe { ffi::sqlite3_vtab_distinct(self.0) } {
+            0 => DistinctMode::Ordered,
+            1 => DistinctMode::Grouped,
+            2 => DistinctMode::Distinct,
+            3 => DistinctMode::DistinctOrdered,
+            _ => DistinctMode::Ordered,
+        }
     }
 
-    /// Constraint values
+    /*/// Constraint values
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     pub fn set_rhs_value(&mut self, constraint_idx: c_int, value: ValueRef) -> Result<()> {
         // TODO ValueRef to sqlite3_value
@@ -524,6 +544,20 @@ impl IndexInfo {
         unsafe { ffi::sqlite3_vtab_in(self.0, constraint_idx, b_handle) != 0 }
     } // TODO sqlite3_vtab_in_first / sqlite3_vtab_in_next https://sqlite.org/c3ref/vtab_in_first.html
     */
+}
+
+/// Determine if a virtual table query is DISTINCT
+#[non_exhaustive]
+#[derive(Debug, Eq, PartialEq)]
+pub enum DistinctMode {
+    /// This is the default expectation.
+    Ordered,
+    /// This mode is used when the query planner is doing a GROUP BY.
+    Grouped,
+    /// This mode is used for a DISTINCT query.
+    Distinct,
+    /// This mode is used for queries that have both DISTINCT and ORDER BY clauses.
+    DistinctOrdered,
 }
 
 /// Iterate on index constraint and its associated usage.
@@ -670,7 +704,7 @@ impl OrderBy<'_> {
 pub unsafe trait VTabCursor: Sized {
     /// Begin a search of a virtual table.
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xfilter_method))
-    fn filter(&mut self, idx_num: c_int, idx_str: Option<&str>, args: &Values<'_>) -> Result<()>;
+    fn filter(&mut self, idx_num: c_int, idx_str: Option<&str>, args: &Filters<'_>) -> Result<()>;
     /// Advance cursor to the next row of a result set initiated by
     /// [`filter`](VTabCursor::filter). (See [SQLite doc](https://sqlite.org/vtab.html#the_xnext_method))
     fn next(&mut self) -> Result<()>;
@@ -712,6 +746,19 @@ impl Context {
 
 /// Wrapper to [`VTabCursor::filter`] arguments, the values
 /// requested by [`VTab::best_index`].
+pub struct Filters<'a> {
+    values: Values<'a>,
+    // TODO sqlite3_vtab_in_first / sqlite3_vtab_in_next https://sqlite.org/c3ref/vtab_in_first.html & 3.38.0
+}
+impl<'a> Deref for Filters<'a> {
+    type Target = Values<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.values
+    }
+}
+
+/// Wrapper to [ffi::sqlite3_value]s
 pub struct Values<'a> {
     args: &'a [*mut ffi::sqlite3_value],
 }
@@ -773,7 +820,6 @@ impl Values<'_> {
             iter: self.args.iter(),
         }
     }
-    // TODO sqlite3_vtab_in_first / sqlite3_vtab_in_next https://sqlite.org/c3ref/vtab_in_first.html & 3.38.0
 }
 
 impl<'a> IntoIterator for &'a Values<'a> {
@@ -807,6 +853,28 @@ impl<'a> Iterator for ValueIter<'a> {
     }
 }
 
+/// Wrapper to [`UpdateVTab::insert`] arguments
+pub struct Inserts<'a> {
+    values: Values<'a>,
+}
+impl<'a> Deref for Inserts<'a> {
+    type Target = Values<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.values
+    }
+}
+impl Inserts<'_> {
+    /// Determine the virtual table conflict policy
+    ///
+    /// # Safety
+    /// This function is unsafe because it uses raw pointer
+    #[must_use]
+    pub unsafe fn on_conflict(&self, db: *mut ffi::sqlite3) -> ConflictMode {
+        ConflictMode::from(unsafe { ffi::sqlite3_vtab_on_conflict(db) })
+    }
+}
+
 /// Wrapper to [`UpdateVTab::update`] arguments
 pub struct Updates<'a> {
     values: Values<'a>,
@@ -827,6 +895,43 @@ impl Updates<'_> {
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
     pub fn no_change(&self, idx: usize) -> bool {
         unsafe { ffi::sqlite3_value_nochange(self.values.args[idx]) != 0 }
+    }
+
+    /// Determine the virtual table conflict policy
+    ///
+    /// # Safety
+    /// This function is unsafe because it uses raw pointer
+    #[must_use]
+    pub unsafe fn on_conflict(&self, db: *mut ffi::sqlite3) -> ConflictMode {
+        ConflictMode::from(unsafe { ffi::sqlite3_vtab_on_conflict(db) })
+    }
+}
+
+/// Conflict resolution modes
+#[non_exhaustive]
+#[derive(Debug, Eq, PartialEq)]
+pub enum ConflictMode {
+    /// SQLITE_ROLLBACK
+    Rollback,
+    /// SQLITE_IGNORE
+    Ignore,
+    /// SQLITE_FAIL
+    Fail,
+    /// SQLITE_ABORT
+    Abort,
+    /// SQLITE_REPLACE
+    Replace,
+}
+impl From<c_int> for ConflictMode {
+    fn from(value: c_int) -> Self {
+        match value {
+            ffi::SQLITE_ROLLBACK => ConflictMode::Rollback,
+            ffi::SQLITE_IGNORE => ConflictMode::Ignore,
+            ffi::SQLITE_FAIL => ConflictMode::Fail,
+            ffi::SQLITE_ABORT => ConflictMode::Abort,
+            ffi::SQLITE_REPLACE => ConflictMode::Replace,
+            _ => unreachable!("sqlite3_vtab_on_conflict returned invalid value"),
+        }
     }
 }
 
@@ -1149,7 +1254,7 @@ where
     let args = slice::from_raw_parts_mut(argv, argc as usize);
     let values = Values { args };
     let cr = cursor as *mut C;
-    cursor_error(cursor, (*cr).filter(idx_num, idx_name, &values))
+    cursor_error(cursor, (*cr).filter(idx_num, idx_name, &Filters { values }))
 }
 
 unsafe extern "C" fn rust_next<C>(cursor: *mut sqlite3_vtab_cursor) -> c_int
@@ -1215,7 +1320,7 @@ where
     } else if ffi::sqlite3_value_type(args[0]) == ffi::SQLITE_NULL {
         // TODO Make the distinction between argv[1] == NULL and argv[1] != NULL ?
         let values = Values { args };
-        match (*vt).insert(&values) {
+        match (*vt).insert(&Inserts { values }) {
             Ok(rowid) => {
                 *p_rowid = rowid;
                 Ok(())

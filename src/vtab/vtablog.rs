@@ -5,8 +5,8 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::vtab::{
-    update_module, Context, CreateVTab, IndexInfo, UpdateVTab, Updates, VTab, VTabConnection,
-    VTabCursor, VTabKind, Values,
+    update_module, Context, CreateVTab, Filters, IndexInfo, Inserts, UpdateVTab, Updates, VTab,
+    VTabConnection, VTabCursor, VTabKind,
 };
 use crate::{ffi, ValueRef};
 use crate::{Connection, Error, Result};
@@ -22,6 +22,8 @@ pub fn load_module(conn: &Connection) -> Result<()> {
 struct VTabLog {
     /// Base class. Must be first
     base: ffi::sqlite3_vtab,
+    /// Associated connection
+    db: *mut ffi::sqlite3,
     /// Number of rows in the table
     n_row: i64,
     /// Instance number for this vtablog table
@@ -32,7 +34,7 @@ struct VTabLog {
 
 impl VTabLog {
     fn connect_create(
-        _: &mut VTabConnection,
+        db: &mut VTabConnection,
         _: Option<&()>,
         args: &[&[u8]],
         is_create: bool,
@@ -43,7 +45,7 @@ impl VTabLog {
             "VTabLog::{}(tab={}, args={:?}):",
             if is_create { "create" } else { "connect" },
             i_inst,
-            args,
+            args.iter().map(|b| str::from_utf8(b)).collect::<Vec<_>>(),
         );
         let mut schema = None;
         let mut n_row = None;
@@ -82,6 +84,7 @@ impl VTabLog {
         }
         let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
+            db: unsafe { db.handle() },
             n_row: n_row.unwrap_or(10),
             i_inst,
             n_cursor: 0,
@@ -109,9 +112,17 @@ unsafe impl<'vtab> VTab<'vtab> for VTabLog {
     }
 
     fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
-        println!("VTabLog::best_index({})", self.i_inst);
+        println!(
+            "VTabLog::best_index({}, num_of_order_by: {}, col_used: {}, distinct: {:?})",
+            self.i_inst,
+            info.num_of_order_by(),
+            info.col_used(),
+            info.distinct()
+        );
         info.set_estimated_cost(500.);
         info.set_estimated_rows(500);
+        info.set_idx_str("idx");
+        info.set_idx_cstr(c"idx");
         Ok(())
     }
 
@@ -153,10 +164,11 @@ impl UpdateVTab<'_> for VTabLog {
         Ok(())
     }
 
-    fn insert(&mut self, args: &Values<'_>) -> Result<i64> {
+    fn insert(&mut self, args: &Inserts<'_>) -> Result<i64> {
         println!(
-            "VTabLog::insert({}, {:?})",
+            "VTabLog::insert({}, on_conflict:{:?}, {:?})",
             self.i_inst,
+            unsafe { args.on_conflict(self.db) },
             args.iter().collect::<Vec<ValueRef<'_>>>()
         );
         Ok(self.n_row)
@@ -164,8 +176,9 @@ impl UpdateVTab<'_> for VTabLog {
 
     fn update(&mut self, args: &Updates<'_>) -> Result<()> {
         println!(
-            "VTabLog::update({}, {:?})",
+            "VTabLog::update({}, on_conflict:{:?}, {:?})",
             self.i_inst,
+            unsafe { args.on_conflict(self.db) },
             args.iter()
                 .enumerate()
                 .map(|(i, v)| (v, args.no_change(i)))
@@ -204,11 +217,12 @@ impl Drop for VTabLogCursor<'_> {
 }
 
 unsafe impl VTabCursor for VTabLogCursor<'_> {
-    fn filter(&mut self, _: c_int, _: Option<&str>, _: &Values<'_>) -> Result<()> {
+    fn filter(&mut self, idx_num: c_int, idx_str: Option<&str>, args: &Filters<'_>) -> Result<()> {
         println!(
-            "VTabLogCursor::filter(tab={}, cursor={})",
+            "VTabLogCursor::filter(tab={}, cursor={}, idx_num={idx_num}, idx_str={idx_str:?}, args={})",
             self.vtab().i_inst,
-            self.i_cursor
+            self.i_cursor,
+            args.len()
         );
         self.row_id = 0;
         Ok(())

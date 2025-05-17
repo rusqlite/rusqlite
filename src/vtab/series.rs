@@ -9,8 +9,8 @@ use std::marker::PhantomData;
 use crate::ffi;
 use crate::types::Type;
 use crate::vtab::{
-    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConfig, VTabConnection,
-    VTabCursor, Values,
+    eponymous_only_module, Context, Filters, IndexConstraintOp, IndexInfo, VTab, VTabConfig,
+    VTabConnection, VTabCursor,
 };
 use crate::{error::error_from_sqlite_code, Connection, Result};
 
@@ -196,7 +196,7 @@ impl SeriesTabCursor<'_> {
 }
 #[expect(clippy::comparison_chain)]
 unsafe impl VTabCursor for SeriesTabCursor<'_> {
-    fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
+    fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Filters<'_>) -> Result<()> {
         let mut idx_num = QueryPlanFlags::from_bits_truncate(idx_num);
         let mut i = 0;
         if idx_num.contains(QueryPlanFlags::START) {
