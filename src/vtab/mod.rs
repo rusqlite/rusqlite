@@ -16,6 +16,8 @@ use std::ops::Deref;
 use std::ptr;
 use std::slice;
 
+use libsqlite3_sys::sqlite3_free;
+
 use crate::context::set_result;
 use crate::error::{error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
@@ -453,8 +455,21 @@ impl IndexInfo {
     /// String used to identify the index
     pub fn set_idx_str(&mut self, idx_str: &str) {
         unsafe {
+            if (*self.0).needToFreeIdxStr == 1 {
+                sqlite3_free((*self.0).idxStr as _);
+            }
             (*self.0).idxStr = alloc(idx_str);
             (*self.0).needToFreeIdxStr = 1;
+        }
+    }
+    /// String used to identify the index
+    pub fn set_idx_cstr(&mut self, idx_str: &'static CStr) {
+        unsafe {
+            if (*self.0).needToFreeIdxStr == 1 {
+                sqlite3_free((*self.0).idxStr as _);
+            }
+            (*self.0).idxStr = idx_str.as_ptr() as _;
+            (*self.0).needToFreeIdxStr = 0;
         }
     }
 
@@ -505,13 +520,19 @@ impl IndexInfo {
         Ok(unsafe { CStr::from_ptr(collation) }.to_str()?)
     }
 
-    /*/// Determine if a virtual table query is DISTINCT
+    /// Determine if a virtual table query is DISTINCT
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
-    pub fn distinct(&self) -> c_int {
-        unsafe { ffi::sqlite3_vtab_distinct(self.0) }
+    pub fn distinct(&self) -> DistinctMode {
+        match unsafe { ffi::sqlite3_vtab_distinct(self.0) } {
+            0 => DistinctMode::Ordered,
+            1 => DistinctMode::Grouped,
+            2 => DistinctMode::Distinct,
+            3 => DistinctMode::DistinctOrdered,
+            _ => DistinctMode::Ordered,
+        }
     }
 
-    /// Constraint values
+    /*/// Constraint values
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     pub fn set_rhs_value(&mut self, constraint_idx: c_int, value: ValueRef) -> Result<()> {
         // TODO ValueRef to sqlite3_value
@@ -524,6 +545,20 @@ impl IndexInfo {
         unsafe { ffi::sqlite3_vtab_in(self.0, constraint_idx, b_handle) != 0 }
     } // TODO sqlite3_vtab_in_first / sqlite3_vtab_in_next https://sqlite.org/c3ref/vtab_in_first.html
     */
+}
+
+/// Determine if a virtual table query is DISTINCT
+#[non_exhaustive]
+#[derive(Debug, Eq, PartialEq)]
+pub enum DistinctMode {
+    /// This is the default expectation.
+    Ordered,
+    /// This mode is used when the query planner is doing a GROUP BY.
+    Grouped,
+    /// This mode is used for a DISTINCT query.
+    Distinct,
+    /// This mode is used for queries that have both DISTINCT and ORDER BY clauses.
+    DistinctOrdered,
 }
 
 /// Iterate on index constraint and its associated usage.

@@ -291,7 +291,7 @@
 - [ ] `sqlite3_vtab_on_conflict`
 - [X] `sqlite3_vtab_nochange`
 - [X] `sqlite3_vtab_collation`
-- [ ] `sqlite3_vtab_distinct`
+- [X] `sqlite3_vtab_distinct`
 - [ ] `sqlite3_vtab_in`
 - [ ] `sqlite3_vtab_in_first`
 - [ ] `sqlite3_vtab_in_next`

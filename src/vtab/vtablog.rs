@@ -43,7 +43,7 @@ impl VTabLog {
             "VTabLog::{}(tab={}, args={:?}):",
             if is_create { "create" } else { "connect" },
             i_inst,
-            args,
+            args.iter().map(|b| str::from_utf8(b)).collect::<Vec<_>>(),
         );
         let mut schema = None;
         let mut n_row = None;
@@ -109,9 +109,16 @@ unsafe impl<'vtab> VTab<'vtab> for VTabLog {
     }
 
     fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
-        println!("VTabLog::best_index({})", self.i_inst);
+        println!(
+            "VTabLog::best_index({}, num_of_order_by: {}, col_used: {}, distinct: {:?})",
+            self.i_inst,
+            info.num_of_order_by(),
+            info.col_used(),
+            info.distinct()
+        );
         info.set_estimated_cost(500.);
         info.set_estimated_rows(500);
+        info.set_idx_cstr(c"idx");
         Ok(())
     }
 
@@ -204,11 +211,12 @@ impl Drop for VTabLogCursor<'_> {
 }
 
 unsafe impl VTabCursor for VTabLogCursor<'_> {
-    fn filter(&mut self, _: c_int, _: Option<&str>, _: &Values<'_>) -> Result<()> {
+    fn filter(&mut self, idx_num: c_int, idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
         println!(
-            "VTabLogCursor::filter(tab={}, cursor={})",
+            "VTabLogCursor::filter(tab={}, cursor={}, idx_num={idx_num}, idx_str={idx_str:?}, args={})",
             self.vtab().i_inst,
-            self.i_cursor
+            self.i_cursor,
+            args.len()
         );
         self.row_id = 0;
         Ok(())
