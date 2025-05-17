@@ -121,6 +121,7 @@ unsafe impl<'vtab> VTab<'vtab> for VTabLog {
         );
         info.set_estimated_cost(500.);
         info.set_estimated_rows(500);
+        info.set_idx_str("idx");
         info.set_idx_cstr(c"idx");
         Ok(())
     }
