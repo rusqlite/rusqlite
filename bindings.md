@@ -288,7 +288,7 @@
 - [X] `sqlite3_wal_checkpoint_v2`
 
 - [X] `sqlite3_vtab_config`
-- [ ] `sqlite3_vtab_on_conflict`
+- [X] `sqlite3_vtab_on_conflict`
 - [X] `sqlite3_vtab_nochange`
 - [X] `sqlite3_vtab_collation`
 - [X] `sqlite3_vtab_distinct`
