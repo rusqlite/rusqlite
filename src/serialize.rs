@@ -114,7 +114,7 @@ impl Connection {
                     code: ffi::ErrorCode::CannotOpen,
                     extended_code: ffi::SQLITE_IOERR,
                 },
-                Some(format!("{}", e)),
+                Some(format!("{e}")),
             )
         })?;
         let ptr = NonNull::new(ptr).unwrap();
