@@ -1005,7 +1005,7 @@ mod test {
         })?;
 
         let res: bool =
-            db.one_column("SELECT example(0, i) FROM (SELECT 0 as i UNION SELECT 1)")?;
+            db.first_column("SELECT example(0, i) FROM (SELECT 0 as i UNION SELECT 1)")?;
         // Doesn't actually matter, we'll assert in the function if there's a problem.
         assert!(res);
         Ok(())
