@@ -329,7 +329,7 @@ mod test {
             }),
         );
 
-        db.one_column::<u32>("PRAGMA user_version")?;
+        db.one_column::<u32, _>("PRAGMA user_version", [])?;
         drop(db);
 
         let db = Connection::open_in_memory()?;

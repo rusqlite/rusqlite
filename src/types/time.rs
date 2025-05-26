@@ -187,7 +187,7 @@ mod test {
         for ts in ts_vec {
             db.execute("INSERT INTO foo(t) VALUES (?1)", [ts])?;
 
-            let from: OffsetDateTime = db.one_column("SELECT t FROM foo")?;
+            let from: OffsetDateTime = db.one_column("SELECT t FROM foo", [])?;
 
             db.execute("DELETE FROM foo", [])?;
 
@@ -265,7 +265,7 @@ mod test {
         ];
 
         for (s, t) in tests {
-            let result: OffsetDateTime = db.query_row("SELECT ?1", [s], |r| r.get(0))?;
+            let result: OffsetDateTime = db.one_column("SELECT ?1", [s])?;
             assert_eq!(result, t);
         }
         Ok(())
@@ -277,9 +277,9 @@ mod test {
         let date = date!(2016 - 02 - 23);
         db.execute("INSERT INTO foo (t) VALUES (?1)", [date])?;
 
-        let s: String = db.one_column("SELECT t FROM foo")?;
+        let s: String = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!("2016-02-23", s);
-        let t: Date = db.one_column("SELECT t FROM foo")?;
+        let t: Date = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(date, t);
         Ok(())
     }
@@ -290,9 +290,9 @@ mod test {
         let time = time!(23:56:04.00001);
         db.execute("INSERT INTO foo (t) VALUES (?1)", [time])?;
 
-        let s: String = db.one_column("SELECT t FROM foo")?;
+        let s: String = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!("23:56:04.00001", s);
-        let v: Time = db.one_column("SELECT t FROM foo")?;
+        let v: Time = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(time, v);
         Ok(())
     }
@@ -304,13 +304,13 @@ mod test {
 
         db.execute("INSERT INTO foo (t) VALUES (?1)", [dt])?;
 
-        let s: String = db.one_column("SELECT t FROM foo")?;
+        let s: String = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!("2016-02-23 23:56:04.0", s);
-        let v: PrimitiveDateTime = db.one_column("SELECT t FROM foo")?;
+        let v: PrimitiveDateTime = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(dt, v);
 
         db.execute("UPDATE foo set b = datetime(t)", [])?; // "YYYY-MM-DD HH:MM:SS"
-        let hms: PrimitiveDateTime = db.one_column("SELECT b FROM foo")?;
+        let hms: PrimitiveDateTime = db.one_column("SELECT b FROM foo", [])?;
         assert_eq!(dt, hms);
         Ok(())
     }
@@ -318,7 +318,7 @@ mod test {
     #[test]
     fn test_date_parsing() -> Result<()> {
         let db = checked_memory_handle()?;
-        let result: Date = db.query_row("SELECT ?1", ["2013-10-07"], |r| r.get(0))?;
+        let result: Date = db.one_column("SELECT ?1", ["2013-10-07"])?;
         assert_eq!(result, date!(2013 - 10 - 07));
         Ok(())
     }
@@ -333,7 +333,7 @@ mod test {
         ];
 
         for (s, t) in tests {
-            let result: Time = db.query_row("SELECT ?1", [s], |r| r.get(0))?;
+            let result: Time = db.one_column("SELECT ?1", [s])?;
             assert_eq!(result, t);
         }
         Ok(())
@@ -353,7 +353,7 @@ mod test {
         ];
 
         for (s, t) in tests {
-            let result: PrimitiveDateTime = db.query_row("SELECT ?1", [s], |r| r.get(0))?;
+            let result: PrimitiveDateTime = db.one_column("SELECT ?1", [s])?;
             assert_eq!(result, t);
         }
         Ok(())
@@ -362,10 +362,10 @@ mod test {
     #[test]
     fn test_sqlite_functions() -> Result<()> {
         let db = checked_memory_handle()?;
-        db.one_column::<Time>("SELECT CURRENT_TIME")?;
-        db.one_column::<Date>("SELECT CURRENT_DATE")?;
-        db.one_column::<PrimitiveDateTime>("SELECT CURRENT_TIMESTAMP")?;
-        db.one_column::<OffsetDateTime>("SELECT CURRENT_TIMESTAMP")?;
+        db.one_column::<Time, _>("SELECT CURRENT_TIME", [])?;
+        db.one_column::<Date, _>("SELECT CURRENT_DATE", [])?;
+        db.one_column::<PrimitiveDateTime, _>("SELECT CURRENT_TIMESTAMP", [])?;
+        db.one_column::<OffsetDateTime, _>("SELECT CURRENT_TIMESTAMP", [])?;
         Ok(())
     }
 
@@ -373,10 +373,9 @@ mod test {
     fn test_time_param() -> Result<()> {
         let db = checked_memory_handle()?;
         let now = OffsetDateTime::now_utc().time();
-        let result: Result<bool> = db.query_row(
+        let result: Result<bool> = db.one_column(
             "SELECT 1 WHERE ?1 BETWEEN time('now', '-1 minute') AND time('now', '+1 minute')",
             [now],
-            |r| r.get(0),
         );
         result?;
         Ok(())
@@ -386,10 +385,9 @@ mod test {
     fn test_date_param() -> Result<()> {
         let db = checked_memory_handle()?;
         let now = OffsetDateTime::now_utc().date();
-        let result: Result<bool> = db.query_row(
+        let result: Result<bool> = db.one_column(
             "SELECT 1 WHERE ?1 BETWEEN date('now', '-1 day') AND date('now', '+1 day')",
             [now],
-            |r| r.get(0),
         );
         result?;
         Ok(())
@@ -402,10 +400,9 @@ mod test {
             OffsetDateTime::now_utc().date(),
             OffsetDateTime::now_utc().time(),
         );
-        let result: Result<bool> = db.query_row(
+        let result: Result<bool> = db.one_column(
             "SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')",
             [now],
-            |r| r.get(0),
         );
         result?;
         Ok(())
@@ -414,10 +411,9 @@ mod test {
     #[test]
     fn test_offset_date_time_param() -> Result<()> {
         let db = checked_memory_handle()?;
-        let result: Result<bool> = db.query_row(
+        let result: Result<bool> = db.one_column(
             "SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')",
             [OffsetDateTime::now_utc()],
-            |r| r.get(0),
         );
         result?;
         Ok(())
