@@ -665,10 +665,33 @@ impl Connection {
         stmt.query_row(params, f)
     }
 
+    /// Convenience method to execute a query that is expected to return exactly
+    /// one row.
+    ///
+    /// Returns `Err(QueryReturnedMoreThanOneRow)` if the query returns more than one row.
+    ///
+    /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
+    /// query truly is optional, you can call
+    /// [`.optional()`](crate::OptionalExtension::optional) on the result of
+    /// this to get a `Result<Option<T>>` (requires that the trait
+    /// `rusqlite::OptionalExtension` is imported).
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if the underlying SQLite call fails.
+    pub fn query_one<T, P, F>(&self, sql: &str, params: P, f: F) -> Result<T>
+    where
+        P: Params,
+        F: FnOnce(&Row<'_>) -> Result<T>,
+    {
+        let mut stmt = self.prepare(sql)?;
+        stmt.query_one(params, f)
+    }
+
     // https://sqlite.org/tclsqlite.html#onecolumn
     #[cfg(test)]
     pub(crate) fn one_column<T: types::FromSql>(&self, sql: &str) -> Result<T> {
-        self.query_row(sql, [], |r| r.get(0))
+        self.query_one(sql, [], |r| r.get(0))
     }
 
     /// Convenience method to execute a query that is expected to return a

@@ -50,6 +50,10 @@ pub enum Error {
     /// for [`query_row`](crate::Connection::query_row)) did not return any.
     QueryReturnedNoRows,
 
+    /// Error when a query that was expected to return only one row (e.g.,
+    /// for [`query_one`](crate::Connection::query_one)) did return more than one.
+    QueryReturnedMoreThanOneRow,
+
     /// Error when the value of a particular column is requested, but the index
     /// is out of range for the statement.
     InvalidColumnIndex(usize),
@@ -152,6 +156,7 @@ impl PartialEq for Error {
             (Self::InvalidPath(p1), Self::InvalidPath(p2)) => p1 == p2,
             (Self::ExecuteReturnedResults, Self::ExecuteReturnedResults) => true,
             (Self::QueryReturnedNoRows, Self::QueryReturnedNoRows) => true,
+            (Self::QueryReturnedMoreThanOneRow, Self::QueryReturnedMoreThanOneRow) => true,
             (Self::InvalidColumnIndex(i1), Self::InvalidColumnIndex(i2)) => i1 == i2,
             (Self::InvalidColumnName(n1), Self::InvalidColumnName(n2)) => n1 == n2,
             (Self::InvalidColumnType(i1, n1, t1), Self::InvalidColumnType(i2, n2, t2)) => {
@@ -278,6 +283,7 @@ impl fmt::Display for Error {
                 write!(f, "Execute returned results - did you mean to call query?")
             }
             Self::QueryReturnedNoRows => write!(f, "Query returned no rows"),
+            Self::QueryReturnedMoreThanOneRow => write!(f, "Query returned more than one row"),
             Self::InvalidColumnIndex(i) => write!(f, "Invalid column index: {i}"),
             Self::InvalidColumnName(ref name) => write!(f, "Invalid column name: {name}"),
             Self::InvalidColumnType(i, ref name, ref t) => {
@@ -336,6 +342,7 @@ impl error::Error for Error {
             | Self::InvalidParameterName(_)
             | Self::ExecuteReturnedResults
             | Self::QueryReturnedNoRows
+            | Self::QueryReturnedMoreThanOneRow
             | Self::InvalidColumnIndex(_)
             | Self::InvalidColumnName(_)
             | Self::InvalidColumnType(..)
