@@ -105,16 +105,16 @@ mod test {
         let date = Date::constant(2016, 2, 23);
         db.execute("INSERT INTO foo (t) VALUES (?1)", [date])?;
 
-        let s: String = db.one_column("SELECT t FROM foo")?;
+        let s: String = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!("2016-02-23", s);
-        let t: Date = db.one_column("SELECT t FROM foo")?;
+        let t: Date = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(date, t);
 
         db.execute("UPDATE foo set b = date(t)", [])?;
-        let t: Date = db.one_column("SELECT b FROM foo")?;
+        let t: Date = db.one_column("SELECT b FROM foo", [])?;
         assert_eq!(date, t);
 
-        let r: Result<Date> = db.one_column("SELECT '2023-02-29'");
+        let r: Result<Date> = db.one_column("SELECT '2023-02-29'", []);
         assert!(r.is_err());
         Ok(())
     }
@@ -125,16 +125,16 @@ mod test {
         let time = Time::constant(23, 56, 4, 0);
         db.execute("INSERT INTO foo (t) VALUES (?1)", [time])?;
 
-        let s: String = db.one_column("SELECT t FROM foo")?;
+        let s: String = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!("23:56:04", s);
-        let v: Time = db.one_column("SELECT t FROM foo")?;
+        let v: Time = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(time, v);
 
         db.execute("UPDATE foo set b = time(t)", [])?;
-        let v: Time = db.one_column("SELECT b FROM foo")?;
+        let v: Time = db.one_column("SELECT b FROM foo", [])?;
         assert_eq!(time, v);
 
-        let r: Result<Time> = db.one_column("SELECT '25:22:45'");
+        let r: Result<Time> = db.one_column("SELECT '25:22:45'", []);
         assert!(r.is_err());
         Ok(())
     }
@@ -146,16 +146,16 @@ mod test {
 
         db.execute("INSERT INTO foo (t) VALUES (?1)", [dt])?;
 
-        let s: String = db.one_column("SELECT t FROM foo")?;
+        let s: String = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!("2016-02-23T23:56:04", s);
-        let v: DateTime = db.one_column("SELECT t FROM foo")?;
+        let v: DateTime = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(dt, v);
 
         db.execute("UPDATE foo set b = datetime(t)", [])?;
-        let v: DateTime = db.one_column("SELECT b FROM foo")?;
+        let v: DateTime = db.one_column("SELECT b FROM foo", [])?;
         assert_eq!(dt, v);
 
-        let r: Result<DateTime> = db.one_column("SELECT '2023-02-29T00:00:00'");
+        let r: Result<DateTime> = db.one_column("SELECT '2023-02-29T00:00:00'", []);
         assert!(r.is_err());
         Ok(())
     }
@@ -167,12 +167,12 @@ mod test {
 
         db.execute("INSERT INTO foo (t) VALUES (?1)", [ts])?;
 
-        let s: String = db.one_column("SELECT t FROM foo")?;
+        let s: String = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!("2016-02-23T23:56:04Z", s);
-        let v: Timestamp = db.one_column("SELECT t FROM foo")?;
+        let v: Timestamp = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(ts, v);
 
-        let r: Result<Timestamp> = db.one_column("SELECT '2023-02-29T00:00:00Z'");
+        let r: Result<Timestamp> = db.one_column("SELECT '2023-02-29T00:00:00Z'", []);
         assert!(r.is_err());
 
         Ok(())
@@ -209,7 +209,7 @@ mod test {
 
         for string in tests {
             let expected: Timestamp = string.parse().unwrap();
-            let result: Timestamp = db.query_row("SELECT ?1", [string], |r| r.get(0))?;
+            let result: Timestamp = db.one_column("SELECT ?1", [string])?;
             assert_eq!(result, expected);
         }
         Ok(())

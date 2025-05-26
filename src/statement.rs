@@ -1045,7 +1045,7 @@ mod test {
         let mut stmt = db.prepare("INSERT INTO test (x, y) VALUES (:x, :y)")?;
         stmt.execute(&[(":x", "one")])?;
 
-        let result: Option<String> = db.one_column("SELECT y FROM test WHERE x = 'one'")?;
+        let result: Option<String> = db.one_column("SELECT y FROM test WHERE x = 'one'", [])?;
         assert!(result.is_none());
         Ok(())
     }
@@ -1091,7 +1091,7 @@ mod test {
         stmt.execute(&[(":x", "one")])?;
         stmt.execute(&[(c":y", "two")])?;
 
-        let result: String = db.one_column("SELECT x FROM test WHERE y = 'two'")?;
+        let result: String = db.one_column("SELECT x FROM test WHERE y = 'two'", [])?;
         assert_eq!(result, "one");
         Ok(())
     }
@@ -1350,7 +1350,7 @@ mod test {
         db.execute_batch("CREATE TABLE foo(x TEXT)")?;
         let expected = "テスト";
         db.execute("INSERT INTO foo(x) VALUES (?1)", [&expected])?;
-        let actual: String = db.one_column("SELECT x FROM foo")?;
+        let actual: String = db.one_column("SELECT x FROM foo", [])?;
         assert_eq!(expected, actual);
         Ok(())
     }
@@ -1359,7 +1359,7 @@ mod test {
     fn test_nul_byte() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let expected = "a\x00b";
-        let actual: String = db.query_row("SELECT ?1", [expected], |row| row.get(0))?;
+        let actual: String = db.one_column("SELECT ?1", [expected])?;
         assert_eq!(expected, actual);
         Ok(())
     }

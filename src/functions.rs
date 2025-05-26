@@ -885,7 +885,7 @@ mod test {
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             half,
         )?;
-        let result: f64 = db.one_column("SELECT half(6)")?;
+        let result: f64 = db.one_column("SELECT half(6)", [])?;
 
         assert!((3f64 - result).abs() < f64::EPSILON);
         Ok(())
@@ -900,12 +900,10 @@ mod test {
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
             half,
         )?;
-        let result: f64 = db.one_column("SELECT half(6)")?;
-        assert!((3f64 - result).abs() < f64::EPSILON);
+        assert!((3f64 - db.one_column::<f64, _>("SELECT half(6)", [])?).abs() < f64::EPSILON);
 
         db.remove_function(c"half", 1)?;
-        let result: Result<f64> = db.one_column("SELECT half(6)");
-        result.unwrap_err();
+        db.one_column::<f64, _>("SELECT half(6)", []).unwrap_err();
         Ok(())
     }
 
@@ -950,14 +948,15 @@ mod test {
             regexp_with_auxiliary,
         )?;
 
-        let result: bool = db.one_column("SELECT regexp('l.s[aeiouy]', 'lisa')")?;
+        assert!(db.one_column::<bool, _>("SELECT regexp('l.s[aeiouy]', 'lisa')", [])?);
 
-        assert!(result);
-
-        let result: i64 =
-            db.one_column("SELECT COUNT(*) FROM foo WHERE regexp('l.s[aeiouy]', x) == 1")?;
-
-        assert_eq!(2, result);
+        assert_eq!(
+            2,
+            db.one_column::<i64, _>(
+                "SELECT COUNT(*) FROM foo WHERE regexp('l.s[aeiouy]', x) == 1",
+                [],
+            )?
+        );
         Ok(())
     }
 
@@ -985,8 +984,7 @@ mod test {
             ("onetwo", "SELECT my_concat('one', 'two')"),
             ("abc", "SELECT my_concat('a', 'b', 'c')"),
         ] {
-            let result: String = db.one_column(query)?;
-            assert_eq!(expected, result);
+            assert_eq!(expected, db.one_column::<String, _>(query, [])?);
         }
         Ok(())
     }
@@ -1059,12 +1057,10 @@ mod test {
 
         // sum should return NULL when given no columns (contrast with count below)
         let no_result = "SELECT my_sum(i) FROM (SELECT 2 AS i WHERE 1 <> 1)";
-        let result: Option<i64> = db.one_column(no_result)?;
-        assert!(result.is_none());
+        assert!(db.one_column::<Option<i64>, _>(no_result, [])?.is_none());
 
         let single_sum = "SELECT my_sum(i) FROM (SELECT 2 AS i UNION ALL SELECT 2)";
-        let result: i64 = db.one_column(single_sum)?;
-        assert_eq!(4, result);
+        assert_eq!(4, db.one_column::<i64, _>(single_sum, [])?);
 
         let dual_sum = "SELECT my_sum(i), my_sum(j) FROM (SELECT 2 AS i, 1 AS j UNION ALL SELECT \
                         2, 1)";
@@ -1085,12 +1081,10 @@ mod test {
 
         // count should return 0 when given no columns (contrast with sum above)
         let no_result = "SELECT my_count(i) FROM (SELECT 2 AS i WHERE 1 <> 1)";
-        let result: i64 = db.one_column(no_result)?;
-        assert_eq!(result, 0);
+        assert_eq!(db.one_column::<i64, _>(no_result, [])?, 0);
 
         let single_sum = "SELECT my_count(i) FROM (SELECT 2 AS i UNION ALL SELECT 2)";
-        let result: i64 = db.one_column(single_sum)?;
-        assert_eq!(2, result);
+        assert_eq!(2, db.one_column::<i64, _>(single_sum, [])?);
         Ok(())
     }
 
@@ -1173,10 +1167,11 @@ mod test {
             FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_RESULT_SUBTYPE,
             test_setsubtype,
         )?;
-        let result: i32 = db.one_column("SELECT test_getsubtype('hello');")?;
+        let result: i32 = db.one_column("SELECT test_getsubtype('hello');", [])?;
         assert_eq!(0, result);
 
-        let result: i32 = db.one_column("SELECT test_getsubtype(test_setsubtype('hello',123));")?;
+        let result: i32 =
+            db.one_column("SELECT test_getsubtype(test_setsubtype('hello',123));", [])?;
         assert_eq!(123, result);
 
         Ok(())
@@ -1192,10 +1187,10 @@ mod test {
         db.create_scalar_function("test_len", 1, FunctionFlags::SQLITE_DETERMINISTIC, test_len)?;
         assert_eq!(
             6,
-            db.one_column::<usize>("SELECT test_len(X'53514C697465');")?
+            db.one_column::<usize, _>("SELECT test_len(X'53514C697465');", [])?
         );
-        assert_eq!(0, db.one_column::<usize>("SELECT test_len(X'');")?);
-        assert_eq!(0, db.one_column::<usize>("SELECT test_len(NULL);")?);
+        assert_eq!(0, db.one_column::<usize, _>("SELECT test_len(X'');", [])?);
+        assert_eq!(0, db.one_column::<usize, _>("SELECT test_len(NULL);", [])?);
         Ok(())
     }
 }
