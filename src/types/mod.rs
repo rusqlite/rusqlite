@@ -201,7 +201,7 @@ mod test {
 
         db.execute("INSERT INTO foo(i) VALUES (?1)", [Value::Integer(10)])?;
 
-        assert_eq!(10i64, db.one_column::<i64, _>("SELECT i FROM foo", [])?);
+        assert_eq!(10, db.one_column::<i64, _>("SELECT i FROM foo", [])?);
         Ok(())
     }
 

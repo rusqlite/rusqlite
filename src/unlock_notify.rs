@@ -108,7 +108,7 @@ mod test {
             tx2.commit().unwrap();
         });
         assert_eq!(tx.recv().unwrap(), 1);
-        assert_eq!(42i64, db1.one_column::<i64, _>("SELECT x FROM foo", [])?);
+        assert_eq!(42, db1.one_column::<i64, _>("SELECT x FROM foo", [])?);
         child.join().unwrap();
         Ok(())
     }

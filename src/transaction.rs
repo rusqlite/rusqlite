@@ -572,7 +572,7 @@ mod test {
         }
         {
             let tx = db.transaction()?;
-            assert_eq!(2i32, tx.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
+            assert_eq!(2, tx.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         }
         Ok(())
     }
@@ -608,7 +608,7 @@ mod test {
             tx.commit()?;
         }
 
-        assert_eq!(2i32, db.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
+        assert_eq!(2, db.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         Ok(())
     }
 
@@ -633,7 +633,7 @@ mod test {
         }
         {
             let tx = db.transaction()?;
-            assert_eq!(6i32, tx.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
+            assert_eq!(6, tx.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         }
         Ok(())
     }

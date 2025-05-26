@@ -690,11 +690,11 @@ impl Connection {
 
     // https://sqlite.org/tclsqlite.html#onecolumn
     #[cfg(test)]
-    pub(crate) fn one_column<T: types::FromSql, P: Params>(
-        &self,
-        sql: &str,
-        params: P,
-    ) -> Result<T> {
+    pub(crate) fn one_column<T, P>(&self, sql: &str, params: P) -> Result<T>
+    where
+        T: types::FromSql,
+        P: Params,
+    {
         self.query_one(sql, params, |r| r.get(0))
     }
 
@@ -1356,7 +1356,7 @@ mod test {
         let path_string = path.to_str().unwrap();
         let db = Connection::open(path_string)?;
 
-        assert_eq!(42i64, db.one_column::<i64, _>("SELECT x FROM foo", [])?);
+        assert_eq!(42, db.one_column::<i64, _>("SELECT x FROM foo", [])?);
         Ok(())
     }
 
@@ -1425,7 +1425,7 @@ mod test {
 
         let db = Connection::open(&db_path)?;
 
-        assert_eq!(42i64, db.one_column::<i64, _>("SELECT x FROM foo", [])?);
+        assert_eq!(42, db.one_column::<i64, _>("SELECT x FROM foo", [])?);
         Ok(())
     }
 
@@ -1510,7 +1510,7 @@ mod test {
         assert_eq!(1, db.execute("INSERT INTO foo(x) VALUES (?1)", [1i32])?);
         assert_eq!(1, db.execute("INSERT INTO foo(x) VALUES (?1)", [2i32])?);
 
-        assert_eq!(3i32, db.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
+        assert_eq!(3, db.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         Ok(())
     }
 
@@ -1652,10 +1652,7 @@ mod test {
                    END;";
         db.execute_batch(sql)?;
 
-        assert_eq!(
-            10i64,
-            db.one_column::<i64, _>("SELECT SUM(x) FROM foo", [])?
-        );
+        assert_eq!(10, db.one_column::<i64, _>("SELECT SUM(x) FROM foo", [])?);
 
         let result: Result<i64> = db.one_column("SELECT x FROM foo WHERE x > 5", []);
         match result.unwrap_err() {
