@@ -1004,8 +1004,11 @@ mod test {
             Ok(true)
         })?;
 
-        let res: bool =
-            db.first_column("SELECT example(0, i) FROM (SELECT 0 as i UNION SELECT 1)")?;
+        let res: bool = db.query_row(
+            "SELECT example(0, i) FROM (SELECT 0 as i UNION SELECT 1)",
+            [],
+            |r| r.get(0),
+        )?;
         // Doesn't actually matter, we'll assert in the function if there's a problem.
         assert!(res);
         Ok(())

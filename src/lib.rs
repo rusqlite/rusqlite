@@ -693,10 +693,6 @@ impl Connection {
     pub(crate) fn one_column<T: types::FromSql>(&self, sql: &str) -> Result<T> {
         self.query_one(sql, [], |r| r.get(0))
     }
-    #[cfg(test)]
-    pub(crate) fn first_column<T: types::FromSql>(&self, sql: &str) -> Result<T> {
-        self.query_row(sql, [], |r| r.get(0))
-    }
 
     /// Convenience method to execute a query that is expected to return a
     /// single row, and execute a mapping via `f` on that returned row with
