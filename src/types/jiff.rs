@@ -4,7 +4,6 @@ use jiff::{
     civil::{Date, DateTime, Time},
     Timestamp,
 };
-use std::str::FromStr;
 
 use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use crate::Result;
@@ -22,10 +21,9 @@ impl ToSql for Date {
 impl FromSql for Date {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value.as_str().and_then(|s| match Self::from_str(s) {
-            Ok(d) => Ok(d),
-            Err(err) => Err(FromSqlError::Other(Box::new(err))),
-        })
+        value
+            .as_str()
+            .and_then(|s| s.parse().map_err(FromSqlError::other))
     }
 }
 /// time => "HH:MM:SS.SSS"
@@ -40,10 +38,9 @@ impl ToSql for Time {
 /// "HH:MM:SS.SSS" => time.
 impl FromSql for Time {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value.as_str().and_then(|s| match Self::from_str(s) {
-            Ok(t) => Ok(t),
-            Err(err) => Err(FromSqlError::Other(Box::new(err))),
-        })
+        value
+            .as_str()
+            .and_then(|s| s.parse().map_err(FromSqlError::other))
     }
 }
 
@@ -59,10 +56,9 @@ impl ToSql for DateTime {
 /// "YYYY-MM-DDTHH:MM:SS.SSS" => Gregorian datetime.
 impl FromSql for DateTime {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        value.as_str().and_then(|s| match Self::from_str(s) {
-            Ok(dt) => Ok(dt),
-            Err(err) => Err(FromSqlError::Other(Box::new(err))),
-        })
+        value
+            .as_str()
+            .and_then(|s| s.parse().map_err(FromSqlError::other))
     }
 }
 
@@ -81,7 +77,7 @@ impl FromSql for Timestamp {
         value
             .as_str()?
             .parse::<Timestamp>()
-            .map_err(|err| FromSqlError::Other(Box::new(err)))
+            .map_err(FromSqlError::other)
     }
 }
 

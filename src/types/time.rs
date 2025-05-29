@@ -69,18 +69,16 @@ impl FromSql for OffsetDateTime {
         value.as_str().and_then(|s| {
             if let Some(b' ') = s.as_bytes().get(23) {
                 // legacy
-                return Self::parse(s, &LEGACY_DATE_TIME_FORMAT)
-                    .map_err(|err| FromSqlError::Other(Box::new(err)));
+                return Self::parse(s, &LEGACY_DATE_TIME_FORMAT).map_err(FromSqlError::other);
             }
             if s[8..].contains('+') || s[8..].contains('-') {
                 // Formats 2-7 with timezone
-                return Self::parse(s, &OFFSET_DATE_TIME_FORMAT)
-                    .map_err(|err| FromSqlError::Other(Box::new(err)));
+                return Self::parse(s, &OFFSET_DATE_TIME_FORMAT).map_err(FromSqlError::other);
             }
             // Formats 2-7 without timezone
             PrimitiveDateTime::parse(s, &UTC_DATE_TIME_FORMAT)
                 .map(|p| p.assume_utc())
-                .map_err(|err| FromSqlError::Other(Box::new(err)))
+                .map_err(FromSqlError::other)
         })
     }
 }

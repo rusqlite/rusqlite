@@ -52,7 +52,7 @@ impl FromSql for DateTimeSql {
         i64::column_result(value).and_then(|as_i64| {
             time::OffsetDateTime::from_unix_timestamp(as_i64)
             .map(|odt| DateTimeSql(odt))
-            .map_err(|err| FromSqlError::Other(Box::new(err)))
+            .map_err(FromSqlError::other)
         })
     }
 }

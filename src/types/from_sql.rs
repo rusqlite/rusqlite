@@ -28,6 +28,18 @@ pub enum FromSqlError {
     Other(Box<dyn Error + Send + Sync + 'static>),
 }
 
+impl FromSqlError {
+    /// Converts an arbitrary error type to [`FromSqlError`].
+    ///
+    /// This is a convenience function that boxes and unsizes the error type. It's main purpose is
+    /// to be usable in the `map_err` method. So instead of
+    /// `result.map_err(|error| FromSqlError::Other(Box::new(error))` you can write
+    /// `result.map_err(FromSqlError::other)`.
+    pub fn other<E: Error + Send + Sync + 'static>(error: E) -> Self {
+        Self::Other(Box::new(error))
+    }
+}
+
 impl PartialEq for FromSqlError {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
