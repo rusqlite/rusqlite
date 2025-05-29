@@ -56,7 +56,7 @@ impl FromSql for Value {
             }
             ValueRef::Null => Ok(Self::Null),
         }
-        .map_err(|err| FromSqlError::Other(Box::new(err)))
+        .map_err(FromSqlError::other)
     }
 }
 

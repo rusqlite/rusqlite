@@ -20,10 +20,7 @@ impl FromSql for NaiveDate {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value
             .as_str()
-            .and_then(|s| match Self::parse_from_str(s, "%F") {
-                Ok(dt) => Ok(dt),
-                Err(err) => Err(FromSqlError::Other(Box::new(err))),
-            })
+            .and_then(|s| Self::parse_from_str(s, "%F").map_err(FromSqlError::other))
     }
 }
 
@@ -45,10 +42,7 @@ impl FromSql for NaiveTime {
                 8 => "%T",
                 _ => "%T%.f",
             };
-            match Self::parse_from_str(s, fmt) {
-                Ok(dt) => Ok(dt),
-                Err(err) => Err(FromSqlError::Other(Box::new(err))),
-            }
+            Self::parse_from_str(s, fmt).map_err(FromSqlError::other)
         })
     }
 }
@@ -75,10 +69,7 @@ impl FromSql for NaiveDateTime {
                 "%F %T%.f"
             };
 
-            match Self::parse_from_str(s, fmt) {
-                Ok(dt) => Ok(dt),
-                Err(err) => Err(FromSqlError::Other(Box::new(err))),
-            }
+            Self::parse_from_str(s, fmt).map_err(FromSqlError::other)
         })
     }
 }
@@ -152,7 +143,7 @@ impl FromSql for DateTime<FixedOffset> {
         let s = String::column_result(value)?;
         Self::parse_from_rfc3339(s.as_str())
             .or_else(|_| Self::parse_from_str(s.as_str(), "%F %T%.f%:z"))
-            .map_err(|e| FromSqlError::Other(Box::new(e)))
+            .map_err(FromSqlError::other)
     }
 }
 
