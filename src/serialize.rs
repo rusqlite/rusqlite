@@ -65,7 +65,7 @@ impl Deref for Data<'_> {
 
 impl Connection {
     /// Serialize a database.
-    pub fn serialize<N: Name>(&self, schema: N) -> Result<Data> {
+    pub fn serialize<N: Name>(&self, schema: N) -> Result<Data<'_>> {
         let schema = schema.as_cstr()?;
         let mut sz = 0;
         let mut ptr: *mut u8 = unsafe {
