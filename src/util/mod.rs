@@ -37,14 +37,14 @@ pub trait Name: std::fmt::Debug {
     fn as_cstr(&self) -> Result<Named>;
 }
 impl Name for &str {
-    fn as_cstr(&self) -> Result<Named> {
+    fn as_cstr(&self) -> Result<Named<'_>> {
         let ss = SmallCString::new(self)?;
         Ok(Named::Small(ss))
     }
 }
 impl Name for &CStr {
     #[inline]
-    fn as_cstr(&self) -> Result<Named> {
+    fn as_cstr(&self) -> Result<Named<'_>> {
         Ok(Named::C(self))
     }
 }

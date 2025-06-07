@@ -185,7 +185,7 @@ impl Statement<'_> {
     /// sure that current statement has already been stepped once before
     /// calling this method.
     #[cfg(feature = "column_decltype")]
-    pub fn columns(&self) -> Vec<Column> {
+    pub fn columns(&self) -> Vec<Column<'_>> {
         let n = self.column_count();
         let mut cols = Vec::with_capacity(n);
         for i in 0..n {
@@ -205,7 +205,7 @@ impl Statement<'_> {
     ///
     /// Computed or otherwise derived columns will have None values for these fields.
     #[cfg(feature = "column_metadata")]
-    pub fn columns_with_metadata(&self) -> Vec<ColumnMetadata> {
+    pub fn columns_with_metadata(&self) -> Vec<ColumnMetadata<'_>> {
         let n = self.column_count();
         let mut col_mets = Vec::with_capacity(n);
         for i in 0..n {

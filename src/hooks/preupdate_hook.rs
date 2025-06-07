@@ -71,7 +71,7 @@ impl PreUpdateOldValueAccessor {
     }
 
     /// Get the value of the row being updated/deleted at the specified index.
-    pub fn get_old_column_value(&self, i: i32) -> Result<ValueRef> {
+    pub fn get_old_column_value(&self, i: i32) -> Result<ValueRef<'_>> {
         let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
         unsafe {
             check(ffi::sqlite3_preupdate_old(self.db, i, &mut p_value))?;
@@ -109,7 +109,7 @@ impl PreUpdateNewValueAccessor {
     }
 
     /// Get the value of the row being updated/deleted at the specified index.
-    pub fn get_new_column_value(&self, i: i32) -> Result<ValueRef> {
+    pub fn get_new_column_value(&self, i: i32) -> Result<ValueRef<'_>> {
         let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
         unsafe {
             check(ffi::sqlite3_preupdate_new(self.db, i, &mut p_value))?;
