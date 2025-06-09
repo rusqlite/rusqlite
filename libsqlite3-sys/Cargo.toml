@@ -42,7 +42,7 @@ wasm32-wasi-vfs = []
 openssl-sys = { version = "0.9.103", optional = true }
 
 [build-dependencies]
-bindgen = { version = "0.71", optional = true, default-features = false, features = [
+bindgen = { version = "0.72", optional = true, default-features = false, features = [
     "prettyplease", "runtime",
 ] }
 pkg-config = { version = "0.3.19", optional = true }
