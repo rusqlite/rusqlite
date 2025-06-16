@@ -194,7 +194,7 @@ rusqlite-macros = { path = "rusqlite-macros", version = "0.4.1", optional = true
 libsqlite3-sys = { path = "libsqlite3-sys", version = "0.35.0" }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
-sqlite-wasm-rs = { version = ">=0.3.0, <0.4.0", default-features = false }
+sqlite-wasm-rs = { version = "0.3.8", default-features = false }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
 # Something is dependent on them, we use feature to override it.
