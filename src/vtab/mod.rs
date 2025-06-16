@@ -16,7 +16,7 @@ use std::ops::Deref;
 use std::ptr;
 use std::slice;
 
-use libsqlite3_sys::sqlite3_free;
+use crate::ffi::sqlite3_free;
 
 use crate::context::set_result;
 use crate::error::{error_from_sqlite_code, to_sqlite_error};
