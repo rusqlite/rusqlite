@@ -1045,15 +1045,14 @@ pub fn parse_boolean(s: &str) -> Option<bool> {
 /// `<param_name>=['"]?<param_value>['"]?` => `(<param_name>, <param_value>)`
 pub fn parameter(c_slice: &[u8]) -> Result<(&str, &str)> {
     let arg = std::str::from_utf8(c_slice)?.trim();
-    let mut split = arg.split('=');
-    if let Some(key) = split.next() {
-        if let Some(value) = split.next() {
+    match arg.split_once('=') {
+        Some((key, value)) => {
             let param = key.trim();
             let value = dequote(value.trim());
-            return Ok((param, value));
+            Ok((param, value))
         }
+        _ => Err(Error::ModuleError(format!("illegal argument: '{arg}'"))),
     }
-    Err(Error::ModuleError(format!("illegal argument: '{arg}'")))
 }
 
 unsafe extern "C" fn rust_create<'vtab, T>(
@@ -1442,5 +1441,10 @@ mod test {
         assert_eq!(Some(false), super::parse_boolean("no"));
         assert_eq!(Some(false), super::parse_boolean("off"));
         assert_eq!(Some(false), super::parse_boolean("false"));
+    }
+    #[test]
+    fn test_parse_parameters() {
+        assert_eq!(Ok(("key", "value")), super::parameter(b"key='value'"));
+        assert_eq!(Ok(("key", "foo=bar")), super::parameter(b"key='foo=bar'"));
     }
 }
