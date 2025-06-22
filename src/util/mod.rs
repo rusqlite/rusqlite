@@ -34,7 +34,7 @@ impl std::ops::Deref for Named<'_> {
 /// Database, table, column, collation, function, module, vfs name
 pub trait Name: std::fmt::Debug {
     /// As C string
-    fn as_cstr(&self) -> Result<Named>;
+    fn as_cstr(&self) -> Result<Named<'_>>;
 }
 impl Name for &str {
     fn as_cstr(&self) -> Result<Named<'_>> {
