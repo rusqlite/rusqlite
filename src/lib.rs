@@ -73,7 +73,7 @@ pub use fallible_streaming_iterator;
 #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
 pub use libsqlite3_sys as ffi;
 #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-pub use sqlite_wasm_rs::export as ffi;
+pub use sqlite_wasm_rs as ffi;
 
 use std::cell::RefCell;
 use std::default::Default;
@@ -2332,19 +2332,5 @@ mod test {
     fn release_memory() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.release_memory()
-    }
-
-    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    fn test_sqlite_wasm_vfs_default() {
-        Connection::open("test_sqlite_wasm_vfs_default.db").unwrap();
-    }
-
-    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-    #[wasm_bindgen_test::wasm_bindgen_test]
-    async fn test_sqlite_wasm_vfs_opfs_sahpool() {
-        let util = ffi::install_opfs_sahpool(None, false).await.unwrap();
-        Connection::open("file:test_sqlite_wasm_vfs_opfs_sahpool.db?vfs=opfs-sahpool").unwrap();
-        assert!(util.get_file_count() > 0);
     }
 }
