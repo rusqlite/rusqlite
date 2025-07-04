@@ -66,16 +66,16 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Add for wasm32-unknown-unknown target
-        run: |
-          rustup target add wasm32-unknown-unknown
-          cargo build --target wasm32-unknown-unknown --features precompiled-wasm,modern-full-wasm32-unknown-unknown
-
       - name: Test for wasm32-unknown-unknown target
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
-          cargo install wasm-pack
-          wasm-pack test --chrome --headless --features precompiled-wasm,modern-full-wasm32-unknown-unknown
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          source ./emsdk_env.sh
+          wasm-pack test --chrome --headless --features modern-base
 
       - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --all-targets --workspace --verbose
       - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --doc --workspace --verbose
