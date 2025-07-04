@@ -87,6 +87,21 @@ jobs:
           RUSTFLAGS: -Ctarget-feature=+crt-static -Cdebuginfo=1
         run: cargo build --features bundled
 
+  test-sqlite-wasm:
+    name: Test wasm32-unknown-unknown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test for wasm32-unknown-unknown target
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          source ./emsdk_env.sh
+          wasm-pack test --chrome --headless --features modern-base
+
   test-sqlcipher-bundled:
     name: Test ${{ matrix.os }} (bundled SQLcipher + OpenSSL)
     runs-on: ${{ matrix.os }}

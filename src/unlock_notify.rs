@@ -91,7 +91,7 @@ mod test {
     use std::thread;
     use std::time;
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_unlock_notify() -> Result<()> {
         let url = "file::memory:?cache=shared";
         let flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_URI;
