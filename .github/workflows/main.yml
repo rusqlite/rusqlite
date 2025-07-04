@@ -66,17 +66,6 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Test for wasm32-unknown-unknown target
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: |
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          git clone https://github.com/emscripten-core/emsdk.git
-          cd emsdk
-          ./emsdk install latest
-          ./emsdk activate latest
-          source ./emsdk_env.sh
-          wasm-pack test --chrome --headless --features modern-base
-
       - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --all-targets --workspace --verbose
       - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --doc --workspace --verbose
 
@@ -97,6 +86,21 @@ jobs:
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static -Cdebuginfo=1
         run: cargo build --features bundled
+
+  test-sqlite-wasm:
+    name: Test wasm32-unknown-unknown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test for wasm32-unknown-unknown target
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          source ./emsdk_env.sh
+          wasm-pack test --chrome --headless --features modern-base
 
   test-sqlcipher-bundled:
     name: Test ${{ matrix.os }} (bundled SQLcipher + OpenSSL)
