@@ -118,7 +118,7 @@ impl std::borrow::Borrow<str> for SmallCString {
 mod test {
     use super::*;
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_small_cstring() {
         // We don't go through the normal machinery for default, so make sure
         // things work.

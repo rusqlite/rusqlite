@@ -397,7 +397,7 @@ impl Connection {
 mod test {
     use crate::{Connection, Result};
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "column_decltype")]
     fn test_columns() -> Result<()> {
         use super::Column;
@@ -425,7 +425,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "column_metadata")]
     fn test_columns_with_metadata() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -460,7 +460,7 @@ mod test {
         Ok(())
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_column_name_in_error() -> Result<()> {
         use crate::{types::Type, Error};
         let db = Connection::open_in_memory()?;
@@ -502,7 +502,7 @@ mod test {
     /// call to `sqlite3_column_name()` or `sqlite3_column_name16()` on the same
     /// column.". We assume that reference is valid if only
     /// `sqlite3_column_name()` is used):
-    #[test]
+    #[rusqlite_test_helper::test]
     #[cfg(feature = "modern_sqlite")]
     fn test_column_name_reference() -> Result<()> {
         let db = Connection::open_in_memory()?;

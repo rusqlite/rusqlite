@@ -30,7 +30,7 @@ impl ParamIndexCache {
 #[cfg(test)]
 mod test {
     use super::*;
-    #[test]
+    #[rusqlite_test_helper::test]
     fn test_cache() {
         let p = ParamIndexCache::default();
         let v = p.get_or_insert_with("foo", |cstr| {

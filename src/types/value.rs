@@ -144,14 +144,14 @@ mod test {
     use super::Value;
     use crate::types::Type;
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn from() {
         assert_eq!(Value::from(2f32), Value::Real(2f64));
         assert_eq!(Value::from(3.), Value::Real(3.));
         assert_eq!(Value::from(vec![0u8]), Value::Blob(vec![0u8]));
     }
 
-    #[test]
+    #[rusqlite_test_helper::test]
     fn data_type() {
         assert_eq!(Value::Null.data_type(), Type::Null);
         assert_eq!(Value::Integer(0).data_type(), Type::Integer);
