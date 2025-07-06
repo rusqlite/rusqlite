@@ -435,7 +435,7 @@ impl Connection {
     ///
     /// - The database is stored in memory by default.
     /// - Persistent VFS (Virtual File Systems) is optional,
-    ///   see <https://github.com/Spxg/sqlite-wasm-rs/blob/master/VFS.md> for details
+    ///   see <https://github.com/Spxg/sqlite-wasm-rs/blob/master/sqlite-wasm-rs/src/vfs/README.md> for details
     #[inline]
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let flags = OpenFlags::default();
