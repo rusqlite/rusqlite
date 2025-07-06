@@ -168,7 +168,7 @@ rusqlite-macros = { path = "rusqlite-macros", version = "0.4.1", optional = true
 libsqlite3-sys = { path = "libsqlite3-sys", version = "0.35.0" }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
-sqlite-wasm-rs = "0.4.0"
+sqlite-wasm-rs = "0.4.1"
 chrono = { version = "0.4.38", optional = true, default-features = false, features = ["wasmbind"] }
 jiff = { version = "0.2", optional = true, default-features = false, features = ["js"] }
 time = { version = "0.3.36", optional = true, features = ["wasm-bindgen"] }
