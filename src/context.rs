@@ -44,6 +44,10 @@ pub(super) unsafe fn set_result(
                 Some(free_array),
             );
         }
+        #[cfg(feature = "pointer")]
+        ToSqlOutput::Pointer(ref p) => {
+            return ffi::sqlite3_result_pointer(ctx, p.0, p.1, p.2);
+        }
     };
 
     match value {
