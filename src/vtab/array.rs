@@ -33,8 +33,8 @@ use std::rc::Rc;
 use crate::ffi;
 use crate::types::{ToSql, ToSqlOutput, Value};
 use crate::vtab::{
-    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConnection, VTabCursor,
-    Values,
+    eponymous_only_module, Context, Filters, IndexConstraintOp, IndexInfo, VTab, VTabConnection,
+    VTabCursor,
 };
 use crate::{Connection, Result};
 
@@ -151,7 +151,7 @@ impl ArrayTabCursor<'_> {
     }
 }
 unsafe impl VTabCursor for ArrayTabCursor<'_> {
-    fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
+    fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Filters<'_>) -> Result<()> {
         if idx_num > 0 {
             self.ptr = args.get_array(0);
         } else {

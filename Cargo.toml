@@ -1,7 +1,7 @@
 [package]
 name = "rusqlite"
 # Note: Update version in README.md when you change this.
-version = "0.35.0"
+version = "0.37.0"
 authors = ["The rusqlite developers"]
 edition = "2021"
 description = "Ergonomic wrapper for SQLite"
@@ -33,9 +33,11 @@ name = "rusqlite"
 members = ["libsqlite3-sys"]
 
 [features]
+# if not SQLITE_OMIT_LOAD_EXTENSION
 load_extension = []
 # hot-backup interface: 3.6.11 (2009-02-18)
 backup = []
+# if not SQLITE_OMIT_INCRBLOB
 # sqlite3_blob_reopen: 3.7.4
 blob = []
 cache = ["hashlink"]
@@ -54,17 +56,22 @@ buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
 limits = []
 loadable_extension = ["libsqlite3-sys/loadable_extension"]
 hooks = []
+# if SQLITE_ENABLE_PREUPDATE_HOOK
 preupdate_hook = ["libsqlite3-sys/preupdate_hook", "hooks"]
 i128_blob = []
 sqlcipher = ["libsqlite3-sys/sqlcipher"]
+# SQLITE_ENABLE_UNLOCK_NOTIFY
 unlock_notify = ["libsqlite3-sys/unlock_notify"]
+# if not SQLITE_OMIT_VIRTUALTABLE
 # xSavepoint, xRelease and xRollbackTo: 3.7.7 (2011-06-23)
 vtab = []
 csvtab = ["csv", "vtab"]
 # pointer passing interfaces: 3.20.0
 array = ["vtab", "modern_sqlite"]
+# if SQLITE_ENABLE_SESSION
 # session extension: 3.13.0
 session = ["libsqlite3-sys/session", "hooks"]
+# if not SQLITE_OMIT_WINDOWFUNC
 # window functions: 3.25.0
 window = ["functions", "modern_sqlite"]
 # 3.9.0
@@ -77,9 +84,12 @@ in_gecko = ["modern_sqlite", "libsqlite3-sys/in_gecko"]
 bundled-windows = ["libsqlite3-sys/bundled-windows"]
 # Build bundled sqlite with -fsanitize=address
 with-asan = ["libsqlite3-sys/with-asan"]
+# if SQLITE_ENABLE_COLUMN_METADATA
 column_metadata = ["libsqlite3-sys/column_metadata"]
+# if not SQLITE_OMIT_DECLTYPE
 column_decltype = []
 wasm32-wasi-vfs = ["libsqlite3-sys/wasm32-wasi-vfs"]
+# if not SQLITE_OMIT_DESERIALIZE
 # 3.23.0
 serialize = ["modern_sqlite"]
 
@@ -120,27 +130,36 @@ bundled-full = ["modern-full", "bundled"]
 default = ["cache"]
 
 [dependencies]
+# Jiff Date/Time/Timestamp persistence
 jiff = { version = "0.2", optional = true, default-features = false, features = [
     "std",
 ] }
+# Date/Time/Timestamp persistence
 time = { version = "0.3.36", features = [
     "formatting",
     "macros",
     "parsing",
 ], optional = true }
 bitflags = "2.6.0"
+# LRU cache of statement
 hashlink = { version = "0.10", optional = true }
+# Chrono Date/Time/Timestamp persistence
 chrono = { version = "0.4.38", optional = true, default-features = false, features = [
     "clock",
 ] }
+# JSON persistence
 serde_json = { version = "1.0", optional = true }
+# Virtual table
 csv = { version = "1.1", optional = true }
+# Url persistence
 url = { version = "2.1", optional = true }
 fallible-iterator = "0.3"
 fallible-streaming-iterator = "0.1"
+# Uuid persistence
 uuid = { version = "1.0", optional = true }
 smallvec = "1.6.1"
-rusqlite-macros = { path = "rusqlite-macros", version = "0.4.0", optional = true }
+# WIP comptime checks
+rusqlite-macros = { path = "rusqlite-macros", version = "0.4.1", optional = true }
 
 [dev-dependencies]
 doc-comment = "0.3"
@@ -155,7 +174,7 @@ bencher = "0.1"
 
 [dependencies.libsqlite3-sys]
 path = "libsqlite3-sys"
-version = "0.33.0"
+version = "0.35.0"
 
 [[test]]
 name = "auto_ext"

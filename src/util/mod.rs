@@ -34,17 +34,17 @@ impl std::ops::Deref for Named<'_> {
 /// Database, table, column, collation, function, module, vfs name
 pub trait Name: std::fmt::Debug {
     /// As C string
-    fn as_cstr(&self) -> Result<Named>;
+    fn as_cstr(&self) -> Result<Named<'_>>;
 }
 impl Name for &str {
-    fn as_cstr(&self) -> Result<Named> {
+    fn as_cstr(&self) -> Result<Named<'_>> {
         let ss = SmallCString::new(self)?;
         Ok(Named::Small(ss))
     }
 }
 impl Name for &CStr {
     #[inline]
-    fn as_cstr(&self) -> Result<Named> {
+    fn as_cstr(&self) -> Result<Named<'_>> {
         Ok(Named::C(self))
     }
 }

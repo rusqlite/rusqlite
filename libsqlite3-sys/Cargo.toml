@@ -1,6 +1,6 @@
 [package]
 name = "libsqlite3-sys"
-version = "0.33.0"
+version = "0.35.0"
 authors = ["The rusqlite developers"]
 edition = "2021"
 repository = "https://github.com/rusqlite/rusqlite"
@@ -42,7 +42,7 @@ wasm32-wasi-vfs = []
 openssl-sys = { version = "0.9.103", optional = true }
 
 [build-dependencies]
-bindgen = { version = "0.71", optional = true, default-features = false, features = [
+bindgen = { version = "0.72", optional = true, default-features = false, features = [
     "runtime",
 ] }
 pkg-config = { version = "0.3.19", optional = true }

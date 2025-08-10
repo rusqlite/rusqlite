@@ -1,3 +1,5 @@
+# List of SQLite functions supported
+
 - [ ] `sqlite3_version`
 - [X] `sqlite3_libversion`
 - [ ] `sqlite3_sourceid`
@@ -18,7 +20,7 @@
 - [ ] `sqlite3_os_init`
 - [ ] `sqlite3_os_end`
 
-- [-] `sqlite3_config` (callback)
+- [ ] `sqlite3_config` (partially, `fn` callback for SQLITE_CONFIG_LOG)
 - [X] `sqlite3_db_config`
 
 - [X] `sqlite3_extended_result_codes` (not public, internal use only)
@@ -36,7 +38,7 @@
 
 - [ ] `sqlite3_complete`
 
-- [X] `sqlite3_busy_handler` (callback)
+- [X] `sqlite3_busy_handler` (`fn` callback)
 - [X] `sqlite3_busy_timeout`
 
 - [ ] `sqlite3_get_table`
@@ -58,11 +60,11 @@
 
 - [ ] `sqlite3_randomness`
 
-- [X] `sqlite3_set_authorizer` (callback)
-- [X] `sqlite3_trace` deprecated (callback)
-- [X] `sqlite3_profile` deprecated (callback)
-- [X] `sqlite3_trace_v2` (callback)
-- [X] `sqlite3_progress_handler` (callback)
+- [X] `sqlite3_set_authorizer` (`FnMut` callback, reference kept)
+- [X] `sqlite3_trace` deprecated (`fn` callback)
+- [X] `sqlite3_profile` deprecated (`fn` callback)
+- [X] `sqlite3_trace_v2` (`fn` callback, no context data)
+- [X] `sqlite3_progress_handler` (`FnMut` callback, reference kept)
 
 - [ ] `sqlite3_open`
 - [X] `sqlite3_open_v2`
@@ -140,8 +142,8 @@
 - [X] `sqlite3_reset` (not public, internal use only)
 
 - [ ] `sqlite3_create_function`
-- [X] `sqlite3_create_function_v2` (callback)
-- [X] `sqlite3_create_window_function` (callback)
+- [X] `sqlite3_create_function_v2` (Boxed callback, destroyed by SQLite)
+- [X] `sqlite3_create_window_function` (Boxed callback, destroyed by SQLite)
 
 - [X] `sqlite3_value_blob`
 - [X] `sqlite3_value_double`
@@ -152,7 +154,7 @@
 - [X] `sqlite3_value_bytes` (not public, internal use only)
 - [X] `sqlite3_value_type`
 - [ ] `sqlite3_value_numeric_type`
-- [ ] `sqlite3_value_nochange`
+- [X] `sqlite3_value_nochange`
 - [ ] `sqlite3_value_frombind`
 - [ ] `sqlite3_value_encoding`
 - [X] `sqlite3_value_subtype`
@@ -162,7 +164,7 @@
 
 - [X] `sqlite3_aggregate_context` (not public, internal use only)
 - [X] `sqlite3_user_data` (not public, internal use only)
-- [X] `sqlite3_context_db_handle`
+- [X] `sqlite3_context_db_handle` (Connection ref)
 - [X] `sqlite3_get_auxdata`
 - [X] `sqlite3_set_auxdata`
 - [ ] `sqlite3_get_clientdata`
@@ -187,24 +189,24 @@
 - [X] `sqlite3_result_subtype`
 
 - [ ] `sqlite3_create_collation`
-- [X] `sqlite3_create_collation_v2` (callback)
-- [X] `sqlite3_collation_needed` (callback)
+- [X] `sqlite3_create_collation_v2` (Boxed callback, destroyed by SQLite)
+- [X] `sqlite3_collation_needed` (`fn` callback)
 
 - [ ] `sqlite3_sleep`
 
 - [X] `sqlite3_get_autocommit`
 
-- [X] `sqlite3_db_handle` (not public, internal use only)
+- [X] `sqlite3_db_handle` (not public, internal use only, Connection ref)
 - [X] `sqlite3_db_name`
 - [X] `sqlite3_db_filename`
 - [X] `sqlite3_db_readonly`
 - [X] `sqlite3_txn_state`
 - [X] `sqlite3_next_stmt` (not public, internal use only)
 
-- [X] `sqlite3_commit_hook` (callback)
-- [X] `sqlite3_rollback_hook` (callback)
+- [X] `sqlite3_commit_hook` (`FnMut` callback, reference kept)
+- [X] `sqlite3_rollback_hook` (`FnMut` callback, reference kept)
 - [ ] `sqlite3_autovacuum_pages`
-- [X] `sqlite3_update_hook` (callback)
+- [X] `sqlite3_update_hook` (`FnMut` callback, reference kept)
 
 - [ ] `sqlite3_enable_shared_cache`
 - [ ] `sqlite3_release_memory`
@@ -212,11 +214,11 @@
 - [ ] `sqlite3_soft_heap_limit64`
 - [ ] `sqlite3_hard_heap_limit64`
 
-- [ ] `sqlite3_table_column_metadata`
+- [X] `sqlite3_table_column_metadata`
 
 - [X] `sqlite3_load_extension`
 - [X] `sqlite3_enable_load_extension`
-- [X] `sqlite3_auto_extension`
+- [X] `sqlite3_auto_extension` (`fn` callbak with Connection ref)
 - [X] `sqlite3_reset_auto_extension`
 
 - [ ] `sqlite3_create_module`
@@ -271,7 +273,7 @@
 - [X] `sqlite3_backup_remaining`
 - [X] `sqlite3_backup_pagecount`
 
-- [X] `sqlite3_unlock_notify` (callback)
+- [X] `sqlite3_unlock_notify` (`fn` callback, internal use only)
 
 - [ ] `sqlite3_stricmp`
 - [ ] `sqlite3_strnicmp`
@@ -280,20 +282,20 @@
 
 - [X] `sqlite3_log`
 
-- [X] `sqlite3_wal_hook` (callback)
+- [X] `sqlite3_wal_hook` (`fn` callback with Connection ref)
 - [X] `sqlite3_wal_autocheckpoint`
 - [X] `sqlite3_wal_checkpoint`
 - [X] `sqlite3_wal_checkpoint_v2`
 
 - [X] `sqlite3_vtab_config`
-- [ ] `sqlite3_vtab_on_conflict`
-- [ ] `sqlite3_vtab_nochange`
+- [X] `sqlite3_vtab_on_conflict`
+- [X] `sqlite3_vtab_nochange`
 - [X] `sqlite3_vtab_collation`
 - [X] `sqlite3_vtab_distinct`
-- [X] `sqlite3_vtab_in`
+- [ ] `sqlite3_vtab_in`
 - [ ] `sqlite3_vtab_in_first`
 - [ ] `sqlite3_vtab_in_next`
-- [X] `sqlite3_vtab_rhs_value`
+- [ ] `sqlite3_vtab_rhs_value`
 
 - [ ] `sqlite3_stmt_scanstatus`
 - [ ] `sqlite3_stmt_scanstatus_v2`
@@ -301,7 +303,7 @@
 
 - [X] `sqlite3_db_cacheflush`
 
-- [X] `sqlite3_preupdate_hook` (callback)
+- [X] `sqlite3_preupdate_hook` (`FnMut` callback with Connection ref, reference kept)
 - [X] `sqlite3_preupdate_old`
 - [X] `sqlite3_preupdate_count`
 - [X] `sqlite3_preupdate_depth`

@@ -4,7 +4,6 @@ use std::panic::catch_unwind;
 use std::ptr;
 
 use super::expect_utf8;
-use super::free_boxed_hook;
 use super::Action;
 use crate::error::check;
 use crate::ffi;
@@ -72,7 +71,7 @@ impl PreUpdateOldValueAccessor {
     }
 
     /// Get the value of the row being updated/deleted at the specified index.
-    pub fn get_old_column_value(&self, i: i32) -> Result<ValueRef> {
+    pub fn get_old_column_value(&self, i: i32) -> Result<ValueRef<'_>> {
         let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
         unsafe {
             check(ffi::sqlite3_preupdate_old(self.db, i, &mut p_value))?;
@@ -110,7 +109,7 @@ impl PreUpdateNewValueAccessor {
     }
 
     /// Get the value of the row being updated/deleted at the specified index.
-    pub fn get_new_column_value(&self, i: i32) -> Result<ValueRef> {
+    pub fn get_new_column_value(&self, i: i32) -> Result<ValueRef<'_>> {
         let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
         unsafe {
             check(ffi::sqlite3_preupdate_new(self.db, i, &mut p_value))?;
@@ -207,31 +206,23 @@ impl InnerConnection {
             }));
         }
 
-        let free_preupdate_hook = if hook.is_some() {
-            Some(free_boxed_hook::<F> as unsafe fn(*mut c_void))
-        } else {
-            None
-        };
-
-        let previous_hook = match hook {
+        match hook {
             Some(hook) => {
-                let boxed_hook: *mut F = Box::into_raw(Box::new(hook));
+                let boxed_hook = Box::new(hook);
                 unsafe {
                     ffi::sqlite3_preupdate_hook(
                         self.db(),
                         Some(call_boxed_closure::<F>),
-                        boxed_hook.cast(),
+                        &*boxed_hook as *const F as *mut _,
                     )
-                }
+                };
+                self.preupdate_hook = Some(boxed_hook);
             }
-            _ => unsafe { ffi::sqlite3_preupdate_hook(self.db(), None, ptr::null_mut()) },
-        };
-        if !previous_hook.is_null() {
-            if let Some(free_boxed_hook) = self.free_preupdate_hook {
-                unsafe { free_boxed_hook(previous_hook) };
+            _ => {
+                unsafe { ffi::sqlite3_preupdate_hook(self.db(), None, ptr::null_mut()) };
+                self.preupdate_hook = None;
             }
         }
-        self.free_preupdate_hook = free_preupdate_hook;
     }
 }
 

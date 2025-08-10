@@ -56,7 +56,7 @@ impl FromSql for Value {
             }
             ValueRef::Null => Ok(Self::Null),
         }
-        .map_err(|err| FromSqlError::Other(Box::new(err)))
+        .map_err(FromSqlError::other)
     }
 }
 
@@ -83,9 +83,9 @@ mod test {
             [&data as &dyn ToSql, &json.as_bytes()],
         )?;
 
-        let t: Value = db.one_column("SELECT t FROM foo")?;
+        let t: Value = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(data, t);
-        let b: Value = db.one_column("SELECT b FROM foo")?;
+        let b: Value = db.one_column("SELECT b FROM foo", [])?;
         assert_eq!(data, b);
         Ok(())
     }
@@ -94,20 +94,15 @@ mod test {
     fn test_to_sql() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
-        let v: Option<String> = db.query_row("SELECT ?", [Value::Null], |r| r.get(0))?;
+        let v: Option<String> = db.one_column("SELECT ?", [Value::Null])?;
         assert_eq!(None, v);
-        let v: String = db.query_row("SELECT ?", [Value::Bool(true)], |r| r.get(0))?;
+        let v: String = db.one_column("SELECT ?", [Value::Bool(true)])?;
         assert_eq!("true", v);
-        let v: i64 = db.query_row("SELECT ?", [Value::Number(Number::from(1))], |r| r.get(0))?;
+        let v: i64 = db.one_column("SELECT ?", [Value::Number(Number::from(1))])?;
         assert_eq!(1, v);
-        let v: f64 = db.query_row(
-            "SELECT ?",
-            [Value::Number(Number::from_f64(0.1).unwrap())],
-            |r| r.get(0),
-        )?;
+        let v: f64 = db.one_column("SELECT ?", [Value::Number(Number::from_f64(0.1).unwrap())])?;
         assert_eq!(0.1, v);
-        let v: String =
-            db.query_row("SELECT ?", [Value::String("text".to_owned())], |r| r.get(0))?;
+        let v: String = db.one_column("SELECT ?", [Value::String("text".to_owned())])?;
         assert_eq!("\"text\"", v);
         Ok(())
     }
@@ -116,19 +111,19 @@ mod test {
     fn test_from_sql() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
-        let v: Value = db.one_column("SELECT NULL")?;
+        let v: Value = db.one_column("SELECT NULL", [])?;
         assert_eq!(Value::Null, v);
-        let v: Value = db.one_column("SELECT 'null'")?;
+        let v: Value = db.one_column("SELECT 'null'", [])?;
         assert_eq!(Value::Null, v);
-        let v: Value = db.one_column("SELECT 'true'")?;
+        let v: Value = db.one_column("SELECT 'true'", [])?;
         assert_eq!(Value::Bool(true), v);
-        let v: Value = db.one_column("SELECT 1")?;
+        let v: Value = db.one_column("SELECT 1", [])?;
         assert_eq!(Value::Number(Number::from(1)), v);
-        let v: Value = db.one_column("SELECT 0.1")?;
+        let v: Value = db.one_column("SELECT 0.1", [])?;
         assert_eq!(Value::Number(Number::from_f64(0.1).unwrap()), v);
-        let v: Value = db.one_column("SELECT '\"text\"'")?;
+        let v: Value = db.one_column("SELECT '\"text\"'", [])?;
         assert_eq!(Value::String("text".to_owned()), v);
-        let v: Result<Value> = db.one_column("SELECT 'text'");
+        let v: Result<Value> = db.one_column("SELECT 'text'", []);
         assert!(v.is_err());
         Ok(())
     }

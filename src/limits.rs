@@ -13,7 +13,6 @@ use std::ffi::c_int;
 #[repr(i32)]
 #[non_exhaustive]
 #[expect(non_camel_case_types)]
-#[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
 pub enum Limit {
     /// The maximum size of any string or BLOB or table row, in bytes.
     SQLITE_LIMIT_LENGTH = ffi::SQLITE_LIMIT_LENGTH,
@@ -52,7 +51,6 @@ pub enum Limit {
 impl Connection {
     /// Returns the current value of a [`Limit`].
     #[inline]
-    #[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
     pub fn limit(&self, limit: Limit) -> Result<i32> {
         let c = self.db.borrow();
         let rc = unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, -1) };
@@ -65,7 +63,6 @@ impl Connection {
     /// Changes the [`Limit`] to `new_val`, returning the prior
     /// value of the limit.
     #[inline]
-    #[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
     pub fn set_limit(&self, limit: Limit, new_val: i32) -> Result<i32> {
         if new_val < 0 {
             return Err(err!(ffi::SQLITE_RANGE, "{new_val} is invalid"));

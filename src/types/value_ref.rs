@@ -84,9 +84,7 @@ impl<'a> ValueRef<'a> {
     #[inline]
     pub fn as_str(&self) -> FromSqlResult<&'a str> {
         match *self {
-            ValueRef::Text(t) => {
-                std::str::from_utf8(t).map_err(|e| FromSqlError::Other(Box::new(e)))
-            }
+            ValueRef::Text(t) => std::str::from_utf8(t).map_err(FromSqlError::other),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -99,7 +97,7 @@ impl<'a> ValueRef<'a> {
         match *self {
             ValueRef::Null => Ok(None),
             ValueRef::Text(t) => std::str::from_utf8(t)
-                .map_err(|e| FromSqlError::Other(Box::new(e)))
+                .map_err(FromSqlError::other)
                 .map(Some),
             _ => Err(FromSqlError::InvalidType),
         }
@@ -331,5 +329,19 @@ mod test {
         assert!(ValueRef::Integer(1).as_bytes_or_null().is_err());
         assert_eq!(ValueRef::Blob(b"").as_bytes_or_null(), Ok(Some(&b""[..])));
         Ok(())
+    }
+    #[test]
+    fn from_value() {
+        use crate::types::Value;
+        assert_eq!(
+            ValueRef::from(&Value::Text("".to_owned())),
+            ValueRef::Text(b"")
+        );
+        assert_eq!(ValueRef::from(&Value::Blob(vec![])), ValueRef::Blob(b""));
+    }
+    #[test]
+    fn from_option() {
+        assert_eq!(ValueRef::from(None as Option<&str>), ValueRef::Null);
+        assert_eq!(ValueRef::from(Some("")), ValueRef::Text(b""));
     }
 }

@@ -41,7 +41,6 @@ impl From<isize> for Value {
 }
 
 #[cfg(feature = "i128_blob")]
-#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 impl From<i128> for Value {
     #[inline]
     fn from(i: i128) -> Self {
@@ -52,7 +51,6 @@ impl From<i128> for Value {
 }
 
 #[cfg(feature = "uuid")]
-#[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
 impl From<uuid::Uuid> for Value {
     #[inline]
     fn from(id: uuid::Uuid) -> Self {
@@ -160,5 +158,11 @@ mod test {
         assert_eq!(Value::Real(0.).data_type(), Type::Real);
         assert_eq!(Value::Text(String::new()).data_type(), Type::Text);
         assert_eq!(Value::Blob(vec![]).data_type(), Type::Blob);
+    }
+
+    #[test]
+    fn from_option() {
+        assert_eq!(Value::from(None as Option<i64>), Value::Null);
+        assert_eq!(Value::from(Some(0)), Value::Integer(0));
     }
 }

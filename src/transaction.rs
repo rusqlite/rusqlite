@@ -375,7 +375,6 @@ impl Drop for Savepoint<'_> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 #[cfg(feature = "modern_sqlite")] // 3.37.0
-#[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
 pub enum TransactionState {
     /// Equivalent to `SQLITE_TXN_NONE`
     None,
@@ -511,7 +510,6 @@ impl Connection {
 
     /// Determine the transaction state of a database
     #[cfg(feature = "modern_sqlite")] // 3.37.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     pub fn transaction_state<N: crate::Name>(
         &self,
         db_name: Option<N>,
@@ -574,7 +572,7 @@ mod test {
         }
         {
             let tx = db.transaction()?;
-            assert_eq!(2i32, tx.one_column::<i32>("SELECT SUM(x) FROM foo")?);
+            assert_eq!(2, tx.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         }
         Ok(())
     }
@@ -610,7 +608,7 @@ mod test {
             tx.commit()?;
         }
 
-        assert_eq!(2i32, db.one_column::<i32>("SELECT SUM(x) FROM foo")?);
+        assert_eq!(2, db.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         Ok(())
     }
 
@@ -635,7 +633,7 @@ mod test {
         }
         {
             let tx = db.transaction()?;
-            assert_eq!(6i32, tx.one_column::<i32>("SELECT SUM(x) FROM foo")?);
+            assert_eq!(6, tx.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         }
         Ok(())
     }
@@ -778,8 +776,7 @@ mod test {
     }
 
     fn assert_current_sum(x: i32, conn: &Connection) -> Result<()> {
-        let i = conn.one_column::<i32>("SELECT SUM(x) FROM foo")?;
-        assert_eq!(x, i);
+        assert_eq!(x, conn.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         Ok(())
     }
 

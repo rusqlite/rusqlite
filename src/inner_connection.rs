@@ -23,17 +23,21 @@ pub struct InnerConnection {
     // interrupt would only acquire the lock after the query's completion.
     interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
     #[cfg(feature = "hooks")]
-    pub free_commit_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    pub commit_hook: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
-    pub free_rollback_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    pub rollback_hook: Option<Box<dyn FnMut() + Send>>,
     #[cfg(feature = "hooks")]
-    pub free_update_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    #[expect(clippy::type_complexity)]
+    pub update_hook: Option<Box<dyn FnMut(crate::hooks::Action, &str, &str, i64) + Send>>,
     #[cfg(feature = "hooks")]
     pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
     pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
     #[cfg(feature = "preupdate_hook")]
-    pub free_preupdate_hook: Option<unsafe fn(*mut std::ffi::c_void)>,
+    #[expect(clippy::type_complexity)]
+    pub preupdate_hook: Option<
+        Box<dyn FnMut(crate::hooks::Action, &str, &str, &crate::hooks::PreUpdateCase) + Send>,
+    >,
     owned: bool,
 }
 
@@ -47,17 +51,17 @@ impl InnerConnection {
             db,
             interrupt_lock: Arc::new(Mutex::new(if owned { db } else { ptr::null_mut() })),
             #[cfg(feature = "hooks")]
-            free_commit_hook: None,
+            commit_hook: None,
             #[cfg(feature = "hooks")]
-            free_rollback_hook: None,
+            rollback_hook: None,
             #[cfg(feature = "hooks")]
-            free_update_hook: None,
+            update_hook: None,
             #[cfg(feature = "hooks")]
             progress_handler: None,
             #[cfg(feature = "hooks")]
             authorizer: None,
             #[cfg(feature = "preupdate_hook")]
-            free_preupdate_hook: None,
+            preupdate_hook: None,
             owned,
         }
     }
@@ -183,12 +187,9 @@ impl InnerConnection {
     ) -> Result<()> {
         let dylib_str = super::path_to_cstring(dylib_path)?;
         let mut errmsg: *mut c_char = ptr::null_mut();
-        let r = if let Some(entry_point) = entry_point {
-            let c_entry = entry_point.as_cstr()?;
-            ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry.as_ptr(), &mut errmsg)
-        } else {
-            ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), ptr::null(), &mut errmsg)
-        };
+        let cs = entry_point.as_ref().map(N::as_cstr).transpose()?;
+        let c_entry = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let r = ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry, &mut errmsg);
         if r == ffi::SQLITE_OK {
             Ok(())
         } else {
@@ -352,12 +353,9 @@ impl InnerConnection {
         &self,
         db_name: Option<N>,
     ) -> Result<super::transaction::TransactionState> {
-        let r = if let Some(ref name) = db_name {
-            let name = name.as_cstr()?;
-            unsafe { ffi::sqlite3_txn_state(self.db, name.as_ptr()) }
-        } else {
-            unsafe { ffi::sqlite3_txn_state(self.db, ptr::null()) }
-        };
+        let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
+        let name = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let r = unsafe { ffi::sqlite3_txn_state(self.db, name) };
         match r {
             0 => Ok(super::transaction::TransactionState::None),
             1 => Ok(super::transaction::TransactionState::Read),
