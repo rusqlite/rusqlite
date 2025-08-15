@@ -144,7 +144,11 @@ mod build_bundled {
             .warnings(false);
 
         if cfg!(feature = "bundled-sqlcipher") {
-            cfg.flag("-DSQLITE_HAS_CODEC").flag("-DSQLITE_TEMP_STORE=2");
+            cfg.flag("-DSQLITE_HAS_CODEC")
+                .flag("-DSQLITE_TEMP_STORE=2")
+                .flag("-DSQLITE_EXTRA_INIT=sqlcipher_extra_init")
+                .flag("-DSQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown")
+                .flag("-DHAVE_STDINT_H=1");
 
             let target = env::var("TARGET").unwrap();
             let host = env::var("HOST").unwrap();
