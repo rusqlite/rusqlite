@@ -91,7 +91,8 @@ fn main() {
 #[cfg(any(
     feature = "bundled",
     feature = "bundled-windows",
-    feature = "bundled-sqlcipher"
+    feature = "bundled-sqlcipher",
+    feature = "bundled-sqlite3mc"
 ))]
 mod build_bundled {
     use std::env;
@@ -330,6 +331,8 @@ fn env_prefix() -> &'static str {
 fn lib_name() -> &'static str {
     if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
         "sqlcipher"
+    } else if cfg!(any(feature = "sqlite3mc", feature = "bundled-sqlite3mc")) {
+        "sqlite3mc"
     } else {
         "sqlite3"
     }
@@ -388,7 +391,8 @@ mod build_linked {
         if (cfg!(any(
             feature = "bundled_bindings",
             feature = "bundled",
-            feature = "bundled-sqlcipher"
+            feature = "bundled-sqlcipher",
+            feature = "bundled-sqlite3mc"
         )) || (win_target() && cfg!(feature = "bundled-windows")))
             && !cfg!(feature = "buildtime_bindgen")
         {
