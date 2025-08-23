@@ -68,12 +68,14 @@ use std::result;
 use std::str;
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "cache")]
 use crate::cache::StatementCache;
 use crate::inner_connection::InnerConnection;
 use crate::raw_statement::RawStatement;
 use crate::types::ValueRef;
 
 pub use crate::bind::BindIndex;
+#[cfg(feature = "cache")]
 pub use crate::cache::CachedStatement;
 #[cfg(feature = "column_decltype")]
 pub use crate::column::Column;
@@ -107,6 +109,7 @@ mod bind;
 #[cfg(feature = "blob")]
 pub mod blob;
 mod busy;
+#[cfg(feature = "cache")]
 mod cache;
 #[cfg(feature = "collation")]
 mod collation;
@@ -149,6 +152,7 @@ pub(crate) mod util;
 compile_error!("feature \"loadable_extension\" and feature \"load_extension\" cannot be enabled at the same time");
 
 // Number of cached prepared statements we'll hold on to.
+#[cfg(feature = "cache")]
 const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
 
 /// A macro making it more convenient to pass longer lists of
@@ -344,6 +348,7 @@ pub const TEMP_DB: &CStr = c"temp";
 /// A connection to a SQLite database.
 pub struct Connection {
     db: RefCell<InnerConnection>,
+    #[cfg(feature = "cache")]
     cache: StatementCache,
     transaction_behavior: TransactionBehavior,
 }
@@ -353,6 +358,7 @@ unsafe impl Send for Connection {}
 impl Drop for Connection {
     #[inline]
     fn drop(&mut self) {
+        #[cfg(feature = "cache")]
         self.flush_prepared_statement_cache();
     }
 }
@@ -441,6 +447,7 @@ impl Connection {
         let c_path = path_to_cstring(path.as_ref())?;
         InnerConnection::open_with_flags(&c_path, flags, None).map(|db| Self {
             db: RefCell::new(db),
+            #[cfg(feature = "cache")]
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
         })
@@ -466,6 +473,7 @@ impl Connection {
         let c_vfs = vfs.as_cstr()?;
         InnerConnection::open_with_flags(&c_path, flags, Some(&c_vfs)).map(|db| Self {
             db: RefCell::new(db),
+            #[cfg(feature = "cache")]
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
         })
@@ -787,6 +795,7 @@ impl Connection {
     #[allow(clippy::result_large_err)]
     #[inline]
     pub fn close(self) -> Result<(), (Self, Error)> {
+        #[cfg(feature = "cache")]
         self.flush_prepared_statement_cache();
         let r = self.db.borrow_mut().close();
         r.map_err(move |err| (self, err))
@@ -942,6 +951,7 @@ impl Connection {
         let db = InnerConnection::new(db, false);
         Ok(Self {
             db: RefCell::new(db),
+            #[cfg(feature = "cache")]
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
         })
@@ -990,6 +1000,7 @@ impl Connection {
         let db = InnerConnection::new(db, true);
         Ok(Self {
             db: RefCell::new(db),
+            #[cfg(feature = "cache")]
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
         })
