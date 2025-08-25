@@ -187,6 +187,8 @@ jobs:
       - run: cargo clippy --all-targets --workspace --features bundled -- -D warnings
       # Clippy with all non-conflicting features
       - run: cargo clippy --all-targets --workspace --features 'bundled-full session buildtime_bindgen preupdate_hook' -- -D warnings
+      # and for the examples
+      - run: cargo clippy --examples --no-deps --workspace --features "loadable_extension,functions,trace" -- -D warnings
 
   # Ensure patch is formatted.
   fmt:
