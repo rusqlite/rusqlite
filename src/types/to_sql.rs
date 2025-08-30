@@ -116,7 +116,7 @@ impl ToSql for ToSqlOutput<'_> {
 }
 
 /// A trait for types that can be converted into SQLite values. Returns
-/// [`Error::ToSqlConversionFailure`] if the conversion fails.
+/// [`crate::Error::ToSqlConversionFailure`] if the conversion fails.
 pub trait ToSql {
     /// Converts Rust value to SQLite value
     fn to_sql(&self) -> Result<ToSqlOutput<'_>>;

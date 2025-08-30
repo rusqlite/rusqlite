@@ -208,7 +208,7 @@ jobs:
       - uses: hecrj/setup-rust-action@v2
       - uses: Swatinem/rust-cache@v2
         with: { shared-key: fullBuild }
-      - run: cargo doc --features 'bundled-full session buildtime_bindgen preupdate_hook' --no-deps
+      - run: cargo doc --features 'bundled-full session buildtime_bindgen fallible_uint preupdate_hook' --no-deps
         env: { RUSTDOCFLAGS: -Dwarnings }
 
   codecov:
