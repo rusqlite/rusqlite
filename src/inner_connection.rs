@@ -214,13 +214,29 @@ impl InnerConnection {
         let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
         let mut c_tail: *const c_char = ptr::null();
         #[cfg(not(feature = "unlock_notify"))]
-        let r = unsafe { ffi::sqlite3_prepare_v3(self.db(), c_sql, len, flags.bits(), &mut c_stmt, &mut c_tail) };
+        let r = unsafe {
+            ffi::sqlite3_prepare_v3(
+                self.db(),
+                c_sql,
+                len,
+                flags.bits(),
+                &mut c_stmt,
+                &mut c_tail,
+            )
+        };
         #[cfg(feature = "unlock_notify")]
         let r = unsafe {
             use crate::unlock_notify;
             let mut rc;
             loop {
-                rc = ffi::sqlite3_prepare_v3(self.db(), c_sql, len, flags.bits(), &mut c_stmt, &mut c_tail);
+                rc = ffi::sqlite3_prepare_v3(
+                    self.db(),
+                    c_sql,
+                    len,
+                    flags.bits(),
+                    &mut c_stmt,
+                    &mut c_tail,
+                );
                 if !unlock_notify::is_locked(self.db, rc) {
                     break;
                 }
