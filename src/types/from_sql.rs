@@ -127,7 +127,9 @@ from_sql_integral!(isize);
 from_sql_integral!(u8);
 from_sql_integral!(u16);
 from_sql_integral!(u32);
+#[cfg(feature = "fallible_uint")]
 from_sql_integral!(u64);
+#[cfg(feature = "fallible_uint")]
 from_sql_integral!(usize);
 
 from_sql_integral!(non_zero std::num::NonZeroIsize, isize);
@@ -138,10 +140,12 @@ from_sql_integral!(non_zero std::num::NonZeroI64, i64);
 #[cfg(feature = "i128_blob")]
 from_sql_integral!(non_zero std::num::NonZeroI128, i128);
 
+#[cfg(feature = "fallible_uint")]
 from_sql_integral!(non_zero std::num::NonZeroUsize, usize);
 from_sql_integral!(non_zero std::num::NonZeroU8, u8);
 from_sql_integral!(non_zero std::num::NonZeroU16, u16);
 from_sql_integral!(non_zero std::num::NonZeroU32, u32);
+#[cfg(feature = "fallible_uint")]
 from_sql_integral!(non_zero std::num::NonZeroU64, u64);
 // std::num::NonZeroU128 is not supported since u128 isn't either
 
@@ -394,11 +398,13 @@ mod test {
             &[0, -2, -1, 4_294_967_296],
             &[1, 4_294_967_295]
         );
+        #[cfg(feature = "fallible_uint")]
         check_ranges!(
             std::num::NonZeroU64,
             &[0, -2, -1, -4_294_967_296],
             &[1, 4_294_967_295, i64::MAX as u64]
         );
+        #[cfg(feature = "fallible_uint")]
         check_ranges!(
             std::num::NonZeroUsize,
             &[0, -2, -1, -4_294_967_296],

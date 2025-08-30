@@ -412,12 +412,18 @@ mod test {
         test_conversion!(db_etc, 200u8, u8, expect 200u8);
         test_conversion!(db_etc, 100u16, i8, expect 100i8);
         test_conversion!(db_etc, 200u16, u8, expect 200u8);
+        #[cfg(feature = "fallible_uint")]
         test_conversion!(db_etc, u32::MAX, u64, expect u32::MAX as u64);
+
         test_conversion!(db_etc, i64::MIN, i64, expect i64::MIN);
         test_conversion!(db_etc, i64::MAX, i64, expect i64::MAX);
+        #[cfg(feature = "fallible_uint")]
         test_conversion!(db_etc, i64::MAX, u64, expect i64::MAX as u64);
+        #[cfg(feature = "fallible_uint")]
         test_conversion!(db_etc, 100usize, usize, expect 100usize);
+        #[cfg(feature = "fallible_uint")]
         test_conversion!(db_etc, 100u64, u64, expect 100u64);
+        #[cfg(feature = "fallible_uint")]
         test_conversion!(db_etc, i64::MAX as u64, u64, expect i64::MAX as u64);
 
         // Out-of-range integral conversions.
@@ -425,9 +431,13 @@ mod test {
         test_conversion!(db_etc, 400u16, i8, expect_from_sql_error);
         test_conversion!(db_etc, 400u16, u8, expect_from_sql_error);
         test_conversion!(db_etc, -1i8, u8, expect_from_sql_error);
+        #[cfg(feature = "fallible_uint")]
         test_conversion!(db_etc, i64::MIN, u64, expect_from_sql_error);
+        #[cfg(feature = "fallible_uint")]
         test_conversion!(db_etc, u64::MAX, i64, expect_to_sql_error);
+        #[cfg(feature = "fallible_uint")]
         test_conversion!(db_etc, u64::MAX, u64, expect_to_sql_error);
+        #[cfg(feature = "fallible_uint")]
         test_conversion!(db_etc, i64::MAX as u64 + 1, u64, expect_to_sql_error);
 
         // FromSql integer to float, always works.
