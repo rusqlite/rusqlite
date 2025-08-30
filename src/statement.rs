@@ -737,7 +737,6 @@ impl Statement<'_> {
     /// or 2 if the statement is an EXPLAIN QUERY PLAN,
     /// or 0 if it is an ordinary statement or a NULL pointer.
     #[inline]
-    #[cfg(feature = "modern_sqlite")] // 3.28.0
     pub fn is_explain(&self) -> i32 {
         self.stmt.is_explain()
     }
@@ -1365,7 +1364,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "modern_sqlite")]
     fn is_explain() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let stmt = db.prepare("SELECT 1;")?;

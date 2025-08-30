@@ -66,18 +66,18 @@ unlock_notify = ["libsqlite3-sys/unlock_notify"]
 vtab = []
 csvtab = ["csv", "vtab"]
 # pointer passing interfaces: 3.20.0
-array = ["vtab", "modern_sqlite"]
+array = ["vtab"]
 # if SQLITE_ENABLE_SESSION
 # session extension: 3.13.0
 session = ["libsqlite3-sys/session", "hooks"]
 # if not SQLITE_OMIT_WINDOWFUNC
 # window functions: 3.25.0
-window = ["functions", "modern_sqlite"]
+window = ["functions"]
 # 3.9.0
 series = ["vtab"]
 # check for invalid query.
 extra_check = []
-# ]3.14.0, last]
+# ]3.34.1, last]
 modern_sqlite = ["libsqlite3-sys/bundled_bindings"]
 in_gecko = ["modern_sqlite", "libsqlite3-sys/in_gecko"]
 bundled-windows = ["libsqlite3-sys/bundled-windows"]
@@ -90,7 +90,7 @@ column_decltype = []
 wasm32-wasi-vfs = ["libsqlite3-sys/wasm32-wasi-vfs"]
 # if not SQLITE_OMIT_DESERIALIZE
 # 3.23.0
-serialize = ["modern_sqlite"]
+serialize = []
 
 # Helper feature for enabling most non-build-related optional features
 # or dependencies (except `session`). This is useful for running tests / clippy
