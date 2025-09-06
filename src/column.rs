@@ -521,7 +521,7 @@ mod test {
     #[cfg(feature = "column_metadata")]
     fn stmt_column_metadata() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        let query = db.prepare("SELECT *, 1 FROM sqlite_schema")?;
+        let query = db.prepare("SELECT *, 1 FROM sqlite_master")?;
         let (db_name, table_name, col_name, data_type, coll_seq, not_null, primary_key, auto_inc) =
             query.column_metadata(0)?.unwrap();
         assert_eq!(db_name, crate::MAIN_DB);
@@ -539,18 +539,18 @@ mod test {
     #[test]
     fn column_exists() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        assert!(db.column_exists(None, c"sqlite_schema", c"type")?);
-        assert!(db.column_exists(Some(crate::TEMP_DB), c"sqlite_schema", c"type")?);
-        assert!(!db.column_exists(Some(crate::MAIN_DB), c"sqlite_temp_schema", c"type")?);
+        assert!(db.column_exists(None, c"sqlite_master", c"type")?);
+        assert!(db.column_exists(Some(crate::TEMP_DB), c"sqlite_master", c"type")?);
+        assert!(!db.column_exists(Some(crate::MAIN_DB), c"sqlite_temp_master", c"type")?);
         Ok(())
     }
 
     #[test]
     fn table_exists() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        assert!(db.table_exists(None, c"sqlite_schema")?);
-        assert!(db.table_exists(Some(crate::TEMP_DB), c"sqlite_schema")?);
-        assert!(!db.table_exists(Some(crate::MAIN_DB), c"sqlite_temp_schema")?);
+        assert!(db.table_exists(None, c"sqlite_master")?);
+        assert!(db.table_exists(Some(crate::TEMP_DB), c"sqlite_master")?);
+        assert!(!db.table_exists(Some(crate::MAIN_DB), c"sqlite_temp_master")?);
         Ok(())
     }
 
@@ -558,13 +558,16 @@ mod test {
     fn column_metadata() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let (data_type, coll_seq, not_null, primary_key, auto_inc) =
-            db.column_metadata(None, c"sqlite_schema", c"type")?;
-        assert_eq!(data_type, Some(c"TEXT"));
+            db.column_metadata(None, c"sqlite_master", c"type")?;
+        assert_eq!(
+            data_type.map(|cs| cs.to_str().unwrap().to_ascii_uppercase()),
+            Some("TEXT".to_owned())
+        );
         assert_eq!(coll_seq, Some(c"BINARY"));
         assert!(!not_null);
         assert!(!primary_key);
         assert!(!auto_inc);
-        assert!(db.column_metadata(None, c"sqlite_schema", c"foo").is_err());
+        assert!(db.column_metadata(None, c"sqlite_master", c"foo").is_err());
         Ok(())
     }
 }
