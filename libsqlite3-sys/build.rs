@@ -44,7 +44,7 @@ fn main() {
     let out_path = Path::new(&out_dir).join("bindgen.rs");
     if cfg!(feature = "in_gecko") {
         // When inside mozilla-central, we are included into the build with
-        // sqlite3.o directly, so we don't want to provide any linker arguments.
+        // sqlite3.o directly, so we don't want to provide any linker arguments
         copy_bindings("sqlite3", "bindgen_bundled_version", out_path);
         return;
     }
