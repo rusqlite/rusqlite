@@ -239,10 +239,9 @@ mod build_bundled {
 
         // If explicitly requested: enable static linking against the Microsoft Visual
         // C++ Runtime to avoid dependencies on vcruntime140.dll and similar libraries.
-        if cfg!(target_feature = "crt-static")
-            || env::var("CARGO_CFG_TARGET_FEATURE")
-                .is_ok_and(|v| v.split(',').any(|tf| tf == "crt-static"))
-                && is_compiler("msvc")
+        if env::var("CARGO_CFG_TARGET_FEATURE")
+            .is_ok_and(|v| v.split(',').any(|tf| tf == "crt-static"))
+            && is_compiler("msvc")
         {
             cfg.static_crt(true);
         }
