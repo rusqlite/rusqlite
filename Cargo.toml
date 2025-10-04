@@ -57,6 +57,8 @@ loadable_extension = ["libsqlite3-sys/loadable_extension"]
 hooks = []
 # if SQLITE_ENABLE_PREUPDATE_HOOK
 preupdate_hook = ["libsqlite3-sys/preupdate_hook", "hooks"]
+# u64, usize, NonZeroU64, NonZeroUsize
+fallible_uint = []
 i128_blob = []
 sqlcipher = ["libsqlite3-sys/sqlcipher"]
 # SQLITE_ENABLE_UNLOCK_NOTIFY
