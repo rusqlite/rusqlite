@@ -85,7 +85,7 @@ jobs:
       # TODO: move into own action for better caching
       - name: Static build
         # Do we expect this to work / should we test with gnu toolchain?
-        if: matrix.os == 'x86_64-pc-windows-msvc'
+        if: matrix.target == 'x86_64-pc-windows-msvc'
         env:
           RUSTFLAGS: -Ctarget-feature=+crt-static -Cdebuginfo=1
         run: cargo build --features bundled
