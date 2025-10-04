@@ -40,6 +40,7 @@ backup = []
 # if not SQLITE_OMIT_INCRBLOB
 # sqlite3_blob_reopen: 3.7.4
 blob = []
+cache = ["hashlink"]
 collation = []
 # sqlite3_create_function_v2: 3.7.3 (2010-10-08)
 functions = []
@@ -128,6 +129,7 @@ modern-full = [
 ]
 
 bundled-full = ["modern-full", "bundled"]
+default = ["cache"]
 
 [dependencies]
 # Jiff Date/Time/Timestamp persistence
@@ -142,7 +144,7 @@ time = { version = "0.3.36", features = [
 ], optional = true }
 bitflags = "2.6.0"
 # LRU cache of statement
-hashlink = "0.10"
+hashlink = { version = "0.10", optional = true }
 # Chrono Date/Time/Timestamp persistence
 chrono = { version = "0.4.38", optional = true, default-features = false, features = [
     "clock",
