@@ -52,7 +52,7 @@
 //! }
 //! ```
 #![warn(missing_docs)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub use fallible_iterator;
 pub use fallible_streaming_iterator;
