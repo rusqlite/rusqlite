@@ -10,6 +10,7 @@ links = "sqlite3"
 build = "build.rs"
 keywords = ["sqlite", "sqlcipher", "ffi"]
 categories = ["external-ffi-bindings"]
+exclude = ["**/*.sh"]
 
 [features]
 default = ["min_sqlite_version_3_14_0"]
