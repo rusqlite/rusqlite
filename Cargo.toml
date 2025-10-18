@@ -19,6 +19,7 @@ exclude = [
     "/Changelog.md",
     "/clippy.toml",
     "/codecov.yml",
+    "**/*.sh",
 ]
 
 [badges]
