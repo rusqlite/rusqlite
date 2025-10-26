@@ -44,7 +44,7 @@ pub struct InnerConnection {
 unsafe impl Send for InnerConnection {}
 
 impl InnerConnection {
-    #[expect(clippy::mutex_atomic, clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
+    #[expect(clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
     #[inline]
     pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> Self {
         Self {

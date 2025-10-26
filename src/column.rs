@@ -246,7 +246,7 @@ impl Statement<'_> {
     ///
     /// See [Connection::column_metadata]
     #[cfg(feature = "column_metadata")]
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     pub fn column_metadata(
         &self,
         col: usize,
@@ -312,7 +312,7 @@ impl Connection {
     /// - True if column has a NOT NULL constraint
     /// - True if column is part of the PRIMARY KEY
     /// - True if column is AUTOINCREMENT
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     pub fn column_metadata<N: Name>(
         &self,
         db_name: Option<N>,
