@@ -23,7 +23,7 @@ pub struct OwnedData {
 impl OwnedData {
     /// # Safety
     ///
-    /// Caller must be certain that `ptr` is allocated by `sqlite3_malloc`.
+    /// Caller must be certain that `ptr` is allocated by `sqlite3_malloc64`.
     pub unsafe fn from_raw_nonnull(ptr: NonNull<u8>, sz: usize) -> Self {
         Self { ptr, sz }
     }
@@ -103,7 +103,7 @@ impl Connection {
         sz: usize,
         read_only: bool,
     ) -> Result<()> {
-        let ptr = unsafe { ffi::sqlite3_malloc(sz.try_into().unwrap()) }.cast::<u8>();
+        let ptr = unsafe { ffi::sqlite3_malloc64(sz.try_into().unwrap()) }.cast::<u8>();
         if ptr.is_null() {
             return Err(error_from_sqlite_code(ffi::SQLITE_NOMEM, None));
         }
