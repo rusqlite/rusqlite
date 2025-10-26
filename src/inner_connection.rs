@@ -6,7 +6,6 @@ use std::str;
 use std::sync::{Arc, Mutex};
 
 use super::ffi;
-use super::str_for_sqlite;
 use super::{Connection, InterruptHandle, Name, OpenFlags, PrepFlags, Result};
 use crate::error::{decode_result_raw, error_from_handle, error_with_offset, Error};
 use crate::raw_statement::RawStatement;
@@ -211,7 +210,10 @@ impl InnerConnection {
         flags: PrepFlags,
     ) -> Result<(Statement<'a>, usize)> {
         let mut c_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
-        let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
+        let Ok(len) = c_int::try_from(sql.len()) else {
+            return Err(err!(ffi::SQLITE_TOOBIG));
+        };
+        let c_sql = sql.as_bytes().as_ptr().cast::<c_char>();
         let mut c_tail: *const c_char = ptr::null();
         #[cfg(not(feature = "unlock_notify"))]
         let r = unsafe { self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail) };

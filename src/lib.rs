@@ -301,31 +301,26 @@ fn str_to_cstring(s: &str) -> Result<util::SmallCString> {
     Ok(util::SmallCString::new(s)?)
 }
 
-/// Returns `Ok((string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT))`
+/// Returns `(string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT)`
 /// normally.
-/// Returns error if the string is too large for sqlite.
 /// The `sqlite3_destructor_type` item is always `SQLITE_TRANSIENT` unless
 /// the string was empty (in which case it's `SQLITE_STATIC`, and the ptr is
 /// static).
-fn str_for_sqlite(s: &[u8]) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type)> {
-    let len = len_as_c_int(s.len())?;
+fn str_for_sqlite(
+    s: &[u8],
+) -> (
+    *const c_char,
+    ffi::sqlite3_uint64,
+    ffi::sqlite3_destructor_type,
+) {
+    let len = s.len();
     let (ptr, dtor_info) = if len != 0 {
         (s.as_ptr().cast::<c_char>(), ffi::SQLITE_TRANSIENT())
     } else {
         // Return a pointer guaranteed to live forever
         ("".as_ptr().cast::<c_char>(), ffi::SQLITE_STATIC())
     };
-    Ok((ptr, len, dtor_info))
-}
-
-// Helper to cast to c_int safely, returning the correct error type if the cast
-// failed.
-fn len_as_c_int(len: usize) -> Result<c_int> {
-    if len >= (c_int::MAX as usize) {
-        Err(err!(ffi::SQLITE_TOOBIG))
-    } else {
-        Ok(len as c_int)
-    }
+    (ptr, len as ffi::sqlite3_uint64, dtor_info)
 }
 
 #[cfg(unix)]

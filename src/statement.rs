@@ -5,7 +5,7 @@ use std::slice::from_raw_parts;
 use std::{fmt, mem, ptr, str};
 
 use super::ffi;
-use super::{len_as_c_int, str_for_sqlite};
+use super::str_for_sqlite;
 use super::{
     AndThenRows, Connection, Error, MappedRows, Params, RawStatement, Result, Row, Rows, ValueRef,
 };
@@ -652,21 +652,26 @@ impl Statement<'_> {
             ValueRef::Integer(i) => unsafe { ffi::sqlite3_bind_int64(ptr, ndx as c_int, i) },
             ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, ndx as c_int, r) },
             ValueRef::Text(s) => unsafe {
-                let (c_str, len, destructor) = str_for_sqlite(s)?;
-                // TODO sqlite3_bind_text64 // 3.8.7
-                ffi::sqlite3_bind_text(ptr, ndx as c_int, c_str, len, destructor)
+                let (c_str, len, destructor) = str_for_sqlite(s);
+                ffi::sqlite3_bind_text64(
+                    ptr,
+                    ndx as c_int,
+                    c_str,
+                    len,
+                    destructor,
+                    ffi::SQLITE_UTF8 as _,
+                )
             },
             ValueRef::Blob(b) => unsafe {
-                let length = len_as_c_int(b.len())?;
+                let length = b.len();
                 if length == 0 {
                     ffi::sqlite3_bind_zeroblob(ptr, ndx as c_int, 0)
                 } else {
-                    // TODO sqlite3_bind_blob64 // 3.8.7
-                    ffi::sqlite3_bind_blob(
+                    ffi::sqlite3_bind_blob64(
                         ptr,
                         ndx as c_int,
                         b.as_ptr().cast::<c_void>(),
-                        length,
+                        length as ffi::sqlite3_uint64,
                         ffi::SQLITE_TRANSIENT(),
                     )
                 }
