@@ -536,14 +536,23 @@ impl IndexInfo {
     pub fn set_rhs_value(&mut self, constraint_idx: c_int, value: ValueRef) -> Result<()> {
         // TODO ValueRef to sqlite3_value
         crate::error::check(unsafe { ffi::sqlite3_vtab_rhs_value(self.O, constraint_idx, value) })
+    }*/
+
+    /// Returns whether this constraint was used in an IN query
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn has_in_constraint(&self, constraint_idx: usize) -> bool {
+        unsafe { ffi::sqlite3_vtab_in(self.0, constraint_idx as _, -1) != 0 }
     }
 
-    /// Identify and handle IN constraints
+    /// Returns whether this constraint should be handled as an IN, meaning you can extract the IN values from inside the `filter()` vtable method.
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
-    pub fn set_in_constraint(&mut self, constraint_idx: c_int, b_handle: c_int) -> bool {
-        unsafe { ffi::sqlite3_vtab_in(self.0, constraint_idx, b_handle) != 0 }
-    } // TODO sqlite3_vtab_in_first / sqlite3_vtab_in_next https://sqlite.org/c3ref/vtab_in_first.html
-    */
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn handle_in_constraint(&self, constraint_idx: usize, handle: bool) {
+        unsafe {
+            ffi::sqlite3_vtab_in(self.0, constraint_idx as _, handle as c_int);
+        }
+    }
 }
 
 /// Determine if a virtual table query is DISTINCT
@@ -794,6 +803,16 @@ impl Values<'_> {
         })
     }
 
+    /// Returns the IN values for a given value.
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
+    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
+    pub fn in_values(&self, idx: usize) -> InValuesIter<'_> {
+        InValuesIter {
+            value: &self.args[idx],
+            is_first: true,
+        }
+    }
+
     // `sqlite3_value_type` returns `SQLITE_NULL` for pointer.
     // So it seems not possible to enhance `ValueRef::from_value`.
     #[cfg(feature = "array")]
@@ -829,6 +848,39 @@ impl<'a> IntoIterator for &'a Values<'a> {
     #[inline]
     fn into_iter(self) -> ValueIter<'a> {
         self.iter()
+    }
+}
+
+/// [`Values`] iterator.
+pub struct InValuesIter<'a> {
+    value: &'a *mut ffi::sqlite3_value,
+    is_first: bool,
+}
+
+impl<'a> Iterator for InValuesIter<'a> {
+    type Item = ValueRef<'a>;
+
+    #[inline]
+    fn next(&mut self) -> Option<ValueRef<'a>> {
+        use libsqlite3_sys::SQLITE_OK;
+
+        let mut next = ptr::null_mut();
+        let res = if self.is_first {
+            unsafe { ffi::sqlite3_vtab_in_first(*self.value, &mut next) }
+        } else {
+            unsafe { ffi::sqlite3_vtab_in_next(*self.value, &mut next) }
+        };
+        if res == SQLITE_OK {
+            self.is_first = false;
+            Some(unsafe { ValueRef::from_value(next) })
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, None)
     }
 }
 
