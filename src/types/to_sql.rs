@@ -29,6 +29,17 @@ pub enum ToSqlOutput<'a> {
     /// `feature = "array"`
     #[cfg(feature = "array")]
     Array(Array),
+
+    /// Pointer passing interface
+    #[cfg(feature = "pointer")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "pointer")))]
+    Pointer(
+        (
+            *mut std::os::raw::c_void,
+            &'static std::ffi::CStr,
+            ::std::option::Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
+        ),
+    ),
 }
 
 // Generically allow any type that can be converted into a ValueRef
@@ -111,6 +122,8 @@ impl ToSql for ToSqlOutput<'_> {
             ToSqlOutput::Arg(i) => ToSqlOutput::Arg(i),
             #[cfg(feature = "array")]
             ToSqlOutput::Array(ref a) => ToSqlOutput::Array(a.clone()),
+            #[cfg(feature = "pointer")]
+            ToSqlOutput::Pointer(p) => ToSqlOutput::Pointer(p),
         })
     }
 }
