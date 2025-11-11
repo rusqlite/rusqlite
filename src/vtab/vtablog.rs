@@ -119,6 +119,16 @@ unsafe impl<'vtab> VTab<'vtab> for VTabLog {
             info.col_used(),
             info.distinct()
         );
+        for (i, constraint) in info.constraints().enumerate() {
+            println!(
+                "  constraint[{}]: col={}, usable={}, op={:?}, rhs={:?}",
+                i,
+                constraint.column(),
+                constraint.is_usable(),
+                constraint.operator(),
+                info.rhs_value(i)
+            )
+        }
         info.set_estimated_cost(500.);
         info.set_estimated_rows(500);
         info.set_idx_str("idx");
