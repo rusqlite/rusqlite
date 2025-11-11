@@ -219,6 +219,7 @@
 - [X] `sqlite3_load_extension`
 - [X] `sqlite3_enable_load_extension`
 - [X] `sqlite3_auto_extension` (`fn` callbak with Connection ref)
+- [X] `sqlite3_cancel_auto_extension`
 - [X] `sqlite3_reset_auto_extension`
 
 - [ ] `sqlite3_create_module`
@@ -295,7 +296,7 @@
 - [ ] `sqlite3_vtab_in`
 - [ ] `sqlite3_vtab_in_first`
 - [ ] `sqlite3_vtab_in_next`
-- [ ] `sqlite3_vtab_rhs_value`
+- [X] `sqlite3_vtab_rhs_value`
 
 - [ ] `sqlite3_stmt_scanstatus`
 - [ ] `sqlite3_stmt_scanstatus_v2`
@@ -330,7 +331,7 @@
 - [X] `sqlite3session_enable`
 - [X] `sqlite3session_indirect`
 - [X] `sqlite3session_attach`
-- [X] `sqlite3session_table_filter`
+- [X] `sqlite3session_table_filter` (Boxed callback, reference kept)
 - [X] `sqlite3session_changeset`
 - [ ] `sqlite3session_changeset_size`
 - [X] `sqlite3session_diff`

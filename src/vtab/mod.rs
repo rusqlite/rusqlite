@@ -19,7 +19,7 @@ use std::slice;
 use libsqlite3_sys::sqlite3_free;
 
 use crate::context::set_result;
-use crate::error::{error_from_sqlite_code, to_sqlite_error};
+use crate::error::{check, error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
 use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
@@ -207,7 +207,7 @@ pub struct VTabConnection(*mut ffi::sqlite3);
 impl VTabConnection {
     /// Configure various facets of the virtual table interface
     pub fn config(&mut self, config: VTabConfig) -> Result<()> {
-        crate::error::check(unsafe { ffi::sqlite3_vtab_config(self.0, config as c_int) })
+        check(unsafe { ffi::sqlite3_vtab_config(self.0, config as c_int) })
     }
 
     /// Get access to the underlying SQLite database connection handle.
@@ -531,14 +531,21 @@ impl IndexInfo {
         }
     }
 
-    /*/// Constraint values
+    /// Constraint value
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
-    pub fn set_rhs_value(&mut self, constraint_idx: c_int, value: ValueRef) -> Result<()> {
-        // TODO ValueRef to sqlite3_value
-        crate::error::check(unsafe { ffi::sqlite3_vtab_rhs_value(self.O, constraint_idx, value) })
+    pub fn rhs_value(&self, constraint_idx: usize) -> Result<Option<ValueRef<'_>>> {
+        let idx = constraint_idx as c_int;
+        let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
+        let rc = unsafe { ffi::sqlite3_vtab_rhs_value(self.0, idx, &mut p_value) };
+        if rc == ffi::SQLITE_NOTFOUND {
+            return Ok(None);
+        }
+        check(rc)?;
+        assert!(!p_value.is_null());
+        Ok(Some(unsafe { ValueRef::from_value(p_value) }))
     }
 
-    /// Identify and handle IN constraints
+    /*/// Identify and handle IN constraints
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     pub fn set_in_constraint(&mut self, constraint_idx: c_int, b_handle: c_int) -> bool {
         unsafe { ffi::sqlite3_vtab_in(self.0, constraint_idx, b_handle) != 0 }
