@@ -4,6 +4,9 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use fallible_iterator::FallibleIterator;
+
+use crate::types::Type;
 use crate::vtab::{
     update_module, Context, CreateVTab, Filters, IndexInfo, Inserts, UpdateVTab, Updates, VTab,
     VTabConnection, VTabCursor, VTabKind,
@@ -119,20 +122,29 @@ unsafe impl<'vtab> VTab<'vtab> for VTabLog {
             info.col_used(),
             info.distinct()
         );
+        let mut in_constraint = None;
         for (i, constraint) in info.constraints().enumerate() {
             println!(
-                "  constraint[{}]: col={}, usable={}, op={:?}, rhs={:?}",
+                "  constraint[{}]: col={}, usable={}, op={:?}, rhs={:?}, in={:?}",
                 i,
                 constraint.column(),
                 constraint.is_usable(),
                 constraint.operator(),
-                info.rhs_value(i)
-            )
+                info.rhs_value(i),
+                info.is_in_constraint(i),
+            );
+            if info.is_in_constraint(i)? {
+                in_constraint = Some(i);
+            }
         }
         info.set_estimated_cost(500.);
         info.set_estimated_rows(500);
         info.set_idx_str("idx");
         info.set_idx_cstr(c"idx");
+        if let Some(idx) = in_constraint {
+            info.set_in_constraint(idx, true)?;
+            info.constraint_usage(idx).set_argv_index(1);
+        }
         Ok(())
     }
 
@@ -234,6 +246,15 @@ unsafe impl VTabCursor for VTabLogCursor<'_> {
             self.i_cursor,
             args.len()
         );
+        for (i, arg) in args.iter().enumerate() {
+            if arg.data_type() == Type::Null {
+                println!(
+                    " in_values[{}]: {:?}",
+                    i,
+                    args.in_values(i)?.collect::<Vec<ValueRef>>()
+                );
+            }
+        }
         self.row_id = 0;
         Ok(())
     }
@@ -312,7 +333,7 @@ mod test {
         db.execute_batch(
             "CREATE VIRTUAL TABLE temp.log USING vtablog(
                     schema='CREATE TABLE x(a,b,c)',
-                    rows=25
+                    rows=3
                 );",
         )?;
         let mut stmt = db.prepare("SELECT * FROM log;")?;
@@ -327,6 +348,8 @@ mod test {
             "UPDATE log SET b = ?1, c = ?2 WHERE a = ?3",
             ["bn", "cn", "a1"],
         )?;
+        db.query_one("SELECT b, c FROM log WHERE a = 'a1'", [], |_| Ok(0))?;
+        db.execute("UPDATE log SET b = '' WHERE a IN (?1, ?2)", ["a1", "a2"])?;
         Ok(())
     }
 }
