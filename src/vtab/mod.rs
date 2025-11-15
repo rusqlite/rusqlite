@@ -764,6 +764,36 @@ impl Context {
     pub fn no_change(&self) -> bool {
         unsafe { ffi::sqlite3_vtab_nochange(self.0) != 0 }
     }
+
+    /// Get the db connection handle via [sqlite3_context_db_handle](https://www.sqlite.org/c3ref/context_db_handle.html)
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because improper use may impact the Connection.
+    pub unsafe fn get_connection(&self) -> Result<ConnectionRef<'_>> {
+        let handle = ffi::sqlite3_context_db_handle(self.0);
+        Ok(ConnectionRef {
+            conn: Connection::from_handle(handle)?,
+            phantom: PhantomData,
+        })
+    }
+}
+
+/// A reference to a connection handle with a lifetime bound to context.
+pub struct ConnectionRef<'ctx> {
+    // comes from Connection::from_handle(sqlite3_context_db_handle(...))
+    // and is non-owning
+    conn: Connection,
+    phantom: PhantomData<&'ctx Context>,
+}
+
+impl Deref for ConnectionRef<'_> {
+    type Target = Connection;
+
+    #[inline]
+    fn deref(&self) -> &Connection {
+        &self.conn
+    }
 }
 
 /// Wrapper to [`VTabCursor::filter`] arguments, the values
@@ -787,7 +817,7 @@ impl<'a> Filters<'a> {
             list,
             phantom: PhantomData,
             first: true,
-        }) // FIXME
+        })
     }
 }
 
