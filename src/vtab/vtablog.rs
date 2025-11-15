@@ -308,6 +308,11 @@ unsafe impl VTabCursor for VTabLogCursor<'_> {
             i,
             value,
         );
+        if i == 0 {
+            println!("  db bust: {:?}", unsafe {
+                ctx.get_connection().map(|c| c.is_busy())
+            })
+        }
         ctx.set_result(&value)
     }
 
