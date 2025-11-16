@@ -53,6 +53,7 @@ bundled-sqlcipher-vendored-openssl = [
     "libsqlite3-sys/bundled-sqlcipher-vendored-openssl",
     "bundled-sqlcipher",
 ]
+bundled-sqlite3mc = ["libsqlite3-sys/bundled-sqlite3mc", "bundled"]
 buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
 limits = []
 loadable_extension = ["libsqlite3-sys/loadable_extension"]
@@ -63,6 +64,7 @@ preupdate_hook = ["libsqlite3-sys/preupdate_hook", "hooks"]
 fallible_uint = []
 i128_blob = []
 sqlcipher = ["libsqlite3-sys/sqlcipher"]
+sqlite3mc = ["libsqlite3-sys/sqlite3mc"]
 # SQLITE_ENABLE_UNLOCK_NOTIFY
 unlock_notify = ["libsqlite3-sys/unlock_notify"]
 # if not SQLITE_OMIT_VIRTUALTABLE
