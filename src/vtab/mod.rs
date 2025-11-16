@@ -760,7 +760,6 @@ impl Context {
     /// Determine if column access is for UPDATE
     #[inline]
     #[must_use]
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
     pub fn no_change(&self) -> bool {
         unsafe { ffi::sqlite3_vtab_nochange(self.0) != 0 }
     }
