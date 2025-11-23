@@ -216,13 +216,29 @@ impl InnerConnection {
         let c_sql = sql.as_bytes().as_ptr().cast::<c_char>();
         let mut c_tail: *const c_char = ptr::null();
         #[cfg(not(feature = "unlock_notify"))]
-        let r = unsafe { self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail) };
+        let r = unsafe {
+            ffi::sqlite3_prepare_v3(
+                self.db(),
+                c_sql,
+                len,
+                flags.bits(),
+                &mut c_stmt,
+                &mut c_tail,
+            )
+        };
         #[cfg(feature = "unlock_notify")]
         let r = unsafe {
             use crate::unlock_notify;
             let mut rc;
             loop {
-                rc = self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail);
+                rc = ffi::sqlite3_prepare_v3(
+                    self.db(),
+                    c_sql,
+                    len,
+                    flags.bits(),
+                    &mut c_stmt,
+                    &mut c_tail,
+                );
                 if !unlock_notify::is_locked(self.db, rc) {
                     break;
                 }
@@ -253,32 +269,6 @@ impl InnerConnection {
             Statement::new(conn, unsafe { RawStatement::new(c_stmt) }),
             tail,
         ))
-    }
-
-    #[inline]
-    #[cfg(not(feature = "modern_sqlite"))]
-    unsafe fn prepare_(
-        &self,
-        z_sql: *const c_char,
-        n_byte: c_int,
-        _: PrepFlags,
-        pp_stmt: *mut *mut ffi::sqlite3_stmt,
-        pz_tail: *mut *const c_char,
-    ) -> c_int {
-        ffi::sqlite3_prepare_v2(self.db(), z_sql, n_byte, pp_stmt, pz_tail)
-    }
-
-    #[inline]
-    #[cfg(feature = "modern_sqlite")]
-    unsafe fn prepare_(
-        &self,
-        z_sql: *const c_char,
-        n_byte: c_int,
-        flags: PrepFlags,
-        pp_stmt: *mut *mut ffi::sqlite3_stmt,
-        pz_tail: *mut *const c_char,
-    ) -> c_int {
-        ffi::sqlite3_prepare_v3(self.db(), z_sql, n_byte, flags.bits(), pp_stmt, pz_tail)
     }
 
     #[inline]
