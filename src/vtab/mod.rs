@@ -1231,19 +1231,7 @@ where
 {
     let vt = vtab.cast::<T>();
     let mut idx_info = IndexInfo(info);
-    match (*vt).best_index(&mut idx_info) {
-        Ok(_) => ffi::SQLITE_OK,
-        Err(Error::SqliteFailure(err, s)) => {
-            if let Some(err_msg) = s {
-                set_err_msg(vtab, &err_msg);
-            }
-            err.extended_code
-        }
-        Err(err) => {
-            set_err_msg(vtab, &err.to_string());
-            ffi::SQLITE_ERROR
-        }
-    }
+    vtab_error(vtab, (*vt).best_index(&mut idx_info))
 }
 
 unsafe extern "C" fn rust_disconnect<'vtab, T>(vtab: *mut sqlite3_vtab) -> c_int
@@ -1271,16 +1259,7 @@ where
             drop(Box::from_raw(vt));
             ffi::SQLITE_OK
         }
-        Err(Error::SqliteFailure(err, s)) => {
-            if let Some(err_msg) = s {
-                set_err_msg(vtab, &err_msg);
-            }
-            err.extended_code
-        }
-        Err(err) => {
-            set_err_msg(vtab, &err.to_string());
-            ffi::SQLITE_ERROR
-        }
+        err => vtab_error(vtab, err),
     }
 }
 
@@ -1298,16 +1277,7 @@ where
             *pp_cursor = boxed_cursor.cast::<sqlite3_vtab_cursor>();
             ffi::SQLITE_OK
         }
-        Err(Error::SqliteFailure(err, s)) => {
-            if let Some(err_msg) = s {
-                set_err_msg(vtab, &err_msg);
-            }
-            err.extended_code
-        }
-        Err(err) => {
-            set_err_msg(vtab, &err.to_string());
-            ffi::SQLITE_ERROR
-        }
+        err => vtab_error(vtab, err),
     }
 }
 
@@ -1417,7 +1387,19 @@ where
         let values = Values { args };
         (*vt).update(&Updates { values })
     };
-    match r {
+    vtab_error(vtab, r)
+}
+
+/// Virtual table cursors can set an error message by assigning a string to
+/// `zErrMsg`.
+unsafe fn cursor_error<T>(cursor: *mut sqlite3_vtab_cursor, result: Result<T>) -> c_int {
+    vtab_error((*cursor).pVtab, result)
+}
+
+/// Virtual tables can set an error message by assigning a string to
+/// `zErrMsg`.
+unsafe fn vtab_error<T>(vtab: *mut sqlite3_vtab, result: Result<T>) -> c_int {
+    match result {
         Ok(_) => ffi::SQLITE_OK,
         Err(Error::SqliteFailure(err, s)) => {
             if let Some(err_msg) = s {
@@ -1427,25 +1409,6 @@ where
         }
         Err(err) => {
             set_err_msg(vtab, &err.to_string());
-            ffi::SQLITE_ERROR
-        }
-    }
-}
-
-/// Virtual table cursors can set an error message by assigning a string to
-/// `zErrMsg`.
-#[cold]
-unsafe fn cursor_error<T>(cursor: *mut sqlite3_vtab_cursor, result: Result<T>) -> c_int {
-    match result {
-        Ok(_) => ffi::SQLITE_OK,
-        Err(Error::SqliteFailure(err, s)) => {
-            if let Some(err_msg) = s {
-                set_err_msg((*cursor).pVtab, &err_msg);
-            }
-            err.extended_code
-        }
-        Err(err) => {
-            set_err_msg((*cursor).pVtab, &err.to_string());
             ffi::SQLITE_ERROR
         }
     }
