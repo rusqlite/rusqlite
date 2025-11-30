@@ -8,8 +8,8 @@ use fallible_iterator::FallibleIterator;
 
 use crate::types::Type;
 use crate::vtab::{
-    update_module, Context, CreateVTab, Filters, IndexInfo, Inserts, UpdateVTab, Updates, VTab,
-    VTabConnection, VTabCursor, VTabKind,
+    update_module_with_tx, Context, CreateVTab, Filters, IndexInfo, Inserts, TransactionVTab,
+    UpdateVTab, Updates, VTab, VTabConnection, VTabCursor, VTabKind,
 };
 use crate::{ffi, ValueRef};
 use crate::{Connection, Error, Result};
@@ -17,7 +17,7 @@ use crate::{Connection, Error, Result};
 /// Register the "vtablog" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module(c"vtablog", update_module::<VTabLog>(), aux)
+    conn.create_module(c"vtablog", update_module_with_tx::<VTabLog>(), aux)
 }
 
 /// An instance of the vtablog virtual table
@@ -206,6 +206,28 @@ impl UpdateVTab<'_> for VTabLog {
                 .map(|(i, v)| (v, args.no_change(i)))
                 .collect::<Vec<(ValueRef<'_>, bool)>>()
         );
+        Ok(())
+    }
+}
+
+impl TransactionVTab<'_> for VTabLog {
+    fn begin(&mut self) -> Result<()> {
+        println!("VTabLog::begin({})", self.i_inst);
+        Ok(())
+    }
+
+    fn sync(&mut self) -> Result<()> {
+        println!("VTabLog::sync({})", self.i_inst);
+        Ok(())
+    }
+
+    fn commit(&mut self) -> Result<()> {
+        println!("VTabLog::commit({})", self.i_inst);
+        Ok(())
+    }
+
+    fn rollback(&mut self) -> Result<()> {
+        println!("VTabLog::rollback({})", self.i_inst);
         Ok(())
     }
 }
