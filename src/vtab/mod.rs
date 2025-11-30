@@ -108,8 +108,8 @@ macro_rules! module {
     ($lt:lifetime, $vt:ty, $ct:ty, $xc:expr, $xd:expr, $xu:expr) => {
     &Module {
         base: ffi::sqlite3_module {
-            // We don't use V3
-            iVersion: 2,
+            // We don't use methods provided by versions > 1
+            iVersion: 1,
             xCreate: $xc,
             xConnect: Some(rust_connect::<$vt>),
             xBestIndex: Some(rust_best_index::<$vt>),
@@ -129,9 +129,6 @@ macro_rules! module {
             xRollback: None,
             xFindFunction: None,
             xRename: None,
-            xSavepoint: None,
-            xRelease: None,
-            xRollbackTo: None,
             ..ZERO_MODULE
         },
         phantom: PhantomData::<&$lt $vt>,
