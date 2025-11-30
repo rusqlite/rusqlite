@@ -557,6 +557,7 @@ impl IndexInfo {
         Ok(unsafe { ffi::sqlite3_vtab_in(self.0, idx, filter_all as c_int) != 0 })
     }
 
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     fn check_constraint_index(&self, idx: usize) -> Result<()> {
         if idx >= unsafe { (*self.0).nConstraint } as usize {
             return Err(err!(ffi::SQLITE_MISUSE, "{idx} is out of range"));
@@ -818,11 +819,13 @@ impl<'a> Filters<'a> {
 }
 
 /// IN values
+#[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
 pub struct InValues<'a> {
     list: *mut ffi::sqlite3_value,
     phantom: PhantomData<Filters<'a>>,
     first: bool,
 }
+#[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
 impl<'a> fallible_iterator::FallibleIterator for InValues<'a> {
     type Error = Error;
     type Item = ValueRef<'a>;
