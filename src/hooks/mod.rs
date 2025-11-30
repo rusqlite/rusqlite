@@ -454,6 +454,9 @@ pub enum CheckpointMode {
     RESTART = ffi::SQLITE_CHECKPOINT_RESTART,
     /// Like RESTART but also truncate WAL
     TRUNCATE = ffi::SQLITE_CHECKPOINT_TRUNCATE,
+    /// Do no work at all
+    #[cfg(feature = "modern_sqlite")] // 3.51.0
+    NOOP = -1, //ffi::SQLITE_CHECKPOINT_NOOP,
 }
 
 /// Write-Ahead Log

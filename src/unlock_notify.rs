@@ -11,7 +11,6 @@ struct UnlockNotification {
     mutex: Mutex<bool>, // Mutex to protect structure
 }
 
-#[expect(clippy::mutex_atomic)]
 impl UnlockNotification {
     fn new() -> Self {
         Self {
@@ -108,8 +107,7 @@ mod test {
             tx2.commit().unwrap();
         });
         assert_eq!(tx.recv().unwrap(), 1);
-        let the_answer: i64 = db1.one_column("SELECT x FROM foo")?;
-        assert_eq!(42i64, the_answer);
+        assert_eq!(42, db1.one_column::<i64, _>("SELECT x FROM foo", [])?);
         child.join().unwrap();
         Ok(())
     }

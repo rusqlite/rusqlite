@@ -48,8 +48,8 @@
 - [ ] `sqlite3_snprintf`
 - [ ] `sqlite3_vsnprintf`
 
-- [X] `sqlite3_malloc` (not public, internal use only)
-- [ ] `sqlite3_malloc64`
+- [ ] `sqlite3_malloc`
+- [X] `sqlite3_malloc64` (not public, internal use only)
 - [ ] `sqlite3_realloc`
 - [ ] `sqlite3_realloc64`
 - [X] `sqlite3_free` (not public, internal use only)
@@ -101,14 +101,14 @@
 - [ ] `sqlite3_stmt_explain`
 - [X] `sqlite3_stmt_busy`
 
-- [X] `sqlite3_bind_blob`
-- [ ] `sqlite3_bind_blob64`
+- [ ] `sqlite3_bind_blob`
+- [X] `sqlite3_bind_blob64`
 - [X] `sqlite3_bind_double`
 - [ ] `sqlite3_bind_int`
 - [X] `sqlite3_bind_int64`
 - [X] `sqlite3_bind_null`
-- [X] `sqlite3_bind_text`
-- [ ] `sqlite3_bind_text64`
+- [ ] `sqlite3_bind_text`
+- [X] `sqlite3_bind_text64`
 - [ ] `sqlite3_bind_value`
 - [X] `sqlite3_bind_pointer` (not public, internal use only)
 - [X] `sqlite3_bind_zeroblob`
@@ -170,8 +170,8 @@
 - [ ] `sqlite3_get_clientdata`
 - [ ] `sqlite3_set_clientdata`
 
-- [X] `sqlite3_result_blob`
-- [ ] `sqlite3_result_blob64`
+- [ ] `sqlite3_result_blob`
+- [X] `sqlite3_result_blob64`
 - [X] `sqlite3_result_double`
 - [X] `sqlite3_result_error`
 - [X] `sqlite3_result_error_toobig`
@@ -180,8 +180,8 @@
 - [ ] `sqlite3_result_int`
 - [X] `sqlite3_result_int64`
 - [X] `sqlite3_result_null`
-- [X] `sqlite3_result_text`
-- [ ] `sqlite3_result_text64`
+- [ ] `sqlite3_result_text`
+- [X] `sqlite3_result_text64`
 - [X] `sqlite3_result_value`
 - [X] `sqlite3_result_pointer` (not public, internal use only)
 - [X] `sqlite3_result_zeroblob`
@@ -219,6 +219,7 @@
 - [X] `sqlite3_load_extension`
 - [X] `sqlite3_enable_load_extension`
 - [X] `sqlite3_auto_extension` (`fn` callbak with Connection ref)
+- [X] `sqlite3_cancel_auto_extension`
 - [X] `sqlite3_reset_auto_extension`
 
 - [ ] `sqlite3_create_module`
@@ -288,14 +289,14 @@
 - [X] `sqlite3_wal_checkpoint_v2`
 
 - [X] `sqlite3_vtab_config`
-- [ ] `sqlite3_vtab_on_conflict`
+- [X] `sqlite3_vtab_on_conflict`
 - [X] `sqlite3_vtab_nochange`
 - [X] `sqlite3_vtab_collation`
-- [ ] `sqlite3_vtab_distinct`
-- [ ] `sqlite3_vtab_in`
-- [ ] `sqlite3_vtab_in_first`
-- [ ] `sqlite3_vtab_in_next`
-- [ ] `sqlite3_vtab_rhs_value`
+- [X] `sqlite3_vtab_distinct`
+- [X] `sqlite3_vtab_in`
+- [X] `sqlite3_vtab_in_first`
+- [X] `sqlite3_vtab_in_next`
+- [X] `sqlite3_vtab_rhs_value`
 
 - [ ] `sqlite3_stmt_scanstatus`
 - [ ] `sqlite3_stmt_scanstatus_v2`
@@ -330,7 +331,7 @@
 - [X] `sqlite3session_enable`
 - [X] `sqlite3session_indirect`
 - [X] `sqlite3session_attach`
-- [X] `sqlite3session_table_filter`
+- [X] `sqlite3session_table_filter` (Boxed callback, reference kept)
 - [X] `sqlite3session_changeset`
 - [ ] `sqlite3session_changeset_size`
 - [X] `sqlite3session_diff`

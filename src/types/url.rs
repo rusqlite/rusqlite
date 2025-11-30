@@ -17,8 +17,8 @@ impl FromSql for Url {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         match value {
             ValueRef::Text(s) => {
-                let s = std::str::from_utf8(s).map_err(|e| FromSqlError::Other(Box::new(e)))?;
-                Self::parse(s).map_err(|e| FromSqlError::Other(Box::new(e)))
+                let s = std::str::from_utf8(s).map_err(FromSqlError::other)?;
+                Self::parse(s).map_err(FromSqlError::other)
             }
             _ => Err(FromSqlError::InvalidType),
         }
@@ -37,7 +37,7 @@ mod test {
     }
 
     fn get_url(db: &Connection, id: i64) -> Result<Url> {
-        db.query_row("SELECT v FROM urls WHERE i = ?", [id], |r| r.get(0))
+        db.one_column("SELECT v FROM urls WHERE i = ?", [id])
     }
 
     #[test]

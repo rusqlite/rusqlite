@@ -144,7 +144,11 @@ mod build_bundled {
             .warnings(false);
 
         if cfg!(feature = "bundled-sqlcipher") {
-            cfg.flag("-DSQLITE_HAS_CODEC").flag("-DSQLITE_TEMP_STORE=2");
+            cfg.flag("-DSQLITE_HAS_CODEC")
+                .flag("-DSQLITE_TEMP_STORE=2")
+                .flag("-DSQLITE_EXTRA_INIT=sqlcipher_extra_init")
+                .flag("-DSQLITE_EXTRA_SHUTDOWN=sqlcipher_extra_shutdown")
+                .flag("-DHAVE_STDINT_H=1");
 
             let target = env::var("TARGET").unwrap();
             let host = env::var("HOST").unwrap();
@@ -235,7 +239,10 @@ mod build_bundled {
 
         // If explicitly requested: enable static linking against the Microsoft Visual
         // C++ Runtime to avoid dependencies on vcruntime140.dll and similar libraries.
-        if cfg!(target_feature = "crt-static") && is_compiler("msvc") {
+        if env::var("CARGO_CFG_TARGET_FEATURE")
+            .is_ok_and(|v| v.split(',').any(|tf| tf == "crt-static"))
+            && is_compiler("msvc")
+        {
             cfg.static_crt(true);
         }
 
@@ -437,7 +444,7 @@ mod build_linked {
             env::set_var("PKG_CONFIG_PATH", pkgconfig_path);
             #[cfg(not(feature = "loadable_extension"))]
             if pkg_config::Config::new()
-                .atleast_version("3.14.0")
+                .atleast_version("3.34.1")
                 .probe(link_lib)
                 .is_err()
             {
@@ -454,7 +461,7 @@ mod build_linked {
 
         // See if pkg-config can do everything for us.
         if let Ok(mut lib) = pkg_config::Config::new()
-            .atleast_version("3.14.0")
+            .atleast_version("3.34.1")
             .print_system_libs(false)
             .probe(link_lib)
         {
@@ -496,7 +503,7 @@ mod bindings {
 
     use std::path::Path;
 
-    static PREBUILT_BINDGENS: &[&str] = &["bindgen_3.14.0"];
+    static PREBUILT_BINDGENS: &[&str] = &["bindgen_3.34.1"];
 
     pub fn write_to_out_dir(_header: HeaderLocation, out_path: &Path) {
         let name = PREBUILT_BINDGENS[PREBUILT_BINDGENS.len() - 1];
@@ -544,7 +551,6 @@ mod bindings {
         let mut bindings = bindgen::builder()
             .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
             .disable_nested_struct_naming()
-            .formatter(bindgen::Formatter::Prettyplease)
             .generate_cstr(true)
             .trust_clang_mangling(false)
             .header(header.clone())

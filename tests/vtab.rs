@@ -4,8 +4,8 @@
 #[test]
 fn test_dummy_module() -> rusqlite::Result<()> {
     use rusqlite::vtab::{
-        eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context, IndexInfo, VTab,
-        VTabConnection, VTabCursor, Values,
+        eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context, Filters, IndexInfo,
+        VTab, VTabConnection, VTabCursor,
     };
     use rusqlite::{version_number, Connection, Result};
     use std::marker::PhantomData;
@@ -59,7 +59,7 @@ fn test_dummy_module() -> rusqlite::Result<()> {
             &mut self,
             _idx_num: c_int,
             _idx_str: Option<&str>,
-            _args: &Values<'_>,
+            _args: &Filters<'_>,
         ) -> Result<()> {
             self.row_id = 1;
             Ok(())

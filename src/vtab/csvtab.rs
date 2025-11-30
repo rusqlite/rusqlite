@@ -30,8 +30,8 @@ use std::str;
 use crate::ffi;
 use crate::types::Null;
 use crate::vtab::{
-    escape_double_quote, parse_boolean, read_only_module, Context, CreateVTab, IndexInfo, VTab,
-    VTabConfig, VTabConnection, VTabCursor, VTabKind, Values,
+    escape_double_quote, parse_boolean, read_only_module, Context, CreateVTab, Filters, IndexInfo,
+    VTab, VTabConfig, VTabConnection, VTabCursor, VTabKind,
 };
 use crate::{Connection, Error, Result};
 
@@ -287,7 +287,7 @@ unsafe impl VTabCursor for CsvTabCursor<'_> {
         &mut self,
         _idx_num: c_int,
         _idx_str: Option<&str>,
-        _args: &Values<'_>,
+        _args: &Filters<'_>,
     ) -> Result<()> {
         {
             let offset_first_row = self.vtab().offset_first_row.clone();

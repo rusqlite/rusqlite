@@ -23,7 +23,7 @@ pub struct OwnedData {
 impl OwnedData {
     /// # Safety
     ///
-    /// Caller must be certain that `ptr` is allocated by `sqlite3_malloc`.
+    /// Caller must be certain that `ptr` is allocated by `sqlite3_malloc64`.
     pub unsafe fn from_raw_nonnull(ptr: NonNull<u8>, sz: usize) -> Self {
         Self { ptr, sz }
     }
@@ -65,7 +65,7 @@ impl Deref for Data<'_> {
 
 impl Connection {
     /// Serialize a database.
-    pub fn serialize<N: Name>(&self, schema: N) -> Result<Data> {
+    pub fn serialize<N: Name>(&self, schema: N) -> Result<Data<'_>> {
         let schema = schema.as_cstr()?;
         let mut sz = 0;
         let mut ptr: *mut u8 = unsafe {
@@ -103,7 +103,7 @@ impl Connection {
         sz: usize,
         read_only: bool,
     ) -> Result<()> {
-        let ptr = unsafe { ffi::sqlite3_malloc(sz.try_into().unwrap()) }.cast::<u8>();
+        let ptr = unsafe { ffi::sqlite3_malloc64(sz.try_into().unwrap()) }.cast::<u8>();
         if ptr.is_null() {
             return Err(error_from_sqlite_code(ffi::SQLITE_NOMEM, None));
         }
@@ -114,7 +114,7 @@ impl Connection {
                     code: ffi::ErrorCode::CannotOpen,
                     extended_code: ffi::SQLITE_IOERR,
                 },
-                Some(format!("{}", e)),
+                Some(format!("{e}")),
             )
         })?;
         let ptr = NonNull::new(ptr).unwrap();

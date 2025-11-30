@@ -4,9 +4,12 @@ use std::marker::PhantomData;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use fallible_iterator::FallibleIterator;
+
+use crate::types::Type;
 use crate::vtab::{
-    update_module, Context, CreateVTab, IndexInfo, UpdateVTab, Updates, VTab, VTabConnection,
-    VTabCursor, VTabKind, Values,
+    update_module_with_tx, Context, CreateVTab, Filters, IndexInfo, Inserts, TransactionVTab,
+    UpdateVTab, Updates, VTab, VTabConnection, VTabCursor, VTabKind,
 };
 use crate::{ffi, ValueRef};
 use crate::{Connection, Error, Result};
@@ -14,7 +17,7 @@ use crate::{Connection, Error, Result};
 /// Register the "vtablog" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module(c"vtablog", update_module::<VTabLog>(), aux)
+    conn.create_module(c"vtablog", update_module_with_tx::<VTabLog>(), aux)
 }
 
 /// An instance of the vtablog virtual table
@@ -22,6 +25,8 @@ pub fn load_module(conn: &Connection) -> Result<()> {
 struct VTabLog {
     /// Base class. Must be first
     base: ffi::sqlite3_vtab,
+    /// Associated connection
+    db: *mut ffi::sqlite3,
     /// Number of rows in the table
     n_row: i64,
     /// Instance number for this vtablog table
@@ -32,7 +37,7 @@ struct VTabLog {
 
 impl VTabLog {
     fn connect_create(
-        _: &mut VTabConnection,
+        db: &mut VTabConnection,
         _: Option<&()>,
         args: &[&[u8]],
         is_create: bool,
@@ -43,7 +48,7 @@ impl VTabLog {
             "VTabLog::{}(tab={}, args={:?}):",
             if is_create { "create" } else { "connect" },
             i_inst,
-            args,
+            args.iter().map(|b| str::from_utf8(b)).collect::<Vec<_>>(),
         );
         let mut schema = None;
         let mut n_row = None;
@@ -82,6 +87,7 @@ impl VTabLog {
         }
         let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
+            db: unsafe { db.handle() },
             n_row: n_row.unwrap_or(10),
             i_inst,
             n_cursor: 0,
@@ -109,9 +115,36 @@ unsafe impl<'vtab> VTab<'vtab> for VTabLog {
     }
 
     fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
-        println!("VTabLog::best_index({})", self.i_inst);
+        println!(
+            "VTabLog::best_index({}, num_of_order_by: {}, col_used: {}, distinct: {:?})",
+            self.i_inst,
+            info.num_of_order_by(),
+            info.col_used(),
+            info.distinct()
+        );
+        let mut in_constraint = None;
+        for (i, constraint) in info.constraints().enumerate() {
+            println!(
+                "  constraint[{}]: col={}, usable={}, op={:?}, rhs={:?}, in={:?}",
+                i,
+                constraint.column(),
+                constraint.is_usable(),
+                constraint.operator(),
+                info.rhs_value(i),
+                info.is_in_constraint(i),
+            );
+            if info.is_in_constraint(i)? {
+                in_constraint = Some(i);
+            }
+        }
         info.set_estimated_cost(500.);
         info.set_estimated_rows(500);
+        info.set_idx_str("idx");
+        info.set_idx_cstr(c"idx");
+        if let Some(idx) = in_constraint {
+            info.set_in_constraint(idx, true)?;
+            info.constraint_usage(idx).set_argv_index(1);
+        }
         Ok(())
     }
 
@@ -153,10 +186,11 @@ impl UpdateVTab<'_> for VTabLog {
         Ok(())
     }
 
-    fn insert(&mut self, args: &Values<'_>) -> Result<i64> {
+    fn insert(&mut self, args: &Inserts<'_>) -> Result<i64> {
         println!(
-            "VTabLog::insert({}, {:?})",
+            "VTabLog::insert({}, on_conflict:{:?}, {:?})",
             self.i_inst,
+            unsafe { args.on_conflict(self.db) },
             args.iter().collect::<Vec<ValueRef<'_>>>()
         );
         Ok(self.n_row)
@@ -164,13 +198,36 @@ impl UpdateVTab<'_> for VTabLog {
 
     fn update(&mut self, args: &Updates<'_>) -> Result<()> {
         println!(
-            "VTabLog::update({}, {:?})",
+            "VTabLog::update({}, on_conflict:{:?}, {:?})",
             self.i_inst,
+            unsafe { args.on_conflict(self.db) },
             args.iter()
                 .enumerate()
                 .map(|(i, v)| (v, args.no_change(i)))
                 .collect::<Vec<(ValueRef<'_>, bool)>>()
         );
+        Ok(())
+    }
+}
+
+impl TransactionVTab<'_> for VTabLog {
+    fn begin(&mut self) -> Result<()> {
+        println!("VTabLog::begin({})", self.i_inst);
+        Ok(())
+    }
+
+    fn sync(&mut self) -> Result<()> {
+        println!("VTabLog::sync({})", self.i_inst);
+        Ok(())
+    }
+
+    fn commit(&mut self) -> Result<()> {
+        println!("VTabLog::commit({})", self.i_inst);
+        Ok(())
+    }
+
+    fn rollback(&mut self) -> Result<()> {
+        println!("VTabLog::rollback({})", self.i_inst);
         Ok(())
     }
 }
@@ -204,12 +261,22 @@ impl Drop for VTabLogCursor<'_> {
 }
 
 unsafe impl VTabCursor for VTabLogCursor<'_> {
-    fn filter(&mut self, _: c_int, _: Option<&str>, _: &Values<'_>) -> Result<()> {
+    fn filter(&mut self, idx_num: c_int, idx_str: Option<&str>, args: &Filters<'_>) -> Result<()> {
         println!(
-            "VTabLogCursor::filter(tab={}, cursor={})",
+            "VTabLogCursor::filter(tab={}, cursor={}, idx_num={idx_num}, idx_str={idx_str:?}, args={})",
             self.vtab().i_inst,
-            self.i_cursor
+            self.i_cursor,
+            args.len()
         );
+        for (i, arg) in args.iter().enumerate() {
+            if arg.data_type() == Type::Null {
+                println!(
+                    " in_values[{}]: {:?}",
+                    i,
+                    args.in_values(i)?.collect::<Vec<ValueRef>>()
+                );
+            }
+        }
         self.row_id = 0;
         Ok(())
     }
@@ -263,6 +330,11 @@ unsafe impl VTabCursor for VTabLogCursor<'_> {
             i,
             value,
         );
+        if i == 0 {
+            println!("  db busy: {:?}", unsafe {
+                ctx.get_connection().map(|c| c.is_busy())
+            })
+        }
         ctx.set_result(&value)
     }
 
@@ -288,7 +360,7 @@ mod test {
         db.execute_batch(
             "CREATE VIRTUAL TABLE temp.log USING vtablog(
                     schema='CREATE TABLE x(a,b,c)',
-                    rows=25
+                    rows=3
                 );",
         )?;
         let mut stmt = db.prepare("SELECT * FROM log;")?;
@@ -303,6 +375,8 @@ mod test {
             "UPDATE log SET b = ?1, c = ?2 WHERE a = ?3",
             ["bn", "cn", "a1"],
         )?;
+        db.query_one("SELECT b, c FROM log WHERE a = 'a1'", [], |_| Ok(0))?;
+        db.execute("UPDATE log SET b = '' WHERE a IN (?1, ?2)", ["a1", "a2"])?;
         Ok(())
     }
 }

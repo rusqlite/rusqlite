@@ -305,10 +305,10 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "modern_sqlite")]
     fn pragma_func_query_value() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        let user_version: i32 = db.one_column("SELECT user_version FROM pragma_user_version")?;
+        let user_version: i32 =
+            db.one_column("SELECT user_version FROM pragma_user_version", [])?;
         assert_eq!(0, user_version);
         Ok(())
     }
@@ -351,7 +351,6 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "modern_sqlite")]
     fn pragma_func() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let mut table_info = db.prepare("SELECT * FROM pragma_table_info(?1)")?;

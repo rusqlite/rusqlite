@@ -52,7 +52,7 @@
 //! }
 //! ```
 #![warn(missing_docs)]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub use fallible_iterator;
 pub use fallible_streaming_iterator;
@@ -68,12 +68,14 @@ use std::result;
 use std::str;
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "cache")]
 use crate::cache::StatementCache;
 use crate::inner_connection::InnerConnection;
 use crate::raw_statement::RawStatement;
 use crate::types::ValueRef;
 
 pub use crate::bind::BindIndex;
+#[cfg(feature = "cache")]
 pub use crate::cache::CachedStatement;
 #[cfg(feature = "column_decltype")]
 pub use crate::column::Column;
@@ -107,6 +109,7 @@ mod bind;
 #[cfg(feature = "blob")]
 pub mod blob;
 mod busy;
+#[cfg(feature = "cache")]
 mod cache;
 #[cfg(feature = "collation")]
 mod collation;
@@ -149,6 +152,7 @@ pub(crate) mod util;
 compile_error!("feature \"loadable_extension\" and feature \"load_extension\" cannot be enabled at the same time");
 
 // Number of cached prepared statements we'll hold on to.
+#[cfg(feature = "cache")]
 const STATEMENT_CACHE_DEFAULT_CAPACITY: usize = 16;
 
 /// A macro making it more convenient to pass longer lists of
@@ -297,31 +301,26 @@ fn str_to_cstring(s: &str) -> Result<util::SmallCString> {
     Ok(util::SmallCString::new(s)?)
 }
 
-/// Returns `Ok((string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT))`
+/// Returns `(string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT)`
 /// normally.
-/// Returns error if the string is too large for sqlite.
 /// The `sqlite3_destructor_type` item is always `SQLITE_TRANSIENT` unless
 /// the string was empty (in which case it's `SQLITE_STATIC`, and the ptr is
 /// static).
-fn str_for_sqlite(s: &[u8]) -> Result<(*const c_char, c_int, ffi::sqlite3_destructor_type)> {
-    let len = len_as_c_int(s.len())?;
+fn str_for_sqlite(
+    s: &[u8],
+) -> (
+    *const c_char,
+    ffi::sqlite3_uint64,
+    ffi::sqlite3_destructor_type,
+) {
+    let len = s.len();
     let (ptr, dtor_info) = if len != 0 {
         (s.as_ptr().cast::<c_char>(), ffi::SQLITE_TRANSIENT())
     } else {
         // Return a pointer guaranteed to live forever
         ("".as_ptr().cast::<c_char>(), ffi::SQLITE_STATIC())
     };
-    Ok((ptr, len, dtor_info))
-}
-
-// Helper to cast to c_int safely, returning the correct error type if the cast
-// failed.
-fn len_as_c_int(len: usize) -> Result<c_int> {
-    if len >= (c_int::MAX as usize) {
-        Err(err!(ffi::SQLITE_TOOBIG))
-    } else {
-        Ok(len as c_int)
-    }
+    (ptr, len as ffi::sqlite3_uint64, dtor_info)
 }
 
 #[cfg(unix)]
@@ -344,6 +343,7 @@ pub const TEMP_DB: &CStr = c"temp";
 /// A connection to a SQLite database.
 pub struct Connection {
     db: RefCell<InnerConnection>,
+    #[cfg(feature = "cache")]
     cache: StatementCache,
     transaction_behavior: TransactionBehavior,
 }
@@ -353,6 +353,7 @@ unsafe impl Send for Connection {}
 impl Drop for Connection {
     #[inline]
     fn drop(&mut self) {
+        #[cfg(feature = "cache")]
         self.flush_prepared_statement_cache();
     }
 }
@@ -441,6 +442,7 @@ impl Connection {
         let c_path = path_to_cstring(path.as_ref())?;
         InnerConnection::open_with_flags(&c_path, flags, None).map(|db| Self {
             db: RefCell::new(db),
+            #[cfg(feature = "cache")]
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
         })
@@ -466,6 +468,7 @@ impl Connection {
         let c_vfs = vfs.as_cstr()?;
         InnerConnection::open_with_flags(&c_path, flags, Some(&c_vfs)).map(|db| Self {
             db: RefCell::new(db),
+            #[cfg(feature = "cache")]
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
         })
@@ -665,10 +668,37 @@ impl Connection {
         stmt.query_row(params, f)
     }
 
+    /// Convenience method to execute a query that is expected to return exactly
+    /// one row.
+    ///
+    /// Returns `Err(QueryReturnedMoreThanOneRow)` if the query returns more than one row.
+    ///
+    /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
+    /// query truly is optional, you can call
+    /// [`.optional()`](crate::OptionalExtension::optional) on the result of
+    /// this to get a `Result<Option<T>>` (requires that the trait
+    /// `rusqlite::OptionalExtension` is imported).
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if the underlying SQLite call fails.
+    pub fn query_one<T, P, F>(&self, sql: &str, params: P, f: F) -> Result<T>
+    where
+        P: Params,
+        F: FnOnce(&Row<'_>) -> Result<T>,
+    {
+        let mut stmt = self.prepare(sql)?;
+        stmt.query_one(params, f)
+    }
+
     // https://sqlite.org/tclsqlite.html#onecolumn
     #[cfg(test)]
-    pub(crate) fn one_column<T: types::FromSql>(&self, sql: &str) -> Result<T> {
-        self.query_row(sql, [], |r| r.get(0))
+    pub(crate) fn one_column<T, P>(&self, sql: &str, params: P) -> Result<T>
+    where
+        T: types::FromSql,
+        P: Params,
+    {
+        self.query_one(sql, params, |r| r.get(0))
     }
 
     /// Convenience method to execute a query that is expected to return a
@@ -757,9 +787,10 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    #[allow(clippy::result_large_err)]
+    #[expect(clippy::result_large_err)]
     #[inline]
     pub fn close(self) -> Result<(), (Self, Error)> {
+        #[cfg(feature = "cache")]
         self.flush_prepared_statement_cache();
         let r = self.db.borrow_mut().close();
         r.map_err(move |err| (self, err))
@@ -915,6 +946,7 @@ impl Connection {
         let db = InnerConnection::new(db, false);
         Ok(Self {
             db: RefCell::new(db),
+            #[cfg(feature = "cache")]
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
         })
@@ -963,6 +995,7 @@ impl Connection {
         let db = InnerConnection::new(db, true);
         Ok(Self {
             db: RefCell::new(db),
+            #[cfg(feature = "cache")]
             cache: StatementCache::with_capacity(STATEMENT_CACHE_DEFAULT_CAPACITY),
             transaction_behavior: TransactionBehavior::Deferred,
         })
@@ -1328,9 +1361,8 @@ mod test {
 
         let path_string = path.to_str().unwrap();
         let db = Connection::open(path_string)?;
-        let the_answer: i64 = db.one_column("SELECT x FROM foo")?;
 
-        assert_eq!(42i64, the_answer);
+        assert_eq!(42, db.one_column::<i64, _>("SELECT x FROM foo", [])?);
         Ok(())
     }
 
@@ -1398,9 +1430,8 @@ mod test {
         }
 
         let db = Connection::open(&db_path)?;
-        let the_answer: i64 = db.one_column("SELECT x FROM foo")?;
 
-        assert_eq!(42i64, the_answer);
+        assert_eq!(42, db.one_column::<i64, _>("SELECT x FROM foo", [])?);
         Ok(())
     }
 
@@ -1485,7 +1516,7 @@ mod test {
         assert_eq!(1, db.execute("INSERT INTO foo(x) VALUES (?1)", [1i32])?);
         assert_eq!(1, db.execute("INSERT INTO foo(x) VALUES (?1)", [2i32])?);
 
-        assert_eq!(3i32, db.one_column::<i32>("SELECT SUM(x) FROM foo")?);
+        assert_eq!(3, db.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         Ok(())
     }
 
@@ -1627,9 +1658,9 @@ mod test {
                    END;";
         db.execute_batch(sql)?;
 
-        assert_eq!(10i64, db.one_column::<i64>("SELECT SUM(x) FROM foo")?);
+        assert_eq!(10, db.one_column::<i64, _>("SELECT SUM(x) FROM foo", [])?);
 
-        let result: Result<i64> = db.one_column("SELECT x FROM foo WHERE x > 5");
+        let result: Result<i64> = db.one_column("SELECT x FROM foo WHERE x > 5", []);
         match result.unwrap_err() {
             Error::QueryReturnedNoRows => (),
             err => panic!("Unexpected error {err}"),
@@ -1648,21 +1679,21 @@ mod test {
     fn test_optional() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
-        let result: Result<i64> = db.one_column("SELECT 1 WHERE 0 <> 0");
+        let result: Result<i64> = db.one_column("SELECT 1 WHERE 0 <> 0", []);
         let result = result.optional();
         match result? {
             None => (),
             _ => panic!("Unexpected result"),
         }
 
-        let result: Result<i64> = db.one_column("SELECT 1 WHERE 0 == 0");
+        let result: Result<i64> = db.one_column("SELECT 1 WHERE 0 == 0", []);
         let result = result.optional();
         match result? {
             Some(1) => (),
             _ => panic!("Unexpected result"),
         }
 
-        let bad_query_result: Result<i64> = db.one_column("NOT A PROPER QUERY");
+        let bad_query_result: Result<i64> = db.one_column("NOT A PROPER QUERY", []);
         let bad_query_result = bad_query_result.optional();
         bad_query_result.unwrap_err();
         Ok(())
@@ -1671,8 +1702,11 @@ mod test {
     #[test]
     fn test_pragma_query_row() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        assert_eq!("memory", db.one_column::<String>("PRAGMA journal_mode")?);
-        let mode = db.one_column::<String>("PRAGMA journal_mode=off")?;
+        assert_eq!(
+            "memory",
+            db.one_column::<String, _>("PRAGMA journal_mode", [])?
+        );
+        let mode = db.one_column::<String, _>("PRAGMA journal_mode=off", [])?;
         if cfg!(feature = "bundled") {
             assert_eq!(mode, "off");
         } else {
@@ -2203,7 +2237,8 @@ mod test {
     fn test_returning() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER PRIMARY KEY)")?;
-        let row_id = db.one_column::<i64>("INSERT INTO foo DEFAULT VALUES RETURNING ROWID")?;
+        let row_id =
+            db.one_column::<i64, _>("INSERT INTO foo DEFAULT VALUES RETURNING ROWID", [])?;
         assert_eq!(row_id, 1);
         Ok(())
     }
