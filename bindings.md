@@ -284,7 +284,7 @@
 - [X] `sqlite3_log`
 
 - [X] `sqlite3_wal_hook` (`fn` callback with Connection ref)
-- [X] `sqlite3_wal_autocheckpoint`
+- [ ] `sqlite3_wal_autocheckpoint`
 - [X] `sqlite3_wal_checkpoint`
 - [X] `sqlite3_wal_checkpoint_v2`
 
@@ -376,3 +376,30 @@
 - [X] `sqlite3changegroup_output_strm`
 - [ ] `sqlite3rebaser_rebase_strm`
 - [ ] `sqlite3session_config`
+
+## List of virtual table methods supported
+
+- [X] `xCreate`
+- [X] `xConnect`
+- [X] `xBestIndex`
+- [X] `xDisconnect`
+- [X] `xDestroy`
+- [X] `xOpen`
+- [X] `xClose`
+- [X] `xFilter`
+- [X] `xNext`
+- [X] `xEof`
+- [X] `xColumn`
+- [X] `xRowid`
+- [X] `xUpdate`
+- [X] `xBegin`
+- [X] `xSync`
+- [X] `xCommit`
+- [X] `xRollback`
+- [ ] `xFindFunction`
+- [ ] `xRename`
+- [ ] `xSavepoint`
+- [ ] `xRelease`
+- [ ] `xRollbackTo`
+- [ ] `xShadowName`
+- [ ] `xIntegrity`
