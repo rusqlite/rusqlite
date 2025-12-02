@@ -506,3 +506,24 @@ pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut c_char) -> c_int {
         }
     }
 }
+
+/// Set error code and message
+/// # Safety
+/// This function is unsafe because it uses raw pointer
+#[cfg(all(feature = "modern_sqlite", not(feature = "bundled-sqlcipher")))] // 3.51.0
+pub unsafe fn set_errmsg(
+    db: *mut ffi::sqlite3,
+    code: c_int,
+    msg: Option<&std::ffi::CStr>,
+) -> Result<()> {
+    unsafe {
+        decode_result_raw(
+            db,
+            ffi::sqlite3_set_errmsg(
+                db,
+                code,
+                msg.map_or(std::ptr::null(), std::ffi::CStr::as_ptr),
+            ),
+        )
+    }
+}
