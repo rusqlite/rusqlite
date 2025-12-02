@@ -369,6 +369,14 @@ impl InnerConnection {
     pub fn is_interrupted(&self) -> bool {
         unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
     }
+
+    #[cfg(any(feature = "hooks", feature = "preupdate_hook"))]
+    pub fn check_owned(&self) -> Result<()> {
+        if !self.owned {
+            return Err(err!(ffi::SQLITE_MISUSE, "Connection is not owned"));
+        }
+        Ok(())
+    }
 }
 
 #[inline]

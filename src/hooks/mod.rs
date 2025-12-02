@@ -348,21 +348,25 @@ impl Connection {
     ///
     /// The callback returns `true` to rollback.
     #[inline]
-    pub fn commit_hook<F>(&self, hook: Option<F>)
+    pub fn commit_hook<F>(&self, hook: Option<F>) -> Result<()>
     where
         F: FnMut() -> bool + Send + 'static,
     {
+        self.db.borrow().check_owned()?;
         self.db.borrow_mut().commit_hook(hook);
+        Ok(())
     }
 
     /// Register a callback function to be invoked whenever
     /// a transaction is committed.
     #[inline]
-    pub fn rollback_hook<F>(&self, hook: Option<F>)
+    pub fn rollback_hook<F>(&self, hook: Option<F>) -> Result<()>
     where
         F: FnMut() + Send + 'static,
     {
+        self.db.borrow().check_owned()?;
         self.db.borrow_mut().rollback_hook(hook);
+        Ok(())
     }
 
     /// Register a callback function to be invoked whenever
@@ -376,11 +380,13 @@ impl Connection {
     /// - the name of the table that is updated,
     /// - the ROWID of the row that is updated.
     #[inline]
-    pub fn update_hook<F>(&self, hook: Option<F>)
+    pub fn update_hook<F>(&self, hook: Option<F>) -> Result<()>
     where
         F: FnMut(Action, &str, &str, i64) + Send + 'static,
     {
+        self.db.borrow().check_owned()?;
         self.db.borrow_mut().update_hook(hook);
+        Ok(())
     }
 
     /// Register a callback that is invoked each time data is committed to a database in wal mode.
@@ -423,21 +429,25 @@ impl Connection {
     /// is disabled.
     ///
     /// If the progress callback returns `true`, the operation is interrupted.
-    pub fn progress_handler<F>(&self, num_ops: c_int, handler: Option<F>)
+    pub fn progress_handler<F>(&self, num_ops: c_int, handler: Option<F>) -> Result<()>
     where
         F: FnMut() -> bool + Send + 'static,
     {
+        self.db.borrow().check_owned()?;
         self.db.borrow_mut().progress_handler(num_ops, handler);
+        Ok(())
     }
 
     /// Register an authorizer callback that's invoked
     /// as a statement is being prepared.
     #[inline]
-    pub fn authorizer<'c, F>(&self, hook: Option<F>)
+    pub fn authorizer<'c, F>(&self, hook: Option<F>) -> Result<()>
     where
         F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + 'static,
     {
+        self.db.borrow().check_owned()?;
         self.db.borrow_mut().authorizer(hook);
+        Ok(())
     }
 }
 
@@ -837,7 +847,7 @@ mod test {
         db.commit_hook(Some(|| {
             CALLED.store(true, Ordering::Relaxed);
             false
-        }));
+        }))?;
         db.execute_batch("BEGIN; CREATE TABLE foo (t TEXT); COMMIT;")?;
         assert!(CALLED.load(Ordering::Relaxed));
         Ok(())
@@ -851,7 +861,7 @@ mod test {
             true
         }
 
-        db.commit_hook(Some(hook));
+        db.commit_hook(Some(hook))?;
         db.execute_batch("BEGIN; CREATE TABLE foo (t TEXT); COMMIT;")
             .unwrap_err();
         Ok(())
@@ -864,7 +874,7 @@ mod test {
         static CALLED: AtomicBool = AtomicBool::new(false);
         db.rollback_hook(Some(|| {
             CALLED.store(true, Ordering::Relaxed);
-        }));
+        }))?;
         db.execute_batch("BEGIN; CREATE TABLE foo (t TEXT); ROLLBACK;")?;
         assert!(CALLED.load(Ordering::Relaxed));
         Ok(())
@@ -881,7 +891,7 @@ mod test {
             assert_eq!("foo", tbl);
             assert_eq!(1, row_id);
             CALLED.store(true, Ordering::Relaxed);
-        }));
+        }))?;
         db.execute_batch("CREATE TABLE foo (t TEXT)")?;
         db.execute_batch("INSERT INTO foo VALUES ('lisa')")?;
         assert!(CALLED.load(Ordering::Relaxed));
@@ -899,7 +909,7 @@ mod test {
                 CALLED.store(true, Ordering::Relaxed);
                 false
             }),
-        );
+        )?;
         db.execute_batch("BEGIN; CREATE TABLE foo (t TEXT); COMMIT;")?;
         assert!(CALLED.load(Ordering::Relaxed));
         Ok(())
@@ -913,7 +923,7 @@ mod test {
             true
         }
 
-        db.progress_handler(1, Some(handler));
+        db.progress_handler(1, Some(handler))?;
         db.execute_batch("BEGIN; CREATE TABLE foo (t TEXT); COMMIT;")
             .unwrap_err();
         Ok(())
@@ -936,7 +946,7 @@ mod test {
             _ => Authorization::Allow,
         };
 
-        db.authorizer(Some(authorizer));
+        db.authorizer(Some(authorizer))?;
         db.execute_batch(
             "BEGIN TRANSACTION; INSERT INTO foo VALUES ('pub txt', 'priv txt'); COMMIT;",
         )?;
@@ -947,7 +957,7 @@ mod test {
         })?;
         db.execute_batch("DROP TABLE foo").unwrap_err();
 
-        db.authorizer(None::<fn(AuthContext<'_>) -> Authorization>);
+        db.authorizer(None::<fn(AuthContext<'_>) -> Authorization>)?;
         db.execute_batch("PRAGMA user_version=1")?; // Disallowed by first authorizer, but it's now removed.
 
         Ok(())
