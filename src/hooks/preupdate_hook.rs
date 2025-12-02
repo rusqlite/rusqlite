@@ -129,11 +129,13 @@ impl Connection {
     /// - a variant of the PreUpdateCase enum which allows access to extra functions depending
     ///   on whether it's an update, delete or insert.
     #[inline]
-    pub fn preupdate_hook<F>(&self, hook: Option<F>)
+    pub fn preupdate_hook<F>(&self, hook: Option<F>) -> Result<()>
     where
         F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
     {
+        self.db.borrow().check_owned()?;
         self.db.borrow_mut().preupdate_hook(hook);
+        Ok(())
     }
 }
 
@@ -260,7 +262,7 @@ mod test {
                 _ => panic!("wrong preupdate case"),
             }
             CALLED.store(true, Ordering::Relaxed);
-        }));
+        }))?;
         db.execute_batch("CREATE TABLE foo (t TEXT)")?;
         db.execute_batch("INSERT INTO foo VALUES ('lisa')")?;
         assert!(CALLED.load(Ordering::Relaxed));
@@ -296,7 +298,7 @@ mod test {
                 _ => panic!("wrong preupdate case"),
             }
             CALLED.store(true, Ordering::Relaxed);
-        }));
+        }))?;
 
         db.execute_batch("DELETE from foo")?;
         assert!(CALLED.load(Ordering::Relaxed));
@@ -354,7 +356,7 @@ mod test {
                 _ => panic!("wrong preupdate case"),
             }
             CALLED.store(true, Ordering::Relaxed);
-        }));
+        }))?;
 
         db.execute_batch("UPDATE foo SET t = 'janice'")?;
         assert!(CALLED.load(Ordering::Relaxed));
