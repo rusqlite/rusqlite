@@ -1,7 +1,7 @@
-use std::error;
-use std::ffi::CStr;
-use std::fmt;
-use std::os::raw::c_int;
+use core::error;
+use core::ffi::c_int;
+use core::ffi::CStr;
+use core::fmt;
 
 /// Error Codes
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
