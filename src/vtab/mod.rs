@@ -1023,7 +1023,6 @@ impl Updates<'_> {
     /// - and if and the prior [`VTabCursor::column`] method call that was invoked to extracted the value for that column returned without setting a result.
     #[inline]
     #[must_use]
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
     pub fn no_change(&self, idx: usize) -> bool {
         unsafe { ffi::sqlite3_value_nochange(self.values.args[idx]) != 0 }
     }
