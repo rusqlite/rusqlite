@@ -546,7 +546,6 @@ impl IndexInfo {
     }
 
     /// Determine the collation for a virtual table constraint
-    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.22.0
     pub fn collation(&self, constraint_idx: usize) -> Result<&str> {
         let idx = constraint_idx as c_int;
         let collation = unsafe { ffi::sqlite3_vtab_collation(self.0, idx) };
