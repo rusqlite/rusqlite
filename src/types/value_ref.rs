@@ -256,7 +256,6 @@ impl ValueRef<'_> {
         }
     }
 
-    // TODO sqlite3_value_nochange // 3.22.0 & VTab xUpdate
     // TODO sqlite3_value_frombind // 3.28.0
 }
 
