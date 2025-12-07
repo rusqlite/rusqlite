@@ -1,12 +1,12 @@
 #![expect(non_snake_case, non_camel_case_types)]
-
+#![cfg_attr(not(test), no_std)]
 // force linking to openssl
 #[cfg(feature = "bundled-sqlcipher-vendored-openssl")]
 extern crate openssl_sys;
 
 pub use self::error::*;
 
-use std::mem;
+use core::mem;
 
 mod error;
 
@@ -17,7 +17,7 @@ pub fn SQLITE_STATIC() -> sqlite3_destructor_type {
 
 #[must_use]
 pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
-    Some(unsafe { mem::transmute::<isize, unsafe extern "C" fn(*mut std::ffi::c_void)>(-1_isize) })
+    Some(unsafe { mem::transmute::<isize, unsafe extern "C" fn(*mut core::ffi::c_void)>(-1_isize) })
 }
 
 #[allow(dead_code, clippy::all)]
