@@ -149,6 +149,9 @@ impl FromSql for DateTime<FixedOffset> {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{
         types::{FromSql, ValueRef},
         Connection, Result,

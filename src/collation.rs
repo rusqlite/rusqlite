@@ -181,6 +181,9 @@ impl InnerConnection {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{Connection, Result};
     use fallible_streaming_iterator::FallibleStreamingIterator;
     use std::cmp::Ordering;

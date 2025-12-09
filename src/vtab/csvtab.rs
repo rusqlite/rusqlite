@@ -342,10 +342,17 @@ impl From<csv::Error> for Error {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::vtab::csvtab;
     use crate::{Connection, Result};
     use fallible_iterator::FallibleIterator;
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn test_csv_module() -> Result<()> {
         let db = Connection::open_in_memory()?;
@@ -368,6 +375,10 @@ mod test {
         db.execute_batch("DROP TABLE vtab")
     }
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn test_csv_cursor() -> Result<()> {
         let db = Connection::open_in_memory()?;

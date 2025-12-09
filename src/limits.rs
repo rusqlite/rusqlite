@@ -78,6 +78,9 @@ impl Connection {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::*;
     use crate::Result;
 
@@ -161,7 +164,13 @@ mod test {
         assert_eq!(32, db.limit(Limit::SQLITE_LIMIT_TRIGGER_DEPTH)?);
 
         db.set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, 2)?;
+        #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
         assert_eq!(2, db.limit(Limit::SQLITE_LIMIT_WORKER_THREADS)?);
+
+        // wasm build with DSQLITE_THREADSAFE=0, so limit not working
+        // see <https://sqlite.org/threadsafe.html>
+        #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+        assert_eq!(0, db.limit(Limit::SQLITE_LIMIT_WORKER_THREADS)?);
 
         assert!(db
             .set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, -1)

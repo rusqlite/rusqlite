@@ -137,6 +137,9 @@ impl fmt::Display for Type {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::Value;
     use crate::{params, Connection, Error, Result, Statement};
     use std::ffi::{c_double, c_int};
@@ -237,7 +240,6 @@ mod test {
     }
 
     #[test]
-    #[expect(clippy::cognitive_complexity)]
     fn test_mismatched_types() -> Result<()> {
         fn is_invalid_column_type(err: Error) -> bool {
             matches!(err, Error::InvalidColumnType(..))

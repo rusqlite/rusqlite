@@ -320,10 +320,17 @@ impl Drop for Backup<'_, '_> {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::{Backup, Progress};
     use crate::{Connection, Result, MAIN_DB, TEMP_DB};
     use std::time::Duration;
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn backup_to_path() -> Result<()> {
         let src = Connection::open_in_memory()?;

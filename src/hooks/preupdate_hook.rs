@@ -230,6 +230,9 @@ impl InnerConnection {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use super::super::Action;

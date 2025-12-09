@@ -909,6 +909,9 @@ pub enum StatementStatus {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::types::ToSql;
     use crate::{params_from_iter, Connection, Error, Result};
 

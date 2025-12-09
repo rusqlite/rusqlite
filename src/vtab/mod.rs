@@ -16,7 +16,7 @@ use std::ops::Deref;
 use std::ptr;
 use std::slice;
 
-use libsqlite3_sys::sqlite3_free;
+use crate::ffi::sqlite3_free;
 
 use crate::context::set_result;
 use crate::error::{check, error_from_sqlite_code, to_sqlite_error};
@@ -1539,6 +1539,9 @@ mod vtablog;
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     #[test]
     fn test_dequote() {
         assert_eq!("", super::dequote(""));

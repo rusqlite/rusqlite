@@ -56,7 +56,11 @@
 
 pub use fallible_iterator;
 pub use fallible_streaming_iterator;
+
+#[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
 pub use libsqlite3_sys as ffi;
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+pub use sqlite_wasm_rs as ffi;
 
 use std::cell::RefCell;
 use std::default::Default;
@@ -411,6 +415,15 @@ impl Connection {
     ///
     /// Will return `Err` if `path` cannot be converted to a C-compatible string
     /// or if the underlying SQLite open call fails.
+    ///
+    /// # WASM support
+    ///
+    /// If you plan to use this connection type on the `wasm32-unknown-unknown` target please
+    /// make sure to read the following notes:
+    ///
+    /// - The database is stored in memory by default.
+    /// - Persistent VFS (Virtual File Systems) is optional,
+    ///   see <https://github.com/Spxg/sqlite-wasm-rs> for details
     #[inline]
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let flags = OpenFlags::default();
@@ -1278,6 +1291,9 @@ doc_comment::doctest!("../README.md");
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::*;
     use fallible_iterator::FallibleIterator;
     use std::error::Error as StdError;
@@ -1303,6 +1319,10 @@ mod test {
         Connection::open_in_memory().unwrap()
     }
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn test_concurrent_transactions_busy_commit() -> Result<()> {
         use std::time::Duration;
@@ -1345,6 +1365,10 @@ mod test {
         Ok(())
     }
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn test_persistence() -> Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -1374,6 +1398,10 @@ mod test {
         db.close().unwrap();
     }
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn test_path() -> Result<()> {
         let tmp = tempfile::tempdir().unwrap();
@@ -1941,6 +1969,8 @@ mod test {
     }
 
     mod query_and_then_tests {
+        #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+        use wasm_bindgen_test::wasm_bindgen_test as test;
 
         use super::*;
 
@@ -2194,6 +2224,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(not(feature = "extra_check"))]
     fn test_alter_table() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE x(t);")?;
