@@ -80,9 +80,16 @@ impl InnerConnection {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{Connection, ErrorCode, Result, TransactionBehavior};
     use std::sync::atomic::{AtomicBool, Ordering};
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn test_default_busy() -> Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -99,6 +106,10 @@ mod test {
         tx1.rollback()
     }
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn test_busy_handler() -> Result<()> {
         static CALLED: AtomicBool = AtomicBool::new(false);

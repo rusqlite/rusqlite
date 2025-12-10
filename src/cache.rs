@@ -176,6 +176,9 @@ impl StatementCache {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::StatementCache;
     use crate::{Connection, Result};
     use fallible_iterator::FallibleIterator;

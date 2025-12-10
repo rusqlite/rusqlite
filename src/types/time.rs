@@ -155,6 +155,9 @@ impl FromSql for PrimitiveDateTime {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{Connection, Result};
     use time::macros::{date, datetime, time};
     use time::{Date, OffsetDateTime, PrimitiveDateTime, Time};

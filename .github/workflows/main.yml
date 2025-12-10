@@ -129,6 +129,24 @@ jobs:
       - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --all-targets --workspace --verbose
       - run: cargo test --features 'bundled-full session buildtime_bindgen preupdate_hook' --doc --workspace --verbose
 
+  test-sqlite-wasm:
+    name: Test wasm32-unknown-unknown
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Install emscripten toolchains
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+      - name: Test unit and integration tests
+        run: |
+          source ./emsdk/emsdk_env.sh
+          wasm-pack test --node --features modern-full
+
   sqlcipher:
     name: Test with sqlcipher
     runs-on: ubuntu-latest

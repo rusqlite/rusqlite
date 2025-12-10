@@ -420,6 +420,9 @@ impl ToSql for ZeroBlob {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{Connection, Result, MAIN_DB};
     use std::io::{BufRead, BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 
