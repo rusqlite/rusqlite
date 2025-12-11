@@ -234,6 +234,52 @@ impl<'vtab, T: RenameVTab<'vtab>> Module<'vtab, T> {
     }
 }
 
+impl<'vtab, T: VTab<'vtab> + ShadowNameVTab> Module<'vtab, T> {
+    /// Enable xShadowName to identify shadow tables.
+    ///
+    /// This allows SQLite to protect shadow tables when
+    /// `SQLITE_DBCONFIG_DEFENSIVE` is enabled.
+    ///
+    /// Requires SQLite module version >= 3.
+    #[must_use]
+    pub const fn with_shadow_name(self) -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                iVersion: if self.base.iVersion < 3 {
+                    3
+                } else {
+                    self.base.iVersion
+                },
+                xShadowName: Some(rust_shadow_name::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "modern_sqlite")] // SQLite >= 3.44.0
+impl<'vtab, T: IntegrityVTab<'vtab>> Module<'vtab, T> {
+    /// Enable xIntegrity to participate in `PRAGMA integrity_check`.
+    ///
+    /// Requires SQLite module version >= 4 (SQLite >= 3.44.0).
+    #[must_use]
+    pub const fn with_integrity(self) -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                iVersion: if self.base.iVersion < 4 {
+                    4
+                } else {
+                    self.base.iVersion
+                },
+                xIntegrity: Some(rust_integrity::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
 /// Create a modifiable virtual table implementation.
 ///
 /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
@@ -431,6 +477,44 @@ pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
     fn rollback(&mut self) -> Result<()> {
         Ok(())
     }
+}
+
+/// Virtual table that uses shadow tables.
+///
+/// Implement this trait to allow SQLite to identify shadow tables belonging
+/// to this virtual table. When `SQLITE_DBCONFIG_DEFENSIVE` is enabled,
+/// shadow tables become read-only for ordinary SQL statements.
+///
+/// See [SQLite doc](https://sqlite.org/vtab.html#the_xshadowname_method)
+pub trait ShadowNameVTab {
+    /// Returns `true` if the given suffix identifies a shadow table.
+    ///
+    /// For example, if your virtual table "foo" uses shadow tables named
+    /// "foo_content" and "foo_index", this should return `true` for
+    /// "content" and "index".
+    fn shadow_name(suffix: &str) -> bool;
+}
+
+/// Virtual table that supports integrity checking.
+///
+/// Implement this trait to participate in `PRAGMA integrity_check` and
+/// `PRAGMA quick_check`.
+///
+/// Requires SQLite >= 3.44.0.
+///
+/// See [SQLite doc](https://sqlite.org/vtab.html#the_xintegrity_method)
+#[cfg(feature = "modern_sqlite")]
+pub trait IntegrityVTab<'vtab>: VTab<'vtab> {
+    /// Check the integrity of the virtual table content.
+    ///
+    /// - `schema`: The schema name ("main", "temp", etc.)
+    /// - `table`: The virtual table name
+    /// - `flags`: 0 for `integrity_check`, 1 for `quick_check`
+    ///
+    /// Return `Ok(None)` if no problems are found.
+    /// Return `Ok(Some(message))` to report an integrity problem.
+    /// Return `Err(...)` only if the integrity check itself fails (e.g., OOM).
+    fn integrity(&self, schema: &str, table: &str, flags: c_int) -> Result<Option<String>>;
 }
 
 /// Index constraint operator.
@@ -1550,6 +1634,48 @@ where
         Err(e) => return vtab_error::<()>(vtab, Err(Error::Utf8Error(e))),
     };
     vtab_error(vtab, (*vt).rename(name))
+}
+
+unsafe extern "C" fn rust_shadow_name<T>(suffix: *const c_char) -> c_int
+where
+    T: ShadowNameVTab,
+{
+    let suffix_str = match CStr::from_ptr(suffix).to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    T::shadow_name(suffix_str) as c_int
+}
+
+#[cfg(feature = "modern_sqlite")]
+unsafe extern "C" fn rust_integrity<'vtab, T>(
+    vtab: *mut sqlite3_vtab,
+    schema: *const c_char,
+    table: *const c_char,
+    flags: c_int,
+    pz_err: *mut *mut c_char,
+) -> c_int
+where
+    T: IntegrityVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    let schema_str = match CStr::from_ptr(schema).to_str() {
+        Ok(s) => s,
+        Err(e) => return vtab_error::<()>(vtab, Err(Error::Utf8Error(e))),
+    };
+    let table_str = match CStr::from_ptr(table).to_str() {
+        Ok(s) => s,
+        Err(e) => return vtab_error::<()>(vtab, Err(Error::Utf8Error(e))),
+    };
+    match (*vt).integrity(schema_str, table_str, flags) {
+        Ok(None) => ffi::SQLITE_OK,
+        Ok(Some(msg)) => {
+            *pz_err = alloc(&msg);
+            ffi::SQLITE_OK
+        }
+        Err(Error::SqliteFailure(err, _)) => err.extended_code,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
 }
 
 /// Virtual table cursors can set an error message by assigning a string to
