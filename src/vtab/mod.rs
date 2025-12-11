@@ -9,6 +9,57 @@
 //!    `USING` clause.
 //!
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
+//!
+//! # Building a module
+//!
+//! Use [`Module::new()`] to create a base module, then chain `with_*` methods
+//! to enable additional capabilities if needed. Each method is only available when your
+//! virtual table type implements the corresponding trait.
+//!
+//! ```rust,ignore
+//! use rusqlite::vtab::{Module, VTab, CreateVTab, VTabKind};
+//!
+//! // Eponymous-only read-only table (simplest case)
+//! const SIMPLE: &Module<MyVTab> = &Module::new();
+//!
+//! // Read-only table with CREATE VIRTUAL TABLE support
+//! const READ_ONLY: &Module<MyVTab> = &Module::new().with_create();
+//!
+//! // Writable table with transaction support
+//! const WITH_TX: &Module<MyVTab> = &Module::new()
+//!     .with_update()
+//!     .with_transactions();
+//!
+//! // Table with rename support (for ALTER TABLE RENAME)
+//! const RENAMEABLE: &Module<MyVTab> = &Module::new()
+//!     .with_create()
+//!     .with_rename();
+//!
+//! // Table with integrity checking (PRAGMA integrity_check support)
+//! // Requires the `modern_sqlite` feature (SQLite >= 3.44.0)
+//! #[cfg(feature = "modern_sqlite")]
+//! const WITH_INTEGRITY: &Module<MyVTab> = &Module::new()
+//!     .with_create()
+//!     .with_integrity();
+//! ```
+//!
+//! ## Available capabilities
+//!
+//! | Method | Trait Required | Description |
+//! |--------|----------------|-------------|
+//! | [`with_create()`](Module::with_create) | [`CreateVTab`] | Enable `CREATE VIRTUAL TABLE` support |
+//! | [`with_update()`](Module::with_update) | [`UpdateVTab`] | Enable INSERT/UPDATE/DELETE |
+//! | [`with_transactions()`](Module::with_transactions) | [`TransactionVTab`] | Enable transaction callbacks |
+//! | [`with_rename()`](Module::with_rename) | [`RenameVTab`] | Enable `ALTER TABLE RENAME` |
+//! | [`with_shadow_name()`](Module::with_shadow_name) | [`ShadowNameVTab`] | Identify shadow tables |
+//! | [`with_integrity()`](Module::with_integrity) | [`IntegrityVTab`] | Enable `PRAGMA integrity_check` |
+//!
+//! ## Legacy module functions
+//!
+//! - [`eponymous_only_module()`] - Eponymous-only read-only table
+//! - [`read_only_module()`] - Read-only table with CREATE support
+//! - [`update_module()`] - Writable table
+//! - [`update_module_with_tx()`] - Writable table with transactions
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::marker::PhantomData;
