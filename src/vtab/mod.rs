@@ -106,7 +106,7 @@ const ZERO_MODULE: ffi::sqlite3_module = unsafe {
 
 macro_rules! module {
     ($lt:lifetime, $vt:ty, $ct:ty, $xcreate:expr, $xdestroy:expr, $xupdate:expr,
-         $xbegin:expr, $xsync:expr, $xcommit:expr, $xrollback:expr) => {
+         $xbegin:expr, $xsync:expr, $xcommit:expr, $xrollback:expr, $xrename:expr) => {
     &Module {
         base: ffi::sqlite3_module {
             // We don't use methods provided by versions > 1
@@ -129,7 +129,7 @@ macro_rules! module {
             xCommit: $xcommit,
             xRollback: $xrollback,
             xFindFunction: None,
-            xRename: None,
+            xRename: $xrename,
             ..ZERO_MODULE
         },
         phantom: PhantomData::<&$lt $vt>,
@@ -144,13 +144,13 @@ macro_rules! module {
 pub fn update_module<'vtab, T: UpdateVTab<'vtab>>() -> &'static Module<'vtab, T> {
     match T::KIND {
         VTabKind::EponymousOnly => {
-            module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>), None, None, None, None)
+            module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>), None, None, None, None, None)
         }
         VTabKind::Eponymous => {
-            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>), None, None, None, None)
+            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>), None, None, None, None, None)
         }
         _ => {
-            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>), None, None, None, None)
+            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>), None, None, None, None, None)
         }
     }
 }
@@ -162,13 +162,13 @@ pub fn update_module<'vtab, T: UpdateVTab<'vtab>>() -> &'static Module<'vtab, T>
 pub fn update_module_with_tx<'vtab, T: TransactionVTab<'vtab>>() -> &'static Module<'vtab, T> {
     match T::KIND {
         VTabKind::EponymousOnly => {
-            module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>))
+            module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>), None)
         }
         VTabKind::Eponymous => {
-            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>))
+            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>), None)
         }
         _ => {
-            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>))
+            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>), None)
         }
     }
 }
@@ -183,12 +183,30 @@ pub fn read_only_module<'vtab, T: CreateVTab<'vtab>>() -> &'static Module<'vtab,
         VTabKind::Eponymous => {
             // A virtual table is eponymous if its xCreate method is the exact same function
             // as the xConnect method
-            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), None, None, None, None, None)
+            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), None, None, None, None, None, None)
         }
         _ => {
             // The xConnect and xCreate methods may do the same thing, but they must be
             // different so that the virtual table is not an eponymous virtual table.
-            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), None, None, None, None, None)
+            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), None, None, None, None, None, None)
+        }
+    }
+}
+
+/// Create a read-only virtual table implementation with rename support.
+///
+/// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
+#[must_use]
+pub fn read_only_module_with_rename<'vtab, T: RenameVTab<'vtab>>() -> &'static Module<'vtab, T> {
+    match T::KIND {
+        VTabKind::EponymousOnly => {
+            module!('vtab, T, T::Cursor, None, None, None, None, None, None, None, None)
+        }
+        VTabKind::Eponymous => {
+            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), None, None, None, None, None, Some(rust_rename::<T>))
+        }
+        _ => {
+            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), None, None, None, None, None, Some(rust_rename::<T>))
         }
     }
 }
@@ -199,7 +217,7 @@ pub fn read_only_module<'vtab, T: CreateVTab<'vtab>>() -> &'static Module<'vtab,
 #[must_use]
 pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, T> {
     //  For eponymous-only virtual tables, the xCreate method is NULL
-    module!('vtab, T, T::Cursor, None, None, None, None, None, None, None)
+    module!('vtab, T, T::Cursor, None, None, None, None, None, None, None, None)
 }
 
 /// Virtual table configuration options
@@ -333,6 +351,17 @@ pub trait UpdateVTab<'vtab>: CreateVTab<'vtab> {
     /// Update: `args[0] != NULL: old rowid or PK, args[1]: new row id or PK,
     /// args[2]: ...`
     fn update(&mut self, args: &Updates<'_>) -> Result<()>;
+}
+
+/// Virtual table that supports renaming via ALTER TABLE RENAME.
+///
+/// See [SQLite doc](https://sqlite.org/vtab.html#the_xrename_method)
+pub trait RenameVTab<'vtab>: CreateVTab<'vtab> {
+    /// Notify the virtual table that it will be given a new name.
+    ///
+    /// If this method returns `Ok(())`, SQLite renames the table.
+    /// If this method returns an error, the renaming is prevented.
+    fn rename(&mut self, new_name: &str) -> Result<()>;
 }
 
 /// Writable virtual table instance with transaction support trait.
@@ -1459,6 +1488,21 @@ where
 {
     let vt = vtab.cast::<T>();
     vtab_error(vtab, (*vt).rollback())
+}
+
+unsafe extern "C" fn rust_rename<'vtab, T>(
+    vtab: *mut sqlite3_vtab,
+    new_name: *const c_char,
+) -> c_int
+where
+    T: RenameVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    let name = match CStr::from_ptr(new_name).to_str() {
+        Ok(s) => s,
+        Err(e) => return vtab_error::<()>(vtab, Err(Error::Utf8Error(e))),
+    };
+    vtab_error(vtab, (*vt).rename(name))
 }
 
 /// Virtual table cursors can set an error message by assigning a string to
