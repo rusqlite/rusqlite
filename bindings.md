@@ -397,9 +397,9 @@
 - [X] `xCommit`
 - [X] `xRollback`
 - [ ] `xFindFunction`
-- [ ] `xRename`
-- [ ] `xSavepoint`
-- [ ] `xRelease`
-- [ ] `xRollbackTo`
-- [ ] `xShadowName`
-- [ ] `xIntegrity`
+- [x] `xRename`
+- [x] `xSavepoint`
+- [x] `xRelease`
+- [x] `xRollbackTo`
+- [x] `xShadowName`
+- [x] `xIntegrity`

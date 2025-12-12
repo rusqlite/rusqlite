@@ -50,6 +50,7 @@
 //! | [`with_create()`](Module::with_create) | [`CreateVTab`] | Enable `CREATE VIRTUAL TABLE` support |
 //! | [`with_update()`](Module::with_update) | [`UpdateVTab`] | Enable INSERT/UPDATE/DELETE |
 //! | [`with_transactions()`](Module::with_transactions) | [`TransactionVTab`] | Enable transaction callbacks |
+//! | [`with_savepoints()`](Module::with_savepoints) | [`SavepointVTab`] | Enable nested transactions |
 //! | [`with_rename()`](Module::with_rename) | [`RenameVTab`] | Enable `ALTER TABLE RENAME` |
 //! | [`with_shadow_name()`](Module::with_shadow_name) | [`ShadowNameVTab`] | Identify shadow tables |
 //! | [`with_integrity()`](Module::with_integrity) | [`IntegrityVTab`] | Enable `PRAGMA integrity_check` |
@@ -264,6 +265,32 @@ impl<'vtab, T: TransactionVTab<'vtab>> Module<'vtab, T> {
                 xSync: Some(rust_sync::<T>),
                 xCommit: Some(rust_commit::<T>),
                 xRollback: Some(rust_rollback::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'vtab, T: SavepointVTab<'vtab>> Module<'vtab, T> {
+    /// Enable savepoint callbacks (xSavepoint, xRelease, xRollbackTo).
+    ///
+    /// These provide nested transaction support. The callbacks are only
+    /// invoked between xBegin and xCommit/xRollback.
+    ///
+    /// Requires SQLite module version >= 2.
+    #[must_use]
+    pub const fn with_savepoints(self) -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                iVersion: if self.base.iVersion < 2 {
+                    2
+                } else {
+                    self.base.iVersion
+                },
+                xSavepoint: Some(rust_savepoint::<T>),
+                xRelease: Some(rust_release_savepoint::<T>),
+                xRollbackTo: Some(rust_rollback_to::<T>),
                 ..self.base
             },
             phantom: PhantomData,
@@ -528,6 +555,30 @@ pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
     fn rollback(&mut self) -> Result<()> {
         Ok(())
     }
+}
+
+/// Virtual table with savepoint (nested transaction) support.
+///
+/// These methods are only called between [`TransactionVTab::begin`] and
+/// [`TransactionVTab::commit`]/[`TransactionVTab::rollback`].
+///
+/// See [SQLite doc](https://sqlite.org/vtab.html#xsavepoint)
+pub trait SavepointVTab<'vtab>: TransactionVTab<'vtab> {
+    /// Save current state as savepoint N.
+    ///
+    /// A subsequent call to [`rollback_to`](Self::rollback_to) with the same N
+    /// means the virtual table state should return to what it was when this
+    /// method was called.
+    fn savepoint(&mut self, savepoint_id: c_int) -> Result<()>;
+
+    /// Invalidate all savepoints where N >= `savepoint_id`.
+    fn release(&mut self, savepoint_id: c_int) -> Result<()>;
+
+    /// Return to the state when [`savepoint`](Self::savepoint) was called with
+    /// `savepoint_id`.
+    ///
+    /// This invalidates all savepoints with N > `savepoint_id`.
+    fn rollback_to(&mut self, savepoint_id: c_int) -> Result<()>;
 }
 
 /// Virtual table that uses shadow tables.
@@ -1670,6 +1721,30 @@ where
 {
     let vt = vtab.cast::<T>();
     vtab_error(vtab, (*vt).rollback())
+}
+
+unsafe extern "C" fn rust_savepoint<'vtab, T>(vtab: *mut sqlite3_vtab, n: c_int) -> c_int
+where
+    T: SavepointVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    vtab_error(vtab, (*vt).savepoint(n))
+}
+
+unsafe extern "C" fn rust_release_savepoint<'vtab, T>(vtab: *mut sqlite3_vtab, n: c_int) -> c_int
+where
+    T: SavepointVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    vtab_error(vtab, (*vt).release(n))
+}
+
+unsafe extern "C" fn rust_rollback_to<'vtab, T>(vtab: *mut sqlite3_vtab, n: c_int) -> c_int
+where
+    T: SavepointVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    vtab_error(vtab, (*vt).rollback_to(n))
 }
 
 unsafe extern "C" fn rust_rename<'vtab, T>(
