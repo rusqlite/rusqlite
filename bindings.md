@@ -396,7 +396,7 @@
 - [X] `xSync`
 - [X] `xCommit`
 - [X] `xRollback`
-- [ ] `xFindFunction`
+- [x] `xFindFunction`
 - [x] `xRename`
 - [x] `xSavepoint`
 - [x] `xRelease`

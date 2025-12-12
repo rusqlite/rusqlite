@@ -52,6 +52,7 @@
 //! | [`with_transactions()`](Module::with_transactions) | [`TransactionVTab`] | Enable transaction callbacks |
 //! | [`with_savepoints()`](Module::with_savepoints) | [`SavepointVTab`] | Enable nested transactions |
 //! | [`with_rename()`](Module::with_rename) | [`RenameVTab`] | Enable `ALTER TABLE RENAME` |
+//! | [`with_find_function()`](Module::with_find_function) | [`FindFunctionVTab`] | Enable SQL function overloading |
 //! | [`with_shadow_name()`](Module::with_shadow_name) | [`ShadowNameVTab`] | Identify shadow tables |
 //! | [`with_integrity()`](Module::with_integrity) | [`IntegrityVTab`] | Enable `PRAGMA integrity_check` |
 //!
@@ -181,6 +182,7 @@ impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
                 xNext: Some(rust_next::<T::Cursor>),
                 xEof: Some(rust_eof::<T::Cursor>),
                 xColumn: Some(rust_column::<T::Cursor>),
+                // FIXME rowid is optional for WITHOUT ROWID, see https://www.sqlite.org/vtab.html#_without_rowid_virtual_tables_
                 xRowid: Some(rust_rowid::<T::Cursor>),
                 xUpdate: None,
                 xBegin: None,
@@ -351,6 +353,20 @@ impl<'vtab, T: IntegrityVTab<'vtab>> Module<'vtab, T> {
                     self.base.iVersion
                 },
                 xIntegrity: Some(rust_integrity::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'vtab, T: FindFunctionVTab<'vtab>> Module<'vtab, T> {
+    /// Enable xFindFunction to overload SQL functions for this virtual table.
+    #[must_use]
+    pub const fn with_find_function(self) -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                xFindFunction: Some(rust_find_function::<T>),
                 ..self.base
             },
             phantom: PhantomData,
@@ -617,6 +633,74 @@ pub trait IntegrityVTab<'vtab>: VTab<'vtab> {
     /// Return `Ok(Some(message))` to report an integrity problem.
     /// Return `Err(...)` only if the integrity check itself fails (e.g., OOM).
     fn integrity(&self, schema: &str, table: &str, flags: c_int) -> Result<Option<String>>;
+}
+
+/// Result of [`FindFunctionVTab::find_function`].
+///
+/// Specifies how to overload a function within a virtual table query.
+#[derive(Clone, Copy)]
+pub enum FindFunctionResult {
+    /// No function overload; use the default function.
+    None,
+    /// Overload the function with the provided implementation.
+    ///
+    /// The function pointer and user data will be used instead of
+    /// the default SQL function.
+    Overload {
+        /// The function implementation (same signature as scalar functions).
+        func: unsafe extern "C" fn(
+            ctx: *mut ffi::sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ),
+        /// User data passed to the function as `sqlite3_user_data()`.
+        ///
+        /// Must remain valid for the lifetime of the virtual table.
+        user_data: *mut c_void,
+    },
+    /// Overload the function and mark it as indexable.
+    ///
+    /// This enables the function to be used in WHERE clauses with
+    /// optimization support (e.g., `WHERE geopoly_overlap(col, ?)`).
+    ///
+    /// The `constraint_op` should be >= `SQLITE_INDEX_CONSTRAINT_FUNCTION` (150).
+    /// This value will appear in `sqlite3_index_info.aConstraint[].op` during
+    /// [`VTab::best_index`], allowing the virtual table to optimize queries.
+    ///
+    /// Requires SQLite >= 3.25.0.
+    Indexable {
+        /// The function implementation.
+        func: unsafe extern "C" fn(
+            ctx: *mut ffi::sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ),
+        /// User data passed to the function.
+        user_data: *mut c_void,
+        /// Constraint operator code (>= 150 for SQLITE_INDEX_CONSTRAINT_FUNCTION).
+        constraint_op: u8,
+    },
+}
+
+/// Virtual table with function overloading support.
+///
+/// See [SQLite doc](https://sqlite.org/vtab.html#the_xfindfunction_method)
+pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
+    /// Check if the virtual table wants to overload a function.
+    ///
+    /// - `n_arg`: Number of arguments the function is called with
+    /// - `name`: Name of the function being looked up
+    ///
+    /// Return [`FindFunctionResult::None`] if no overloading is desired.
+    /// Return [`FindFunctionResult::Overload`] to provide a custom implementation.
+    /// Return [`FindFunctionResult::Indexable`] to provide a custom implementation
+    /// that can also be used for query optimization (requires SQLite >= 3.25.0).
+    ///
+    /// # Safety
+    ///
+    /// The function pointer and user data returned must remain valid for the
+    /// lifetime of this virtual table instance.
+    fn find_function(&self, n_arg: c_int, name: &str) -> FindFunctionResult;
 }
 
 /// Index constraint operator.
@@ -1801,6 +1885,46 @@ where
         }
         Err(Error::SqliteFailure(err, _)) => err.extended_code,
         Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn rust_find_function<'vtab, T>(
+    vtab: *mut sqlite3_vtab,
+    n_arg: c_int,
+    z_name: *const c_char,
+    px_func: *mut Option<
+        unsafe extern "C" fn(
+            ctx: *mut ffi::sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ),
+    >,
+    pp_arg: *mut *mut c_void,
+) -> c_int
+where
+    T: FindFunctionVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    let name = match CStr::from_ptr(z_name).to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    match (*vt).find_function(n_arg, name) {
+        FindFunctionResult::None => 0,
+        FindFunctionResult::Overload { func, user_data } => {
+            *px_func = Some(func);
+            *pp_arg = user_data;
+            1
+        }
+        FindFunctionResult::Indexable {
+            func,
+            user_data,
+            constraint_op,
+        } => {
+            *px_func = Some(func);
+            *pp_arg = user_data;
+            constraint_op as c_int
+        }
     }
 }
 
