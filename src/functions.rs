@@ -87,8 +87,8 @@ unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
 /// Context is a wrapper for the SQLite function
 /// evaluation context.
 pub struct Context<'a> {
-    ctx: *mut sqlite3_context,
-    args: &'a [*mut sqlite3_value],
+    pub(crate) ctx: *mut sqlite3_context,
+    pub(crate) args: &'a [*mut sqlite3_value],
 }
 
 impl Context<'_> {

@@ -635,9 +635,149 @@ pub trait IntegrityVTab<'vtab>: VTab<'vtab> {
     fn integrity(&self, schema: &str, table: &str, flags: c_int) -> Result<Option<String>>;
 }
 
+/// A wrapper for SQL functions that can be returned from [`FindFunctionVTab::find_function`].
+///
+/// This type stores a closure and provides the raw function pointer and user data
+/// needed for xFindFunction. Store instances of this type in your virtual table
+/// struct to ensure they remain valid for the vtab's lifetime.
+///
+/// Requires the `functions` feature.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use rusqlite::vtab::{VTabFunc, FindFunctionResult};
+///
+/// #[repr(C)]
+/// struct MyVTab {
+///     base: sqlite3_vtab,
+///     // Store the function to keep it alive
+///     my_func: VTabFunc<fn(&functions::Context<'_>) -> Result<i64>>,
+/// }
+///
+/// impl MyVTab {
+///     fn new() -> Self {
+///         Self {
+///             base: Default::default(),
+///             my_func: VTabFunc::new(|ctx| {
+///                 let val: i64 = ctx.get(0)?;
+///                 Ok(val * 2)
+///             }),
+///         }
+///     }
+/// }
+/// ```
+#[cfg(feature = "functions")]
+pub struct VTabFunc<F> {
+    func: F,
+}
+
+#[cfg(feature = "functions")]
+impl<F, T> VTabFunc<F>
+where
+    F: Fn(&crate::functions::Context<'_>) -> Result<T>,
+    T: crate::functions::SqlFnOutput,
+{
+    /// Create a new virtual table function wrapper.
+    ///
+    /// The closure receives a [`functions::Context`](crate::functions::Context)
+    /// and should return a [`Result<T>`] where `T` implements
+    /// [`SqlFnOutput`](crate::functions::SqlFnOutput).
+    pub fn new(func: F) -> Self {
+        Self { func }
+    }
+
+    /// Get a [`FindFunctionResult::Overload`] that can be returned from
+    /// [`FindFunctionVTab::find_function`].
+    pub fn as_overload(&self) -> FindFunctionResult {
+        FindFunctionResult::Overload {
+            func: vtab_func_trampoline::<F, T>,
+            user_data: (&self.func as *const F).cast_mut().cast(),
+        }
+    }
+
+    /// Get a [`FindFunctionResult::Indexable`] that can be returned from
+    /// [`FindFunctionVTab::find_function`].
+    ///
+    /// The `constraint_op` value will appear in `sqlite3_index_info.aConstraint[].op`
+    /// during [`VTab::best_index`], allowing query optimization.
+    /// Use values >= 150 (`SQLITE_INDEX_CONSTRAINT_FUNCTION`).
+    pub fn as_indexable(&self, constraint_op: u8) -> FindFunctionResult {
+        FindFunctionResult::Indexable {
+            func: vtab_func_trampoline::<F, T>,
+            user_data: (&self.func as *const F).cast_mut().cast(),
+            constraint_op,
+        }
+    }
+}
+
+/// Trampoline function that bridges FFI to the Rust closure.
+#[cfg(feature = "functions")]
+unsafe extern "C" fn vtab_func_trampoline<F, T>(
+    ctx: *mut ffi::sqlite3_context,
+    argc: c_int,
+    argv: *mut *mut ffi::sqlite3_value,
+) where
+    F: Fn(&crate::functions::Context<'_>) -> Result<T>,
+    T: crate::functions::SqlFnOutput,
+{
+    use std::panic::catch_unwind;
+
+    let args = slice::from_raw_parts(argv, argc as usize);
+    let r = catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let func_ptr = ffi::sqlite3_user_data(ctx).cast::<F>();
+        assert!(
+            !func_ptr.is_null(),
+            "Internal error - null function pointer"
+        );
+        let fn_ctx = crate::functions::Context { ctx, args };
+        (*func_ptr)(&fn_ctx)
+    }));
+
+    match r {
+        Err(_) => {
+            ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_ERROR);
+            if let Ok(cstr) = str_to_cstring("Rust panic in vtab function") {
+                ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
+            }
+        }
+        Ok(Ok(value)) => match crate::functions::SqlFnOutput::to_sql(&value) {
+            Ok((ref output, sub_type)) => {
+                set_result(ctx, args, output);
+                if let Some(st) = sub_type {
+                    ffi::sqlite3_result_subtype(ctx, st);
+                }
+            }
+            Err(err) => {
+                ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_ERROR);
+                if let Ok(cstr) = str_to_cstring(&err.to_string()) {
+                    ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
+                }
+            }
+        },
+        Ok(Err(err)) => {
+            if let Error::SqliteFailure(ref e, ref s) = err {
+                ffi::sqlite3_result_error_code(ctx, e.extended_code);
+                if let Some(Ok(cstr)) = s.as_ref().map(|s| str_to_cstring(s)) {
+                    ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
+                }
+            } else {
+                ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_ERROR);
+                if let Ok(cstr) = str_to_cstring(&err.to_string()) {
+                    ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
+                }
+            }
+        }
+    }
+}
+
 /// Result of [`FindFunctionVTab::find_function`].
 ///
 /// Specifies how to overload a function within a virtual table query.
+///
+/// For a high-level API, use [`VTabFunc`] (requires `functions` feature) to
+/// create these values from closures. The raw variants are available for
+/// advanced use cases or when the `functions` feature is not enabled.
 #[derive(Clone, Copy)]
 pub enum FindFunctionResult {
     /// No function overload; use the default function.
@@ -646,6 +786,8 @@ pub enum FindFunctionResult {
     ///
     /// The function pointer and user data will be used instead of
     /// the default SQL function.
+    ///
+    /// For a safer API, use [`VTabFunc::as_overload`].
     Overload {
         /// The function implementation (same signature as scalar functions).
         func: unsafe extern "C" fn(
@@ -667,6 +809,8 @@ pub enum FindFunctionResult {
     /// This value will appear in `sqlite3_index_info.aConstraint[].op` during
     /// [`VTab::best_index`], allowing the virtual table to optimize queries.
     ///
+    /// For a safer API, use [`VTabFunc::as_indexable`].
+    ///
     /// Requires SQLite >= 3.25.0.
     Indexable {
         /// The function implementation.
@@ -684,6 +828,35 @@ pub enum FindFunctionResult {
 
 /// Virtual table with function overloading support.
 ///
+/// Implement this trait to allow the virtual table to provide custom
+/// implementations of SQL functions when used with this table's columns.
+///
+/// This is called during `sqlite3_prepare()` to check if the virtual table
+/// wants to overload a function. The function is only considered for
+/// overloading when a column from this virtual table is the first argument.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use rusqlite::vtab::{VTab, FindFunctionVTab, VTabFunc, FindFunctionResult};
+///
+/// #[repr(C)]
+/// struct MyVTab {
+///     base: sqlite3_vtab,
+///     double_func: VTabFunc<fn(&functions::Context<'_>) -> Result<i64>>,
+/// }
+///
+/// impl FindFunctionVTab<'_> for MyVTab {
+///     fn find_function(&self, _n_arg: c_int, name: &str) -> FindFunctionResult {
+///         if name.eq_ignore_ascii_case("double") {
+///             self.double_func.as_overload()
+///         } else {
+///             FindFunctionResult::None
+///         }
+///     }
+/// }
+/// ```
+///
 /// See [SQLite doc](https://sqlite.org/vtab.html#the_xfindfunction_method)
 pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
     /// Check if the virtual table wants to overload a function.
@@ -695,11 +868,6 @@ pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
     /// Return [`FindFunctionResult::Overload`] to provide a custom implementation.
     /// Return [`FindFunctionResult::Indexable`] to provide a custom implementation
     /// that can also be used for query optimization (requires SQLite >= 3.25.0).
-    ///
-    /// # Safety
-    ///
-    /// The function pointer and user data returned must remain valid for the
-    /// lifetime of this virtual table instance.
     fn find_function(&self, n_arg: c_int, name: &str) -> FindFunctionResult;
 }
 
