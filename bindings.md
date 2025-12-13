@@ -396,10 +396,10 @@
 - [X] `xSync`
 - [X] `xCommit`
 - [X] `xRollback`
-- [ ] `xFindFunction`
-- [ ] `xRename`
-- [ ] `xSavepoint`
-- [ ] `xRelease`
-- [ ] `xRollbackTo`
-- [ ] `xShadowName`
-- [ ] `xIntegrity`
+- [x] `xFindFunction`
+- [x] `xRename`
+- [x] `xSavepoint`
+- [x] `xRelease`
+- [x] `xRollbackTo`
+- [x] `xShadowName`
+- [x] `xIntegrity`
