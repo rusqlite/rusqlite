@@ -710,8 +710,8 @@ where
     ///
     /// The `constraint_op` value will appear in `sqlite3_index_info.aConstraint[].op`
     /// during [`VTab::best_index`], allowing query optimization.
-    /// Use values >= 150 (`SQLITE_INDEX_CONSTRAINT_FUNCTION`).
-    pub fn as_indexable(&self, constraint_op: u8) -> FindFunctionResult {
+    /// Must use [`SQLITE_INDEX_CONSTRAINT_FUNCTION`].
+    pub fn as_indexable(&self, constraint_op: IndexConstraintOp) -> FindFunctionResult {
         FindFunctionResult::Indexable {
             func: vtab_func_trampoline::<F, T>,
             user_data: (&self.func as *const F).cast_mut().cast(),
@@ -814,9 +814,9 @@ pub enum FindFunctionResult {
     /// This enables the function to be used in WHERE clauses with
     /// optimization support (e.g., `WHERE geopoly_overlap(col, ?)`).
     ///
-    /// The `constraint_op` should be >= `SQLITE_INDEX_CONSTRAINT_FUNCTION` (150).
+    /// The `constraint_op` must be `SQLITE_INDEX_CONSTRAINT_FUNCTION`.
     /// This value will appear in `sqlite3_index_info.aConstraint[].op` during
-    /// [`VTab::best_index`], allowing the virtual table to optimize queries.
+    /// [`VTab::best_index`].
     ///
     /// For a safer API, use [`VTabFunc::as_indexable`].
     ///
@@ -830,8 +830,8 @@ pub enum FindFunctionResult {
         ),
         /// User data passed to the function.
         user_data: *mut c_void,
-        /// Constraint operator code (>= 150 for SQLITE_INDEX_CONSTRAINT_FUNCTION).
-        constraint_op: u8,
+        /// The constraint operator code later passed to [`VTab::best_index`].
+        constraint_op: IndexConstraintOp,
     },
 }
 
@@ -882,7 +882,7 @@ pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
 
 /// Index constraint operator.
 /// See [Virtual Table Constraint Operator Codes](https://sqlite.org/c3ref/c_index_constraint_eq.html) for details.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[allow(missing_docs)]
 #[expect(non_camel_case_types)]
 pub enum IndexConstraintOp {
@@ -902,6 +902,7 @@ pub enum IndexConstraintOp {
     SQLITE_INDEX_CONSTRAINT_IS,           // 3.21.0
     SQLITE_INDEX_CONSTRAINT_LIMIT,        // 3.38.0
     SQLITE_INDEX_CONSTRAINT_OFFSET,       // 3.38.0
+    /// Value must be >=150.
     SQLITE_INDEX_CONSTRAINT_FUNCTION(u8), // 3.25.0
 }
 
@@ -925,6 +926,30 @@ impl From<u8> for IndexConstraintOp {
             73 => Self::SQLITE_INDEX_CONSTRAINT_LIMIT,
             74 => Self::SQLITE_INDEX_CONSTRAINT_OFFSET,
             v => Self::SQLITE_INDEX_CONSTRAINT_FUNCTION(v),
+        }
+    }
+}
+
+impl From<IndexConstraintOp> for u8 {
+    fn from(value: IndexConstraintOp) -> u8 {
+        match value {
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ => 2,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GT => 4,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LE => 8,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LT => 16,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GE => 32,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_MATCH => 64,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIKE => 65,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GLOB => 66,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_REGEXP => 67,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_NE => 68,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNOT => 69,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNOTNULL => 70,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNULL => 71,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_IS => 72,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIMIT => 73,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_OFFSET => 74,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_FUNCTION(v) => v,
         }
     }
 }
@@ -2101,7 +2126,7 @@ where
         } => {
             *px_func = Some(func);
             *pp_arg = user_data;
-            constraint_op as c_int
+            u8::from(constraint_op) as c_int
         }
     }
 }
