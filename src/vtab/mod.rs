@@ -163,6 +163,7 @@ impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
     /// This sets up xConnect, xBestIndex, xDisconnect, xOpen, xClose, xFilter,
     /// xNext, xEof, xColumn, and xRowid. All optional callbacks (xCreate,
     /// xDestroy, xUpdate, xRename, transaction callbacks) are left as None.
+    /// xRowid is set to None if `T::WITHOUT_ROWID` is true.
     ///
     /// Use the `with_*` methods to enable additional capabilities.
     #[must_use]
@@ -182,8 +183,11 @@ impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
                 xNext: Some(rust_next::<T::Cursor>),
                 xEof: Some(rust_eof::<T::Cursor>),
                 xColumn: Some(rust_column::<T::Cursor>),
-                // FIXME rowid is optional for WITHOUT ROWID, see https://www.sqlite.org/vtab.html#_without_rowid_virtual_tables_
-                xRowid: Some(rust_rowid::<T::Cursor>),
+                xRowid: if T::WITHOUT_ROWID {
+                    None
+                } else {
+                    Some(rust_rowid::<T::Cursor>)
+                },
                 xUpdate: None,
                 xBegin: None,
                 xSync: None,
@@ -472,6 +476,10 @@ pub unsafe trait VTab<'vtab>: Sized {
     /// Specific cursor implementation
     type Cursor: VTabCursor;
 
+    /// Whether this is a WITHOUT ROWID virtual table.
+    /// If set to true, the generated CREATE TABLE statement _must_ include WITHOUT ROWID.
+    const WITHOUT_ROWID: bool = false;
+
     /// Establish a new connection to an existing virtual table.
     ///
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xconnect_method))
@@ -533,6 +541,7 @@ pub trait UpdateVTab<'vtab>: CreateVTab<'vtab> {
     /// args[2]: ...`
     ///
     /// Return the new rowid.
+    /// If the VTab is a WITHOUT_ROWID table, then the returned "rowid" is ignored.
     // TODO Make the distinction between argv[1] == NULL and argv[1] != NULL ?
     fn insert(&mut self, args: &Inserts<'_>) -> Result<i64>;
     /// Update: `args[0] != NULL: old rowid or PK, args[1]: new row id or PK,
@@ -1292,6 +1301,7 @@ pub unsafe trait VTabCursor: Sized {
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xcolumn_method))
     fn column(&self, ctx: &mut Context, i: c_int) -> Result<()>;
     /// Return the rowid of row that the cursor is currently pointing at.
+    /// Will not be called if the vtab is WITHOUT ROWID.
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xrowid_method))
     fn rowid(&self) -> Result<i64>;
 }
