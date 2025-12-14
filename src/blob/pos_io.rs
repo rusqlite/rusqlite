@@ -192,6 +192,9 @@ impl Blob<'_> {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{Connection, Result, MAIN_DB};
     // to ensure we don't modify seek pos
     use std::io::Seek as _;

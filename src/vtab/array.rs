@@ -191,6 +191,9 @@ unsafe impl VTabCursor for ArrayTabCursor<'_> {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::types::Value;
     use crate::vtab::array;
     use crate::{Connection, Result};

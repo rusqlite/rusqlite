@@ -137,6 +137,9 @@ impl fmt::Display for Type {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::Value;
     use crate::{params, Connection, Error, Result, Statement};
     use std::ffi::{c_double, c_int};

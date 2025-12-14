@@ -855,6 +855,9 @@ where
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use regex::Regex;
     use std::ffi::c_double;
 

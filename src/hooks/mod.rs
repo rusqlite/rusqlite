@@ -835,6 +835,9 @@ unsafe fn expect_optional_utf8<'a>(
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::Action;
     use crate::{Connection, Result, MAIN_DB};
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -963,6 +966,10 @@ mod test {
         Ok(())
     }
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn wal_hook() -> Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
