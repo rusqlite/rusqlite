@@ -86,9 +86,6 @@ pub struct Module<'vtab, T: VTab<'vtab>> {
     phantom: PhantomData<&'vtab T>,
 }
 
-unsafe impl<'vtab, T: VTab<'vtab>> Send for Module<'vtab, T> {}
-unsafe impl<'vtab, T: VTab<'vtab>> Sync for Module<'vtab, T> {}
-
 union ModuleZeroHack {
     bytes: [u8; size_of::<ffi::sqlite3_module>()],
     module: ffi::sqlite3_module,
