@@ -100,6 +100,7 @@ mod build_bundled {
 
     use super::{is_compiler, win_target};
 
+    #[expect(clippy::assertions_on_constants)] // https://github.com/rust-lang/rust-clippy/issues/16242
     pub fn main(out_dir: &str, out_path: &Path) {
         let lib_name = super::lib_name();
 
