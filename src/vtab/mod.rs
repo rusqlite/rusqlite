@@ -816,6 +816,7 @@ pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[allow(missing_docs)]
 #[expect(non_camel_case_types)]
+#[non_exhaustive]
 pub enum IndexConstraintOp {
     /// Unknown/unsupported index constraint which should be ignored
     UNKNOWN(u8),
