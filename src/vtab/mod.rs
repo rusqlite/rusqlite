@@ -727,7 +727,7 @@ where
         FindFunctionResult::Indexable {
             func: vtab_func_trampoline::<F, T>,
             user_data: (&self.func as *const F).cast_mut().cast(),
-            constraint_op,
+            function_idx,
         }
     }
 }
@@ -842,8 +842,8 @@ pub enum FindFunctionResult {
         ),
         /// User data passed to the function.
         user_data: *mut c_void,
-        /// The constraint operator code later passed to [`VTab::best_index`].
-        constraint_op: IndexConstraintOp,
+        /// Function index which will be passed as `SQLITE_INDEX_CONSTRAINT_FUNCTION` to [`VTab::best_index`].
+        function_idx: u8,
     },
 }
 
@@ -898,6 +898,8 @@ pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
 #[allow(missing_docs)]
 #[expect(non_camel_case_types)]
 pub enum IndexConstraintOp {
+    /// Unknown/unsupported index constraint which should be ignored
+    UNKNOWN(u8),
     SQLITE_INDEX_CONSTRAINT_EQ,
     SQLITE_INDEX_CONSTRAINT_GT,
     SQLITE_INDEX_CONSTRAINT_LE,
@@ -914,9 +916,10 @@ pub enum IndexConstraintOp {
     SQLITE_INDEX_CONSTRAINT_IS,           // 3.21.0
     SQLITE_INDEX_CONSTRAINT_LIMIT,        // 3.38.0
     SQLITE_INDEX_CONSTRAINT_OFFSET,       // 3.38.0
-    /// Value must be >=150.
     SQLITE_INDEX_CONSTRAINT_FUNCTION(u8), // 3.25.0
 }
+
+const SQLITE_INDEX_CONSTRAINT_FUNCTION: u8 = 150;
 
 impl From<u8> for IndexConstraintOp {
     fn from(code: u8) -> Self {
@@ -937,7 +940,10 @@ impl From<u8> for IndexConstraintOp {
             72 => Self::SQLITE_INDEX_CONSTRAINT_IS,
             73 => Self::SQLITE_INDEX_CONSTRAINT_LIMIT,
             74 => Self::SQLITE_INDEX_CONSTRAINT_OFFSET,
-            v => Self::SQLITE_INDEX_CONSTRAINT_FUNCTION(v),
+            v if v >= SQLITE_INDEX_CONSTRAINT_FUNCTION => {
+                Self::SQLITE_INDEX_CONSTRAINT_FUNCTION(v - SQLITE_INDEX_CONSTRAINT_FUNCTION)
+            }
+            v => Self::UNKNOWN(v),
         }
     }
 }
@@ -945,6 +951,7 @@ impl From<u8> for IndexConstraintOp {
 impl From<IndexConstraintOp> for u8 {
     fn from(value: IndexConstraintOp) -> u8 {
         match value {
+            IndexConstraintOp::UNKNOWN(v) => v,
             IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ => 2,
             IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GT => 4,
             IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LE => 8,
@@ -961,7 +968,9 @@ impl From<IndexConstraintOp> for u8 {
             IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_IS => 72,
             IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIMIT => 73,
             IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_OFFSET => 74,
-            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_FUNCTION(v) => v,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_FUNCTION(v) => {
+                v + SQLITE_INDEX_CONSTRAINT_FUNCTION
+            }
         }
     }
 }
@@ -2134,11 +2143,13 @@ where
         FindFunctionResult::Indexable {
             func,
             user_data,
-            constraint_op,
+            function_idx,
         } => {
             *px_func = Some(func);
             *pp_arg = user_data;
-            u8::from(constraint_op) as c_int
+            u8::from(IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_FUNCTION(
+                function_idx,
+            )) as c_int
         }
     }
 }
