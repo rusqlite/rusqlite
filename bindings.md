@@ -226,7 +226,7 @@
 - [X] `sqlite3_create_module_v2`
 - [ ] `sqlite3_drop_modules`
 - [X] `sqlite3_declare_vtab`
-- [ ] `sqlite3_overload_function`
+- [x] `sqlite3_overload_function`
 
 - [X] `sqlite3_blob_open`
 - [X] `sqlite3_blob_reopen`

@@ -435,6 +435,13 @@ impl VTabConnection {
         check(unsafe { ffi::sqlite3_vtab_config(self.0, config as c_int) })
     }
 
+    /// Create a global stub function for vtab function overloading ([`FindFunctionVTab`]).
+    /// The stub will always throw an error if used directly.
+    pub fn overload_function<N: Name>(&mut self, name: N, num_args: c_int) -> Result<()> {
+        let name = name.as_cstr()?;
+        check(unsafe { ffi::sqlite3_overload_function(self.0, name.as_ptr(), num_args) })
+    }
+
     /// Get access to the underlying SQLite database connection handle.
     ///
     /// # Warning
