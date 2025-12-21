@@ -260,7 +260,7 @@ impl VTabConnection {
 /// (See [SQLite doc](https://sqlite.org/c3ref/vtab.html))
 pub unsafe trait VTab<'vtab>: Sized {
     /// Client data passed to [`Connection::create_module`].
-    type Aux;
+    type Aux: Send + Sync + 'static;
     /// Specific cursor implementation
     type Cursor: VTabCursor;
 
