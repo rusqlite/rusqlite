@@ -26,7 +26,7 @@
 - [X] `sqlite3_extended_result_codes` (not public, internal use only)
 
 - [X] `sqlite3_last_insert_rowid`
-- [ ] `sqlite3_set_last_insert_rowid`
+- [x] `sqlite3_set_last_insert_rowid`
 
 - [X] `sqlite3_changes`
 - [X] `sqlite3_changes64`

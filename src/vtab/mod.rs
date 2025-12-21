@@ -442,6 +442,11 @@ impl VTabConnection {
         check(unsafe { ffi::sqlite3_overload_function(self.0, name.as_ptr(), num_args) })
     }
 
+    /// Set the rowid returned by [`Connection::last_insert_rowid`].
+    pub fn set_last_insert_rowid(&mut self, rowid: i64) {
+        unsafe { ffi::sqlite3_set_last_insert_rowid(self.0, rowid) }
+    }
+
     /// Get access to the underlying SQLite database connection handle.
     ///
     /// # Warning
