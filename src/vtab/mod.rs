@@ -1016,7 +1016,7 @@ impl<'a> Deref for Updates<'a> {
 impl Updates<'_> {
     /// Returns `true` if and only
     /// - if the column corresponding to `idx` is unchanged by the UPDATE operation that the [`UpdateVTab::update`] method call was invoked to implement
-    /// - and if and the prior [`VTabCursor::column`] method call that was invoked to extracted the value for that column returned without setting a result.
+    /// - and if and the prior [`VTabCursor::column`] method call that was invoked to extract the value for that column returned without setting a result.
     #[inline]
     #[must_use]
     pub fn no_change(&self, idx: usize) -> bool {

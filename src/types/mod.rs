@@ -388,7 +388,7 @@ mod test {
     #[test]
     #[expect(clippy::float_cmp)]
     fn test_numeric_conversions() -> Result<()> {
-        // Test what happens when we store an f32 and retrieve an i32 etc.
+        // Test what happens when we store a f32 and retrieve an i32 etc.
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo (x)")?;
 

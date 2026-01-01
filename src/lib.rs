@@ -621,9 +621,7 @@ impl Connection {
     /// likely to be more robust.
     #[inline]
     pub fn path(&self) -> Option<&str> {
-        unsafe {
-            crate::inner_connection::db_filename(std::marker::PhantomData, self.handle(), MAIN_DB)
-        }
+        unsafe { inner_connection::db_filename(std::marker::PhantomData, self.handle(), MAIN_DB) }
     }
 
     /// Attempts to free as much heap memory as possible from the database
@@ -1106,7 +1104,7 @@ impl fmt::Debug for Connection {
 ///
 /// # Warning
 ///
-/// There is no recovery on parsing error, when a invalid statement is found in `sql`, SQLite cannot jump to the next statement.
+/// There is no recovery on parsing error, when an invalid statement is found in `sql`, SQLite cannot jump to the next statement.
 /// So you should break the loop when an error is raised by the `next` method.
 ///
 /// ```rust
@@ -1140,8 +1138,8 @@ impl<'conn, 'sql> Batch<'conn, 'sql> {
     }
 }
 impl<'conn> fallible_iterator::FallibleIterator for Batch<'conn, '_> {
-    type Error = Error;
     type Item = Statement<'conn>;
+    type Error = Error;
 
     /// Iterates on each batch statements.
     ///
