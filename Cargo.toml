@@ -36,26 +36,33 @@ members = ["libsqlite3-sys"]
 [features]
 # if not SQLITE_OMIT_LOAD_EXTENSION
 load_extension = []
-# hot-backup interface: 3.6.11 (2009-02-18)
+# hot-backup interface
 backup = []
 # if not SQLITE_OMIT_INCRBLOB
-# sqlite3_blob_reopen: 3.7.4
+# sqlite3_blob
 blob = []
+# Prepared statements cache by connection (like https://www.sqlite.org/tclsqlite.html#cache)
 cache = ["hashlink"]
+# sqlite3_create_collation_v2
 collation = []
-# sqlite3_create_function_v2: 3.7.3 (2010-10-08)
+# sqlite3_create_function_v2
 functions = []
-# sqlite3_log: 3.6.23 (2010-03-09)
+# sqlite3_log / sqlite3_trace_v2
 trace = []
+# Use bundled SQLite sources (instead of the one provided by your OS / distribution)
 bundled = ["libsqlite3-sys/bundled", "modern_sqlite"]
+# Use SQLCipher instead of SQLite
 bundled-sqlcipher = ["libsqlite3-sys/bundled-sqlcipher", "bundled"]
 bundled-sqlcipher-vendored-openssl = [
     "libsqlite3-sys/bundled-sqlcipher-vendored-openssl",
     "bundled-sqlcipher",
 ]
 buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen", "sqlite-wasm-rs/bindgen"]
+# sqlite3_limit
 limits = []
+# Used to generate a cdylib
 loadable_extension = ["libsqlite3-sys/loadable_extension"]
+# sqlite3_commit_hook, sqlite3_rollback_hook, ...
 hooks = []
 # if SQLITE_ENABLE_PREUPDATE_HOOK
 preupdate_hook = ["libsqlite3-sys/preupdate_hook", "hooks"]
@@ -66,18 +73,18 @@ sqlcipher = ["libsqlite3-sys/sqlcipher"]
 # SQLITE_ENABLE_UNLOCK_NOTIFY
 unlock_notify = ["libsqlite3-sys/unlock_notify"]
 # if not SQLITE_OMIT_VIRTUALTABLE
-# xSavepoint, xRelease and xRollbackTo: 3.7.7 (2011-06-23)
+# sqlite3_vtab
 vtab = []
 csvtab = ["csv", "vtab"]
-# pointer passing interfaces: 3.20.0
+# Port of Carray() table-valued function
 array = ["vtab"]
 # if SQLITE_ENABLE_SESSION
-# session extension: 3.13.0
+# session extension
 session = ["libsqlite3-sys/session", "hooks"]
 # if not SQLITE_OMIT_WINDOWFUNC
-# window functions: 3.25.0
+# sqlite3_create_window_function
 window = ["functions"]
-# 3.9.0
+# Port of generate_series table-valued function
 series = ["vtab"]
 # check for invalid query.
 extra_check = []
@@ -93,7 +100,6 @@ column_metadata = ["libsqlite3-sys/column_metadata"]
 column_decltype = []
 wasm32-wasi-vfs = ["libsqlite3-sys/wasm32-wasi-vfs"]
 # if not SQLITE_OMIT_DESERIALIZE
-# 3.23.0
 serialize = []
 
 # Helper feature for enabling most non-build-related optional features
