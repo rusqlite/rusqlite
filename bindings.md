@@ -218,7 +218,7 @@
 
 - [X] `sqlite3_load_extension`
 - [X] `sqlite3_enable_load_extension`
-- [X] `sqlite3_auto_extension` (`fn` callbak with Connection ref)
+- [X] `sqlite3_auto_extension` (`fn` callback with Connection ref)
 - [X] `sqlite3_cancel_auto_extension`
 - [X] `sqlite3_reset_auto_extension`
 
