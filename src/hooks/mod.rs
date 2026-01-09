@@ -1002,4 +1002,23 @@ mod test {
         db.wal_hook(None);
         Ok(())
     }
+
+    #[test]
+    fn test_non_owning_hooks_cleanup() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+
+        static CALLED: AtomicBool = AtomicBool::new(false);
+        CALLED.store(false, Ordering::Relaxed);
+        conn.commit_hook(Some(|| {
+            CALLED.store(true, Ordering::Relaxed);
+            false
+        }))?;
+
+        let non_owning_conn = unsafe { Connection::from_handle(conn.handle()) }?;
+        drop(non_owning_conn);
+
+        conn.execute_batch("CREATE TABLE test(value)")?;
+        assert!(CALLED.load(Ordering::Relaxed));
+        Ok(())
+    }
 }
