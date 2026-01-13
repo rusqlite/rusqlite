@@ -377,6 +377,30 @@ impl InnerConnection {
         }
         Ok(())
     }
+
+    #[cfg(feature = "modern_sqlite")] // 3.44
+    pub fn set_clientdata<T: Send + 'static, N: Name>(
+        &mut self,
+        name: N,
+        data: Option<T>,
+    ) -> Result<*mut T> {
+        let name = name.as_cstr()?;
+        let ptr = data.map_or(std::ptr::null_mut(), |d| Box::into_raw(Box::new(d)));
+        self.decode_result(unsafe {
+            ffi::sqlite3_set_clientdata(
+                self.db,
+                name.as_ptr(),
+                ptr.cast::<std::ffi::c_void>(),
+                Some(crate::util::free_boxed_value::<T>),
+            )
+        })?;
+        Ok(ptr)
+    }
+    #[cfg(feature = "modern_sqlite")] // 3.44
+    pub unsafe fn get_clientdata<T, N: Name>(&self, name: N) -> Result<*mut T> {
+        let name = name.as_cstr()?;
+        Ok(ffi::sqlite3_get_clientdata(self.db, name.as_ptr()).cast::<T>())
+    }
 }
 
 #[inline]
