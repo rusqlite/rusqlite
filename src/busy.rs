@@ -60,13 +60,13 @@ impl Connection {
             c_int::from(catch_unwind(|| handler_fn(count)).unwrap_or_default())
         }
         let c = self.db.borrow_mut();
-        let r = match callback {
-            Some(f) => unsafe {
-                ffi::sqlite3_busy_handler(c.db(), Some(busy_handler_callback), f as *mut c_void)
-            },
-            None => unsafe { ffi::sqlite3_busy_handler(c.db(), None, ptr::null_mut()) },
-        };
-        c.decode_result(r)
+        c.decode_result(unsafe {
+            ffi::sqlite3_busy_handler(
+                c.db(),
+                callback.as_ref().map(|_| busy_handler_callback as _),
+                callback.map_or_else(ptr::null_mut, |f| f as *mut c_void),
+            )
+        })
     }
 }
 
