@@ -413,12 +413,13 @@ impl Connection {
             .unwrap_or_default()
         }
         let c = self.db.borrow_mut();
-        match hook {
-            Some(f) => unsafe {
-                ffi::sqlite3_wal_hook(c.db(), Some(wal_hook_callback), f as *mut c_void)
-            },
-            None => unsafe { ffi::sqlite3_wal_hook(c.db(), None, ptr::null_mut()) },
-        };
+        unsafe {
+            ffi::sqlite3_wal_hook(
+                c.db(),
+                hook.as_ref().map(|_| wal_hook_callback as _),
+                hook.map_or_else(ptr::null_mut, |f| f as *mut c_void),
+            );
+        }
     }
 
     /// Register a query progress callback.
@@ -550,24 +551,17 @@ impl InnerConnection {
             });
             c_int::from(r.unwrap_or_default())
         }
-
-        match hook {
-            Some(hook) => {
-                let boxed_hook = Box::new(hook);
-                unsafe {
-                    ffi::sqlite3_commit_hook(
-                        self.db(),
-                        Some(call_boxed_closure::<F>),
-                        &*boxed_hook as *const F as *mut _,
-                    )
-                };
-                self.commit_hook = Some(boxed_hook);
-            }
-            _ => {
-                unsafe { ffi::sqlite3_commit_hook(self.db(), None, ptr::null_mut()) };
-                self.commit_hook = None;
-            }
-        }
+        let boxed_hook = hook.map(Box::new);
+        unsafe {
+            ffi::sqlite3_commit_hook(
+                self.db(),
+                boxed_hook.as_ref().map(|_| call_boxed_closure::<F> as _),
+                boxed_hook
+                    .as_ref()
+                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
+            )
+        };
+        self.commit_hook = boxed_hook.map(|bh| bh as _);
     }
 
     /// ```compile_fail
@@ -604,23 +598,17 @@ impl InnerConnection {
             }));
         }
 
-        match hook {
-            Some(hook) => {
-                let boxed_hook = Box::new(hook);
-                unsafe {
-                    ffi::sqlite3_rollback_hook(
-                        self.db(),
-                        Some(call_boxed_closure::<F>),
-                        &*boxed_hook as *const F as *mut _,
-                    )
-                };
-                self.rollback_hook = Some(boxed_hook);
-            }
-            _ => {
-                unsafe { ffi::sqlite3_rollback_hook(self.db(), None, ptr::null_mut()) };
-                self.rollback_hook = None;
-            }
-        }
+        let boxed_hook = hook.map(Box::new);
+        unsafe {
+            ffi::sqlite3_rollback_hook(
+                self.db(),
+                boxed_hook.as_ref().map(|_| call_boxed_closure::<F> as _),
+                boxed_hook
+                    .as_ref()
+                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
+            )
+        };
+        self.rollback_hook = boxed_hook.map(|bh| bh as _);
     }
 
     /// ```compile_fail
@@ -661,23 +649,17 @@ impl InnerConnection {
             }));
         }
 
-        match hook {
-            Some(hook) => {
-                let boxed_hook = Box::new(hook);
-                unsafe {
-                    ffi::sqlite3_update_hook(
-                        self.db(),
-                        Some(call_boxed_closure::<F>),
-                        &*boxed_hook as *const F as *mut _,
-                    )
-                };
-                self.update_hook = Some(boxed_hook);
-            }
-            _ => {
-                unsafe { ffi::sqlite3_update_hook(self.db(), None, ptr::null_mut()) };
-                self.update_hook = None;
-            }
-        }
+        let boxed_hook = hook.map(Box::new);
+        unsafe {
+            ffi::sqlite3_update_hook(
+                self.db(),
+                boxed_hook.as_ref().map(|_| call_boxed_closure::<F> as _),
+                boxed_hook
+                    .as_ref()
+                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
+            )
+        };
+        self.update_hook = boxed_hook.map(|bh| bh as _);
     }
 
     /// ```compile_fail
@@ -715,21 +697,18 @@ impl InnerConnection {
             c_int::from(r.unwrap_or_default())
         }
 
-        if let Some(handler) = handler {
-            let boxed_handler = Box::new(handler);
-            unsafe {
-                ffi::sqlite3_progress_handler(
-                    self.db(),
-                    num_ops,
-                    Some(call_boxed_closure::<F>),
-                    &*boxed_handler as *const F as *mut _,
-                );
-            }
-            self.progress_handler = Some(boxed_handler);
-        } else {
-            unsafe { ffi::sqlite3_progress_handler(self.db(), num_ops, None, ptr::null_mut()) }
-            self.progress_handler = None;
+        let boxed_handler = handler.map(Box::new);
+        unsafe {
+            ffi::sqlite3_progress_handler(
+                self.db(),
+                num_ops,
+                boxed_handler.as_ref().map(|_| call_boxed_closure::<F> as _),
+                boxed_handler
+                    .as_ref()
+                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
+            )
         };
+        self.progress_handler = boxed_handler.map(|bh| bh as _);
     }
 
     /// ```compile_fail
@@ -784,15 +763,14 @@ impl InnerConnection {
             .map_or_else(|_| ffi::SQLITE_ERROR, Authorization::into_raw)
         }
 
-        let callback_fn = authorizer
-            .as_ref()
-            .map(|_| call_boxed_closure::<'c, F> as unsafe extern "C" fn(_, _, _, _, _, _) -> _);
         let boxed_authorizer = authorizer.map(Box::new);
 
         match unsafe {
             ffi::sqlite3_set_authorizer(
                 self.db(),
-                callback_fn,
+                boxed_authorizer
+                    .as_ref()
+                    .map(|_| call_boxed_closure::<'c, F> as _),
                 boxed_authorizer
                     .as_ref()
                     .map_or_else(ptr::null_mut, |f| &**f as *const F as *mut _),
@@ -1000,6 +978,25 @@ mod test {
         db.execute_batch("CREATE TABLE y(c);")?;
 
         db.wal_hook(None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_non_owning_hooks_cleanup() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+
+        static CALLED: AtomicBool = AtomicBool::new(false);
+        CALLED.store(false, Ordering::Relaxed);
+        conn.commit_hook(Some(|| {
+            CALLED.store(true, Ordering::Relaxed);
+            false
+        }))?;
+
+        let non_owning_conn = unsafe { Connection::from_handle(conn.handle()) }?;
+        drop(non_owning_conn);
+
+        conn.execute_batch("CREATE TABLE test(value)")?;
+        assert!(CALLED.load(Ordering::Relaxed));
         Ok(())
     }
 }

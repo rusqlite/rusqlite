@@ -1276,7 +1276,7 @@ impl Default for OpenFlags {
 
 bitflags::bitflags! {
     /// Prepare flags. See
-    /// [sqlite3_prepare_v3](https://sqlite.org/c3ref/c_prepare_normalize.html) for details.
+    /// [sqlite3_prepare_v3](https://sqlite.org/c3ref/c_prepare_dont_log.html) for details.
     #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
     #[repr(C)]
     pub struct PrepFlags: c_uint {

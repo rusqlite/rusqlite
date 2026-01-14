@@ -20,7 +20,7 @@
 - [ ] `sqlite3_os_init`
 - [ ] `sqlite3_os_end`
 
-- [ ] `sqlite3_config` (partially, `fn` callback for SQLITE_CONFIG_LOG)
+- [ ] `sqlite3_config` (partially, `fn` callback for SQLITE_CONFIG_LOG) (cannot be used by a loadable extension)
 - [X] `sqlite3_db_config`
 
 - [X] `sqlite3_extended_result_codes` (not public, internal use only)
@@ -217,7 +217,7 @@
 - [X] `sqlite3_table_column_metadata`
 
 - [X] `sqlite3_load_extension`
-- [X] `sqlite3_enable_load_extension`
+- [X] `sqlite3_enable_load_extension` (cannot be used by a loadable extension)
 - [X] `sqlite3_auto_extension` (`fn` callbak with Connection ref)
 - [X] `sqlite3_cancel_auto_extension`
 - [X] `sqlite3_reset_auto_extension`
@@ -304,7 +304,7 @@
 
 - [X] `sqlite3_db_cacheflush`
 
-- [X] `sqlite3_preupdate_hook` (`FnMut` callback with Connection ref, reference kept)
+- [X] `sqlite3_preupdate_hook` (`FnMut` callback with Connection ref, reference kept) (cannot be used by a loadable extension)
 - [X] `sqlite3_preupdate_old`
 - [X] `sqlite3_preupdate_count`
 - [X] `sqlite3_preupdate_depth`

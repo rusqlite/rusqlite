@@ -140,8 +140,10 @@ impl InnerConnection {
         if self.db.is_null() {
             return Ok(());
         }
-        self.remove_hooks();
-        self.remove_preupdate_hook();
+        if self.owned {
+            self.remove_hooks();
+            self.remove_preupdate_hook();
+        }
         let mut shared_handle = self.interrupt_lock.lock().unwrap();
         assert!(
             !self.owned || !shared_handle.is_null(),
