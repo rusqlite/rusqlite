@@ -208,23 +208,17 @@ impl InnerConnection {
             }));
         }
 
-        match hook {
-            Some(hook) => {
-                let boxed_hook = Box::new(hook);
-                unsafe {
-                    ffi::sqlite3_preupdate_hook(
-                        self.db(),
-                        Some(call_boxed_closure::<F>),
-                        &*boxed_hook as *const F as *mut _,
-                    )
-                };
-                self.preupdate_hook = Some(boxed_hook);
-            }
-            _ => {
-                unsafe { ffi::sqlite3_preupdate_hook(self.db(), None, ptr::null_mut()) };
-                self.preupdate_hook = None;
-            }
-        }
+        let boxed_hook = hook.map(Box::new);
+        unsafe {
+            ffi::sqlite3_preupdate_hook(
+                self.db(),
+                boxed_hook.as_ref().map(|_| call_boxed_closure::<F> as _),
+                boxed_hook
+                    .as_ref()
+                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
+            )
+        };
+        self.preupdate_hook = boxed_hook.map(|bh| bh as _);
     }
 }
 
