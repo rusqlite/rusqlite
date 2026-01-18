@@ -128,6 +128,22 @@ pub fn code_to_str(code: c_int) -> &'static str {
     }
 }
 
+/// Formats SQLite version integer as parts
+#[cfg(feature = "loadable_extension")]
+struct FmtVersion(i32);
+#[cfg(feature = "loadable_extension")]
+impl ::std::fmt::Display for FmtVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "v{}.{}.{}",
+            self.0 / 1000000,
+            (self.0 / 1000) % 1000,
+            self.0 % 1000
+        )
+    }
+}
+
 /// Loadable extension initialization error
 #[cfg(feature = "loadable_extension")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -146,7 +162,12 @@ impl fmt::Display for InitError {
                 compile_time,
                 runtime,
             } => {
-                write!(f, "SQLite version mismatch: {runtime} < {compile_time}")
+                write!(
+                    f,
+                    "SQLite version mismatch:  runtime {} < compiled {}",
+                    FmtVersion(runtime),
+                    FmtVersion(compile_time)
+                )
             }
             Self::NullFunctionPointer => {
                 write!(f, "Some sqlite3_api_routines fields are null")
