@@ -9,6 +9,59 @@
 //!    `USING` clause.
 //!
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
+//!
+//! # Building a module
+//!
+//! Use [`Module::new()`] to create a base module, then chain `with_*` methods
+//! to enable additional capabilities if needed. Each method is only available when your
+//! virtual table type implements the corresponding trait.
+//!
+//! ```rust,ignore
+//! use rusqlite::vtab::{Module, VTab, CreateVTab, VTabKind};
+//!
+//! // Eponymous-only read-only table (simplest case)
+//! const SIMPLE: &Module<MyVTab> = &Module::new();
+//!
+//! // Read-only table with CREATE VIRTUAL TABLE support
+//! const READ_ONLY: &Module<MyVTab> = &Module::new().with_create();
+//!
+//! // Writable table with transaction support
+//! const WITH_TX: &Module<MyVTab> = &Module::new()
+//!     .with_update()
+//!     .with_transactions();
+//!
+//! // Table with rename support (for ALTER TABLE RENAME)
+//! const RENAMEABLE: &Module<MyVTab> = &Module::new()
+//!     .with_create()
+//!     .with_rename();
+//!
+//! // Table with integrity checking (PRAGMA integrity_check support)
+//! // Requires the `modern_sqlite` feature (SQLite >= 3.44.0)
+//! #[cfg(feature = "modern_sqlite")]
+//! const WITH_INTEGRITY: &Module<MyVTab> = &Module::new()
+//!     .with_create()
+//!     .with_integrity();
+//! ```
+//!
+//! ## Available capabilities
+//!
+//! | Method | Trait Required | Description |
+//! |--------|----------------|-------------|
+//! | [`with_create()`](Module::with_create) | [`CreateVTab`] | Enable `CREATE VIRTUAL TABLE` support |
+//! | [`with_update()`](Module::with_update) | [`UpdateVTab`] | Enable INSERT/UPDATE/DELETE |
+//! | [`with_transactions()`](Module::with_transactions) | [`TransactionVTab`] | Enable transaction callbacks |
+//! | [`with_savepoints()`](Module::with_savepoints) | [`SavepointVTab`] | Enable nested transactions |
+//! | [`with_rename()`](Module::with_rename) | [`RenameVTab`] | Enable `ALTER TABLE RENAME` |
+//! | [`with_find_function()`](Module::with_find_function) | [`FindFunctionVTab`] | Enable SQL function overloading |
+//! | [`with_shadow_name()`](Module::with_shadow_name) | [`ShadowNameVTab`] | Identify shadow tables |
+//! | [`with_integrity()`](Module::with_integrity) | [`IntegrityVTab`] | Enable `PRAGMA integrity_check` |
+//!
+//! ## Legacy module functions
+//!
+//! - [`eponymous_only_module()`] - Eponymous-only read-only table
+//! - [`read_only_module()`] - Read-only table with CREATE support
+//! - [`update_module()`] - Writable table
+//! - [`update_module_with_tx()`] - Writable table with transactions
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::marker::PhantomData;
@@ -22,6 +75,8 @@ use crate::context::set_result;
 use crate::error::{check, error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
+#[cfg(feature = "functions")]
+use crate::functions::call_boxed_closure;
 use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
 use crate::util::{alloc, free_boxed_value};
 use crate::{str_to_cstring, Connection, Error, InnerConnection, Name, Result};
@@ -101,102 +156,258 @@ const ZERO_MODULE: ffi::sqlite3_module = unsafe {
     .module
 };
 
-macro_rules! module {
-    ($lt:lifetime, $vt:ty, $ct:ty, $xcreate:expr, $xdestroy:expr, $xupdate:expr,
-         $xbegin:expr, $xsync:expr, $xcommit:expr, $xrollback:expr) => {
-    &Module {
-        base: ffi::sqlite3_module {
-            // We don't use methods provided by versions > 1
-            iVersion: 1,
-            xCreate: $xcreate,
-            xConnect: Some(rust_connect::<$vt>),
-            xBestIndex: Some(rust_best_index::<$vt>),
-            xDisconnect: Some(rust_disconnect::<$vt>),
-            xDestroy: $xdestroy,
-            xOpen: Some(rust_open::<$vt>),
-            xClose: Some(rust_close::<$ct>),
-            xFilter: Some(rust_filter::<$ct>),
-            xNext: Some(rust_next::<$ct>),
-            xEof: Some(rust_eof::<$ct>),
-            xColumn: Some(rust_column::<$ct>),
-            xRowid: Some(rust_rowid::<$ct>), // FIXME optional
-            xUpdate: $xupdate,
-            xBegin: $xbegin,
-            xSync: $xsync,
-            xCommit: $xcommit,
-            xRollback: $xrollback,
-            xFindFunction: None,
-            xRename: None,
-            ..ZERO_MODULE
-        },
-        phantom: PhantomData::<&$lt $vt>,
+impl<'vtab, T: VTab<'vtab>> Module<'vtab, T> {
+    /// Create a base module with mandatory callbacks.
+    ///
+    /// This sets up xConnect, xBestIndex, xDisconnect, xOpen, xClose, xFilter,
+    /// xNext, xEof, xColumn, and xRowid. All optional callbacks (xCreate,
+    /// xDestroy, xUpdate, xRename, transaction callbacks) are left as None.
+    /// xRowid is set to None if `T::WITHOUT_ROWID` is true.
+    ///
+    /// Use the `with_*` methods to enable additional capabilities.
+    #[must_use]
+    #[allow(clippy::new_without_default)]
+    pub const fn new() -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                iVersion: 1,
+                xCreate: None,
+                xConnect: Some(rust_connect::<T>),
+                xBestIndex: Some(rust_best_index::<T>),
+                xDisconnect: Some(rust_disconnect::<T>),
+                xDestroy: None,
+                xOpen: Some(rust_open::<T>),
+                xClose: Some(rust_close::<T::Cursor>),
+                xFilter: Some(rust_filter::<T::Cursor>),
+                xNext: Some(rust_next::<T::Cursor>),
+                xEof: Some(rust_eof::<T::Cursor>),
+                xColumn: Some(rust_column::<T::Cursor>),
+                xRowid: if T::WITHOUT_ROWID {
+                    None
+                } else {
+                    Some(rust_rowid::<T::Cursor>)
+                },
+                xUpdate: None,
+                xBegin: None,
+                xSync: None,
+                xCommit: None,
+                xRollback: None,
+                xFindFunction: None,
+                xRename: None,
+                ..ZERO_MODULE
+            },
+            phantom: PhantomData,
+        }
     }
-    };
+}
+
+impl<'vtab, T: CreateVTab<'vtab>> Module<'vtab, T> {
+    /// Enable xCreate/xDestroy based on [`VTabKind`].
+    ///
+    /// - [`VTabKind::Default`]: Uses separate create/destroy functions
+    /// - [`VTabKind::Eponymous`]: xCreate == xConnect, xDestroy == xDisconnect
+    /// - [`VTabKind::EponymousOnly`]: xCreate and xDestroy are None
+    #[must_use]
+    pub const fn with_create(self) -> Self {
+        let (xcreate, xdestroy) = match T::KIND {
+            VTabKind::EponymousOnly => (None, None),
+            VTabKind::Eponymous => (
+                Some(rust_connect::<T> as unsafe extern "C" fn(_, _, _, _, _, _) -> _),
+                Some(rust_disconnect::<T> as unsafe extern "C" fn(_) -> _),
+            ),
+            VTabKind::Default => (
+                Some(rust_create::<T> as unsafe extern "C" fn(_, _, _, _, _, _) -> _),
+                Some(rust_destroy::<T> as unsafe extern "C" fn(_) -> _),
+            ),
+        };
+        Module {
+            base: ffi::sqlite3_module {
+                xCreate: xcreate,
+                xDestroy: xdestroy,
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'vtab, T: UpdateVTab<'vtab>> Module<'vtab, T> {
+    /// Enable xUpdate for INSERT/UPDATE/DELETE operations.
+    ///
+    /// Note: This also sets xCreate/xDestroy based on [`VTabKind`].
+    #[must_use]
+    pub const fn with_update(self) -> Self {
+        let (xcreate, xdestroy) = match T::KIND {
+            VTabKind::EponymousOnly => (None, None),
+            VTabKind::Eponymous => (
+                Some(rust_connect::<T> as unsafe extern "C" fn(_, _, _, _, _, _) -> _),
+                Some(rust_disconnect::<T> as unsafe extern "C" fn(_) -> _),
+            ),
+            VTabKind::Default => (
+                Some(rust_create::<T> as unsafe extern "C" fn(_, _, _, _, _, _) -> _),
+                Some(rust_destroy::<T> as unsafe extern "C" fn(_) -> _),
+            ),
+        };
+        Module {
+            base: ffi::sqlite3_module {
+                xCreate: xcreate,
+                xDestroy: xdestroy,
+                xUpdate: Some(rust_update::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'vtab, T: TransactionVTab<'vtab>> Module<'vtab, T> {
+    /// Enable xBegin/xSync/xCommit/xRollback for transaction support.
+    #[must_use]
+    pub const fn with_transactions(self) -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                xBegin: Some(rust_begin::<T>),
+                xSync: Some(rust_sync::<T>),
+                xCommit: Some(rust_commit::<T>),
+                xRollback: Some(rust_rollback::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'vtab, T: SavepointVTab<'vtab>> Module<'vtab, T> {
+    /// Enable savepoint callbacks (xSavepoint, xRelease, xRollbackTo).
+    ///
+    /// These provide nested transaction support. The callbacks are only
+    /// invoked between xBegin and xCommit/xRollback.
+    ///
+    /// Requires SQLite module version >= 2.
+    #[must_use]
+    pub const fn with_savepoints(self) -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                iVersion: if self.base.iVersion < 2 {
+                    2
+                } else {
+                    self.base.iVersion
+                },
+                xSavepoint: Some(rust_savepoint::<T>),
+                xRelease: Some(rust_release_savepoint::<T>),
+                xRollbackTo: Some(rust_rollback_to::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'vtab, T: RenameVTab<'vtab>> Module<'vtab, T> {
+    /// Enable xRename for ALTER TABLE RENAME support.
+    #[must_use]
+    pub const fn with_rename(self) -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                xRename: Some(rust_rename::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'vtab, T: VTab<'vtab> + ShadowNameVTab> Module<'vtab, T> {
+    /// Enable xShadowName to identify shadow tables.
+    ///
+    /// This allows SQLite to protect shadow tables when
+    /// `SQLITE_DBCONFIG_DEFENSIVE` is enabled.
+    ///
+    /// Requires SQLite module version >= 3.
+    #[must_use]
+    pub const fn with_shadow_name(self) -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                iVersion: if self.base.iVersion < 3 {
+                    3
+                } else {
+                    self.base.iVersion
+                },
+                xShadowName: Some(rust_shadow_name::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
+#[cfg(feature = "modern_sqlite")] // SQLite >= 3.44.0
+impl<'vtab, T: IntegrityVTab<'vtab>> Module<'vtab, T> {
+    /// Enable xIntegrity to participate in `PRAGMA integrity_check`.
+    ///
+    /// Requires SQLite module version >= 4 (SQLite >= 3.44.0).
+    #[must_use]
+    pub const fn with_integrity(self) -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                iVersion: if self.base.iVersion < 4 {
+                    4
+                } else {
+                    self.base.iVersion
+                },
+                xIntegrity: Some(rust_integrity::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<'vtab, T: FindFunctionVTab<'vtab>> Module<'vtab, T> {
+    /// Enable xFindFunction to overload SQL functions for this virtual table.
+    #[must_use]
+    pub const fn with_find_function(self) -> Self {
+        Module {
+            base: ffi::sqlite3_module {
+                xFindFunction: Some(rust_find_function::<T>),
+                ..self.base
+            },
+            phantom: PhantomData,
+        }
+    }
 }
 
 /// Create a modifiable virtual table implementation.
 ///
 /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
 #[must_use]
-pub fn update_module<'vtab, T: UpdateVTab<'vtab>>() -> &'static Module<'vtab, T> {
-    match T::KIND {
-        VTabKind::EponymousOnly => {
-            module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>), None, None, None, None)
-        }
-        VTabKind::Eponymous => {
-            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>), None, None, None, None)
-        }
-        _ => {
-            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>), None, None, None, None)
-        }
-    }
+pub const fn update_module<'vtab, T: UpdateVTab<'vtab>>() -> &'static Module<'vtab, T> {
+    const { &Module::new().with_update() }
 }
 
 /// Create a modifiable virtual table implementation with support for transactions.
 ///
 /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
 #[must_use]
-pub fn update_module_with_tx<'vtab, T: TransactionVTab<'vtab>>() -> &'static Module<'vtab, T> {
-    match T::KIND {
-        VTabKind::EponymousOnly => {
-            module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>))
-        }
-        VTabKind::Eponymous => {
-            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>))
-        }
-        _ => {
-            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>))
-        }
-    }
+pub const fn update_module_with_tx<'vtab, T: TransactionVTab<'vtab>>() -> &'static Module<'vtab, T>
+{
+    const { &Module::new().with_update().with_transactions() }
 }
 
 /// Create a read-only virtual table implementation.
 ///
 /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
 #[must_use]
-pub fn read_only_module<'vtab, T: CreateVTab<'vtab>>() -> &'static Module<'vtab, T> {
-    match T::KIND {
-        VTabKind::EponymousOnly => eponymous_only_module(),
-        VTabKind::Eponymous => {
-            // A virtual table is eponymous if its xCreate method is the exact same function
-            // as the xConnect method
-            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), None, None, None, None, None)
-        }
-        _ => {
-            // The xConnect and xCreate methods may do the same thing, but they must be
-            // different so that the virtual table is not an eponymous virtual table.
-            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), None, None, None, None, None)
-        }
-    }
+pub const fn read_only_module<'vtab, T: CreateVTab<'vtab>>() -> &'static Module<'vtab, T> {
+    const { &Module::new().with_create() }
 }
 
 /// Create an eponymous only virtual table implementation.
 ///
 /// Step 2 of [Creating New Virtual Table Implementations](https://sqlite.org/vtab.html#creating_new_virtual_table_implementations).
 #[must_use]
-pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, T> {
-    //  For eponymous-only virtual tables, the xCreate method is NULL
-    module!('vtab, T, T::Cursor, None, None, None, None, None, None, None)
+pub const fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, T> {
+    const { &Module::new() }
 }
 
 /// Virtual table configuration options
@@ -221,6 +432,18 @@ impl VTabConnection {
     /// Configure various facets of the virtual table interface
     pub fn config(&mut self, config: VTabConfig) -> Result<()> {
         check(unsafe { ffi::sqlite3_vtab_config(self.0, config as c_int) })
+    }
+
+    /// Create a global stub function for vtab function overloading ([`FindFunctionVTab`]).
+    /// The stub will always throw an error if used directly.
+    pub fn overload_function<N: Name>(&mut self, name: N, num_args: c_int) -> Result<()> {
+        let name = name.as_cstr()?;
+        check(unsafe { ffi::sqlite3_overload_function(self.0, name.as_ptr(), num_args) })
+    }
+
+    /// Set the rowid returned by [`Connection::last_insert_rowid`].
+    pub fn set_last_insert_rowid(&mut self, rowid: i64) {
+        unsafe { ffi::sqlite3_set_last_insert_rowid(self.0, rowid) }
     }
 
     /// Get access to the underlying SQLite database connection handle.
@@ -263,6 +486,10 @@ pub unsafe trait VTab<'vtab>: Sized {
     type Aux: Send + Sync + 'static;
     /// Specific cursor implementation
     type Cursor: VTabCursor;
+
+    /// Whether this is a WITHOUT ROWID virtual table.
+    /// If set to true, the generated CREATE TABLE statement _must_ include WITHOUT ROWID.
+    const WITHOUT_ROWID: bool = false;
 
     /// Establish a new connection to an existing virtual table.
     ///
@@ -325,11 +552,23 @@ pub trait UpdateVTab<'vtab>: CreateVTab<'vtab> {
     /// args[2]: ...`
     ///
     /// Return the new rowid.
+    /// If the VTab is a WITHOUT_ROWID table, then the returned "rowid" is ignored.
     // TODO Make the distinction between argv[1] == NULL and argv[1] != NULL ?
     fn insert(&mut self, args: &Inserts<'_>) -> Result<i64>;
     /// Update: `args[0] != NULL: old rowid or PK, args[1]: new row id or PK,
     /// args[2]: ...`
     fn update(&mut self, args: &Updates<'_>) -> Result<()>;
+}
+
+/// Virtual table that supports renaming via ALTER TABLE RENAME.
+///
+/// See [SQLite doc](https://sqlite.org/vtab.html#the_xrename_method)
+pub trait RenameVTab<'vtab>: CreateVTab<'vtab> {
+    /// Notify the virtual table that it will be given a new name.
+    ///
+    /// If this method returns `Ok(())`, SQLite renames the table.
+    /// If this method returns an error, the renaming is prevented.
+    fn rename(&mut self, new_name: &str) -> Result<()>;
 }
 
 /// Writable virtual table instance with transaction support trait.
@@ -354,12 +593,230 @@ pub trait TransactionVTab<'vtab>: UpdateVTab<'vtab> {
     }
 }
 
+/// Virtual table with savepoint (nested transaction) support.
+///
+/// These methods are only called between [`TransactionVTab::begin`] and
+/// [`TransactionVTab::commit`]/[`TransactionVTab::rollback`].
+///
+/// See [SQLite doc](https://sqlite.org/vtab.html#xsavepoint)
+pub trait SavepointVTab<'vtab>: TransactionVTab<'vtab> {
+    /// Save current state as savepoint N.
+    ///
+    /// A subsequent call to [`rollback_to`](Self::rollback_to) with the same N
+    /// means the virtual table state should return to what it was when this
+    /// method was called.
+    fn savepoint(&mut self, savepoint_id: c_int) -> Result<()>;
+
+    /// Invalidate all savepoints where N >= `savepoint_id`.
+    fn release(&mut self, savepoint_id: c_int) -> Result<()>;
+
+    /// Return to the state when [`savepoint`](Self::savepoint) was called with
+    /// `savepoint_id`.
+    ///
+    /// This invalidates all savepoints with N > `savepoint_id`.
+    fn rollback_to(&mut self, savepoint_id: c_int) -> Result<()>;
+}
+
+/// Virtual table that uses shadow tables.
+///
+/// Implement this trait to allow SQLite to identify shadow tables belonging
+/// to this virtual table. When `SQLITE_DBCONFIG_DEFENSIVE` is enabled,
+/// shadow tables become read-only for ordinary SQL statements.
+///
+/// See [SQLite doc](https://sqlite.org/vtab.html#the_xshadowname_method)
+pub trait ShadowNameVTab {
+    /// Returns `true` if the given suffix identifies a shadow table.
+    ///
+    /// For example, if your virtual table "foo" uses shadow tables named
+    /// "foo_content" and "foo_index", this should return `true` for
+    /// "content" and "index".
+    fn shadow_name(suffix: &str) -> bool;
+}
+
+/// Virtual table that supports integrity checking.
+///
+/// Implement this trait to participate in `PRAGMA integrity_check` and
+/// `PRAGMA quick_check`.
+///
+/// Requires SQLite >= 3.44.0.
+///
+/// See [SQLite doc](https://sqlite.org/vtab.html#the_xintegrity_method)
+#[cfg(feature = "modern_sqlite")]
+pub trait IntegrityVTab<'vtab>: VTab<'vtab> {
+    /// Check the integrity of the virtual table content.
+    ///
+    /// - `schema`: The schema name ("main", "temp", etc.)
+    /// - `table`: The virtual table name
+    /// - `flags`: 0 for `integrity_check`, 1 for `quick_check`
+    ///
+    /// Return `Ok(None)` if no problems are found.
+    /// Return `Ok(Some(message))` to report an integrity problem.
+    /// Return `Err(...)` only if the integrity check itself fails (e.g., OOM).
+    fn integrity(&self, schema: &str, table: &str, flags: c_int) -> Result<Option<String>>;
+}
+
+/// A wrapper for SQL functions that can be returned from [`FindFunctionVTab::find_function`].
+///
+/// This type stores a closure and provides the raw function pointer and user data
+/// needed for xFindFunction. Store instances of this type in your virtual table
+/// struct to ensure they remain valid for the vtab's lifetime.
+///
+/// Requires the `functions` feature.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use rusqlite::vtab::{VTabFunc, FindFunctionResult};
+///
+/// #[repr(C)]
+/// struct MyVTab {
+///     base: sqlite3_vtab,
+///     // Store the function to keep it alive
+///     my_func: VTabFunc<fn(&functions::Context<'_>) -> Result<i64>>,
+/// }
+///
+/// impl MyVTab {
+///     fn new() -> Self {
+///         Self {
+///             base: Default::default(),
+///             my_func: VTabFunc::new(|ctx| {
+///                 let val: i64 = ctx.get(0)?;
+///                 Ok(val * 2)
+///             }),
+///         }
+///     }
+/// }
+/// ```
+#[cfg(feature = "functions")]
+pub struct VTabFunc<F> {
+    func: F,
+}
+
+#[cfg(feature = "functions")]
+impl<F, T> VTabFunc<F>
+where
+    F: Fn(&crate::functions::Context<'_>) -> Result<T>,
+    T: crate::functions::SqlFnOutput,
+{
+    /// Create a new virtual table function wrapper.
+    ///
+    /// The closure receives a [`functions::Context`](crate::functions::Context)
+    /// and should return a [`Result<T>`] where `T` implements
+    /// [`SqlFnOutput`](crate::functions::SqlFnOutput).
+    pub fn new(func: F) -> Self {
+        Self { func }
+    }
+
+    /// Get a [`FindFunctionResult::Overload`] that can be returned from
+    /// [`FindFunctionVTab::find_function`].
+    pub fn as_overload(&self) -> FindFunctionResult {
+        FindFunctionResult::Overload {
+            func: call_boxed_closure::<F, T>,
+            user_data: (&self.func as *const F).cast_mut().cast(),
+        }
+    }
+
+    /// Get a [`FindFunctionResult::Indexable`] that can be returned from
+    /// [`FindFunctionVTab::find_function`].
+    ///
+    /// The `function_idx` value will appear in `IndexInfo::operator`
+    /// during [`VTab::best_index`] as the value of [`SQLITE_INDEX_CONSTRAINT_FUNCTION`].
+    pub fn as_indexable(&self, function_idx: u8) -> FindFunctionResult {
+        FindFunctionResult::Indexable {
+            func: call_boxed_closure::<F, T>,
+            user_data: (&self.func as *const F).cast_mut().cast(),
+            function_idx,
+        }
+    }
+}
+
+/// Result of [`FindFunctionVTab::find_function`].
+///
+/// Specifies how to overload a function within a virtual table query.
+///
+/// For a high-level API, use [`VTabFunc`] (requires `functions` feature) to
+/// create these values from closures. The raw variants are available for
+/// advanced use cases or when the `functions` feature is not enabled.
+#[derive(Clone, Copy)]
+pub enum FindFunctionResult {
+    /// No function overload; use the default function.
+    None,
+    /// Overload the function with the provided implementation.
+    ///
+    /// The function pointer and user data will be used instead of
+    /// the default SQL function.
+    ///
+    /// For a safer API, use [`VTabFunc::as_overload`].
+    Overload {
+        /// The function implementation (same signature as scalar functions).
+        func: unsafe extern "C" fn(
+            ctx: *mut ffi::sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ),
+        /// User data passed to the function as `sqlite3_user_data()`.
+        ///
+        /// Must remain valid for the lifetime of the virtual table.
+        user_data: *mut c_void,
+    },
+    /// Overload the function and mark it as indexable.
+    ///
+    /// This enables the function to be used in WHERE clauses with
+    /// optimization support (e.g., `WHERE geopoly_overlap(col, ?)`).
+    ///
+    /// The `constraint_op` must be `SQLITE_INDEX_CONSTRAINT_FUNCTION`.
+    /// This value will appear in `sqlite3_index_info.aConstraint[].op` during
+    /// [`VTab::best_index`].
+    ///
+    /// For a safer API, use [`VTabFunc::as_indexable`].
+    ///
+    /// Requires SQLite >= 3.25.0.
+    Indexable {
+        /// The function implementation.
+        func: unsafe extern "C" fn(
+            ctx: *mut ffi::sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ),
+        /// User data passed to the function.
+        user_data: *mut c_void,
+        /// Function index which will be passed as `SQLITE_INDEX_CONSTRAINT_FUNCTION` to [`VTab::best_index`].
+        function_idx: u8,
+    },
+}
+
+/// Virtual table with function overloading support.
+///
+/// Implement this trait to allow the virtual table to provide custom
+/// implementations of SQL functions when used with this table's columns.
+///
+/// This is used during `sqlite3_prepare()` to check if the virtual table
+/// wants to overload a function. The function is only considered for
+/// overloading when a column from this virtual table is the first argument.
+///
+/// See [SQLite doc](https://sqlite.org/vtab.html#the_xfindfunction_method)
+pub trait FindFunctionVTab<'vtab>: VTab<'vtab> {
+    /// Check if the virtual table wants to overload a function.
+    ///
+    /// - `n_arg`: Number of arguments the function is called with
+    /// - `name`: Name of the function being looked up
+    ///
+    /// Return [`FindFunctionResult::None`] if no overloading is desired.
+    /// Return [`FindFunctionResult::Overload`] to provide a custom implementation.
+    /// Return [`FindFunctionResult::Indexable`] to provide a custom implementation
+    /// (requires SQLite >= 3.25.0).
+    fn find_function(&self, n_arg: c_int, name: &str) -> FindFunctionResult;
+}
+
 /// Index constraint operator.
 /// See [Virtual Table Constraint Operator Codes](https://sqlite.org/c3ref/c_index_constraint_eq.html) for details.
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 #[allow(missing_docs)]
 #[expect(non_camel_case_types)]
+#[non_exhaustive]
 pub enum IndexConstraintOp {
+    /// Unknown/unsupported index constraint which should be ignored
+    UNKNOWN(u8),
     SQLITE_INDEX_CONSTRAINT_EQ,
     SQLITE_INDEX_CONSTRAINT_GT,
     SQLITE_INDEX_CONSTRAINT_LE,
@@ -378,6 +835,8 @@ pub enum IndexConstraintOp {
     SQLITE_INDEX_CONSTRAINT_OFFSET,       // 3.38.0
     SQLITE_INDEX_CONSTRAINT_FUNCTION(u8), // 3.25.0
 }
+
+const SQLITE_INDEX_CONSTRAINT_FUNCTION: u8 = 150;
 
 impl From<u8> for IndexConstraintOp {
     fn from(code: u8) -> Self {
@@ -398,7 +857,37 @@ impl From<u8> for IndexConstraintOp {
             72 => Self::SQLITE_INDEX_CONSTRAINT_IS,
             73 => Self::SQLITE_INDEX_CONSTRAINT_LIMIT,
             74 => Self::SQLITE_INDEX_CONSTRAINT_OFFSET,
-            v => Self::SQLITE_INDEX_CONSTRAINT_FUNCTION(v),
+            v if v >= SQLITE_INDEX_CONSTRAINT_FUNCTION => {
+                Self::SQLITE_INDEX_CONSTRAINT_FUNCTION(v - SQLITE_INDEX_CONSTRAINT_FUNCTION)
+            }
+            v => Self::UNKNOWN(v),
+        }
+    }
+}
+
+impl From<IndexConstraintOp> for u8 {
+    fn from(value: IndexConstraintOp) -> u8 {
+        match value {
+            IndexConstraintOp::UNKNOWN(v) => v,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ => 2,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GT => 4,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LE => 8,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LT => 16,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GE => 32,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_MATCH => 64,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIKE => 65,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_GLOB => 66,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_REGEXP => 67,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_NE => 68,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNOT => 69,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNOTNULL => 70,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_ISNULL => 71,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_IS => 72,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_LIMIT => 73,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_OFFSET => 74,
+            IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_FUNCTION(v) => {
+                v + SQLITE_INDEX_CONSTRAINT_FUNCTION
+            }
         }
     }
 }
@@ -775,6 +1264,7 @@ pub unsafe trait VTabCursor: Sized {
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xcolumn_method))
     fn column(&self, ctx: &mut Context, i: c_int) -> Result<()>;
     /// Return the rowid of row that the cursor is currently pointing at.
+    /// Will not be called if the vtab is WITHOUT ROWID.
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xrowid_method))
     fn rowid(&self) -> Result<i64>;
 }
@@ -1456,6 +1946,129 @@ where
 {
     let vt = vtab.cast::<T>();
     vtab_error(vtab, (*vt).rollback())
+}
+
+unsafe extern "C" fn rust_savepoint<'vtab, T>(vtab: *mut sqlite3_vtab, n: c_int) -> c_int
+where
+    T: SavepointVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    vtab_error(vtab, (*vt).savepoint(n))
+}
+
+unsafe extern "C" fn rust_release_savepoint<'vtab, T>(vtab: *mut sqlite3_vtab, n: c_int) -> c_int
+where
+    T: SavepointVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    vtab_error(vtab, (*vt).release(n))
+}
+
+unsafe extern "C" fn rust_rollback_to<'vtab, T>(vtab: *mut sqlite3_vtab, n: c_int) -> c_int
+where
+    T: SavepointVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    vtab_error(vtab, (*vt).rollback_to(n))
+}
+
+unsafe extern "C" fn rust_rename<'vtab, T>(
+    vtab: *mut sqlite3_vtab,
+    new_name: *const c_char,
+) -> c_int
+where
+    T: RenameVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    let name = match CStr::from_ptr(new_name).to_str() {
+        Ok(s) => s,
+        Err(e) => return vtab_error::<()>(vtab, Err(Error::Utf8Error(e))),
+    };
+    vtab_error(vtab, (*vt).rename(name))
+}
+
+unsafe extern "C" fn rust_shadow_name<T>(suffix: *const c_char) -> c_int
+where
+    T: ShadowNameVTab,
+{
+    let suffix_str = match CStr::from_ptr(suffix).to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    T::shadow_name(suffix_str) as c_int
+}
+
+#[cfg(feature = "modern_sqlite")]
+unsafe extern "C" fn rust_integrity<'vtab, T>(
+    vtab: *mut sqlite3_vtab,
+    schema: *const c_char,
+    table: *const c_char,
+    flags: c_int,
+    pz_err: *mut *mut c_char,
+) -> c_int
+where
+    T: IntegrityVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    let schema_str = match CStr::from_ptr(schema).to_str() {
+        Ok(s) => s,
+        Err(e) => return vtab_error::<()>(vtab, Err(Error::Utf8Error(e))),
+    };
+    let table_str = match CStr::from_ptr(table).to_str() {
+        Ok(s) => s,
+        Err(e) => return vtab_error::<()>(vtab, Err(Error::Utf8Error(e))),
+    };
+    match (*vt).integrity(schema_str, table_str, flags) {
+        Ok(None) => ffi::SQLITE_OK,
+        Ok(Some(msg)) => {
+            *pz_err = alloc(&msg);
+            ffi::SQLITE_OK
+        }
+        Err(Error::SqliteFailure(err, _)) => err.extended_code,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn rust_find_function<'vtab, T>(
+    vtab: *mut sqlite3_vtab,
+    n_arg: c_int,
+    z_name: *const c_char,
+    px_func: *mut Option<
+        unsafe extern "C" fn(
+            ctx: *mut ffi::sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ),
+    >,
+    pp_arg: *mut *mut c_void,
+) -> c_int
+where
+    T: FindFunctionVTab<'vtab>,
+{
+    let vt = vtab.cast::<T>();
+    let name = match CStr::from_ptr(z_name).to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    match (*vt).find_function(n_arg, name) {
+        FindFunctionResult::None => 0,
+        FindFunctionResult::Overload { func, user_data } => {
+            *px_func = Some(func);
+            *pp_arg = user_data;
+            1
+        }
+        FindFunctionResult::Indexable {
+            func,
+            user_data,
+            function_idx,
+        } => {
+            *px_func = Some(func);
+            *pp_arg = user_data;
+            u8::from(IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_FUNCTION(
+                function_idx,
+            )) as c_int
+        }
+    }
 }
 
 /// Virtual table cursors can set an error message by assigning a string to
