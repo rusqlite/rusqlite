@@ -633,6 +633,31 @@ impl Connection {
         self.db.borrow_mut().release_memory()
     }
 
+    /// Register a custom operator for virtual tables
+    ///
+    /// This is typically used to enable MATCH operator for custom virtual tables.
+    /// For example, FTS5 uses this to register MATCH.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use rusqlite::{Connection, Result};
+    /// # fn main() -> Result<()> {
+    /// let db = Connection::open_in_memory()?;
+    /// db.overload_function("match", 2)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// See [sqlite3_overload_function](https://www.sqlite.org/c3ref/overload_function.html) for details.
+    pub fn overload_function(&self, name: &str, n_arg: c_int) -> Result<()> {
+        let c_name = CString::new(name)?;
+        let db_handle = self.db.borrow().db();
+        self.db.borrow_mut().decode_result(unsafe {
+            ffi::sqlite3_overload_function(db_handle, c_name.as_ptr(), n_arg)
+        })
+    }
+
     /// Get the SQLite rowid of the most recent successful INSERT.
     ///
     /// Uses [sqlite3_last_insert_rowid](https://www.sqlite.org/c3ref/last_insert_rowid.html) under
