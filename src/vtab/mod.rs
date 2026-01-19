@@ -10,7 +10,7 @@
 //!
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
 use std::borrow::Cow::{self, Borrowed, Owned};
-use std::ffi::{c_char, c_int, c_void, CStr};
+use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr;
@@ -86,6 +86,7 @@ pub struct Module<'vtab, T: VTab<'vtab>> {
     phantom: PhantomData<&'vtab T>,
 }
 
+#[allow(dead_code)]
 union ModuleZeroHack {
     bytes: [u8; size_of::<ffi::sqlite3_module>()],
     module: ffi::sqlite3_module,
@@ -94,6 +95,7 @@ union ModuleZeroHack {
 // Used as a trailing initializer for sqlite3_module -- this way we avoid having
 // the build fail if buildtime_bindgen is on. This is safe, as bindgen-generated
 // structs are allowed to be zeroed.
+#[allow(dead_code)]
 const ZERO_MODULE: ffi::sqlite3_module = unsafe {
     ModuleZeroHack {
         bytes: [0_u8; size_of::<ffi::sqlite3_module>()],
@@ -103,10 +105,14 @@ const ZERO_MODULE: ffi::sqlite3_module = unsafe {
 
 macro_rules! module {
     ($lt:lifetime, $vt:ty, $ct:ty, $xcreate:expr, $xdestroy:expr, $xupdate:expr,
-         $xbegin:expr, $xsync:expr, $xcommit:expr, $xrollback:expr) => {
+         $xbegin:expr, $xsync:expr, $xcommit:expr, $xrollback:expr, $xintegrity:expr) => {
     &Module {
         base: ffi::sqlite3_module {
-            // We don't use methods provided by versions > 1
+            // Use iVersion 4 to enable xIntegrity (SQLite 3.44.0+) when bundled feature is used
+            // Otherwise use iVersion 1 for maximum compatibility
+            #[cfg(feature = "bundled")]
+            iVersion: 4,
+            #[cfg(not(feature = "bundled"))]
             iVersion: 1,
             xCreate: $xcreate,
             xConnect: Some(rust_connect::<$vt>),
@@ -127,6 +133,8 @@ macro_rules! module {
             xRollback: $xrollback,
             xFindFunction: None,
             xRename: None,
+            #[cfg(feature = "bundled")]
+            xIntegrity: $xintegrity,
             ..ZERO_MODULE
         },
         phantom: PhantomData::<&$lt $vt>,
@@ -141,13 +149,13 @@ macro_rules! module {
 pub fn update_module<'vtab, T: UpdateVTab<'vtab>>() -> &'static Module<'vtab, T> {
     match T::KIND {
         VTabKind::EponymousOnly => {
-            module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>), None, None, None, None)
+            module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>), None, None, None, None, None)
         }
         VTabKind::Eponymous => {
-            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>), None, None, None, None)
+            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>), None, None, None, None, None)
         }
         _ => {
-            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>), None, None, None, None)
+            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>), None, None, None, None, Some(rust_integrity::<T>))
         }
     }
 }
@@ -159,13 +167,13 @@ pub fn update_module<'vtab, T: UpdateVTab<'vtab>>() -> &'static Module<'vtab, T>
 pub fn update_module_with_tx<'vtab, T: TransactionVTab<'vtab>>() -> &'static Module<'vtab, T> {
     match T::KIND {
         VTabKind::EponymousOnly => {
-            module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>))
+            module!('vtab, T, T::Cursor, None, None, Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>), None)
         }
         VTabKind::Eponymous => {
-            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>))
+            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>), None)
         }
         _ => {
-            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>))
+            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), Some(rust_update::<T>), Some(rust_begin::<T>), Some(rust_sync::<T>), Some(rust_commit::<T>), Some(rust_rollback::<T>), Some(rust_integrity::<T>))
         }
     }
 }
@@ -180,12 +188,12 @@ pub fn read_only_module<'vtab, T: CreateVTab<'vtab>>() -> &'static Module<'vtab,
         VTabKind::Eponymous => {
             // A virtual table is eponymous if its xCreate method is the exact same function
             // as the xConnect method
-            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), None, None, None, None, None)
+            module!('vtab, T, T::Cursor, Some(rust_connect::<T>), Some(rust_disconnect::<T>), None, None, None, None, None, None)
         }
         _ => {
             // The xConnect and xCreate methods may do the same thing, but they must be
             // different so that the virtual table is not an eponymous virtual table.
-            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), None, None, None, None, None)
+            module!('vtab, T, T::Cursor, Some(rust_create::<T>), Some(rust_destroy::<T>), None, None, None, None, None, Some(rust_integrity::<T>))
         }
     }
 }
@@ -196,7 +204,7 @@ pub fn read_only_module<'vtab, T: CreateVTab<'vtab>>() -> &'static Module<'vtab,
 #[must_use]
 pub fn eponymous_only_module<'vtab, T: VTab<'vtab>>() -> &'static Module<'vtab, T> {
     //  For eponymous-only virtual tables, the xCreate method is NULL
-    module!('vtab, T, T::Cursor, None, None, None, None, None, None, None)
+    module!('vtab, T, T::Cursor, None, None, None, None, None, None, None, None)
 }
 
 /// Virtual table configuration options
@@ -312,6 +320,18 @@ pub trait CreateVTab<'vtab>: VTab<'vtab> {
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xdestroy_method))
     fn destroy(&self) -> Result<()> {
         Ok(())
+    }
+
+    /// Called during PRAGMA integrity_check to validate virtual table
+    ///
+    /// Return Ok(None) if the table is valid, or Ok(Some(error_message)) if corrupted.
+    /// Available only with SQLite 3.44.0+
+    ///
+    /// Default implementation returns Ok(None) (no validation performed).
+    ///
+    /// (See [SQLite doc](https://sqlite.org/c3ref/vtab.html#xintegrity))
+    fn integrity(&self, _schema: &str, _table_name: &str, _flags: c_int) -> Result<Option<String>> {
+        Ok(None)
     }
 }
 
@@ -1299,6 +1319,46 @@ where
             ffi::SQLITE_OK
         }
         err => vtab_error(vtab, err),
+    }
+}
+
+unsafe extern "C" fn rust_integrity<'vtab, T>(
+    vtab: *mut sqlite3_vtab,
+    schema: *const c_char,
+    tab_name: *const c_char,
+    flags: c_int,
+    pz_err: *mut *mut c_char,
+) -> c_int
+where
+    T: CreateVTab<'vtab>,
+{
+    if vtab.is_null() || schema.is_null() || tab_name.is_null() {
+        return ffi::SQLITE_ERROR;
+    }
+
+    let vt = vtab.cast::<T>();
+    let schema_str = match CStr::from_ptr(schema).to_str() {
+        Ok(s) => s,
+        Err(_) => return ffi::SQLITE_ERROR,
+    };
+    let table_str = match CStr::from_ptr(tab_name).to_str() {
+        Ok(s) => s,
+        Err(_) => return ffi::SQLITE_ERROR,
+    };
+
+    match (*vt).integrity(schema_str, table_str, flags) {
+        Ok(None) => ffi::SQLITE_OK,
+        Ok(Some(err_msg)) => {
+            // Allocate error message for SQLite to free
+            let c_err = match CString::new(err_msg) {
+                Ok(s) => s,
+                Err(_) => return ffi::SQLITE_ERROR,
+            };
+            let fmt = CString::new("%s").unwrap();
+            *pz_err = ffi::sqlite3_mprintf(fmt.as_ptr(), c_err.as_ptr());
+            ffi::SQLITE_ERROR
+        }
+        Err(_) => ffi::SQLITE_ERROR,
     }
 }
 
