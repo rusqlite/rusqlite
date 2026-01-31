@@ -7,7 +7,7 @@ use std::slice;
 
 use crate::ffi;
 use crate::util::free_boxed_value;
-use crate::{Connection, InnerConnection, Name, Result};
+use crate::{Connection, Error, InnerConnection, Name, Result};
 
 impl Connection {
     /// Add or modify a collation.
@@ -146,9 +146,13 @@ impl InnerConnection {
                     .to_str()
                     .expect("illegal collation sequence name");
                 callback(&conn, collation_name)
-            });
+            })
+            .unwrap_or_else(|_| Err(Error::UnwindingPanic));
             if res.is_err() {
-                return; // FIXME How ?
+                #[cfg(all(feature = "modern_sqlite", not(feature = "bundled-sqlcipher")))]
+                // 3.51.0
+                let _ = crate::error::set_errmsg(arg2, ffi::SQLITE_ERROR, Some(c"FIXME"));
+                return;
             }
         }
 
