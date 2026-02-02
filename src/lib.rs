@@ -100,7 +100,7 @@ pub use crate::util::Name;
 pub use crate::version::*;
 #[cfg(feature = "rusqlite-macros")]
 #[doc(hidden)]
-pub use rusqlite_macros::__bind;
+pub use rusqlite_macros::{__bind, __single};
 
 #[macro_use]
 mod error;
@@ -248,6 +248,15 @@ macro_rules! named_params {
 ///     Ok(prepare_and_bind!(db, "SELECT $name, @age, :smart;"))
 /// }
 /// ```
+///
+/// ```compile_fail
+/// # use rusqlite::{Connection, Result};
+/// # fn main() -> Result<()> {
+/// # let db = Connection::open_in_memory()?;
+/// let mut stmt = prepare_and_bind!(db, "SELECT 1; SELECT 2"); // should't compile: multiple statements
+/// # Ok(())
+/// # }
+/// ```
 #[cfg(feature = "rusqlite-macros")]
 #[macro_export]
 macro_rules! prepare_and_bind {
@@ -271,6 +280,18 @@ macro_rules! prepare_cached_and_bind {
         $crate::__bind!(stmt $sql);
         stmt
     }};
+}
+
+/// Check that only one statement is used at compile time.
+/// This is possible only if a literal is passed as argument.
+#[cfg(feature = "rusqlite-macros")]
+#[macro_export]
+macro_rules! single {
+    ($sql:literal) => {
+        $crate::__single!($sql);
+    };
+    // TODO How to match / ignore anything else ?
+    (sql) => {};
 }
 
 /// A typedef of the result returned by many methods.
