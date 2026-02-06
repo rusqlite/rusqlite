@@ -208,6 +208,13 @@ impl PartialEq for Error {
     }
 }
 
+impl From<ffi::Error> for Error {
+    #[cold]
+    fn from(err: ffi::Error) -> Self {
+        Self::SqliteFailure(err, None)
+    }
+}
+
 impl From<str::Utf8Error> for Error {
     #[cold]
     fn from(err: str::Utf8Error) -> Self {
