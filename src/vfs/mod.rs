@@ -16,7 +16,6 @@ pub mod memvfs;
 use crate::ffi as sqlite3;
 use crate::ffi::{
     sqlite3_file, sqlite3_filename, sqlite3_int64, sqlite3_io_methods, sqlite3_vfs, Error,
-    IntoResultCodeExt,
 };
 use rand::RngCore;
 use std::borrow::Cow;
@@ -35,6 +34,45 @@ use std::time::{Duration, SystemTime};
 use std::{mem, slice};
 
 use crate::{Connection, OpenFlags};
+
+/// Extension trait to convert a [`Result`] to an SQLite result code ([`c_int`]).
+pub trait IntoResultCodeExt {
+    /// Convert `self` to an SQLite result code ([`c_int`]).
+    ///
+    /// If `self` is:
+    /// - `Ok(_)`, this function returns `SQLITE_OK`.
+    /// - `Err(err)`, this function returns `extended_code`.
+    fn into_rc(self) -> c_int;
+}
+
+impl<T> IntoResultCodeExt for Result<T, Error> {
+    fn into_rc(self) -> c_int {
+        match self {
+            Ok(_) => sqlite3::SQLITE_OK,
+            Err(e) => e.extended_code,
+        }
+    }
+}
+
+/// Extensiont trait to convert an SQLite result code ([`c_int`]) to a [`Result`].
+pub trait FromResultCodeExt {
+    /// Convert an SQLite result code ([`c_int`]) to a [`Result`].
+    ///
+    /// If `code` is:
+    /// - `SQLITE_OK`, this function returns `Ok(())`.
+    /// - any other value, this function returns `Err(Error::new(code))`.
+    fn from_rc(code: c_int) -> Result<(), Error>;
+}
+
+impl FromResultCodeExt for Result<(), Error> {
+    fn from_rc(code: c_int) -> Result<(), Error> {
+        if code == sqlite3::SQLITE_OK {
+            Ok(())
+        } else {
+            Err(Error::new(code))
+        }
+    }
+}
 
 /// A specialised result type for [`Vfs`] operations.
 pub type Result<T, E = Error> = core::result::Result<T, E>;
@@ -1424,6 +1462,7 @@ unsafe extern "C" fn x_full_pathname<T: Vfs>(
 
 // On linux, these function are available by default in libc. On other platforms `-ldl` is probably needed.
 // Also, this code is unix-only and does not work on windows.
+#[cfg(unix)]
 unsafe extern "C" {
     fn dlopen(filename: *const c_char, flags: c_int) -> *mut c_void;
     fn dlclose(handle: *mut c_void) -> c_int;
@@ -1445,6 +1484,11 @@ unsafe extern "C" fn x_dlopen(_: *mut sqlite3_vfs, filename: *const c_char) -> *
     todo!();
 }
 
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+unsafe extern "C" fn x_dlopen(_: *mut sqlite3_vfs, _filename: *const c_char) -> *mut c_void {
+    panic!("dynamic loading is not supported on wasm32-unknown");
+}
+
 #[cfg(unix)]
 unsafe extern "C" fn x_dlerror(_: *mut sqlite3_vfs, n: c_int, out: *mut c_char) {
     unsafe {
@@ -1458,6 +1502,11 @@ unsafe extern "C" fn x_dlerror(_: *mut sqlite3_vfs, n: c_int, out: *mut c_char) 
 #[cfg(windows)]
 unsafe extern "C" fn x_dlerror(_: *mut sqlite3_vfs, n: c_int, out: *mut c_char) {
     todo!();
+}
+
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+unsafe extern "C" fn x_dlerror(_: *mut sqlite3_vfs, _n: c_int, _out: *mut c_char) {
+    panic!("dynamic loading is not supported on wasm32-unknown");
 }
 
 // FIXME: the return type of this function is wrong:
@@ -1487,6 +1536,15 @@ unsafe extern "C" fn x_dlsym(
     todo!();
 }
 
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+unsafe extern "C" fn x_dlsym(
+    _: *mut sqlite3_vfs,
+    _p: *mut c_void,
+    _sym: *const c_char,
+) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const i8)> {
+    panic!("dynamic loading is not supported on wasm32-unknown");
+}
+
 #[cfg(unix)]
 unsafe extern "C" fn x_dlclose(_: *mut sqlite3_vfs, handle: *mut core::ffi::c_void) {
     unsafe { dlclose(handle) };
@@ -1495,6 +1553,11 @@ unsafe extern "C" fn x_dlclose(_: *mut sqlite3_vfs, handle: *mut core::ffi::c_vo
 #[cfg(windows)]
 unsafe extern "C" fn x_dlclose(_: *mut sqlite3_vfs, handle: *mut core::ffi::c_void) {
     todo!();
+}
+
+#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+unsafe extern "C" fn x_dlclose(_: *mut sqlite3_vfs, _handle: *mut core::ffi::c_void) {
+    panic!("dynamic loading is not supported on wasm32-unknown");
 }
 
 unsafe extern "C" fn x_randomness<T: Vfs>(
@@ -2089,7 +2152,7 @@ mod tests {
         time::{Duration, SystemTime},
     };
 
-    use libsqlite3_sys as sqlite3;
+    use crate::ffi as sqlite3;
 
     use crate::Connection;
 
@@ -2457,5 +2520,15 @@ mod tests {
         assert!(methods.xFetch.is_some());
         assert!(methods.xUnfetch.is_some());
         drop(token);
+    }
+
+    #[test]
+    fn test_result_conversion() {
+        assert_eq!(Ok(()).into_rc(), sqlite3::SQLITE_OK);
+        assert_eq!(
+            Result::<(), _>::Err(Error::new(sqlite3::SQLITE_ERROR)).into_rc(),
+            sqlite3::SQLITE_ERROR
+        );
+        assert!(Result::<(), _>::from_rc(sqlite3::SQLITE_ERROR).is_err());
     }
 }
