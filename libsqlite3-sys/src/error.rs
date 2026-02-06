@@ -240,6 +240,6 @@ mod test {
             Result::<(), _>::Err(Error::new(SQLITE_ERROR)).into_rc(),
             SQLITE_ERROR
         );
-        assert!(!Result::<(), _>::from_rc(SQLITE_ERROR).is_ok());
+        assert!(Result::<(), _>::from_rc(SQLITE_ERROR).is_err());
     }
 }
