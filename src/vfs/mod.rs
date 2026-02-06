@@ -13,8 +13,8 @@
 #[cfg(all(feature = "memvfs", unix))]
 pub mod memvfs;
 
-use libsqlite3_sys as sqlite3;
-use libsqlite3_sys::{
+use crate::ffi as sqlite3;
+use crate::ffi::{
     sqlite3_file, sqlite3_filename, sqlite3_int64, sqlite3_io_methods, sqlite3_vfs, Error,
     IntoResultCodeExt,
 };

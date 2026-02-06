@@ -7,8 +7,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use libsqlite3_sys::Error;
-
+use crate::ffi::Error;
 use crate::vfs::{
     FileType, IoCapabilities, LockLevel, OpenFile, Result, SyncOptions, Vfs, VfsFile, VfsOpenFlags,
     VfsPath,
