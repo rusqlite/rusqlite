@@ -1470,6 +1470,24 @@ unsafe extern "C" {
     fn dlerror() -> *mut c_char;
 }
 
+// Windows API declarations for dynamic library loading
+#[cfg(windows)]
+unsafe extern "C" {
+    fn LoadLibraryW(lpLibFileName: *const u16) -> *mut c_void;
+    fn FreeLibrary(hLibModule: *mut c_void) -> c_int;
+    fn GetProcAddress(hModule: *mut c_void, lpProcName: *const c_char) -> *const c_void;
+    fn GetLastError() -> u32;
+    fn FormatMessageW(
+        dwFlags: u32,
+        lpSource: *const c_void,
+        dwMessageId: u32,
+        dwLanguageId: u32,
+        lpBuffer: *mut u16,
+        nSize: u32,
+        Arguments: *mut c_void,
+    ) -> u32;
+}
+
 #[cfg(unix)]
 unsafe extern "C" fn x_dlopen(_: *mut sqlite3_vfs, filename: *const c_char) -> *mut c_void {
     // Linux only, but that's ok as dqlite-utils is for linux only
@@ -1481,7 +1499,19 @@ unsafe extern "C" fn x_dlopen(_: *mut sqlite3_vfs, filename: *const c_char) -> *
 
 #[cfg(windows)]
 unsafe extern "C" fn x_dlopen(_: *mut sqlite3_vfs, filename: *const c_char) -> *mut c_void {
-    todo!();
+    use std::os::windows::ffi::OsStrExt;
+
+    if filename.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let filename_str = unsafe { CStr::from_ptr(filename) };
+    let filename_lossy = filename_str.to_string_lossy();
+    let os_str = OsStr::new(filename_lossy.as_ref());
+
+    let wide: Vec<u16> = os_str.encode_wide().chain(std::iter::once(0)).collect();
+
+    unsafe { LoadLibraryW(wide.as_ptr()) as *mut c_void }
 }
 
 #[cfg(all(target_family = "wasm", target_os = "unknown"))]
@@ -1501,7 +1531,48 @@ unsafe extern "C" fn x_dlerror(_: *mut sqlite3_vfs, n: c_int, out: *mut c_char) 
 
 #[cfg(windows)]
 unsafe extern "C" fn x_dlerror(_: *mut sqlite3_vfs, n: c_int, out: *mut c_char) {
-    todo!();
+    use std::os::windows::ffi::OsStringExt;
+
+    const FORMAT_MESSAGE_FROM_SYSTEM: u32 = 0x00001000;
+    const FORMAT_MESSAGE_IGNORE_INSERTS: u32 = 0x00000200;
+
+    let error_code = unsafe { GetLastError() };
+    if error_code == 0 {
+        if !out.is_null() {
+            unsafe {
+                *out = 0;
+            }
+        }
+        return;
+    }
+
+    let mut buffer: [u16; 512] = [0; 512];
+    let len = unsafe {
+        FormatMessageW(
+            FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+            std::ptr::null(),
+            error_code,
+            0,
+            buffer.as_mut_ptr(),
+            buffer.len() as u32,
+            std::ptr::null_mut(),
+        )
+    };
+
+    if len > 0 && !out.is_null() {
+        // Convert wide string to UTF-8
+        let error_msg = String::from_utf16_lossy(&buffer[..len as usize]);
+        let error_bytes = error_msg.as_bytes();
+        let copy_len = std::cmp::min(n as usize - 1, error_bytes.len());
+        unsafe {
+            std::ptr::copy_nonoverlapping(error_bytes.as_ptr(), out as *mut u8, copy_len);
+            *(out.add(copy_len) as *mut u8) = 0;
+        }
+    } else if !out.is_null() {
+        unsafe {
+            *out = 0;
+        }
+    }
 }
 
 #[cfg(all(target_family = "wasm", target_os = "unknown"))]
@@ -1533,7 +1604,20 @@ unsafe extern "C" fn x_dlsym(
     p: *mut c_void,
     sym: *const c_char,
 ) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const i8)> {
-    todo!();
+    if p.is_null() || sym.is_null() {
+        return None;
+    }
+
+    let func_ptr = unsafe { GetProcAddress(p as *mut c_void, sym) };
+    if func_ptr.is_null() {
+        None
+    } else {
+        Some(unsafe {
+            mem::transmute::<_, unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const i8)>(
+                func_ptr,
+            )
+        })
+    }
 }
 
 #[cfg(all(target_family = "wasm", target_os = "unknown"))]
@@ -1552,7 +1636,11 @@ unsafe extern "C" fn x_dlclose(_: *mut sqlite3_vfs, handle: *mut core::ffi::c_vo
 
 #[cfg(windows)]
 unsafe extern "C" fn x_dlclose(_: *mut sqlite3_vfs, handle: *mut core::ffi::c_void) {
-    todo!();
+    if !handle.is_null() {
+        unsafe {
+            FreeLibrary(handle as *mut c_void);
+        }
+    }
 }
 
 #[cfg(all(target_family = "wasm", target_os = "unknown"))]
