@@ -3,6 +3,44 @@ use core::ffi::c_int;
 use core::ffi::CStr;
 use core::fmt;
 
+/// Extension trait to convert a [`Result`] to an SQLite result code ([`c_int`]).
+pub trait IntoResultCodeExt {
+    /// Convert `self` to an SQLite result code ([`c_int`]).
+    ///
+    /// If `self` is:
+    /// - `Ok(_)`, this function returns `SQLITE_OK`.
+    /// - `Err(err)`, this function returns `extended_code`.
+    fn into_rc(self) -> c_int;
+}
+
+impl<T> IntoResultCodeExt for Result<T, Error> {
+    fn into_rc(self) -> c_int {
+        match self {
+            Ok(_) => super::SQLITE_OK,
+            Err(e) => e.extended_code,
+        }
+    }
+}
+
+pub trait FromResultCodeExt {
+    /// Convert an SQLite result code ([`c_int`]) to a [`Result`].
+    ///
+    /// If `code` is:
+    /// - `SQLITE_OK`, this function returns `Ok(())`.
+    /// - any other value, this function returns `Err(Error::new(code))`.
+    fn from_rc(code: c_int) -> Result<(), Error>;
+}
+
+impl FromResultCodeExt for Result<(), Error> {
+    fn from_rc(code: c_int) -> Result<(), Error> {
+        if code == super::SQLITE_OK {
+            Ok(())
+        } else {
+            Err(Error::new(code))
+        }
+    }
+}
+
 /// Error Codes
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -193,5 +231,15 @@ mod test {
             let s = format!("{err}");
             assert!(!s.is_empty());
         }
+    }
+
+    #[test]
+    fn test_result_conversion() {
+        assert_eq!(Ok(()).into_rc(), SQLITE_OK);
+        assert_eq!(
+            Result::<(), _>::Err(Error::new(SQLITE_ERROR)).into_rc(),
+            SQLITE_ERROR
+        );
+        assert!(!Result::<(), _>::from_rc(SQLITE_ERROR).is_ok());
     }
 }
