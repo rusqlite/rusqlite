@@ -9,11 +9,15 @@
 //!    `USING` clause.
 //!
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
+#[cfg(feature = "value_pointer")]
+use std::any::Any;
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr;
+#[cfg(feature = "value_pointer")]
+use std::rc::Rc;
 use std::slice;
 
 use crate::ffi::sqlite3_free;
@@ -939,6 +943,23 @@ impl Values<'_> {
         }
     }
 
+    /// returns a value pointer that was provided to SQLite via `ffi::sqlite3_result_pointer`.
+    #[cfg(feature = "value_pointer")]
+    pub fn get_pointer(&self, idx: usize, ptr_type: &'static CStr) -> Option<Rc<dyn Any>> {
+        let arg = self.args[idx];
+        let ptr = unsafe { ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr()) };
+
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe {
+                let ptr = ptr as *const Rc<dyn Any>;
+                Rc::increment_strong_count(ptr); // don't consume it
+                Rc::from_raw(ptr)
+            })
+        }
+    }
+
     /// Turns `Values` into an iterator.
     #[inline]
     #[must_use]
@@ -1531,6 +1552,8 @@ pub mod array;
 pub mod csvtab;
 #[cfg(feature = "series")]
 pub mod series; // SQLite >= 3.9.0
+#[cfg(feature = "value_pointer")]
+pub mod value_pointer;
 #[cfg(all(test, feature = "modern_sqlite"))]
 mod vtablog;
 

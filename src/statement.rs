@@ -622,7 +622,6 @@ impl Statement<'_> {
         let value = match value {
             ToSqlOutput::Borrowed(v) => v,
             ToSqlOutput::Owned(ref v) => ValueRef::from(v),
-
             #[cfg(feature = "blob")]
             ToSqlOutput::ZeroBlob(len) => {
                 // TODO sqlite3_bind_zeroblob64 // 3.8.11
@@ -643,6 +642,20 @@ impl Statement<'_> {
                         Rc::into_raw(a) as *mut c_void,
                         ARRAY_TYPE,
                         Some(free_array),
+                    )
+                });
+            }
+            #[cfg(feature = "value_pointer")]
+            ToSqlOutput::ValuePointer(sqlite_pointer) => {
+                return self.conn.decode_result(unsafe {
+                    use crate::vtab::value_pointer::free_pointer;
+
+                    ffi::sqlite3_bind_pointer(
+                        ptr,
+                        ndx as c_int,
+                        Rc::into_raw(sqlite_pointer.value) as *mut c_void,
+                        sqlite_pointer.pointer_type.as_ptr(),
+                        Some(free_pointer),
                     )
                 });
             }

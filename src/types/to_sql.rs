@@ -1,6 +1,8 @@
 use super::{Null, Value, ValueRef};
 #[cfg(feature = "array")]
 use crate::vtab::array::Array;
+#[cfg(feature = "value_pointer")]
+use crate::vtab::value_pointer::ValuePointer;
 #[cfg(feature = "fallible_uint")]
 use crate::Error;
 use crate::Result;
@@ -29,6 +31,10 @@ pub enum ToSqlOutput<'a> {
     /// `feature = "array"`
     #[cfg(feature = "array")]
     Array(Array),
+
+    /// `feature = "value_pointer"`
+    #[cfg(feature = "value_pointer")]
+    ValuePointer(ValuePointer),
 }
 
 // Generically allow any type that can be converted into a ValueRef
@@ -111,6 +117,8 @@ impl ToSql for ToSqlOutput<'_> {
             ToSqlOutput::Arg(i) => ToSqlOutput::Arg(i),
             #[cfg(feature = "array")]
             ToSqlOutput::Array(ref a) => ToSqlOutput::Array(a.clone()),
+            #[cfg(feature = "value_pointer")]
+            ToSqlOutput::ValuePointer(ref a) => ToSqlOutput::ValuePointer(a.clone()),
         })
     }
 }
