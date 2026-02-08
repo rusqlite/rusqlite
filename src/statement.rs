@@ -622,6 +622,7 @@ impl Statement<'_> {
         let value = match value {
             ToSqlOutput::Borrowed(v) => v,
             ToSqlOutput::Owned(ref v) => ValueRef::from(v),
+
             #[cfg(feature = "blob")]
             ToSqlOutput::ZeroBlob(len) => {
                 // TODO sqlite3_bind_zeroblob64 // 3.8.11
