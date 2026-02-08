@@ -78,6 +78,7 @@ vtab = []
 csvtab = ["csv", "vtab"]
 # Port of Carray() table-valued function
 array = ["vtab"]
+value_pointer = ["vtab"]
 # if SQLITE_ENABLE_SESSION
 # session extension
 session = ["libsqlite3-sys/session", "hooks"]
@@ -131,6 +132,7 @@ modern-full = [
     "unlock_notify",
     "url",
     "uuid",
+    "value_pointer",
     "vtab",
     "window",
 ]
