@@ -3,21 +3,25 @@
 //! Port of C [generate series
 //! "function"](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/series.c):
 //! `https://www.sqlite.org/series.html`
+use std::ffi::c_int;
 use std::marker::PhantomData;
-use std::os::raw::c_int;
 
 use crate::ffi;
 use crate::types::Type;
 use crate::vtab::{
-    eponymous_only_module, Context, IndexConstraintOp, IndexInfo, VTab, VTabConfig, VTabConnection,
-    VTabCursor, Values,
+    eponymous_only_module, Context, Filters, IndexConstraintOp, IndexInfo, VTab, VTabConfig,
+    VTabConnection, VTabCursor,
 };
 use crate::{error::error_from_sqlite_code, Connection, Result};
 
 /// Register the `generate_series` module.
 pub fn load_module(conn: &Connection) -> Result<()> {
     let aux: Option<()> = None;
-    conn.create_module("generate_series", eponymous_only_module::<SeriesTab>(), aux)
+    conn.create_module(
+        c"generate_series",
+        eponymous_only_module::<SeriesTab>(),
+        aux,
+    )
 }
 
 // Column numbers
@@ -190,9 +194,9 @@ impl SeriesTabCursor<'_> {
         }
     }
 }
-#[expect(clippy::comparison_chain)]
+
 unsafe impl VTabCursor for SeriesTabCursor<'_> {
-    fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Values<'_>) -> Result<()> {
+    fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Filters<'_>) -> Result<()> {
         let mut idx_num = QueryPlanFlags::from_bits_truncate(idx_num);
         let mut i = 0;
         if idx_num.contains(QueryPlanFlags::START) {
@@ -276,6 +280,9 @@ unsafe impl VTabCursor for SeriesTabCursor<'_> {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::ffi;
     use crate::vtab::series;
     use crate::{Connection, Result};

@@ -1,5 +1,4 @@
-use std::ffi::CStr;
-use std::os::raw::{c_char, c_int};
+use std::ffi::{c_char, c_int, CStr};
 #[cfg(feature = "load_extension")]
 use std::path::Path;
 use std::ptr;
@@ -7,8 +6,7 @@ use std::str;
 use std::sync::{Arc, Mutex};
 
 use super::ffi;
-use super::str_for_sqlite;
-use super::{Connection, InterruptHandle, OpenFlags, PrepFlags, Result};
+use super::{Connection, InterruptHandle, Name, OpenFlags, PrepFlags, Result};
 use crate::error::{decode_result_raw, error_from_handle, error_with_offset, Error};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
@@ -24,41 +22,45 @@ pub struct InnerConnection {
     // interrupt would only acquire the lock after the query's completion.
     interrupt_lock: Arc<Mutex<*mut ffi::sqlite3>>,
     #[cfg(feature = "hooks")]
-    pub free_commit_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
+    pub commit_hook: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
-    pub free_rollback_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
+    pub rollback_hook: Option<Box<dyn FnMut() + Send>>,
     #[cfg(feature = "hooks")]
-    pub free_update_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
+    #[expect(clippy::type_complexity)]
+    pub update_hook: Option<Box<dyn FnMut(crate::hooks::Action, &str, &str, i64) + Send>>,
     #[cfg(feature = "hooks")]
     pub progress_handler: Option<Box<dyn FnMut() -> bool + Send>>,
     #[cfg(feature = "hooks")]
     pub authorizer: Option<crate::hooks::BoxedAuthorizer>,
     #[cfg(feature = "preupdate_hook")]
-    pub free_preupdate_hook: Option<unsafe fn(*mut std::os::raw::c_void)>,
+    #[expect(clippy::type_complexity)]
+    pub preupdate_hook: Option<
+        Box<dyn FnMut(crate::hooks::Action, &str, &str, &crate::hooks::PreUpdateCase) + Send>,
+    >,
     owned: bool,
 }
 
 unsafe impl Send for InnerConnection {}
 
 impl InnerConnection {
-    #[expect(clippy::mutex_atomic, clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
+    #[expect(clippy::arc_with_non_send_sync)] // See unsafe impl Send / Sync for InterruptHandle
     #[inline]
     pub unsafe fn new(db: *mut ffi::sqlite3, owned: bool) -> Self {
         Self {
             db,
             interrupt_lock: Arc::new(Mutex::new(if owned { db } else { ptr::null_mut() })),
             #[cfg(feature = "hooks")]
-            free_commit_hook: None,
+            commit_hook: None,
             #[cfg(feature = "hooks")]
-            free_rollback_hook: None,
+            rollback_hook: None,
             #[cfg(feature = "hooks")]
-            free_update_hook: None,
+            update_hook: None,
             #[cfg(feature = "hooks")]
             progress_handler: None,
             #[cfg(feature = "hooks")]
             authorizer: None,
             #[cfg(feature = "preupdate_hook")]
-            free_preupdate_hook: None,
+            preupdate_hook: None,
             owned,
         }
     }
@@ -138,8 +140,10 @@ impl InnerConnection {
         if self.db.is_null() {
             return Ok(());
         }
-        self.remove_hooks();
-        self.remove_preupdate_hook();
+        if self.owned {
+            self.remove_hooks();
+            self.remove_preupdate_hook();
+        }
         let mut shared_handle = self.interrupt_lock.lock().unwrap();
         assert!(
             !self.owned || !shared_handle.is_null(),
@@ -177,24 +181,21 @@ impl InnerConnection {
     }
 
     #[cfg(feature = "load_extension")]
-    pub unsafe fn load_extension(
+    pub unsafe fn load_extension<N: Name>(
         &self,
         dylib_path: &Path,
-        entry_point: Option<&str>,
+        entry_point: Option<N>,
     ) -> Result<()> {
         let dylib_str = super::path_to_cstring(dylib_path)?;
         let mut errmsg: *mut c_char = ptr::null_mut();
-        let r = if let Some(entry_point) = entry_point {
-            let c_entry = crate::str_to_cstring(entry_point)?;
-            ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry.as_ptr(), &mut errmsg)
-        } else {
-            ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), ptr::null(), &mut errmsg)
-        };
+        let cs = entry_point.as_ref().map(N::as_cstr).transpose()?;
+        let c_entry = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let r = ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry, &mut errmsg);
         if r == ffi::SQLITE_OK {
             Ok(())
         } else {
             let message = super::errmsg_to_string(errmsg);
-            ffi::sqlite3_free(errmsg.cast::<std::os::raw::c_void>());
+            ffi::sqlite3_free(errmsg.cast::<std::ffi::c_void>());
             Err(crate::error::error_from_sqlite_code(r, Some(message)))
         }
     }
@@ -209,18 +210,37 @@ impl InnerConnection {
         conn: &'a Connection,
         sql: &str,
         flags: PrepFlags,
-    ) -> Result<Statement<'a>> {
+    ) -> Result<(Statement<'a>, usize)> {
         let mut c_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
-        let (c_sql, len, _) = str_for_sqlite(sql.as_bytes())?;
+        let Ok(len) = c_int::try_from(sql.len()) else {
+            return Err(err!(ffi::SQLITE_TOOBIG));
+        };
+        let c_sql = sql.as_bytes().as_ptr().cast::<c_char>();
         let mut c_tail: *const c_char = ptr::null();
         #[cfg(not(feature = "unlock_notify"))]
-        let r = unsafe { self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail) };
+        let r = unsafe {
+            ffi::sqlite3_prepare_v3(
+                self.db(),
+                c_sql,
+                len,
+                flags.bits(),
+                &mut c_stmt,
+                &mut c_tail,
+            )
+        };
         #[cfg(feature = "unlock_notify")]
         let r = unsafe {
             use crate::unlock_notify;
             let mut rc;
             loop {
-                rc = self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail);
+                rc = ffi::sqlite3_prepare_v3(
+                    self.db(),
+                    c_sql,
+                    len,
+                    flags.bits(),
+                    &mut c_stmt,
+                    &mut c_tail,
+                );
                 if !unlock_notify::is_locked(self.db, rc) {
                     break;
                 }
@@ -247,35 +267,10 @@ impl InnerConnection {
                 n as usize
             }
         };
-        Ok(Statement::new(conn, unsafe {
-            RawStatement::new(c_stmt, tail)
-        }))
-    }
-
-    #[inline]
-    #[cfg(not(feature = "modern_sqlite"))]
-    unsafe fn prepare_(
-        &self,
-        z_sql: *const c_char,
-        n_byte: c_int,
-        _: PrepFlags,
-        pp_stmt: *mut *mut ffi::sqlite3_stmt,
-        pz_tail: *mut *const c_char,
-    ) -> c_int {
-        ffi::sqlite3_prepare_v2(self.db(), z_sql, n_byte, pp_stmt, pz_tail)
-    }
-
-    #[inline]
-    #[cfg(feature = "modern_sqlite")]
-    unsafe fn prepare_(
-        &self,
-        z_sql: *const c_char,
-        n_byte: c_int,
-        flags: PrepFlags,
-        pp_stmt: *mut *mut ffi::sqlite3_stmt,
-        pz_tail: *mut *const c_char,
-    ) -> c_int {
-        ffi::sqlite3_prepare_v3(self.db(), z_sql, n_byte, flags.bits(), pp_stmt, pz_tail)
+        Ok((
+            Statement::new(conn, unsafe { RawStatement::new(c_stmt) }),
+            tail,
+        ))
     }
 
     #[inline]
@@ -333,7 +328,7 @@ impl InnerConnection {
     #[inline]
     fn remove_preupdate_hook(&mut self) {}
 
-    pub fn db_readonly(&self, db_name: super::DatabaseName<'_>) -> Result<bool> {
+    pub fn db_readonly<N: Name>(&self, db_name: N) -> Result<bool> {
         let name = db_name.as_cstr()?;
         let r = unsafe { ffi::sqlite3_db_readonly(self.db, name.as_ptr()) };
         match r {
@@ -348,16 +343,13 @@ impl InnerConnection {
     }
 
     #[cfg(feature = "modern_sqlite")] // 3.37.0
-    pub fn txn_state(
+    pub fn txn_state<N: Name>(
         &self,
-        db_name: Option<super::DatabaseName<'_>>,
+        db_name: Option<N>,
     ) -> Result<super::transaction::TransactionState> {
-        let r = if let Some(ref name) = db_name {
-            let name = name.as_cstr()?;
-            unsafe { ffi::sqlite3_txn_state(self.db, name.as_ptr()) }
-        } else {
-            unsafe { ffi::sqlite3_txn_state(self.db, ptr::null()) }
-        };
+        let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
+        let name = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let r = unsafe { ffi::sqlite3_txn_state(self.db, name) };
         match r {
             0 => Ok(super::transaction::TransactionState::None),
             1 => Ok(super::transaction::TransactionState::Read),
@@ -379,6 +371,14 @@ impl InnerConnection {
     pub fn is_interrupted(&self) -> bool {
         unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
     }
+
+    #[cfg(any(feature = "hooks", feature = "preupdate_hook"))]
+    pub fn check_owned(&self) -> Result<()> {
+        if !self.owned {
+            return Err(err!(ffi::SQLITE_MISUSE, "Connection is not owned"));
+        }
+        Ok(())
+    }
 }
 
 #[inline]
@@ -387,9 +387,10 @@ pub(crate) unsafe fn get_autocommit(ptr: *mut ffi::sqlite3) -> bool {
 }
 
 #[inline]
-pub(crate) unsafe fn db_filename(
+pub(crate) unsafe fn db_filename<N: Name>(
+    _: std::marker::PhantomData<&()>,
     ptr: *mut ffi::sqlite3,
-    db_name: crate::DatabaseName<'_>,
+    db_name: N,
 ) -> Option<&str> {
     let db_name = db_name.as_cstr().unwrap();
     let db_filename = ffi::sqlite3_db_filename(ptr, db_name.as_ptr());

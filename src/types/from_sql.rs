@@ -28,6 +28,18 @@ pub enum FromSqlError {
     Other(Box<dyn Error + Send + Sync + 'static>),
 }
 
+impl FromSqlError {
+    /// Converts an arbitrary error type to [`FromSqlError`].
+    ///
+    /// This is a convenience function that boxes and unsizes the error type. It's main purpose is
+    /// to be usable in the `map_err` method. So instead of
+    /// `result.map_err(|error| FromSqlError::Other(Box::new(error))` you can write
+    /// `result.map_err(FromSqlError::other)`.
+    pub fn other<E: Error + Send + Sync + 'static>(error: E) -> Self {
+        Self::Other(Box::new(error))
+    }
+}
+
 impl PartialEq for FromSqlError {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -115,7 +127,9 @@ from_sql_integral!(isize);
 from_sql_integral!(u8);
 from_sql_integral!(u16);
 from_sql_integral!(u32);
+#[cfg(feature = "fallible_uint")]
 from_sql_integral!(u64);
+#[cfg(feature = "fallible_uint")]
 from_sql_integral!(usize);
 
 from_sql_integral!(non_zero std::num::NonZeroIsize, isize);
@@ -124,13 +138,14 @@ from_sql_integral!(non_zero std::num::NonZeroI16, i16);
 from_sql_integral!(non_zero std::num::NonZeroI32, i32);
 from_sql_integral!(non_zero std::num::NonZeroI64, i64);
 #[cfg(feature = "i128_blob")]
-#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 from_sql_integral!(non_zero std::num::NonZeroI128, i128);
 
+#[cfg(feature = "fallible_uint")]
 from_sql_integral!(non_zero std::num::NonZeroUsize, usize);
 from_sql_integral!(non_zero std::num::NonZeroU8, u8);
 from_sql_integral!(non_zero std::num::NonZeroU16, u16);
 from_sql_integral!(non_zero std::num::NonZeroU32, u32);
+#[cfg(feature = "fallible_uint")]
 from_sql_integral!(non_zero std::num::NonZeroU64, u64);
 // std::num::NonZeroU128 is not supported since u128 isn't either
 
@@ -238,7 +253,6 @@ impl<const N: usize> FromSql for [u8; N] {
 }
 
 #[cfg(feature = "i128_blob")]
-#[cfg_attr(docsrs, doc(cfg(feature = "i128_blob")))]
 impl FromSql for i128 {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
@@ -248,7 +262,6 @@ impl FromSql for i128 {
 }
 
 #[cfg(feature = "uuid")]
-#[cfg_attr(docsrs, doc(cfg(feature = "uuid")))]
 impl FromSql for uuid::Uuid {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
@@ -287,7 +300,10 @@ impl FromSql for Value {
 
 #[cfg(test)]
 mod test {
-    use super::FromSql;
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::{FromSql, FromSqlError};
     use crate::{Connection, Error, Result};
     use std::borrow::Cow;
     use std::rc::Rc;
@@ -385,11 +401,13 @@ mod test {
             &[0, -2, -1, 4_294_967_296],
             &[1, 4_294_967_295]
         );
+        #[cfg(feature = "fallible_uint")]
         check_ranges!(
             std::num::NonZeroU64,
             &[0, -2, -1, -4_294_967_296],
             &[1, 4_294_967_295, i64::MAX as u64]
         );
+        #[cfg(feature = "fallible_uint")]
         check_ranges!(
             std::num::NonZeroUsize,
             &[0, -2, -1, -4_294_967_296],
@@ -426,6 +444,10 @@ mod test {
         let db = Connection::open_in_memory()?;
 
         assert_eq!(
+            db.query_row("SELECT 'text'", [], |r| r.get::<_, Box<str>>(0)),
+            Ok(Box::from("text")),
+        );
+        assert_eq!(
             db.query_row("SELECT 'Some string slice!'", [], |r| r
                 .get::<_, Rc<str>>(0)),
             Ok(Rc::from("Some string slice!")),
@@ -455,5 +477,25 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn from_sql_error() {
+        use std::error::Error as _;
+        assert_ne!(FromSqlError::InvalidType, FromSqlError::OutOfRange(0));
+        assert_ne!(FromSqlError::OutOfRange(0), FromSqlError::OutOfRange(1));
+        assert_ne!(
+            FromSqlError::InvalidBlobSize {
+                expected_size: 0,
+                blob_size: 0
+            },
+            FromSqlError::InvalidBlobSize {
+                expected_size: 0,
+                blob_size: 1
+            }
+        );
+        assert!(FromSqlError::InvalidType.source().is_none());
+        let err = std::io::Error::from(std::io::ErrorKind::UnexpectedEof);
+        assert!(FromSqlError::Other(Box::new(err)).source().is_some());
     }
 }

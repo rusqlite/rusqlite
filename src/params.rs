@@ -1,4 +1,4 @@
-use crate::{Result, Statement, ToSql};
+use crate::{BindIndex, Result, Statement, ToSql};
 
 mod sealed {
     /// This trait exists just to ensure that the only impls of `trait Params`
@@ -217,8 +217,8 @@ impl Params for &[&dyn ToSql] {
     }
 }
 
-impl Sealed for &[(&str, &dyn ToSql)] {}
-impl Params for &[(&str, &dyn ToSql)] {
+impl<S: BindIndex, T: ToSql> Sealed for &[(S, T)] {}
+impl<S: BindIndex, T: ToSql> Params for &[(S, T)] {
     #[inline]
     fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
         stmt.bind_parameters_named(self)
@@ -298,8 +298,8 @@ macro_rules! impl_for_array_ref {
                 stmt.bind_parameters(self)
             }
         }
-        impl<T: ToSql + ?Sized> Sealed for &[(&str, &T); $N] {}
-        impl<T: ToSql + ?Sized> Params for &[(&str, &T); $N] {
+        impl<S: BindIndex, T: ToSql + ?Sized> Sealed for &[(S, &T); $N] {}
+        impl<S: BindIndex, T: ToSql + ?Sized> Params for &[(S, &T); $N] {
             fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
                 stmt.bind_parameters_named(self)
             }

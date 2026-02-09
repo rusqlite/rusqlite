@@ -1,10 +1,12 @@
+use std::ffi::{c_char, CStr};
+use std::ptr;
 use std::str;
 
-use crate::{Error, Result, Statement};
+use crate::ffi;
+use crate::{Connection, Error, Name, Result, Statement};
 
 /// Information about a column of a SQLite query.
 #[cfg(feature = "column_decltype")]
-#[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
 #[derive(Debug)]
 pub struct Column<'stmt> {
     name: &'stmt str,
@@ -12,7 +14,6 @@ pub struct Column<'stmt> {
 }
 
 #[cfg(feature = "column_decltype")]
-#[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
 impl Column<'_> {
     /// Returns the name of the column.
     #[inline]
@@ -26,6 +27,47 @@ impl Column<'_> {
     #[must_use]
     pub fn decl_type(&self) -> Option<&str> {
         self.decl_type
+    }
+}
+
+/// Metadata about the origin of a column of a SQLite query
+#[cfg(feature = "column_metadata")]
+#[derive(Debug)]
+pub struct ColumnMetadata<'stmt> {
+    name: &'stmt str,
+    database_name: Option<&'stmt str>,
+    table_name: Option<&'stmt str>,
+    origin_name: Option<&'stmt str>,
+}
+
+#[cfg(feature = "column_metadata")]
+impl ColumnMetadata<'_> {
+    #[inline]
+    #[must_use]
+    /// Returns the name of the column in the query results
+    pub fn name(&self) -> &str {
+        self.name
+    }
+
+    #[inline]
+    #[must_use]
+    /// Returns the database name from which the column originates
+    pub fn database_name(&self) -> Option<&str> {
+        self.database_name
+    }
+
+    #[inline]
+    #[must_use]
+    /// Returns the table name from which the column originates
+    pub fn table_name(&self) -> Option<&str> {
+        self.table_name
+    }
+
+    #[inline]
+    #[must_use]
+    /// Returns the column name from which the column originates
+    pub fn origin_name(&self) -> Option<&str> {
+        self.origin_name
     }
 }
 
@@ -143,8 +185,7 @@ impl Statement<'_> {
     /// sure that current statement has already been stepped once before
     /// calling this method.
     #[cfg(feature = "column_decltype")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "column_decltype")))]
-    pub fn columns(&self) -> Vec<Column> {
+    pub fn columns(&self) -> Vec<Column<'_>> {
         let n = self.column_count();
         let mut cols = Vec::with_capacity(n);
         for i in 0..n {
@@ -158,10 +199,205 @@ impl Statement<'_> {
         }
         cols
     }
+
+    /// Returns the names of the database, table, and row from which
+    /// each column of this query's results originate.
+    ///
+    /// Computed or otherwise derived columns will have None values for these fields.
+    #[cfg(feature = "column_metadata")]
+    pub fn columns_with_metadata(&self) -> Vec<ColumnMetadata<'_>> {
+        let n = self.column_count();
+        let mut col_mets = Vec::with_capacity(n);
+        for i in 0..n {
+            let name = self.column_name_unwrap(i);
+            let db_slice = self.stmt.column_database_name(i);
+            let tbl_slice = self.stmt.column_table_name(i);
+            let origin_slice = self.stmt.column_origin_name(i);
+            col_mets.push(ColumnMetadata {
+                name,
+                database_name: db_slice.map(|s| {
+                    s.to_str()
+                        .expect("Invalid UTF-8 sequence in column db name")
+                }),
+                table_name: tbl_slice.map(|s| {
+                    s.to_str()
+                        .expect("Invalid UTF-8 sequence in column table name")
+                }),
+                origin_name: origin_slice.map(|s| {
+                    s.to_str()
+                        .expect("Invalid UTF-8 sequence in column origin name")
+                }),
+            })
+        }
+        col_mets
+    }
+
+    /// Extract metadata of column at specified index
+    ///
+    /// Returns:
+    /// - database name
+    /// - table name
+    /// - original column name
+    /// - declared data type
+    /// - name of default collation sequence
+    /// - True if column has a NOT NULL constraint
+    /// - True if column is part of the PRIMARY KEY
+    /// - True if column is AUTOINCREMENT
+    ///
+    /// See [Connection::column_metadata]
+    #[cfg(feature = "column_metadata")]
+    #[expect(clippy::type_complexity)]
+    pub fn column_metadata(
+        &self,
+        col: usize,
+    ) -> Result<
+        Option<(
+            &CStr,
+            &CStr,
+            &CStr,
+            Option<&CStr>,
+            Option<&CStr>,
+            bool,
+            bool,
+            bool,
+        )>,
+    > {
+        let db_name = self.stmt.column_database_name(col);
+        let table_name = self.stmt.column_table_name(col);
+        let origin_name = self.stmt.column_origin_name(col);
+        if db_name.is_none() || table_name.is_none() || origin_name.is_none() {
+            return Ok(None);
+        }
+        let (data_type, coll_seq, not_null, primary_key, auto_inc) =
+            self.conn
+                .column_metadata(db_name, table_name.unwrap(), origin_name.unwrap())?;
+        Ok(Some((
+            db_name.unwrap(),
+            table_name.unwrap(),
+            origin_name.unwrap(),
+            data_type,
+            coll_seq,
+            not_null,
+            primary_key,
+            auto_inc,
+        )))
+    }
+}
+
+impl Connection {
+    /// Check if `table_name`.`column_name` exists.
+    ///
+    /// `db_name` is main, temp, the name in ATTACH, or `None` to search all databases.
+    pub fn column_exists<N: Name>(
+        &self,
+        db_name: Option<N>,
+        table_name: N,
+        column_name: N,
+    ) -> Result<bool> {
+        self.exists(db_name, table_name, Some(column_name))
+    }
+
+    /// Check if `table_name` exists.
+    ///
+    /// `db_name` is main, temp, the name in ATTACH, or `None` to search all databases.
+    pub fn table_exists<N: Name>(&self, db_name: Option<N>, table_name: N) -> Result<bool> {
+        self.exists(db_name, table_name, None)
+    }
+
+    /// Extract metadata of column at specified index
+    ///
+    /// Returns:
+    /// - declared data type
+    /// - name of default collation sequence
+    /// - True if column has a NOT NULL constraint
+    /// - True if column is part of the PRIMARY KEY
+    /// - True if column is AUTOINCREMENT
+    #[expect(clippy::type_complexity)]
+    pub fn column_metadata<N: Name>(
+        &self,
+        db_name: Option<N>,
+        table_name: N,
+        column_name: N,
+    ) -> Result<(Option<&CStr>, Option<&CStr>, bool, bool, bool)> {
+        let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
+        let db_name = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let table_name = table_name.as_cstr()?;
+        let column_name = column_name.as_cstr()?;
+
+        let mut data_type: *const c_char = ptr::null_mut();
+        let mut coll_seq: *const c_char = ptr::null_mut();
+        let mut not_null = 0;
+        let mut primary_key = 0;
+        let mut auto_inc = 0;
+
+        self.decode_result(unsafe {
+            ffi::sqlite3_table_column_metadata(
+                self.handle(),
+                db_name,
+                table_name.as_ptr(),
+                column_name.as_ptr(),
+                &mut data_type,
+                &mut coll_seq,
+                &mut not_null,
+                &mut primary_key,
+                &mut auto_inc,
+            )
+        })?;
+
+        Ok((
+            if data_type.is_null() {
+                None
+            } else {
+                Some(unsafe { CStr::from_ptr(data_type) })
+            },
+            if coll_seq.is_null() {
+                None
+            } else {
+                Some(unsafe { CStr::from_ptr(coll_seq) })
+            },
+            not_null != 0,
+            primary_key != 0,
+            auto_inc != 0,
+        ))
+    }
+
+    fn exists<N: Name>(
+        &self,
+        db_name: Option<N>,
+        table_name: N,
+        column_name: Option<N>,
+    ) -> Result<bool> {
+        let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
+        let db_name = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let table_name = table_name.as_cstr()?;
+        let cn = column_name.as_ref().map(N::as_cstr).transpose()?;
+        let column_name = cn.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        let r = unsafe {
+            ffi::sqlite3_table_column_metadata(
+                self.handle(),
+                db_name,
+                table_name.as_ptr(),
+                column_name,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
+        };
+        match r {
+            ffi::SQLITE_OK => Ok(true),
+            ffi::SQLITE_ERROR => Ok(false),
+            _ => self.db.borrow().decode_result(r).map(|_| false),
+        }
+    }
 }
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{Connection, Result};
 
     #[test]
@@ -189,6 +425,41 @@ mod test {
                 Some("text".to_owned()),
             ]
         );
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "column_metadata")]
+    fn test_columns_with_metadata() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let query = db.prepare("SELECT *, 1 FROM sqlite_master")?;
+
+        let col_mets = query.columns_with_metadata();
+
+        assert_eq!(col_mets.len(), 6);
+
+        for col in col_mets.iter().take(5) {
+            assert_eq!(&col.database_name(), &Some("main"));
+            assert_eq!(&col.table_name(), &Some("sqlite_master"));
+        }
+
+        assert!(col_mets[5].database_name().is_none());
+        assert!(col_mets[5].table_name().is_none());
+        assert!(col_mets[5].origin_name().is_none());
+
+        let col_origins: Vec<Option<&str>> = col_mets.iter().map(|col| col.origin_name()).collect();
+
+        assert_eq!(
+            &col_origins[..5],
+            &[
+                Some("type"),
+                Some("name"),
+                Some("tbl_name"),
+                Some("rootpage"),
+                Some("sql"),
+            ]
+        );
+
         Ok(())
     }
 
@@ -246,6 +517,60 @@ mod test {
         // column name is not refreshed until statement is re-prepared
         let same_column_name = stmt.column_name(0)?;
         assert_eq!(same_column_name, column_name);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "column_metadata")]
+    fn stmt_column_metadata() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let query = db.prepare("SELECT *, 1 FROM sqlite_master")?;
+        let (db_name, table_name, col_name, data_type, coll_seq, not_null, primary_key, auto_inc) =
+            query.column_metadata(0)?.unwrap();
+        assert_eq!(db_name, crate::MAIN_DB);
+        assert_eq!(table_name, c"sqlite_master");
+        assert_eq!(col_name, c"type");
+        assert_eq!(data_type, Some(c"TEXT"));
+        assert_eq!(coll_seq, Some(c"BINARY"));
+        assert!(!not_null);
+        assert!(!primary_key);
+        assert!(!auto_inc);
+        assert!(query.column_metadata(5)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn column_exists() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        assert!(db.column_exists(None, c"sqlite_master", c"type")?);
+        assert!(db.column_exists(Some(crate::TEMP_DB), c"sqlite_master", c"type")?);
+        assert!(!db.column_exists(Some(crate::MAIN_DB), c"sqlite_temp_master", c"type")?);
+        Ok(())
+    }
+
+    #[test]
+    fn table_exists() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        assert!(db.table_exists(None, c"sqlite_master")?);
+        assert!(db.table_exists(Some(crate::TEMP_DB), c"sqlite_master")?);
+        assert!(!db.table_exists(Some(crate::MAIN_DB), c"sqlite_temp_master")?);
+        Ok(())
+    }
+
+    #[test]
+    fn column_metadata() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let (data_type, coll_seq, not_null, primary_key, auto_inc) =
+            db.column_metadata(None, c"sqlite_master", c"type")?;
+        assert_eq!(
+            data_type.map(|cs| cs.to_str().unwrap().to_ascii_uppercase()),
+            Some("TEXT".to_owned())
+        );
+        assert_eq!(coll_seq, Some(c"BINARY"));
+        assert!(!not_null);
+        assert!(!primary_key);
+        assert!(!auto_inc);
+        assert!(db.column_metadata(None, c"sqlite_master", c"foo").is_err());
         Ok(())
     }
 }

@@ -1,7 +1,7 @@
 [package]
 name = "rusqlite"
 # Note: Update version in README.md when you change this.
-version = "0.33.0"
+version = "0.38.0"
 authors = ["The rusqlite developers"]
 edition = "2021"
 description = "Ergonomic wrapper for SQLite"
@@ -19,6 +19,7 @@ exclude = [
     "/Changelog.md",
     "/clippy.toml",
     "/codecov.yml",
+    "**/*.sh",
 ]
 
 [badges]
@@ -33,56 +34,75 @@ name = "rusqlite"
 members = ["libsqlite3-sys"]
 
 [features]
+# if not SQLITE_OMIT_LOAD_EXTENSION
 load_extension = []
-# hot-backup interface: 3.6.11 (2009-02-18)
+# hot-backup interface
 backup = []
-# sqlite3_blob_reopen: 3.7.4
+# if not SQLITE_OMIT_INCRBLOB
+# sqlite3_blob
 blob = []
+# Prepared statements cache by connection (like https://www.sqlite.org/tclsqlite.html#cache)
+cache = ["hashlink"]
+# sqlite3_create_collation_v2
 collation = []
-# sqlite3_create_function_v2: 3.7.3 (2010-10-08)
+# sqlite3_create_function_v2
 functions = []
-# sqlite3_log: 3.6.23 (2010-03-09)
+# sqlite3_log / sqlite3_trace_v2
 trace = []
+# Use bundled SQLite sources (instead of the one provided by your OS / distribution)
 bundled = ["libsqlite3-sys/bundled", "modern_sqlite"]
+# Use SQLCipher instead of SQLite
 bundled-sqlcipher = ["libsqlite3-sys/bundled-sqlcipher", "bundled"]
 bundled-sqlcipher-vendored-openssl = [
     "libsqlite3-sys/bundled-sqlcipher-vendored-openssl",
     "bundled-sqlcipher",
 ]
-buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen"]
+buildtime_bindgen = ["libsqlite3-sys/buildtime_bindgen", "sqlite-wasm-rs/bindgen"]
+# sqlite3_limit
 limits = []
+# Used to generate a cdylib
 loadable_extension = ["libsqlite3-sys/loadable_extension"]
+# sqlite3_commit_hook, sqlite3_rollback_hook, ...
 hooks = []
+# if SQLITE_ENABLE_PREUPDATE_HOOK
 preupdate_hook = ["libsqlite3-sys/preupdate_hook", "hooks"]
+# u64, usize, NonZeroU64, NonZeroUsize
+fallible_uint = []
 i128_blob = []
 sqlcipher = ["libsqlite3-sys/sqlcipher"]
+# SQLITE_ENABLE_UNLOCK_NOTIFY
 unlock_notify = ["libsqlite3-sys/unlock_notify"]
-# xSavepoint, xRelease and xRollbackTo: 3.7.7 (2011-06-23)
+# if not SQLITE_OMIT_VIRTUALTABLE
+# sqlite3_vtab
 vtab = []
 csvtab = ["csv", "vtab"]
-# pointer passing interfaces: 3.20.0
-array = ["vtab", "modern_sqlite"]
-# session extension: 3.13.0
+# Port of Carray() table-valued function
+array = ["vtab"]
+# if SQLITE_ENABLE_SESSION
+# session extension
 session = ["libsqlite3-sys/session", "hooks"]
-# window functions: 3.25.0
-window = ["functions", "modern_sqlite"]
-# 3.9.0
+# if not SQLITE_OMIT_WINDOWFUNC
+# sqlite3_create_window_function
+window = ["functions"]
+# Port of generate_series table-valued function
 series = ["vtab"]
 # check for invalid query.
 extra_check = []
-# ]3.14.0, last]
+# ]3.34.1, last]
 modern_sqlite = ["libsqlite3-sys/bundled_bindings"]
 in_gecko = ["modern_sqlite", "libsqlite3-sys/in_gecko"]
 bundled-windows = ["libsqlite3-sys/bundled-windows"]
 # Build bundled sqlite with -fsanitize=address
 with-asan = ["libsqlite3-sys/with-asan"]
+# if SQLITE_ENABLE_COLUMN_METADATA
+column_metadata = ["libsqlite3-sys/column_metadata"]
+# if not SQLITE_OMIT_DECLTYPE
 column_decltype = []
 wasm32-wasi-vfs = ["libsqlite3-sys/wasm32-wasi-vfs"]
-# 3.23.0
-serialize = ["modern_sqlite"]
+# if not SQLITE_OMIT_DESERIALIZE
+serialize = []
 # pointer passing interfaces: 3.20.0
-pointer = ["modern_sqlite"]
-
+pointer = []
 
 # Helper feature for enabling most non-build-related optional features
 # or dependencies (except `session`). This is useful for running tests / clippy
@@ -95,6 +115,7 @@ modern-full = [
     "modern_sqlite",
     "chrono",
     "collation",
+    "column_metadata",
     "column_decltype",
     "csvtab",
     "extra_check",
@@ -117,29 +138,56 @@ modern-full = [
 ]
 
 bundled-full = ["modern-full", "bundled"]
+default = ["cache"]
 
 [dependencies]
-jiff = { version = "0.1", optional = true, default-features = false, features = [
+# Jiff Date/Time/Timestamp persistence
+jiff = { version = "0.2", optional = true, default-features = false, features = [
     "std",
 ] }
+# Date/Time/Timestamp persistence
 time = { version = "0.3.36", features = [
     "formatting",
     "macros",
     "parsing",
 ], optional = true }
 bitflags = "2.6.0"
-hashlink = "0.10"
+# LRU cache of statement
+hashlink = { version = "0.11", optional = true }
+# Chrono Date/Time/Timestamp persistence
 chrono = { version = "0.4.38", optional = true, default-features = false, features = [
     "clock",
 ] }
+# JSON persistence
 serde_json = { version = "1.0", optional = true }
+# Virtual table
 csv = { version = "1.1", optional = true }
+# Url persistence
 url = { version = "2.1", optional = true }
 fallible-iterator = "0.3"
 fallible-streaming-iterator = "0.1"
+# Uuid persistence
 uuid = { version = "1.0", optional = true }
 smallvec = "1.6.1"
-rusqlite-macros = { path = "rusqlite-macros", version = "0.4.0", optional = true }
+# WIP comptime checks
+rusqlite-macros = { path = "rusqlite-macros", version = "0.4.2", optional = true }
+
+[target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
+libsqlite3-sys = { path = "libsqlite3-sys", version = "0.36.0" }
+
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
+sqlite-wasm-rs = { version = "0.5.1", default-features = false }
+chrono = { version = "0.4.38", optional = true, default-features = false, features = ["wasmbind"] }
+jiff = { version = "0.2", optional = true, default-features = false, features = ["js"] }
+time = { version = "0.3.36", optional = true, features = ["wasm-bindgen"] }
+uuid = { version = "1.0", optional = true, features = ["js"] }
+
+[target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
+# Something is dependent on them, we use feature to override it.
+uuid = { version = "1.0", features = ["js"] }
+getrandom = { version = "0.4", features = ["wasm_js"] }
+wasm-bindgen-test = "0.3.54"
+wasm-bindgen = "0.2.104"
 
 [dev-dependencies]
 doc-comment = "0.3"
@@ -151,10 +199,6 @@ self_cell = "1.1.0"
 # Use `bencher` over criterion because it builds much faster,
 # and we don't have many benchmarks
 bencher = "0.1"
-
-[dependencies.libsqlite3-sys]
-path = "libsqlite3-sys"
-version = "0.31.0"
 
 [[test]]
 name = "auto_ext"
@@ -189,7 +233,7 @@ required-features = ["load_extension", "bundled", "functions", "trace"]
 [package.metadata.docs.rs]
 features = ["modern-full", "rusqlite-macros"]
 all-features = false
-no-default-features = true
+no-default-features = false
 default-target = "x86_64-unknown-linux-gnu"
 rustdoc-args = ["--cfg", "docsrs"]
 

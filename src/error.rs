@@ -2,8 +2,8 @@ use crate::types::FromSqlError;
 use crate::types::Type;
 use crate::{errmsg_to_string, ffi, Result};
 use std::error;
+use std::ffi::{c_char, c_int, NulError};
 use std::fmt;
-use std::os::raw::c_int;
 use std::path::PathBuf;
 use std::str;
 
@@ -33,7 +33,7 @@ pub enum Error {
 
     /// Error converting a string to a C-compatible string because it contained
     /// an embedded nul.
-    NulError(std::ffi::NulError),
+    NulError(NulError),
 
     /// Error when using SQL named parameters and passing a parameter name not
     /// present in the SQL.
@@ -49,6 +49,10 @@ pub enum Error {
     /// Error when a query that was expected to return at least one row (e.g.,
     /// for [`query_row`](crate::Connection::query_row)) did not return any.
     QueryReturnedNoRows,
+
+    /// Error when a query that was expected to return only one row (e.g.,
+    /// for [`query_one`](crate::Connection::query_one)) did return more than one.
+    QueryReturnedMoreThanOneRow,
 
     /// Error when the value of a particular column is requested, but the index
     /// is out of range for the statement.
@@ -71,18 +75,15 @@ pub enum Error {
     /// [`functions::Context::get`](crate::functions::Context::get) when the
     /// function argument cannot be converted to the requested type.
     #[cfg(feature = "functions")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
     InvalidFunctionParameterType(usize, Type),
     /// Error returned by [`vtab::Values::get`](crate::vtab::Values::get) when
     /// the filter argument cannot be converted to the requested type.
     #[cfg(feature = "vtab")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "vtab")))]
     InvalidFilterParameterType(usize, Type),
 
     /// An error case available for implementors of custom user functions (e.g.,
     /// [`create_scalar_function`](crate::Connection::create_scalar_function)).
     #[cfg(feature = "functions")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
     UserFunctionError(Box<dyn error::Error + Send + Sync + 'static>),
 
     /// Error available for the implementors of the
@@ -95,7 +96,6 @@ pub enum Error {
     /// An error case available for implementors of custom modules (e.g.,
     /// [`create_module`](crate::Connection::create_module)).
     #[cfg(feature = "vtab")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "vtab")))]
     ModuleError(String),
 
     /// An unwinding panic occurs in a UDF (user-defined function).
@@ -106,7 +106,6 @@ pub enum Error {
     /// retrieve data of a different type than what had been stored using
     /// [`Context::set_aux`](crate::functions::Context::set_aux).
     #[cfg(feature = "functions")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "functions")))]
     GetAuxWrongType,
 
     /// Error when the SQL contains multiple statements.
@@ -121,11 +120,9 @@ pub enum Error {
     /// [`Blob::raw_read_at_exact`](crate::blob::Blob::raw_read_at_exact) will
     /// return it if the blob has insufficient data.
     #[cfg(feature = "blob")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "blob")))]
     BlobSizeError,
     /// Error referencing a specific token in the input SQL
     #[cfg(feature = "modern_sqlite")] // 3.38.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     SqlInputError {
         /// error code
         error: ffi::Error,
@@ -138,12 +135,10 @@ pub enum Error {
     },
     /// Loadable extension initialization error
     #[cfg(feature = "loadable_extension")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "loadable_extension")))]
     InitError(ffi::InitError),
     /// Error when the schema of a particular database is requested, but the index
     /// is out of range.
     #[cfg(feature = "modern_sqlite")] // 3.39.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
     InvalidDatabaseIndex(usize),
 }
 
@@ -161,6 +156,7 @@ impl PartialEq for Error {
             (Self::InvalidPath(p1), Self::InvalidPath(p2)) => p1 == p2,
             (Self::ExecuteReturnedResults, Self::ExecuteReturnedResults) => true,
             (Self::QueryReturnedNoRows, Self::QueryReturnedNoRows) => true,
+            (Self::QueryReturnedMoreThanOneRow, Self::QueryReturnedMoreThanOneRow) => true,
             (Self::InvalidColumnIndex(i1), Self::InvalidColumnIndex(i2)) => i1 == i2,
             (Self::InvalidColumnName(n1), Self::InvalidColumnName(n2)) => n1 == n2,
             (Self::InvalidColumnType(i1, n1, t1), Self::InvalidColumnType(i2, n2, t2)) => {
@@ -219,9 +215,9 @@ impl From<str::Utf8Error> for Error {
     }
 }
 
-impl From<std::ffi::NulError> for Error {
+impl From<NulError> for Error {
     #[cold]
-    fn from(err: std::ffi::NulError) -> Self {
+    fn from(err: NulError) -> Self {
         Self::NulError(err)
     }
 }
@@ -287,6 +283,7 @@ impl fmt::Display for Error {
                 write!(f, "Execute returned results - did you mean to call query?")
             }
             Self::QueryReturnedNoRows => write!(f, "Query returned no rows"),
+            Self::QueryReturnedMoreThanOneRow => write!(f, "Query returned more than one row"),
             Self::InvalidColumnIndex(i) => write!(f, "Invalid column index: {i}"),
             Self::InvalidColumnName(ref name) => write!(f, "Invalid column name: {name}"),
             Self::InvalidColumnType(i, ref name, ref t) => {
@@ -345,6 +342,7 @@ impl error::Error for Error {
             | Self::InvalidParameterName(_)
             | Self::ExecuteReturnedResults
             | Self::QueryReturnedNoRows
+            | Self::QueryReturnedMoreThanOneRow
             | Self::InvalidColumnIndex(_)
             | Self::InvalidColumnName(_)
             | Self::InvalidColumnType(..)
@@ -493,7 +491,7 @@ pub fn check(code: c_int) -> Result<()> {
 /// Transform Rust error to SQLite error (message and code).
 /// # Safety
 /// This function is unsafe because it uses raw pointer
-pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut std::os::raw::c_char) -> c_int {
+pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut c_char) -> c_int {
     use crate::util::alloc;
     match e {
         Error::SqliteFailure(err, s) => {

@@ -375,7 +375,6 @@ impl Drop for Savepoint<'_> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 #[cfg(feature = "modern_sqlite")] // 3.37.0
-#[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
 pub enum TransactionState {
     /// Equivalent to `SQLITE_TXN_NONE`
     None,
@@ -511,10 +510,9 @@ impl Connection {
 
     /// Determine the transaction state of a database
     #[cfg(feature = "modern_sqlite")] // 3.37.0
-    #[cfg_attr(docsrs, doc(cfg(feature = "modern_sqlite")))]
-    pub fn transaction_state(
+    pub fn transaction_state<N: crate::Name>(
         &self,
-        db_name: Option<crate::DatabaseName<'_>>,
+        db_name: Option<N>,
     ) -> Result<TransactionState> {
         self.db.borrow().txn_state(db_name)
     }
@@ -550,6 +548,9 @@ impl Connection {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::DropBehavior;
     use crate::{Connection, Error, Result};
 
@@ -574,7 +575,7 @@ mod test {
         }
         {
             let tx = db.transaction()?;
-            assert_eq!(2i32, tx.one_column::<i32>("SELECT SUM(x) FROM foo")?);
+            assert_eq!(2, tx.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         }
         Ok(())
     }
@@ -610,7 +611,7 @@ mod test {
             tx.commit()?;
         }
 
-        assert_eq!(2i32, db.one_column::<i32>("SELECT SUM(x) FROM foo")?);
+        assert_eq!(2, db.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         Ok(())
     }
 
@@ -635,7 +636,7 @@ mod test {
         }
         {
             let tx = db.transaction()?;
-            assert_eq!(6i32, tx.one_column::<i32>("SELECT SUM(x) FROM foo")?);
+            assert_eq!(6, tx.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         }
         Ok(())
     }
@@ -778,8 +779,7 @@ mod test {
     }
 
     fn assert_current_sum(x: i32, conn: &Connection) -> Result<()> {
-        let i = conn.one_column::<i32>("SELECT SUM(x) FROM foo")?;
-        assert_eq!(x, i);
+        assert_eq!(x, conn.one_column::<i32, _>("SELECT SUM(x) FROM foo", [])?);
         Ok(())
     }
 
@@ -787,19 +787,16 @@ mod test {
     #[cfg(feature = "modern_sqlite")]
     fn txn_state() -> Result<()> {
         use super::TransactionState;
-        use crate::DatabaseName;
+        use crate::MAIN_DB;
         let db = Connection::open_in_memory()?;
-        assert_eq!(
-            TransactionState::None,
-            db.transaction_state(Some(DatabaseName::Main))?
-        );
-        assert_eq!(TransactionState::None, db.transaction_state(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state(Some(MAIN_DB))?);
+        assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
         db.execute_batch("BEGIN")?;
-        assert_eq!(TransactionState::None, db.transaction_state(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
         let _: i32 = db.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+        assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
         db.pragma_update(None, "user_version", 1)?;
-        assert_eq!(TransactionState::Write, db.transaction_state(None)?);
+        assert_eq!(TransactionState::Write, db.transaction_state::<&str>(None)?);
         db.execute_batch("ROLLBACK")?;
         Ok(())
     }
@@ -812,17 +809,17 @@ mod test {
         db.execute_batch("CREATE TABLE t(i UNIQUE);")?;
         assert!(db.is_autocommit());
         let mut stmt = db.prepare("SELECT name FROM sqlite_master")?;
-        assert_eq!(TransactionState::None, db.transaction_state(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
         {
             let mut rows = stmt.query([])?;
             assert!(rows.next()?.is_some()); // start reading
-            assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+            assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
             db.execute("INSERT INTO t VALUES (1)", [])?; // auto-commit
-            assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+            assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
             assert!(rows.next()?.is_some()); // still reading
-            assert_eq!(TransactionState::Read, db.transaction_state(None)?);
+            assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
             assert!(rows.next()?.is_none()); // end
-            assert_eq!(TransactionState::None, db.transaction_state(None)?);
+            assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
         }
         Ok(())
     }

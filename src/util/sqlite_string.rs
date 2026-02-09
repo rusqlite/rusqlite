@@ -3,8 +3,8 @@
 // still warn for anything that's not used by either, though.
 #![cfg_attr(not(feature = "vtab"), allow(dead_code))]
 use crate::ffi;
+use std::ffi::{c_char, CStr};
 use std::marker::PhantomData;
-use std::os::raw::{c_char, c_int};
 use std::ptr::NonNull;
 
 // Space to hold this string must be obtained
@@ -15,7 +15,7 @@ pub(crate) fn alloc(s: &str) -> *mut c_char {
 
 /// A string we own that's allocated on the SQLite heap. Automatically calls
 /// `sqlite3_free` when dropped, unless `into_raw` (or `into_inner`) is called
-/// on it. If constructed from a rust string, `sqlite3_malloc` is used.
+/// on it. If constructed from a rust string, `sqlite3_malloc64` is used.
 ///
 /// It has identical representation to a nonnull `*mut c_char`, so you can use
 /// it transparently as one. It's nonnull, so Option<SqliteMallocString> can be
@@ -41,7 +41,7 @@ pub(crate) struct SqliteMallocString {
 
 impl SqliteMallocString {
     /// SAFETY: Caller must be certain that `m` a nul-terminated c string
-    /// allocated by `sqlite3_malloc`, and that SQLite expects us to free it!
+    /// allocated by `sqlite3_malloc64`, and that SQLite expects us to free it!
     #[inline]
     pub(crate) unsafe fn from_raw_nonnull(ptr: NonNull<c_char>) -> Self {
         Self {
@@ -51,7 +51,7 @@ impl SqliteMallocString {
     }
 
     /// SAFETY: Caller must be certain that `m` a nul-terminated c string
-    /// allocated by `sqlite3_malloc`, and that SQLite expects us to free it!
+    /// allocated by `sqlite3_malloc64`, and that SQLite expects us to free it!
     #[inline]
     pub(crate) unsafe fn from_raw(ptr: *mut c_char) -> Option<Self> {
         NonNull::new(ptr).map(|p| Self::from_raw_nonnull(p))
@@ -81,8 +81,8 @@ impl SqliteMallocString {
     }
 
     #[inline]
-    pub(crate) fn as_cstr(&self) -> &std::ffi::CStr {
-        unsafe { std::ffi::CStr::from_ptr(self.as_ptr()) }
+    pub(crate) fn as_cstr(&self) -> &CStr {
+        unsafe { CStr::from_ptr(self.as_ptr()) }
     }
 
     #[inline]
@@ -115,14 +115,14 @@ impl SqliteMallocString {
         let bytes: &[u8] = s.as_ref().as_bytes();
         let src_ptr: *const c_char = bytes.as_ptr().cast();
         let src_len = bytes.len();
-        let maybe_len_plus_1 = s.len().checked_add(1).and_then(|v| c_int::try_from(v).ok());
+        let maybe_len_plus_1 = s.len().checked_add(1).and_then(|v| v.try_into().ok());
         unsafe {
             let res_ptr = maybe_len_plus_1
                 .and_then(|len_to_alloc| {
                     // `>` because we added 1.
                     debug_assert!(len_to_alloc > 0);
                     debug_assert_eq!((len_to_alloc - 1) as usize, src_len);
-                    NonNull::new(ffi::sqlite3_malloc(len_to_alloc).cast::<c_char>())
+                    NonNull::new(ffi::sqlite3_malloc64(len_to_alloc).cast::<c_char>())
                 })
                 .unwrap_or_else(|| {
                     use std::alloc::{handle_alloc_error, Layout};
@@ -144,7 +144,7 @@ impl SqliteMallocString {
             let buf: *mut c_char = res_ptr.as_ptr().cast::<c_char>();
             src_ptr.copy_to_nonoverlapping(buf, src_len);
             buf.add(src_len).write(0);
-            debug_assert_eq!(std::ffi::CStr::from_ptr(res_ptr.as_ptr()).to_bytes(), bytes);
+            debug_assert_eq!(CStr::from_ptr(res_ptr.as_ptr()).to_bytes(), bytes);
             Self::from_raw_nonnull(res_ptr)
         }
     }
@@ -164,20 +164,11 @@ impl Drop for SqliteMallocString {
     }
 }
 
-impl std::fmt::Debug for SqliteMallocString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_string_lossy().fmt(f)
-    }
-}
-
-impl std::fmt::Display for SqliteMallocString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.to_string_lossy().fmt(f)
-    }
-}
-
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::*;
     #[test]
     fn test_from_str() {
@@ -223,17 +214,17 @@ mod test {
             for (i, s) in v.chunks_mut(2).enumerate() {
                 let s0 = std::mem::replace(&mut s[0], std::ptr::null_mut());
                 let s1 = std::mem::replace(&mut s[1], std::ptr::null_mut());
-                assert_eq!(
-                    std::ffi::CStr::from_ptr(s0).to_str().unwrap(),
-                    &i.to_string()
-                );
-                assert_eq!(
-                    std::ffi::CStr::from_ptr(s1).to_str().unwrap(),
-                    &format!("abc {i} 😀")
-                );
+                assert_eq!(CStr::from_ptr(s0).to_str().unwrap(), &i.to_string());
+                assert_eq!(CStr::from_ptr(s1).to_str().unwrap(), &format!("abc {i} 😀"));
                 let _ = SqliteMallocString::from_raw(s0).unwrap();
                 let _ = SqliteMallocString::from_raw(s1).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn test_alloc() {
+        let err = alloc("error");
+        unsafe { ffi::sqlite3_free(err.cast()) };
     }
 }

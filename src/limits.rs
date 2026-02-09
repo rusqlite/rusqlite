@@ -1,7 +1,7 @@
 //! Run-Time Limits
 
 use crate::{ffi, Connection, Result};
-use std::os::raw::c_int;
+use std::ffi::c_int;
 
 /// Run-Time limit categories, for use with [`Connection::limit`] and
 /// [`Connection::set_limit`].
@@ -13,7 +13,6 @@ use std::os::raw::c_int;
 #[repr(i32)]
 #[non_exhaustive]
 #[expect(non_camel_case_types)]
-#[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
 pub enum Limit {
     /// The maximum size of any string or BLOB or table row, in bytes.
     SQLITE_LIMIT_LENGTH = ffi::SQLITE_LIMIT_LENGTH,
@@ -52,7 +51,6 @@ pub enum Limit {
 impl Connection {
     /// Returns the current value of a [`Limit`].
     #[inline]
-    #[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
     pub fn limit(&self, limit: Limit) -> Result<i32> {
         let c = self.db.borrow();
         let rc = unsafe { ffi::sqlite3_limit(c.db(), limit as c_int, -1) };
@@ -65,7 +63,6 @@ impl Connection {
     /// Changes the [`Limit`] to `new_val`, returning the prior
     /// value of the limit.
     #[inline]
-    #[cfg_attr(docsrs, doc(cfg(feature = "limits")))]
     pub fn set_limit(&self, limit: Limit, new_val: i32) -> Result<i32> {
         if new_val < 0 {
             return Err(err!(ffi::SQLITE_RANGE, "{new_val} is invalid"));
@@ -81,6 +78,9 @@ impl Connection {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::*;
     use crate::Result;
 
@@ -164,7 +164,13 @@ mod test {
         assert_eq!(32, db.limit(Limit::SQLITE_LIMIT_TRIGGER_DEPTH)?);
 
         db.set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, 2)?;
+        #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
         assert_eq!(2, db.limit(Limit::SQLITE_LIMIT_WORKER_THREADS)?);
+
+        // wasm build with DSQLITE_THREADSAFE=0, so limit not working
+        // see <https://sqlite.org/threadsafe.html>
+        #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+        assert_eq!(0, db.limit(Limit::SQLITE_LIMIT_WORKER_THREADS)?);
 
         assert!(db
             .set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, -1)

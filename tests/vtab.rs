@@ -1,11 +1,13 @@
 //! Ensure Virtual tables can be declared outside `rusqlite` crate.
+#[cfg(all(feature = "vtab", target_family = "wasm", target_os = "unknown"))]
+use wasm_bindgen_test::wasm_bindgen_test as test;
 
 #[cfg(feature = "vtab")]
 #[test]
 fn test_dummy_module() -> rusqlite::Result<()> {
     use rusqlite::vtab::{
-        eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context, IndexInfo, VTab,
-        VTabConnection, VTabCursor, Values,
+        eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context, Filters, IndexInfo,
+        VTab, VTabConnection, VTabCursor,
     };
     use rusqlite::{version_number, Connection, Result};
     use std::marker::PhantomData;
@@ -59,7 +61,7 @@ fn test_dummy_module() -> rusqlite::Result<()> {
             &mut self,
             _idx_num: c_int,
             _idx_str: Option<&str>,
-            _args: &Values<'_>,
+            _args: &Filters<'_>,
         ) -> Result<()> {
             self.row_id = 1;
             Ok(())
@@ -85,7 +87,7 @@ fn test_dummy_module() -> rusqlite::Result<()> {
 
     let db = Connection::open_in_memory()?;
 
-    db.create_module::<DummyTab>("dummy", module, None)?;
+    db.create_module::<DummyTab, _>(c"dummy", module, None)?;
 
     let version = version_number();
     if version < 3_009_000 {

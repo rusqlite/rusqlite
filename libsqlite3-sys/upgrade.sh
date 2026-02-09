@@ -9,8 +9,8 @@ export SQLITE3_LIB_DIR="$SCRIPT_DIR/sqlite3"
 mkdir -p "$TARGET_DIR" "$SQLITE3_LIB_DIR"
 
 # Download and extract amalgamation
-SQLITE=sqlite-amalgamation-3480000
-curl -O https://sqlite.org/2025/$SQLITE.zip
+SQLITE=sqlite-amalgamation-3510200
+curl -O https://sqlite.org/2026/$SQLITE.zip
 unzip -p "$SQLITE.zip" "$SQLITE/sqlite3.c" > "$SQLITE3_LIB_DIR/sqlite3.c"
 unzip -p "$SQLITE.zip" "$SQLITE/sqlite3.h" > "$SQLITE3_LIB_DIR/sqlite3.h"
 unzip -p "$SQLITE.zip" "$SQLITE/sqlite3ext.h" > "$SQLITE3_LIB_DIR/sqlite3ext.h"
@@ -33,8 +33,7 @@ rm -f "$SQLITE3_LIB_DIR/bindgen_bundled_version_ext.rs"
 find "$TARGET_DIR" -type f -name bindgen.rs -exec rm {} \;
 env LIBSQLITE3_SYS_BUNDLING=1 cargo build --features "buildtime_bindgen loadable_extension" --no-default-features
 find "$TARGET_DIR" -type f -name bindgen.rs -exec mv {} "$SQLITE3_LIB_DIR/bindgen_bundled_version_ext.rs" \;
-git checkout "$SQLITE3_LIB_DIR/sqlite3ext.h"
-rm -f "$SQLITE3_LIB_DIR/sqlite3ext.h.bk"
+mv "$SQLITE3_LIB_DIR"/sqlite3ext.h{.bk,}
 
 # Sanity checks
 cd "$SCRIPT_DIR/.." || { echo "fatal error" >&2; exit 1; }

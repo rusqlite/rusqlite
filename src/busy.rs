@@ -1,6 +1,6 @@
 //! Busy handler (when the database is locked)
+use std::ffi::{c_int, c_void};
 use std::mem;
-use std::os::raw::{c_int, c_void};
 use std::panic::catch_unwind;
 use std::ptr;
 use std::time::Duration;
@@ -60,13 +60,13 @@ impl Connection {
             c_int::from(catch_unwind(|| handler_fn(count)).unwrap_or_default())
         }
         let c = self.db.borrow_mut();
-        let r = match callback {
-            Some(f) => unsafe {
-                ffi::sqlite3_busy_handler(c.db(), Some(busy_handler_callback), f as *mut c_void)
-            },
-            None => unsafe { ffi::sqlite3_busy_handler(c.db(), None, ptr::null_mut()) },
-        };
-        c.decode_result(r)
+        c.decode_result(unsafe {
+            ffi::sqlite3_busy_handler(
+                c.db(),
+                callback.as_ref().map(|_| busy_handler_callback as _),
+                callback.map_or_else(ptr::null_mut, |f| f as *mut c_void),
+            )
+        })
     }
 }
 
@@ -80,9 +80,16 @@ impl InnerConnection {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{Connection, ErrorCode, Result, TransactionBehavior};
     use std::sync::atomic::{AtomicBool, Ordering};
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn test_default_busy() -> Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -99,6 +106,10 @@ mod test {
         tx1.rollback()
     }
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn test_busy_handler() -> Result<()> {
         static CALLED: AtomicBool = AtomicBool::new(false);

@@ -192,7 +192,10 @@ impl Blob<'_> {
 
 #[cfg(test)]
 mod test {
-    use crate::{Connection, DatabaseName, Result};
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use crate::{Connection, Result, MAIN_DB};
     // to ensure we don't modify seek pos
     use std::io::Seek as _;
 
@@ -203,7 +206,7 @@ mod test {
         db.execute("INSERT INTO test_table(content) VALUES (ZEROBLOB(10))", [])?;
 
         let rowid = db.last_insert_rowid();
-        let mut blob = db.blob_open(DatabaseName::Main, "test_table", "content", rowid, false)?;
+        let mut blob = db.blob_open(MAIN_DB, c"test_table", c"content", rowid, false)?;
         // modify the seek pos to ensure we aren't using it or modifying it.
         blob.seek(std::io::SeekFrom::Start(1)).unwrap();
 

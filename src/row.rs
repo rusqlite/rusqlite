@@ -126,8 +126,8 @@ impl<F, B> FallibleIterator for Map<'_, F>
 where
     F: FnMut(&Row<'_>) -> Result<B>,
 {
-    type Error = Error;
     type Item = B;
+    type Error = Error;
 
     #[inline]
     fn next(&mut self) -> Result<Option<B>> {
@@ -208,8 +208,8 @@ where
 /// }
 /// ```
 impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
-    type Error = Error;
     type Item = Row<'stmt>;
+    type Error = Error;
 
     #[inline]
     fn advance(&mut self) -> Result<()> {
@@ -393,7 +393,7 @@ impl std::fmt::Debug for Row<'_> {
 }
 
 mod sealed {
-    /// This trait exists just to ensure that the only impls of `trait Params`
+    /// This trait exists just to ensure that the only impls of `trait RowIndex`
     /// that are allowed are ones in this crate.
     pub trait Sealed {}
     impl Sealed for usize {}
@@ -404,7 +404,7 @@ mod sealed {
 ///
 /// It is only implemented for `usize` and `&str`.
 pub trait RowIndex: sealed::Sealed {
-    /// Returns the index of the appropriate column, or `None` if no such
+    /// Returns the index of the appropriate column, or `Error` if no such
     /// column exists.
     fn idx(&self, stmt: &Statement<'_>) -> Result<usize>;
 }
@@ -463,6 +463,9 @@ tuples_try_from_row!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{Connection, Result};
 
     #[test]

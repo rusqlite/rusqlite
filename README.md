@@ -27,7 +27,7 @@ In your Cargo.toml:
 # That said, it's not ideal for all scenarios and in particular, generic
 # libraries built around `rusqlite` should probably not enable it, which
 # is why it is not a default feature -- it could become hard to disable.
-rusqlite = { version = "0.33.0", features = ["bundled"] }
+rusqlite = { version = "0.38.0", features = ["bundled"] }
 ```
 
 Simple example usage:
@@ -81,7 +81,7 @@ fn main() -> Result<()> {
 
 ### Supported SQLite Versions
 
-The base `rusqlite` package supports SQLite version 3.14.0 or newer. If you need
+The base `rusqlite` package supports SQLite version 3.34.1 or newer. If you need
 support for older versions, please file an issue. Some cargo features require a
 newer SQLite version; see details below.
 
@@ -104,15 +104,18 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
   gives `std::io::{Read, Write, Seek}` access to SQL BLOBs.
 * [`limits`](https://docs.rs/rusqlite/~0/rusqlite/struct.Connection.html#method.limit)
   allows you to set and retrieve SQLite's per connection limits.
-* `chrono` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
-  and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for various
-  types from the [`chrono` crate](https://crates.io/crates/chrono).
 * `serde_json` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
   `Value` type from the [`serde_json` crate](https://crates.io/crates/serde_json).
+* `chrono` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
+  and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for various
+  types from the [`chrono` crate](https://crates.io/crates/chrono).
 * `time` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for various
   types from the [`time` crate](https://crates.io/crates/time).
+* `jiff` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
+  and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
+  `Value` type from the [`jiff` crate](https://crates.io/crates/jiff).
 * `url` implements [`FromSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.FromSql.html)
   and [`ToSql`](https://docs.rs/rusqlite/~0/rusqlite/types/trait.ToSql.html) for the
   `Url` type from the [`url` crate](https://crates.io/crates/url).
@@ -129,13 +132,18 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
 * `series` exposes [`generate_series(...)`](https://www.sqlite.org/series.html) Table-Valued Function. (Implies `vtab`.)
 * [`csvtab`](https://sqlite.org/csv.html), CSV virtual table written in Rust. (Implies `vtab`.)
 * [`array`](https://sqlite.org/carray.html), The `rarray()` Table-Valued Function. (Implies `vtab`.)
+* `fallible_uint` allows storing values of type `u64`, `usize`, `NonZeroU64`, `NonZeroUsize` but only if <= `i64::MAX`.
 * `i128_blob` allows storing values of type `i128` type in SQLite databases. Internally, the data is stored as a 16 byte big-endian blob, with the most significant bit flipped, which allows ordering and comparison between different blobs storing i128s to work as expected.
 * `uuid` allows storing and retrieving `Uuid` values from the [`uuid`](https://docs.rs/uuid/) crate using blobs.
 * [`session`](https://sqlite.org/sessionintro.html), Session module extension. Requires `buildtime_bindgen` feature. (Implies `hooks`.)
-* `extra_check` fail when a query passed to execute is readonly or has a column count > 0.
+* `extra_check` fails when a query passed to `execute` is readonly and has a column count > 0.
 * `column_decltype` provides `columns()` method for Statements and Rows; omit if linking to a version of SQLite/SQLCipher compiled with `-DSQLITE_OMIT_DECLTYPE`.
 * `collation` exposes [`sqlite3_create_collation_v2`](https://sqlite.org/c3ref/create_collation.html).
 * `serialize` exposes [`sqlite3_serialize`](http://sqlite.org/c3ref/serialize.html) (3.23.0).
+* `rusqlite-macros` enables the use of the [`prepare_and_bind`](https://docs.rs/rusqlite/~0/rusqlite/macro.prepare_and_bind.html)
+  and [`prepare_cached_and_bind`](https://docs.rs/rusqlite/~0/rusqlite/macro.prepare_cached_and_bind.html)
+  procedural macros, which allow capturing identifiers in SQL statements.
+
 
 ## Notes on building rusqlite and libsqlite3-sys
 
@@ -148,11 +156,11 @@ You can adjust this behavior in a number of ways:
 * If you use the `bundled`, `bundled-sqlcipher`, or `bundled-sqlcipher-vendored-openssl` features, `libsqlite3-sys` will use the
   [cc](https://crates.io/crates/cc) crate to compile SQLite or SQLCipher from source and
   link against that. This source is embedded in the `libsqlite3-sys` crate and
-  is currently SQLite 3.48.0 (as of `rusqlite` 0.33.0 / `libsqlite3-sys`
-  0.31.0).  This is probably the simplest solution to any build problems. You can enable this by adding the following in your `Cargo.toml` file:
+  is currently SQLite 3.51.1 (as of `rusqlite` 0.38.0 / `libsqlite3-sys`
+  0.36.0).  This is probably the simplest solution to any build problems. You can enable this by adding the following in your `Cargo.toml` file:
   ```toml
   [dependencies.rusqlite]
-  version = "0.33.0"
+  version = "0.38.0"
   features = ["bundled"]
   ```
 * When using any of the `bundled` features, the build script will honor `SQLITE_MAX_VARIABLE_NUMBER` and `SQLITE_MAX_EXPR_DEPTH` variables. It will also honor a `LIBSQLITE3_FLAGS` variable, which can have a format like `"-USQLITE_ALPHA -DSQLITE_BETA SQLITE_GAMMA ..."`. That would disable the `SQLITE_ALPHA` flag, and set the `SQLITE_BETA` and `SQLITE_GAMMA` flags. (The initial `-D` can be omitted, as on the last one.)
@@ -190,7 +198,7 @@ minimum SQLite version that supports your chosen features. If you are using
 `libsqlite3-sys` directly, you can use the same features to choose which
 pregenerated bindings are chosen:
 
-* `min_sqlite_version_3_14_0` - SQLite 3.14.0 bindings (this is the default)
+* `min_sqlite_version_3_34_1` - SQLite 3.34.1 bindings (this is the default)
 
 If you use any of the `bundled` features, you will get pregenerated bindings for the
 bundled version of SQLite/SQLCipher. If you need other specific pregenerated binding
@@ -249,4 +257,3 @@ Both of these are quite permissive, have no bearing on the license of the code i
 ## Minimum supported Rust version (MSRV)
 
 Latest stable Rust version at the time of release. It might compile with older versions.
-

@@ -10,11 +10,10 @@ use crate::{Connection, Result};
 /// fn load_my_extension(conn: &Connection) -> Result<()> {
 ///     unsafe {
 ///         let _guard = LoadExtensionGuard::new(conn)?;
-///         conn.load_extension("trusted/sqlite/extension", None)
+///         conn.load_extension("trusted/sqlite/extension", None::<&str>)
 ///     }
 /// }
 /// ```
-#[cfg_attr(docsrs, doc(cfg(feature = "load_extension")))]
 pub struct LoadExtensionGuard<'conn> {
     conn: &'conn Connection,
 }

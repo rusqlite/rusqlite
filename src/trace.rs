@@ -1,16 +1,15 @@
 //! Tracing and profiling functions. Error and warning log.
 
 use std::borrow::Cow;
-use std::ffi::{CStr, CString};
+use std::ffi::{c_char, c_int, c_uint, c_void, CStr, CString};
 use std::marker::PhantomData;
 use std::mem;
-use std::os::raw::{c_char, c_int, c_uint, c_void};
 use std::panic::catch_unwind;
 use std::ptr;
 use std::time::Duration;
 
 use super::ffi;
-use crate::{Connection, DatabaseName, StatementStatus};
+use crate::{Connection, StatementStatus, MAIN_DB};
 
 /// Set up the process-wide SQLite error logging callback.
 ///
@@ -68,7 +67,7 @@ bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     #[non_exhaustive]
     #[repr(C)]
-    pub struct TraceEventCodes: ::std::os::raw::c_uint {
+    pub struct TraceEventCodes: c_uint {
         /// when a prepared statement first begins running and possibly at other times during the execution
         /// of the prepared statement, such as at the start of each trigger subprogram
         const SQLITE_TRACE_STMT = ffi::SQLITE_TRACE_STMT;
@@ -137,7 +136,7 @@ impl ConnRef<'_> {
     }
     /// the path to the database file, if one exists and is known.
     pub fn db_filename(&self) -> Option<&str> {
-        unsafe { crate::inner_connection::db_filename(self.ptr, DatabaseName::Main) }
+        unsafe { crate::inner_connection::db_filename(self.phantom, self.ptr, MAIN_DB) }
     }
 }
 
@@ -148,6 +147,7 @@ impl Connection {
     /// Prepared statement placeholders are replaced/logged with their assigned
     /// values. There can only be a single tracer defined for each database
     /// connection. Setting a new tracer clears the old one.
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     #[deprecated(since = "0.33.0", note = "use trace_v2 instead")]
     pub fn trace(&mut self, trace_fn: Option<fn(&str)>) {
         unsafe extern "C" fn trace_callback(p_arg: *mut c_void, z_sql: *const c_char) {
@@ -157,13 +157,12 @@ impl Connection {
         }
 
         let c = self.db.borrow_mut();
-        match trace_fn {
-            Some(f) => unsafe {
-                ffi::sqlite3_trace(c.db(), Some(trace_callback), f as *mut c_void);
-            },
-            None => unsafe {
-                ffi::sqlite3_trace(c.db(), None, ptr::null_mut());
-            },
+        unsafe {
+            ffi::sqlite3_trace(
+                c.db(),
+                trace_fn.as_ref().map(|_| trace_callback as _),
+                trace_fn.map_or_else(ptr::null_mut, |f| f as *mut c_void),
+            );
         }
     }
 
@@ -172,6 +171,7 @@ impl Connection {
     ///
     /// There can only be a single profiler defined for each database
     /// connection. Setting a new profiler clears the old one.
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     #[deprecated(since = "0.33.0", note = "use trace_v2 instead")]
     pub fn profile(&mut self, profile_fn: Option<fn(&str, Duration)>) {
         unsafe extern "C" fn profile_callback(
@@ -187,12 +187,13 @@ impl Connection {
         }
 
         let c = self.db.borrow_mut();
-        match profile_fn {
-            Some(f) => unsafe {
-                ffi::sqlite3_profile(c.db(), Some(profile_callback), f as *mut c_void)
-            },
-            None => unsafe { ffi::sqlite3_profile(c.db(), None, ptr::null_mut()) },
-        };
+        unsafe {
+            ffi::sqlite3_profile(
+                c.db(),
+                profile_fn.as_ref().map(|_| profile_callback as _),
+                profile_fn.map_or_else(ptr::null_mut, |f| f as *mut c_void),
+            );
+        }
     }
 
     /// Register or clear a trace callback function
@@ -233,25 +234,29 @@ impl Connection {
             ffi::SQLITE_OK
         }
         let c = self.db.borrow_mut();
-        if let Some(f) = trace_fn {
-            unsafe {
-                ffi::sqlite3_trace_v2(c.db(), mask.bits(), Some(trace_callback), f as *mut c_void);
-            }
-        } else {
-            unsafe {
-                ffi::sqlite3_trace_v2(c.db(), 0, None, ptr::null_mut());
-            }
+        unsafe {
+            ffi::sqlite3_trace_v2(
+                c.db(),
+                mask.bits(),
+                trace_fn.as_ref().map(|_| trace_callback as _),
+                trace_fn.map_or_else(ptr::null_mut, |f| f as *mut c_void),
+            );
         }
     }
 }
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     use std::sync::{LazyLock, Mutex};
     use std::time::Duration;
 
     use crate::{Connection, Result};
 
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     #[test]
     #[allow(deprecated)]
     fn test_trace() -> Result<()> {
@@ -281,6 +286,7 @@ mod test {
         Ok(())
     }
 
+    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     #[test]
     #[allow(deprecated)]
     fn test_profile() -> Result<()> {
@@ -318,19 +324,29 @@ mod test {
                 }
                 TraceEvent::Profile(s, d) => {
                     assert_eq!(s.get_status(crate::StatementStatus::Sort), 0);
-                    assert_eq!(d.cmp(&Duration::ZERO), Ordering::Greater)
+                    #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+                    assert_eq!(d.cmp(&Duration::ZERO), Ordering::Greater);
+                    // Timers on the web are not very accurate
+                    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+                    assert!(matches!(
+                        d.cmp(&Duration::ZERO),
+                        Ordering::Equal | Ordering::Greater
+                    ));
                 }
                 TraceEvent::Row(s) => {
                     assert_eq!(s.expanded_sql().as_deref(), Some(s.sql().borrow()));
                 }
                 TraceEvent::Close(db) => {
                     assert!(db.is_autocommit());
-                    assert!(db.db_filename().is_none());
+                    // https://www.sqlite.org/c3ref/db_filename.html
+                    // if database N is a temporary or in-memory database,
+                    // then this function will return either a NULL pointer or an empty string.
+                    assert!(db.db_filename().is_none_or(|s| s.is_empty()));
                 }
             }),
         );
 
-        db.one_column::<u32>("PRAGMA user_version")?;
+        db.one_column::<u32, _>("PRAGMA user_version", [])?;
         drop(db);
 
         let db = Connection::open_in_memory()?;

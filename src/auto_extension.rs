@@ -2,7 +2,7 @@
 use super::ffi;
 use crate::error::{check, to_sqlite_error};
 use crate::{Connection, Error, Result};
-use std::os::raw::{c_char, c_int};
+use std::ffi::{c_char, c_int};
 use std::panic::catch_unwind;
 
 /// Automatic extension initialization routine

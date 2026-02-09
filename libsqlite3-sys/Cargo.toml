@@ -1,6 +1,6 @@
 [package]
 name = "libsqlite3-sys"
-version = "0.31.0"
+version = "0.36.0"
 authors = ["The rusqlite developers"]
 edition = "2021"
 repository = "https://github.com/rusqlite/rusqlite"
@@ -10,25 +10,36 @@ links = "sqlite3"
 build = "build.rs"
 keywords = ["sqlite", "sqlcipher", "ffi"]
 categories = ["external-ffi-bindings"]
+exclude = ["**/*.sh"]
 
 [features]
-default = ["min_sqlite_version_3_14_0"]
+default = ["min_sqlite_version_3_34_1"]
+# Use bundled SQLite sources (instead of the one provided by your OS / distribution)
 bundled = ["cc", "bundled_bindings"]
 bundled-windows = ["cc", "bundled_bindings"]
+# Use bundled SQLCipher sources
 bundled-sqlcipher = ["bundled"]
-bundled-sqlcipher-vendored-openssl = ["bundled-sqlcipher", "openssl-sys/vendored"]
+bundled-sqlcipher-vendored-openssl = [
+    "bundled-sqlcipher",
+    "openssl-sys/vendored",
+]
 buildtime_bindgen = ["bindgen", "pkg-config", "vcpkg"]
+# Use SQLCipher instead of SQLite
 sqlcipher = []
-min_sqlite_version_3_14_0 = ["pkg-config", "vcpkg"]
+# Minimal version required by rusqlite
+min_sqlite_version_3_34_1 = ["pkg-config", "vcpkg"]
 # Bundle only the bindings file. Note that this does nothing if
 # `buildtime_bindgen` is enabled.
 bundled_bindings = []
+# Used to generate a cdylib
 loadable_extension = ["prettyplease", "quote", "syn"]
-# sqlite3_unlock_notify >= 3.6.12
+# SQLITE_ENABLE_UNLOCK_NOTIFY
 unlock_notify = []
-# 3.13.0
+# SQLITE_ENABLE_COLUMN_METADATA
+column_metadata = []
+# SQLITE_ENABLE_PREUPDATE_HOOK
 preupdate_hook = ["buildtime_bindgen"]
-# 3.13.0
+# SQLITE_ENABLE_SESSION
 session = ["preupdate_hook", "buildtime_bindgen"]
 in_gecko = []
 with-asan = []
@@ -38,13 +49,19 @@ wasm32-wasi-vfs = []
 openssl-sys = { version = "0.9.103", optional = true }
 
 [build-dependencies]
-bindgen = { version = "0.71", optional = true, default-features = false, features = ["runtime"] }
+bindgen = { version = "0.72", optional = true, default-features = false, features = [
+    "runtime",
+] }
 pkg-config = { version = "0.3.19", optional = true }
-cc = { version = "1.1.6", optional = true }
+cc = { version = "1.2.27", optional = true }
 vcpkg = { version = "0.2.15", optional = true }
 # for loadable_extension:
-prettyplease = {version = "0.2.20", optional = true }
+prettyplease = { version = "0.2.20", optional = true }
 # like bindgen
 quote = { version = "1.0.36", optional = true, default-features = false }
 # like bindgen
-syn = { version = "2.0.72", optional = true, features = ["full", "extra-traits", "visit-mut"] }
+syn = { version = "2.0.89", optional = true, features = [
+    "full",
+    "extra-traits",
+    "visit-mut",
+] }

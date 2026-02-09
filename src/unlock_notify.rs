@@ -1,7 +1,6 @@
 //! [Unlock Notification](http://sqlite.org/unlock_notify.html)
 
-use std::os::raw::c_int;
-use std::os::raw::c_void;
+use std::ffi::{c_int, c_void};
 use std::panic::catch_unwind;
 use std::sync::{Condvar, Mutex};
 
@@ -12,7 +11,6 @@ struct UnlockNotification {
     mutex: Mutex<bool>, // Mutex to protect structure
 }
 
-#[expect(clippy::mutex_atomic)]
 impl UnlockNotification {
     fn new() -> Self {
         Self {
@@ -87,11 +85,18 @@ pub unsafe fn wait_for_unlock_notify(db: *mut ffi::sqlite3) -> c_int {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{Connection, OpenFlags, Result, Transaction, TransactionBehavior};
     use std::sync::mpsc::sync_channel;
     use std::thread;
     use std::time;
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no thread on this platform"
+    )]
     #[test]
     fn test_unlock_notify() -> Result<()> {
         let url = "file::memory:?cache=shared";
@@ -109,8 +114,7 @@ mod test {
             tx2.commit().unwrap();
         });
         assert_eq!(tx.recv().unwrap(), 1);
-        let the_answer: i64 = db1.one_column("SELECT x FROM foo")?;
-        assert_eq!(42i64, the_answer);
+        assert_eq!(42, db1.one_column::<i64, _>("SELECT x FROM foo", [])?);
         child.join().unwrap();
         Ok(())
     }

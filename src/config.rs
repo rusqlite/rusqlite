@@ -1,6 +1,6 @@
 //! Configure database connections
 
-use std::os::raw::c_int;
+use std::ffi::c_int;
 
 use crate::error::check;
 use crate::ffi;
@@ -37,29 +37,22 @@ pub enum DbConfig {
     /// Activates or deactivates the "defensive" flag for a database connection.
     SQLITE_DBCONFIG_DEFENSIVE = 1010, // 3.26.0
     /// Activates or deactivates the `writable_schema` flag.
-    #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_WRITABLE_SCHEMA = 1011, // 3.28.0
     /// Activates or deactivates the legacy behavior of the ALTER TABLE RENAME
     /// command.
-    #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_LEGACY_ALTER_TABLE = 1012, // 3.29
     /// Activates or deactivates the legacy double-quoted string literal
     /// misfeature for DML statements only.
-    #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_DQS_DML = 1013, // 3.29.0
     /// Activates or deactivates the legacy double-quoted string literal
     /// misfeature for DDL statements.
-    #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_DQS_DDL = 1014, // 3.29.0
     /// Enable or disable views.
-    #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_ENABLE_VIEW = 1015, // 3.30.0
     /// Activates or deactivates the legacy file format flag.
-    #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_LEGACY_FILE_FORMAT = 1016, // 3.31.0
     /// Tells SQLite to assume that database schemas (the contents of the
     /// `sqlite_master` tables) are untainted by malicious content.
-    #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_TRUSTED_SCHEMA = 1017, // 3.31.0
     /// Sets or clears a flag that enables collection of the
     /// `sqlite3_stmt_scanstatus_v2()` statistics
@@ -68,6 +61,16 @@ pub enum DbConfig {
     /// Changes the default order in which tables and indexes are scanned
     #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_REVERSE_SCANORDER = 1019, // 3.42.0
+    /// Enables or disables the ability of the ATTACH DATABASE SQL command
+    /// to create a new database file if the database filed named in the ATTACH command does not already exist.
+    #[cfg(feature = "modern_sqlite")]
+    SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE = 1020, // 3.49.0
+    /// Enables or disables the ability of the ATTACH DATABASE SQL command to open a database for writing.
+    #[cfg(feature = "modern_sqlite")]
+    SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE = 1021, // 3.49.0
+    /// Enables or disables the ability to include comments in SQL text.
+    #[cfg(feature = "modern_sqlite")]
+    SQLITE_DBCONFIG_ENABLE_COMMENTS = 1022, // 3.49.0
 }
 
 impl Connection {
@@ -132,6 +135,9 @@ impl Connection {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::DbConfig;
     use crate::{Connection, Result};
 
