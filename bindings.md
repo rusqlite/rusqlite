@@ -134,7 +134,7 @@
 - [ ] `sqlite3_column_int`
 - [X] `sqlite3_column_int64`
 - [X] `sqlite3_column_text`
-- [X] `sqlite3_column_value`
+- [X] `sqlite3_column_value` (not public, internal use only)
 - [X] `sqlite3_column_bytes` (not public, internal use only)
 - [X] `sqlite3_column_type`
 

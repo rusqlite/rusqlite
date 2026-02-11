@@ -927,6 +927,7 @@ impl Values<'_> {
     fn get_array(&self, idx: usize) -> Option<array::Array> {
         use crate::types::Value;
         let arg = self.args[idx];
+        debug_assert_eq!(unsafe { ffi::sqlite3_value_type(arg) }, ffi::SQLITE_NULL);
         let ptr = unsafe { ffi::sqlite3_value_pointer(arg, array::ARRAY_TYPE) };
         if ptr.is_null() {
             None
@@ -940,10 +941,13 @@ impl Values<'_> {
     }
 
     /// Return raw pointer at `idx`
+    /// # Safety
+    /// This function is unsafe because it uses raw pointer and cast
     #[cfg(feature = "pointer")]
-    pub unsafe fn get_pointer(&self, idx: usize, ptr_type: &'static CStr) -> *mut c_void {
+    pub unsafe fn get_pointer<T: 'static>(&self, idx: usize, ptr_type: &'static CStr) -> *const T {
         let arg = self.args[idx];
-        unsafe { ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr()) }
+        debug_assert_eq!(unsafe { ffi::sqlite3_value_type(arg) }, ffi::SQLITE_NULL);
+        unsafe { ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr()).cast::<T>() }
     }
 
     /// Turns `Values` into an iterator.

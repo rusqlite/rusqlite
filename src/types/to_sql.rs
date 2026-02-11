@@ -34,11 +34,26 @@ pub enum ToSqlOutput<'a> {
     #[cfg(feature = "pointer")]
     Pointer(
         (
-            *mut std::os::raw::c_void,
+            *const std::os::raw::c_void,
             &'static std::ffi::CStr,
             Option<unsafe extern "C" fn(arg1: *mut ::std::os::raw::c_void)>,
         ),
     ),
+}
+
+#[cfg(feature = "pointer")]
+impl<'a> ToSqlOutput<'a> {
+    /// Pass an `Rc` as a raw pointer to SQLite
+    pub fn from_rc<T>(rc: std::rc::Rc<T>, ptr_type: &'static std::ffi::CStr) -> ToSqlOutput<'a> {
+        unsafe extern "C" fn free_rc(p: *mut std::ffi::c_void) {
+            std::rc::Rc::decrement_strong_count(p);
+        }
+        ToSqlOutput::Pointer((
+            std::rc::Rc::into_raw(rc) as *mut std::ffi::c_void,
+            ptr_type,
+            Some(free_rc),
+        ))
+    }
 }
 
 // Generically allow any type that can be converted into a ValueRef

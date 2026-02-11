@@ -46,7 +46,7 @@ pub(super) unsafe fn set_result(
         }
         #[cfg(feature = "pointer")]
         ToSqlOutput::Pointer(ref p) => {
-            return ffi::sqlite3_result_pointer(ctx, p.0, p.1.as_ptr(), p.2);
+            return ffi::sqlite3_result_pointer(ctx, p.0 as _, p.1.as_ptr(), p.2);
         }
     };
 
