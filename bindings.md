@@ -26,7 +26,7 @@
 - [X] `sqlite3_extended_result_codes` (not public, internal use only)
 
 - [X] `sqlite3_last_insert_rowid`
-- [ ] `sqlite3_set_last_insert_rowid`
+- [x] `sqlite3_set_last_insert_rowid`
 
 - [X] `sqlite3_changes`
 - [X] `sqlite3_changes64`
@@ -226,7 +226,7 @@
 - [X] `sqlite3_create_module_v2`
 - [ ] `sqlite3_drop_modules`
 - [X] `sqlite3_declare_vtab`
-- [ ] `sqlite3_overload_function`
+- [x] `sqlite3_overload_function`
 
 - [X] `sqlite3_blob_open`
 - [X] `sqlite3_blob_reopen`
@@ -396,10 +396,10 @@
 - [X] `xSync`
 - [X] `xCommit`
 - [X] `xRollback`
-- [ ] `xFindFunction`
-- [ ] `xRename`
-- [ ] `xSavepoint`
-- [ ] `xRelease`
-- [ ] `xRollbackTo`
-- [ ] `xShadowName`
-- [ ] `xIntegrity`
+- [x] `xFindFunction`
+- [x] `xRename`
+- [x] `xSavepoint`
+- [x] `xRelease`
+- [x] `xRollbackTo`
+- [x] `xShadowName`
+- [x] `xIntegrity`

@@ -87,8 +87,8 @@ unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
 /// Context is a wrapper for the SQLite function
 /// evaluation context.
 pub struct Context<'a> {
-    ctx: *mut sqlite3_context,
-    args: &'a [*mut sqlite3_value],
+    pub(crate) ctx: *mut sqlite3_context,
+    pub(crate) args: &'a [*mut sqlite3_value],
 }
 
 impl Context<'_> {
@@ -563,31 +563,6 @@ impl InnerConnection {
         F: Fn(&Context<'_>) -> Result<T> + Send + 'static,
         T: SqlFnOutput,
     {
-        unsafe extern "C" fn call_boxed_closure<F, T>(
-            ctx: *mut sqlite3_context,
-            argc: c_int,
-            argv: *mut *mut sqlite3_value,
-        ) where
-            F: Fn(&Context<'_>) -> Result<T>,
-            T: SqlFnOutput,
-        {
-            let args = slice::from_raw_parts(argv, argc as usize);
-            let r = catch_unwind(|| {
-                let boxed_f: *const F = ffi::sqlite3_user_data(ctx).cast::<F>();
-                assert!(!boxed_f.is_null(), "Internal error - null function pointer");
-                let ctx = Context { ctx, args };
-                (*boxed_f)(&ctx)
-            });
-            let t = match r {
-                Err(_) => {
-                    report_error(ctx, &Error::UnwindingPanic);
-                    return;
-                }
-                Ok(r) => r,
-            };
-            sql_result(ctx, args, t);
-        }
-
         let boxed_f: *mut F = Box::into_raw(Box::new(x_func));
         let c_name = fn_name.as_cstr()?;
         let r = unsafe {
@@ -693,6 +668,31 @@ unsafe fn aggregate_context<A>(ctx: *mut sqlite3_context, bytes: usize) -> Optio
         return None;
     }
     Some(pac)
+}
+
+pub(crate) unsafe extern "C" fn call_boxed_closure<F, T>(
+    ctx: *mut sqlite3_context,
+    argc: c_int,
+    argv: *mut *mut sqlite3_value,
+) where
+    F: Fn(&Context<'_>) -> Result<T>,
+    T: SqlFnOutput,
+{
+    let args = slice::from_raw_parts(argv, argc as usize);
+    let r = catch_unwind(|| {
+        let boxed_f: *const F = ffi::sqlite3_user_data(ctx).cast::<F>();
+        assert!(!boxed_f.is_null(), "Internal error - null function pointer");
+        let ctx = Context { ctx, args };
+        (*boxed_f)(&ctx)
+    });
+    let t = match r {
+        Err(_) => {
+            report_error(ctx, &Error::UnwindingPanic);
+            return;
+        }
+        Ok(r) => r,
+    };
+    sql_result(ctx, args, t);
 }
 
 unsafe extern "C" fn call_boxed_step<A, D, T>(
