@@ -177,7 +177,7 @@ libsqlite3-sys = { path = "libsqlite3-sys", version = "0.36.0" }
 sqlite-wasm-rs = { version = "0.5.1", default-features = false }
 chrono = { version = "0.4.38", optional = true, default-features = false, features = ["wasmbind"] }
 jiff = { version = "0.2", optional = true, default-features = false, features = ["js"] }
-time = { version = "0.3.36", optional = true, features = ["wasm-bindgen"] }
+time = { version = "0.3.47", optional = true, features = ["wasm-bindgen"] }
 uuid = { version = "1.0", optional = true, features = ["js"] }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dev-dependencies]
