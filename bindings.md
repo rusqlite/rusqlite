@@ -110,7 +110,7 @@
 - [ ] `sqlite3_bind_text`
 - [X] `sqlite3_bind_text64`
 - [ ] `sqlite3_bind_value`
-- [X] `sqlite3_bind_pointer` (not public, internal use only)
+- [X] `sqlite3_bind_pointer`
 - [X] `sqlite3_bind_zeroblob`
 - [ ] `sqlite3_bind_zeroblob64`
 
@@ -149,7 +149,7 @@
 - [X] `sqlite3_value_double`
 - [ ] `sqlite3_value_int`
 - [X] `sqlite3_value_int64`
-- [X] `sqlite3_value_pointer` (not public, internal use only)
+- [X] `sqlite3_value_pointer`
 - [X] `sqlite3_value_text`
 - [X] `sqlite3_value_bytes` (not public, internal use only)
 - [X] `sqlite3_value_type`
@@ -183,7 +183,7 @@
 - [ ] `sqlite3_result_text`
 - [X] `sqlite3_result_text64`
 - [X] `sqlite3_result_value`
-- [X] `sqlite3_result_pointer` (not public, internal use only)
+- [X] `sqlite3_result_pointer`
 - [X] `sqlite3_result_zeroblob`
 - [ ] `sqlite3_result_zeroblob64`
 - [X] `sqlite3_result_subtype`

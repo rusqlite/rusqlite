@@ -1,6 +1,4 @@
 use std::ffi::{c_int, c_void};
-#[cfg(feature = "array")]
-use std::rc::Rc;
 use std::slice::from_raw_parts;
 use std::{fmt, mem, ptr, str};
 
@@ -11,8 +9,6 @@ use super::{
 };
 use crate::bind::BindIndex;
 use crate::types::{ToSql, ToSqlOutput};
-#[cfg(feature = "array")]
-use crate::vtab::array::{free_array, ARRAY_TYPE};
 
 /// A prepared statement.
 pub struct Statement<'conn> {
@@ -633,18 +629,6 @@ impl Statement<'_> {
             #[cfg(feature = "functions")]
             ToSqlOutput::Arg(_) => {
                 return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
-            }
-            #[cfg(feature = "array")]
-            ToSqlOutput::Array(a) => {
-                return self.conn.decode_result(unsafe {
-                    ffi::sqlite3_bind_pointer(
-                        ptr,
-                        ndx as c_int,
-                        Rc::into_raw(a) as *mut c_void,
-                        ARRAY_TYPE,
-                        Some(free_array),
-                    )
-                });
             }
             #[cfg(feature = "pointer")]
             ToSqlOutput::Pointer(p) => {

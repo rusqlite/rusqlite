@@ -77,7 +77,7 @@ unlock_notify = ["libsqlite3-sys/unlock_notify"]
 vtab = []
 csvtab = ["csv", "vtab"]
 # Port of Carray() table-valued function
-array = ["vtab"]
+array = ["vtab", "pointer"]
 # if SQLITE_ENABLE_SESSION
 # session extension
 session = ["libsqlite3-sys/session", "hooks"]

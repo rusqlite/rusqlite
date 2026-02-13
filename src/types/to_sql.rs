@@ -1,6 +1,4 @@
 use super::{Null, Value, ValueRef};
-#[cfg(feature = "array")]
-use crate::vtab::array::Array;
 #[cfg(feature = "fallible_uint")]
 use crate::Error;
 use crate::Result;
@@ -25,10 +23,6 @@ pub enum ToSqlOutput<'a> {
     /// n-th arg of an SQL scalar function
     #[cfg(feature = "functions")]
     Arg(usize),
-
-    /// `feature = "array"`
-    #[cfg(feature = "array")]
-    Array(Array),
 
     /// Pointer passing interface
     #[cfg(feature = "pointer")]
@@ -134,8 +128,6 @@ impl ToSql for ToSqlOutput<'_> {
             ToSqlOutput::ZeroBlob(i) => ToSqlOutput::ZeroBlob(i),
             #[cfg(feature = "functions")]
             ToSqlOutput::Arg(i) => ToSqlOutput::Arg(i),
-            #[cfg(feature = "array")]
-            ToSqlOutput::Array(ref a) => ToSqlOutput::Array(a.clone()),
             #[cfg(feature = "pointer")]
             ToSqlOutput::Pointer(p) => ToSqlOutput::Pointer(p),
         })

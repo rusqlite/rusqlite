@@ -921,33 +921,24 @@ impl Values<'_> {
         })
     }
 
-    // `sqlite3_value_type` returns `SQLITE_NULL` for pointer.
-    // So it seems not possible to enhance `ValueRef::from_value`.
-    #[cfg(feature = "array")]
-    fn get_array(&self, idx: usize) -> Option<array::Array> {
-        use crate::types::Value;
-        let arg = self.args[idx];
-        debug_assert_eq!(unsafe { ffi::sqlite3_value_type(arg) }, ffi::SQLITE_NULL);
-        let ptr = unsafe { ffi::sqlite3_value_pointer(arg, array::ARRAY_TYPE) };
-        if ptr.is_null() {
-            None
-        } else {
-            Some(unsafe {
-                let ptr = ptr as *const Vec<Value>;
-                array::Array::increment_strong_count(ptr); // don't consume it
-                array::Array::from_raw(ptr)
-            })
-        }
-    }
-
     /// Return raw pointer at `idx`
     /// # Safety
     /// This function is unsafe because it uses raw pointer and cast
+    // `sqlite3_value_type` returns `SQLITE_NULL` for pointer.
+    // So it seems not possible to enhance `ValueRef::from_value`.
     #[cfg(feature = "pointer")]
-    pub unsafe fn get_pointer<T: 'static>(&self, idx: usize, ptr_type: &'static CStr) -> *const T {
+    pub unsafe fn get_pointer<'a, T: 'static>(
+        &self,
+        idx: usize,
+        ptr_type: &'static CStr,
+    ) -> Option<&'a T> {
         let arg = self.args[idx];
         debug_assert_eq!(unsafe { ffi::sqlite3_value_type(arg) }, ffi::SQLITE_NULL);
-        unsafe { ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr()).cast::<T>() }
+        unsafe {
+            ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr())
+                .cast::<T>()
+                .as_ref()
+        }
     }
 
     /// Turns `Values` into an iterator.

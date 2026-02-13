@@ -353,14 +353,16 @@ impl Row<'_> {
         &self,
         idx: I,
         ptr_type: &'static std::ffi::CStr,
-    ) -> Result<*const T> {
+    ) -> Result<Option<&T>> {
         let idx = idx.idx(self.stmt)?;
         debug_assert_eq!(self.stmt.stmt.column_type(idx), super::ffi::SQLITE_NULL);
         let sv = super::ffi::sqlite3_column_value(self.stmt.stmt.ptr(), idx as std::ffi::c_int);
         Ok(if sv.is_null() {
-            std::ptr::null_mut()
+            None
         } else {
-            super::ffi::sqlite3_value_pointer(sv, ptr_type.as_ptr()).cast::<T>()
+            super::ffi::sqlite3_value_pointer(sv, ptr_type.as_ptr())
+                .cast::<T>()
+                .as_ref()
         })
     }
 }

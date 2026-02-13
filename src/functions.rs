@@ -140,10 +140,14 @@ impl Context<'_> {
         &self,
         idx: usize,
         ptr_type: &'static std::ffi::CStr,
-    ) -> *const T {
+    ) -> Option<&T> {
         let arg = self.args[idx];
         debug_assert_eq!(unsafe { ffi::sqlite3_value_type(arg) }, ffi::SQLITE_NULL);
-        unsafe { ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr()).cast::<T>() }
+        unsafe {
+            ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr())
+                .cast::<T>()
+                .as_ref()
+        }
     }
 
     /// Returns the `idx`th argument as a `ValueRef`.
@@ -1216,6 +1220,7 @@ mod test {
     #[cfg(feature = "pointer")]
     fn test_pointer() -> Result<()> {
         use crate::types::ToSqlOutput;
+        use std::ops::Deref;
         use std::rc::Rc;
 
         const PTR_TYPE: &std::ffi::CStr = c"my_rust_ptr";
@@ -1225,15 +1230,16 @@ mod test {
             assert_eq!(2, Rc::strong_count(&rc));
             fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
                 let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
-                //assert_eq!(x, ptr.)
-                Ok(ToSqlOutput::Pointer((x, PTR_TYPE, None)))
+                assert_eq!(x, Some(&1));
+                Ok(ToSqlOutput::from_rc(Rc::new(*x.unwrap()), PTR_TYPE))
             }
             let db = Connection::open_in_memory()?;
             db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;
             let mut stmt = db.prepare("SELECT myfunc(?)")?;
-            let result =
-                stmt.query_one([ptr], |r| unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) })?;
-            assert_eq!(result, Rc::as_ptr(&rc));
+            let result = stmt.query_one([ptr], |r| {
+                unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) }.map(|opt| opt.cloned())
+            })?;
+            assert_eq!(result.unwrap(), *rc.deref());
         }
         assert_eq!(1, Rc::strong_count(&rc));
         Ok(())
