@@ -9,8 +9,6 @@
 //!    `USING` clause.
 //!
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
-#[cfg(feature = "value_pointer")]
-use std::any::Any;
 use std::borrow::Cow::{self, Borrowed, Owned};
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::marker::PhantomData;
@@ -28,6 +26,8 @@ use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
 use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
 use crate::util::{alloc, free_boxed_value};
+#[cfg(feature = "value_pointer")]
+use crate::vtab::value_pointer::PointerType;
 use crate::{str_to_cstring, Connection, Error, InnerConnection, Name, Result};
 
 // let conn: Connection = ...;
@@ -945,15 +945,15 @@ impl Values<'_> {
 
     /// returns a value pointer that was provided to SQLite via `ffi::sqlite3_result_pointer`.
     #[cfg(feature = "value_pointer")]
-    pub fn get_pointer(&self, idx: usize, ptr_type: &'static CStr) -> Option<Rc<dyn Any>> {
+    pub fn get_pointer<T: 'static>(&self, idx: usize, ptr_type: PointerType<T>) -> Option<Rc<T>> {
         let arg = self.args[idx];
-        let ptr = unsafe { ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr()) };
+        let ptr = unsafe { ffi::sqlite3_value_pointer(arg, ptr_type.get_type_name().as_ptr()) };
 
         if ptr.is_null() {
             None
         } else {
             Some(unsafe {
-                let ptr = ptr as *const Rc<dyn Any>;
+                let ptr = ptr as *const T;
                 Rc::increment_strong_count(ptr); // don't consume it
                 Rc::from_raw(ptr)
             })

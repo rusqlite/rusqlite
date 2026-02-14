@@ -46,13 +46,13 @@ pub(super) unsafe fn set_result(
         }
         #[cfg(feature = "value_pointer")]
         ToSqlOutput::ValuePointer(ref a) => {
-            use crate::vtab::value_pointer::free_pointer;
+            use std::rc::Rc;
 
             return ffi::sqlite3_result_pointer(
                 ctx,
                 Rc::into_raw(a.value.clone()) as *mut c_void,
-                a.pointer_type.as_ptr(),
-                Some(free_pointer),
+                a.pointer_type_name.as_ptr(),
+                Some(a.free_pointer),
             );
         }
     };
