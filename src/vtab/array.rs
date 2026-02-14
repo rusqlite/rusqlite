@@ -26,7 +26,7 @@
 //! }
 //! ```
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_int, CStr};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -40,11 +40,7 @@ use crate::{Connection, Result};
 
 // http://sqlite.org/bindptr.html
 
-pub(crate) const ARRAY_TYPE: *const c_char = c"rarray".as_ptr();
-
-pub(crate) unsafe extern "C" fn free_array(p: *mut c_void) {
-    Rc::decrement_strong_count(p as *const Vec<Value>);
-}
+const ARRAY_TYPE: &CStr = c"rarray";
 
 /// Array parameter / pointer
 pub type Array = Rc<Vec<Value>>;
@@ -52,7 +48,7 @@ pub type Array = Rc<Vec<Value>>;
 impl ToSql for Array {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::Array(self.clone()))
+        Ok(ToSqlOutput::from_rc(self.clone(), ARRAY_TYPE))
     }
 }
 
@@ -129,7 +125,7 @@ struct ArrayTabCursor<'vtab> {
     /// The rowid
     row_id: i64,
     /// Pointer to the array of values ("pointer")
-    ptr: Option<Array>,
+    ptr: Option<&'vtab Vec<Value>>,
     phantom: PhantomData<&'vtab ArrayTab>,
 }
 
@@ -145,7 +141,7 @@ impl ArrayTabCursor<'_> {
 
     fn len(&self) -> i64 {
         match self.ptr {
-            Some(ref a) => a.len() as i64,
+            Some(a) => a.len() as i64,
             _ => 0,
         }
     }
@@ -153,7 +149,7 @@ impl ArrayTabCursor<'_> {
 unsafe impl VTabCursor for ArrayTabCursor<'_> {
     fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Filters<'_>) -> Result<()> {
         if idx_num > 0 {
-            self.ptr = args.get_array(0);
+            self.ptr = unsafe { args.get_pointer(0, ARRAY_TYPE) };
         } else {
             self.ptr = None;
         }
@@ -174,7 +170,7 @@ unsafe impl VTabCursor for ArrayTabCursor<'_> {
         match i {
             CARRAY_COLUMN_POINTER => Ok(()),
             _ => {
-                if let Some(ref array) = self.ptr {
+                if let Some(array) = self.ptr {
                     let value = &array[(self.row_id - 1) as usize];
                     ctx.set_result(&value)
                 } else {

@@ -344,6 +344,27 @@ impl Row<'_> {
     pub fn get_ref_unwrap<I: RowIndex>(&self, idx: I) -> ValueRef<'_> {
         self.get_ref(idx).unwrap()
     }
+
+    /// Return raw pointer at `idx`
+    /// # Safety
+    /// This function is unsafe because it uses raw pointer and cast
+    #[cfg(feature = "pointer")]
+    pub unsafe fn get_pointer<I: RowIndex, T: 'static>(
+        &self,
+        idx: I,
+        ptr_type: &'static std::ffi::CStr,
+    ) -> Result<Option<&T>> {
+        let idx = idx.idx(self.stmt)?;
+        debug_assert_eq!(self.stmt.stmt.column_type(idx), super::ffi::SQLITE_NULL);
+        let sv = super::ffi::sqlite3_column_value(self.stmt.stmt.ptr(), idx as std::ffi::c_int);
+        Ok(if sv.is_null() {
+            None
+        } else {
+            super::ffi::sqlite3_value_pointer(sv, ptr_type.as_ptr())
+                .cast::<T>()
+                .as_ref()
+        })
+    }
 }
 
 impl<'stmt> AsRef<Statement<'stmt>> for Row<'stmt> {

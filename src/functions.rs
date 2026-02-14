@@ -132,6 +132,24 @@ impl Context<'_> {
         })
     }
 
+    /// Return raw pointer at `idx`
+    /// # Safety
+    /// This function is unsafe because it uses raw pointer and cast
+    #[cfg(feature = "pointer")]
+    pub unsafe fn get_pointer<T: 'static>(
+        &self,
+        idx: usize,
+        ptr_type: &'static std::ffi::CStr,
+    ) -> Option<&T> {
+        let arg = self.args[idx];
+        debug_assert_eq!(unsafe { ffi::sqlite3_value_type(arg) }, ffi::SQLITE_NULL);
+        unsafe {
+            ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr())
+                .cast::<T>()
+                .as_ref()
+        }
+    }
+
     /// Returns the `idx`th argument as a `ValueRef`.
     ///
     /// # Failure
@@ -858,13 +876,12 @@ mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use regex::Regex;
-    use std::ffi::c_double;
-
     #[cfg(feature = "window")]
     use crate::functions::WindowAggregate;
     use crate::functions::{Aggregate, Context, FunctionFlags, SqlFnArg, SubType};
     use crate::{Connection, Error, Result};
+    use regex::Regex;
+    use std::ffi::c_double;
 
     fn half(ctx: &Context<'_>) -> Result<c_double> {
         assert!(!ctx.is_empty());
@@ -1196,6 +1213,35 @@ mod test {
         );
         assert_eq!(0, db.one_column::<u32, _>("SELECT test_len(X'');", [])?);
         assert_eq!(0, db.one_column::<u32, _>("SELECT test_len(NULL);", [])?);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "pointer")]
+    fn test_pointer() -> Result<()> {
+        use crate::types::ToSqlOutput;
+        use std::ops::Deref;
+        use std::rc::Rc;
+
+        const PTR_TYPE: &std::ffi::CStr = c"my_rust_ptr";
+        let rc = Rc::new(1);
+        {
+            let ptr = ToSqlOutput::from_rc(rc.clone(), PTR_TYPE);
+            assert_eq!(2, Rc::strong_count(&rc));
+            fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
+                let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
+                assert_eq!(x, Some(&1));
+                Ok(ToSqlOutput::from_rc(Rc::new(*x.unwrap()), PTR_TYPE))
+            }
+            let db = Connection::open_in_memory()?;
+            db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;
+            let mut stmt = db.prepare("SELECT myfunc(?)")?;
+            let result = stmt.query_one([ptr], |r| {
+                unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) }.map(|opt| opt.cloned())
+            })?;
+            assert_eq!(result.unwrap(), *rc.deref());
+        }
+        assert_eq!(1, Rc::strong_count(&rc));
         Ok(())
     }
 }
