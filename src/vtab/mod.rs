@@ -14,6 +14,8 @@ use std::ffi::{c_char, c_int, c_void, CStr};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr;
+#[cfg(feature = "value_pointer")]
+use std::rc::Rc;
 use std::slice;
 
 use crate::ffi::sqlite3_free;
@@ -24,6 +26,8 @@ use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
 use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
 use crate::util::{alloc, free_boxed_value};
+#[cfg(feature = "value_pointer")]
+use crate::vtab::value_pointer::PointerType;
 use crate::{str_to_cstring, Connection, Error, InnerConnection, Name, Result};
 
 // let conn: Connection = ...;
@@ -939,6 +943,23 @@ impl Values<'_> {
         }
     }
 
+    /// returns a value pointer that was provided to SQLite via `ffi::sqlite3_result_pointer`.
+    #[cfg(feature = "value_pointer")]
+    pub fn get_pointer<T: 'static>(&self, idx: usize, ptr_type: PointerType<T>) -> Option<Rc<T>> {
+        let arg = self.args[idx];
+        let ptr = unsafe { ffi::sqlite3_value_pointer(arg, ptr_type.get_type_name().as_ptr()) };
+
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe {
+                let ptr = ptr as *const T;
+                Rc::increment_strong_count(ptr); // don't consume it
+                Rc::from_raw(ptr)
+            })
+        }
+    }
+
     /// Turns `Values` into an iterator.
     #[inline]
     #[must_use]
@@ -1531,6 +1552,8 @@ pub mod array;
 pub mod csvtab;
 #[cfg(feature = "series")]
 pub mod series; // SQLite >= 3.9.0
+#[cfg(feature = "value_pointer")]
+pub mod value_pointer;
 #[cfg(all(test, feature = "modern_sqlite"))]
 mod vtablog;
 

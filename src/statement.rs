@@ -646,6 +646,22 @@ impl Statement<'_> {
                     )
                 });
             }
+            #[cfg(feature = "value_pointer")]
+            ToSqlOutput::ValuePointer(sqlite_pointer) => {
+                return self.conn.decode_result(unsafe {
+                    use std::rc::Rc;
+
+                    let v = Rc::into_raw(sqlite_pointer.value) as *mut c_void;
+
+                    ffi::sqlite3_bind_pointer(
+                        ptr,
+                        ndx as c_int,
+                        v,
+                        sqlite_pointer.pointer_type_name.as_ptr(),
+                        Some(sqlite_pointer.free_pointer),
+                    )
+                });
+            }
         };
         self.conn.decode_result(match value {
             ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, ndx as c_int) },

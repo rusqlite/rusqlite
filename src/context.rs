@@ -44,6 +44,17 @@ pub(super) unsafe fn set_result(
                 Some(free_array),
             );
         }
+        #[cfg(feature = "value_pointer")]
+        ToSqlOutput::ValuePointer(ref a) => {
+            use std::rc::Rc;
+
+            return ffi::sqlite3_result_pointer(
+                ctx,
+                Rc::into_raw(a.value.clone()) as *mut c_void,
+                a.pointer_type_name.as_ptr(),
+                Some(a.free_pointer),
+            );
+        }
     };
 
     match value {
