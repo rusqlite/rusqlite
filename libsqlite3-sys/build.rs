@@ -4,6 +4,11 @@ use std::path::Path;
 #[cfg(all(feature = "loadable_extension", feature = "preupdate_hook"))]
 compile_error!("feature \"loadable_extension\" and feature \"preupdate_hook\" cannot be enabled at the same time");
 
+#[cfg(all(feature = "loadable_extension", feature = "bundled"))]
+compile_error!(
+    "feature \"loadable_extension\" and feature \"bundled\" cannot be enabled at the same time"
+);
+
 /// Tells whether we're building for Windows. This is more suitable than a plain
 /// `cfg!(windows)`, since the latter does not properly handle cross-compilation
 ///
