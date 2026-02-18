@@ -107,6 +107,14 @@ impl ToSql for DateTime<FixedOffset> {
 /// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") into `DateTime<Utc>`.
 impl FromSql for DateTime<Utc> {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        // Accept unix epoch seconds stored as INTEGER.
+        if let Ok(secs) = value.as_i64() {
+            return Utc
+                .timestamp_opt(secs, 0)
+                .single()
+                .ok_or_else(|| FromSqlError::Other("invalid unix timestamp".into()));
+        }
+
         {
             // Try to parse value as rfc3339 first.
             let s = value.as_str()?;
@@ -303,5 +311,16 @@ mod test {
     fn test_lenient_parse_timezone() {
         DateTime::<Utc>::column_result(ValueRef::Text(b"1970-01-01T00:00:00Z")).unwrap();
         DateTime::<Utc>::column_result(ValueRef::Text(b"1970-01-01T00:00:00+00")).unwrap();
+    }
+
+    #[test]
+    fn test_date_time_utc_from_integer() -> Result<()> {
+        let db = checked_memory_handle()?;
+
+        // 2016-02-23 23:56:04 UTC
+        let v: DateTime<Utc> = db.one_column("SELECT 1456271764", [])?;
+
+        assert_eq!(v, Utc.timestamp_opt(1456271764, 0).single().unwrap());
+        Ok(())
     }
 }
