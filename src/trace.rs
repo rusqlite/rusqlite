@@ -109,7 +109,14 @@ impl StmtRef<'_> {
     }
     /// SQL text
     pub fn sql(&self) -> Cow<'_, str> {
-        unsafe { CStr::from_ptr(ffi::sqlite3_sql(self.ptr)).to_string_lossy() }
+        let sql = unsafe { ffi::sqlite3_sql(self.ptr) };
+
+        if sql.is_null() {
+            return Cow::default();
+        }
+
+        // Safety: sql is a valid pointer to a cstr returned by sqlite3
+        unsafe { CStr::from_ptr(sql).to_string_lossy() }
     }
     /// Expanded SQL text
     pub fn expanded_sql(&self) -> Option<String> {
