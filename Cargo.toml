@@ -171,7 +171,7 @@ smallvec = "1.6.1"
 rusqlite-macros = { path = "rusqlite-macros", version = "0.4.2", optional = true }
 
 [target.'cfg(not(all(target_family = "wasm", target_os = "unknown")))'.dependencies]
-libsqlite3-sys = { path = "libsqlite3-sys", version = "0.36.0" }
+libsqlite3-sys = { path = "libsqlite3-sys", version = ">=0.30.0, <0.37.0" }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
 sqlite-wasm-rs = { version = "0.5.1", default-features = false }
