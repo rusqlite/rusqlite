@@ -153,7 +153,7 @@ bitflags = "2.6.0"
 # LRU cache of statement
 hashlink = { version = "0.11", optional = true }
 # Chrono Date/Time/Timestamp persistence
-chrono = { version = "0.4.38", optional = true, default-features = false, features = [
+chrono = { version = "0.4.42", optional = true, default-features = false, features = [
     "clock",
 ] }
 # JSON persistence
@@ -175,7 +175,7 @@ libsqlite3-sys = { path = "libsqlite3-sys", version = "0.36.0" }
 
 [target.'cfg(all(target_family = "wasm", target_os = "unknown"))'.dependencies]
 sqlite-wasm-rs = { version = "0.5.1", default-features = false }
-chrono = { version = "0.4.38", optional = true, default-features = false, features = ["wasmbind"] }
+chrono = { version = "0.4.42", optional = true, default-features = false, features = ["wasmbind"] }
 jiff = { version = "0.2", optional = true, default-features = false, features = ["js"] }
 time = { version = "0.3.47", optional = true, features = ["wasm-bindgen"] }
 uuid = { version = "1.0", optional = true, features = ["js"] }
