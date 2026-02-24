@@ -261,7 +261,8 @@ mod test {
     use std::sync::{LazyLock, Mutex};
     use std::time::Duration;
 
-    use crate::{Connection, Result};
+    use super::{TraceEvent, TraceEventCodes};
+    use crate::{Connection, Result, MAIN_DB};
 
     #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     #[test]
@@ -318,7 +319,6 @@ mod test {
 
     #[test]
     pub fn trace_v2() -> Result<()> {
-        use super::{TraceEvent, TraceEventCodes};
         use std::borrow::Borrow;
         use std::cmp::Ordering;
 
@@ -358,6 +358,28 @@ mod test {
 
         let db = Connection::open_in_memory()?;
         db.trace_v2(TraceEventCodes::empty(), None);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "blob")]
+    pub fn null_sql() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let sql = "CREATE TABLE test (content BLOB);
+                   INSERT INTO test VALUES (ZEROBLOB(10));";
+        db.execute_batch(sql)?;
+        let rowid = db.last_insert_rowid();
+
+        db.trace_v2(
+            TraceEventCodes::SQLITE_TRACE_ROW,
+            Some(|e| {
+                if let TraceEvent::Row(s) = e {
+                    assert_eq!(s.sql(), "");
+                }
+            }),
+        );
+        db.blob_open(MAIN_DB, c"test", c"content", rowid, true)?;
+
         Ok(())
     }
 }
