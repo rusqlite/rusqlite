@@ -374,7 +374,7 @@ mod test {
             TraceEventCodes::SQLITE_TRACE_ROW,
             Some(|e| {
                 if let TraceEvent::Row(s) = e {
-                    println!("Row");
+                    assert_eq!(s.sql(), "");
                 }
             }),
         );
