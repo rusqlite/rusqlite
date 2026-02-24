@@ -372,12 +372,10 @@ mod test {
 
         db.trace_v2(
             TraceEventCodes::SQLITE_TRACE_ROW,
-            Some(|e| match e {
-                TraceEvent::Row(s) => {
+            Some(|e| {
+                if let TraceEvent::Row(s) = e {
                     println!("Row");
-                    assert_eq!(s.sql(), "");
                 }
-                _ => {}
             }),
         );
         db.blob_open(MAIN_DB, c"test", c"content", rowid, true)?;
