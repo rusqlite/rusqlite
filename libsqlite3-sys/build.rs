@@ -210,6 +210,8 @@ mod build_bundled {
                 cfg.include(env::var("DEP_OPENSSL_INCLUDE").unwrap());
                 // cargo will resolve downstream to the static lib in
                 // openssl-sys
+            } else if cfg!(feature = "bundled-sqlcipher-custom-crypto") {
+                cfg.flag("-DSQLCIPHER_CRYPTO_CUSTOM=rusqlite_custom_crypto_setup");
             } else if use_openssl {
                 cfg.include(inc_dir.to_string_lossy().as_ref());
                 let lib_name = if is_windows { "libcrypto" } else { "crypto" };
@@ -604,6 +606,9 @@ mod bindings {
         if cfg!(any(feature = "sqlcipher", feature = "bundled-sqlcipher")) {
             bindings = bindings.clang_arg("-DSQLITE_HAS_CODEC");
         }
+        if cfg!(feature = "bundled-sqlcipher-custom-crypto") {
+            bindings = bindings.clang_arg("-DSQLCIPHER_CRYPTO_CUSTOM=rusqlite_custom_crypto_setup");
+        }
         if cfg!(feature = "unlock_notify") {
             bindings = bindings.clang_arg("-DSQLITE_ENABLE_UNLOCK_NOTIFY");
         }
@@ -639,6 +644,10 @@ mod bindings {
                 .blocklist_type("va_list")
                 .blocklist_item("__.*");
         }
+
+        let bindings = bindings
+            .blocklist_item("sqlcipher_codec_pragma")
+            .blocklist_type("Parse");
 
         let bindings = bindings
             .layout_tests(false)
