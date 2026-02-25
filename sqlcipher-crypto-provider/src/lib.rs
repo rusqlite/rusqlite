@@ -1,9 +1,16 @@
 use core::ffi::CStr;
 
+use aes::cipher::{
+    BlockDecryptMut, BlockEncryptMut, BlockSizeUser, IvSizeUser, KeyIvInit, KeySizeUser,
+    block_padding::NoPadding,
+};
 use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2_hmac;
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
+
+type Aes256CbcEnc = cbc::Encryptor<aes::Aes256>;
+type Aes256CbcDec = cbc::Decryptor<aes::Aes256>;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum HmacAlgorithm {
@@ -32,10 +39,11 @@ pub enum KdfAlgorithm {
 impl KdfAlgorithm {}
 
 pub trait SqlcipherCryptoProvider {
+    // TODO: should the lifetime of the return value be limited to 'static?
     fn get_provider_name(&self) -> &CStr;
 
-    fn add_random(&mut self, _buffer: &[u8]) -> i32;
-    fn random(&mut self, _buffer: &mut [u8]) -> i32;
+    fn add_random(&mut self, buffer: &[u8]) -> i32;
+    fn random(&mut self, buffer: &mut [u8]) -> i32;
 
     fn hmac(
         &mut self,
@@ -58,6 +66,7 @@ pub trait SqlcipherCryptoProvider {
     fn encrypt(&mut self, key: &[u8], iv: &[u8], input: &[u8], out: &mut [u8]) -> i32;
     fn decrypt(&mut self, key: &[u8], iv: &[u8], input: &[u8], out: &mut [u8]) -> i32;
 
+    // TODO: should the lifetime of the return value be limited to 'static?
     fn get_cipher(&self) -> &CStr;
 
     fn get_key_sz(&self) -> i32;
@@ -67,6 +76,7 @@ pub trait SqlcipherCryptoProvider {
 
     fn fips_status(&self) -> i32;
 
+    // TODO: should the lifetime of the return value be limited to 'static?
     fn get_provider_version(&self) -> &CStr;
 }
 
@@ -75,11 +85,14 @@ pub struct RustCryptoProvider;
 
 impl SqlcipherCryptoProvider for RustCryptoProvider {
     fn get_provider_name(&self) -> &CStr {
-        todo!()
+        c"RustCrypto"
     }
 
     fn add_random(&mut self, _buffer: &[u8]) -> i32 {
-        todo!()
+        // We discard the randomness.
+        // `ThreadRng` from `rand` has no API to add seed data, and it's fast and secure enough on
+        // its own.
+        0
     }
 
     fn random(&mut self, buffer: &mut [u8]) -> i32 {
@@ -147,36 +160,40 @@ impl SqlcipherCryptoProvider for RustCryptoProvider {
         0
     }
 
-    fn decrypt(
-        &mut self,
-        _key: &[u8],
-        _iv: &[u8],
-        _input: &[u8],
-        _out: &mut [u8],
-    ) -> i32 {
-        todo!()
+    fn decrypt(&mut self, key: &[u8], iv: &[u8], input: &[u8], out: &mut [u8]) -> i32 {
+        let dec = Aes256CbcDec::new(key.into(), iv.into());
+        if let Err(_e) = dec.decrypt_padded_b2b_mut::<NoPadding>(input, out) {
+            out.fill(0);
+            return -1;
+        }
+
+        0
     }
 
-    fn encrypt(
-        &mut self,
-        _key: &[u8],
-        _iv: &[u8],
-        _input: &[u8],
-        _out: &mut [u8],
-    ) -> i32 {
-        todo!()
+    fn encrypt(&mut self, key: &[u8], iv: &[u8], input: &[u8], out: &mut [u8]) -> i32 {
+        let dec = Aes256CbcEnc::new(key.into(), iv.into());
+        if let Err(_e) = dec.encrypt_padded_b2b_mut::<NoPadding>(input, out) {
+            out.fill(0);
+            return -1;
+        }
+
+        0
+    }
+
+    fn get_cipher(&self) -> &CStr {
+        c"aes256-CBC"
     }
 
     fn get_key_sz(&self) -> i32 {
-        todo!()
+        Aes256CbcEnc::key_size() as i32
     }
 
     fn get_iv_sz(&self) -> i32 {
-        todo!()
+        Aes256CbcEnc::iv_size() as i32
     }
 
     fn get_block_sz(&self) -> i32 {
-        todo!()
+        Aes256CbcEnc::block_size() as i32
     }
 
     fn get_hmac_sz(&self, algorithm: HmacAlgorithm) -> i32 {
@@ -188,6 +205,7 @@ impl SqlcipherCryptoProvider for RustCryptoProvider {
     }
 
     fn get_provider_version(&self) -> &CStr {
-        todo!()
+        // env!("CARGO_PKG_VERSION").into()
+        c"0.1.0"
     }
 }
