@@ -523,6 +523,38 @@ pub const FTS5_TOKENIZE_PREFIX: i32 = 2;
 pub const FTS5_TOKENIZE_DOCUMENT: i32 = 4;
 pub const FTS5_TOKENIZE_AUX: i32 = 8;
 pub const FTS5_TOKEN_COLOCATED: i32 = 1;
+pub const SQLCIPHER_HMAC_SHA1: i32 = 0;
+pub const SQLCIPHER_HMAC_SHA1_LABEL: &::core::ffi::CStr = c"HMAC_SHA1";
+pub const SQLCIPHER_HMAC_SHA256: i32 = 1;
+pub const SQLCIPHER_HMAC_SHA256_LABEL: &::core::ffi::CStr = c"HMAC_SHA256";
+pub const SQLCIPHER_HMAC_SHA512: i32 = 2;
+pub const SQLCIPHER_HMAC_SHA512_LABEL: &::core::ffi::CStr = c"HMAC_SHA512";
+pub const SQLCIPHER_PBKDF2_HMAC_SHA1: i32 = 0;
+pub const SQLCIPHER_PBKDF2_HMAC_SHA1_LABEL: &::core::ffi::CStr = c"PBKDF2_HMAC_SHA1";
+pub const SQLCIPHER_PBKDF2_HMAC_SHA256: i32 = 1;
+pub const SQLCIPHER_PBKDF2_HMAC_SHA256_LABEL: &::core::ffi::CStr = c"PBKDF2_HMAC_SHA256";
+pub const SQLCIPHER_PBKDF2_HMAC_SHA512: i32 = 2;
+pub const SQLCIPHER_PBKDF2_HMAC_SHA512_LABEL: &::core::ffi::CStr = c"PBKDF2_HMAC_SHA512";
+pub const SQLCIPHER_MUTEX_PROVIDER: i32 = 0;
+pub const SQLCIPHER_MUTEX_PROVIDER_ACTIVATE: i32 = 1;
+pub const SQLCIPHER_MUTEX_PROVIDER_RAND: i32 = 2;
+pub const SQLCIPHER_MUTEX_RESERVED1: i32 = 3;
+pub const SQLCIPHER_MUTEX_RESERVED2: i32 = 4;
+pub const SQLCIPHER_MUTEX_RESERVED3: i32 = 5;
+pub const SQLCIPHER_MUTEX_MEM: i32 = 6;
+pub const SQLCIPHER_MUTEX_SHAREDCACHE: i32 = 7;
+pub const SQLCIPHER_MUTEX_COUNT: i32 = 8;
+pub const SQLCIPHER_LOG_NONE: i32 = 0;
+pub const SQLCIPHER_LOG_ANY: i64 = 4294967295;
+pub const SQLCIPHER_LOG_ERROR: i32 = 1;
+pub const SQLCIPHER_LOG_WARN: i32 = 2;
+pub const SQLCIPHER_LOG_INFO: i32 = 4;
+pub const SQLCIPHER_LOG_DEBUG: i32 = 8;
+pub const SQLCIPHER_LOG_TRACE: i32 = 16;
+pub const SQLCIPHER_LOG_CORE: i32 = 1;
+pub const SQLCIPHER_LOG_MEMORY: i32 = 2;
+pub const SQLCIPHER_LOG_MUTEX: i32 = 4;
+pub const SQLCIPHER_LOG_PROVIDER: i32 = 8;
 unsafe extern "C" {
     pub static sqlite3_version: [::core::ffi::c_char; 0usize];
 }
@@ -3518,4 +3550,174 @@ pub struct fts5_api {
             ppTokenizer: *mut *mut fts5_tokenizer_v2,
         ) -> ::core::ffi::c_int,
     >,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct sqlcipher_provider {
+    pub init: ::core::option::Option<unsafe extern "C" fn() -> ::core::ffi::c_int>,
+    pub shutdown: ::core::option::Option<unsafe extern "C" fn()>,
+    pub get_provider_name: ::core::option::Option<
+        unsafe extern "C" fn(ctx: *mut ::core::ffi::c_void) -> *const ::core::ffi::c_char,
+    >,
+    pub add_random: ::core::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::core::ffi::c_void,
+            buffer: *const ::core::ffi::c_void,
+            length: ::core::ffi::c_int,
+        ) -> ::core::ffi::c_int,
+    >,
+    pub random: ::core::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::core::ffi::c_void,
+            buffer: *mut ::core::ffi::c_void,
+            length: ::core::ffi::c_int,
+        ) -> ::core::ffi::c_int,
+    >,
+    pub hmac: ::core::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::core::ffi::c_void,
+            algorithm: ::core::ffi::c_int,
+            hmac_key: *const ::core::ffi::c_uchar,
+            key_sz: ::core::ffi::c_int,
+            in_: *const ::core::ffi::c_uchar,
+            in_sz: ::core::ffi::c_int,
+            in2: *const ::core::ffi::c_uchar,
+            in2_sz: ::core::ffi::c_int,
+            out: *mut ::core::ffi::c_uchar,
+        ) -> ::core::ffi::c_int,
+    >,
+    pub kdf: ::core::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::core::ffi::c_void,
+            algorithm: ::core::ffi::c_int,
+            pass: *const ::core::ffi::c_uchar,
+            pass_sz: ::core::ffi::c_int,
+            salt: *const ::core::ffi::c_uchar,
+            salt_sz: ::core::ffi::c_int,
+            workfactor: ::core::ffi::c_int,
+            key_sz: ::core::ffi::c_int,
+            key: *mut ::core::ffi::c_uchar,
+        ) -> ::core::ffi::c_int,
+    >,
+    pub cipher: ::core::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::core::ffi::c_void,
+            mode: ::core::ffi::c_int,
+            key: *const ::core::ffi::c_uchar,
+            key_sz: ::core::ffi::c_int,
+            iv: *const ::core::ffi::c_uchar,
+            in_: *const ::core::ffi::c_uchar,
+            in_sz: ::core::ffi::c_int,
+            out: *mut ::core::ffi::c_uchar,
+        ) -> ::core::ffi::c_int,
+    >,
+    pub get_cipher: ::core::option::Option<
+        unsafe extern "C" fn(ctx: *mut ::core::ffi::c_void) -> *const ::core::ffi::c_char,
+    >,
+    pub get_key_sz: ::core::option::Option<
+        unsafe extern "C" fn(ctx: *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+    >,
+    pub get_iv_sz: ::core::option::Option<
+        unsafe extern "C" fn(ctx: *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+    >,
+    pub get_block_sz: ::core::option::Option<
+        unsafe extern "C" fn(ctx: *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+    >,
+    pub get_hmac_sz: ::core::option::Option<
+        unsafe extern "C" fn(
+            ctx: *mut ::core::ffi::c_void,
+            algorithm: ::core::ffi::c_int,
+        ) -> ::core::ffi::c_int,
+    >,
+    pub ctx_init: ::core::option::Option<
+        unsafe extern "C" fn(ctx: *mut *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+    >,
+    pub ctx_free: ::core::option::Option<
+        unsafe extern "C" fn(ctx: *mut *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+    >,
+    pub fips_status: ::core::option::Option<
+        unsafe extern "C" fn(ctx: *mut ::core::ffi::c_void) -> ::core::ffi::c_int,
+    >,
+    pub get_provider_version: ::core::option::Option<
+        unsafe extern "C" fn(ctx: *mut ::core::ffi::c_void) -> *const ::core::ffi::c_char,
+    >,
+    pub next: *mut sqlcipher_provider,
+}
+unsafe extern "C" {
+    pub fn sqlcipher_extra_init(arg1: *const ::core::ffi::c_char) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlcipher_extra_shutdown();
+}
+unsafe extern "C" {
+    pub fn sqlcipher_init_memmethods();
+}
+unsafe extern "C" {
+    pub fn sqlcipherCodecAttach(
+        arg1: *mut sqlite3,
+        arg2: ::core::ffi::c_int,
+        arg3: *const ::core::ffi::c_void,
+        arg4: ::core::ffi::c_int,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlcipherCodecGetKey(
+        arg1: *mut sqlite3,
+        arg2: ::core::ffi::c_int,
+        arg3: *mut *mut ::core::ffi::c_void,
+        arg4: *mut ::core::ffi::c_int,
+    );
+}
+unsafe extern "C" {
+    pub fn sqlcipher_find_db_index(
+        arg1: *mut sqlite3,
+        arg2: *const ::core::ffi::c_char,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlcipher_memset(
+        arg1: *mut ::core::ffi::c_void,
+        arg2: ::core::ffi::c_uchar,
+        arg3: sqlite_uint64,
+    ) -> *mut ::core::ffi::c_void;
+}
+unsafe extern "C" {
+    pub fn sqlcipher_ismemset(
+        arg1: *const ::core::ffi::c_void,
+        arg2: ::core::ffi::c_uchar,
+        arg3: sqlite_uint64,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlcipher_memcmp(
+        arg1: *const ::core::ffi::c_void,
+        arg2: *const ::core::ffi::c_void,
+        arg3: ::core::ffi::c_int,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlcipher_malloc(arg1: sqlite_uint64) -> *mut ::core::ffi::c_void;
+}
+unsafe extern "C" {
+    pub fn sqlcipher_free(arg1: *mut ::core::ffi::c_void, arg2: sqlite_uint64);
+}
+unsafe extern "C" {
+    pub fn sqlcipher_version() -> *mut ::core::ffi::c_char;
+}
+unsafe extern "C" {
+    pub fn sqlcipher_register_provider(arg1: *mut sqlcipher_provider) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlcipher_get_provider() -> *mut sqlcipher_provider;
+}
+unsafe extern "C" {
+    pub fn sqlcipher_mutex(arg1: ::core::ffi::c_int) -> *mut sqlite3_mutex;
+}
+unsafe extern "C" {
+    pub fn sqlcipher_log(
+        level: ::core::ffi::c_uint,
+        source: ::core::ffi::c_uint,
+        message: *const ::core::ffi::c_char,
+        ...
+    );
 }
