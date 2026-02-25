@@ -1,6 +1,7 @@
 use core::ffi::CStr;
 
 use hmac::{Hmac, Mac};
+use pbkdf2::pbkdf2_hmac;
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
 
@@ -28,8 +29,7 @@ pub enum KdfAlgorithm {
     Pbkdf2HmacSha512,
 }
 
-impl KdfAlgorithm {
-}
+impl KdfAlgorithm {}
 
 pub trait SqlcipherCryptoProvider {
     fn get_provider_name(&self) -> &CStr;
@@ -132,13 +132,19 @@ impl SqlcipherCryptoProvider for RustCryptoProvider {
 
     fn kdf(
         &mut self,
-        _algorithm: KdfAlgorithm,
-        _pass: &[u8],
-        _salt: &[u8],
-        _workfactor: i32,
-        _key: &mut [u8],
+        algorithm: KdfAlgorithm,
+        password: &[u8],
+        salt: &[u8],
+        n: i32,
+        key: &mut [u8],
     ) -> i32 {
-        todo!()
+        match algorithm {
+            KdfAlgorithm::Pbkdf2HmacSha1 => pbkdf2_hmac::<Sha1>(password, salt, n as u32, key),
+            KdfAlgorithm::Pbkdf2HmacSha256 => pbkdf2_hmac::<Sha256>(password, salt, n as u32, key),
+            KdfAlgorithm::Pbkdf2HmacSha512 => pbkdf2_hmac::<Sha512>(password, salt, n as u32, key),
+        }
+
+        0
     }
 
     fn decrypt(
