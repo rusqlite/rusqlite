@@ -1,5 +1,9 @@
 use core::ffi::CStr;
 
+use hmac::{Hmac, Mac};
+use sha1::Sha1;
+use sha2::{Sha256, Sha512};
+
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum HmacAlgorithm {
     HmacSha1,
@@ -85,13 +89,45 @@ impl SqlcipherCryptoProvider for RustCryptoProvider {
 
     fn hmac(
         &mut self,
-        _algorithm: HmacAlgorithm,
+        algorithm: HmacAlgorithm,
         _hmac_key: &[u8],
-        _input1: &[u8],
-        _input2: Option<&[u8]>,
-        _out: &mut [u8],
+        input1: &[u8],
+        input2: Option<&[u8]>,
+        out: &mut [u8],
     ) -> i32 {
-        todo!()
+        match algorithm {
+            HmacAlgorithm::HmacSha1 => {
+                let mut mac = Hmac::<Sha1>::new_from_slice(_hmac_key).expect("hmac from any size");
+                mac.update(input1);
+                if let Some(input) = input2 {
+                    mac.update(input);
+                }
+                let result = mac.finalize().into_bytes();
+                out.copy_from_slice(&result);
+            }
+            HmacAlgorithm::HmacSha256 => {
+                let mut mac =
+                    Hmac::<Sha256>::new_from_slice(_hmac_key).expect("hmac from any size");
+                mac.update(input1);
+                if let Some(input) = input2 {
+                    mac.update(input);
+                }
+                let result = mac.finalize().into_bytes();
+                out.copy_from_slice(&result);
+            }
+            HmacAlgorithm::HmacSha512 => {
+                let mut mac =
+                    Hmac::<Sha512>::new_from_slice(_hmac_key).expect("hmac from any size");
+                mac.update(input1);
+                if let Some(input) = input2 {
+                    mac.update(input);
+                }
+                let result = mac.finalize().into_bytes();
+                out.copy_from_slice(&result);
+            }
+        }
+
+        0
     }
 
     fn kdf(
@@ -137,8 +173,8 @@ impl SqlcipherCryptoProvider for RustCryptoProvider {
         todo!()
     }
 
-    fn get_hmac_sz(&self, _algorithm: HmacAlgorithm) -> i32 {
-        todo!()
+    fn get_hmac_sz(&self, algorithm: HmacAlgorithm) -> i32 {
+        algorithm.output_len() as i32
     }
 
     fn fips_status(&self) -> i32 {
