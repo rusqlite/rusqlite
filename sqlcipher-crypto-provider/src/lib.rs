@@ -201,7 +201,7 @@ impl SqlcipherCryptoProvider for RustCryptoProvider {
     }
 
     fn fips_status(&self) -> i32 {
-        todo!()
+        -1
     }
 
     fn get_provider_version(&self) -> &CStr {
