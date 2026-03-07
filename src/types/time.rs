@@ -12,7 +12,7 @@
 //! Time String that contain an optional timezone without an explicit date are unsupported.
 //! All other assumptions described in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) section are unsupported.
 
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
 use crate::{Error, Result};
 use time::format_description::FormatItem;
 use time::macros::format_description;
@@ -62,10 +62,15 @@ impl ToSql for OffsetDateTime {
     }
 }
 
-// Supports parsing formats 2-7 from https://www.sqlite.org/lang_datefunc.html
+// Supports parsing formats 2-7 and 12 (unix timestamp) from https://www.sqlite.org/lang_datefunc.html
 // Formats 2-7 without a timezone assumes UTC
 impl FromSql for OffsetDateTime {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        if value.data_type() == Type::Integer {
+            return value
+                .as_i64()
+                .and_then(|i| OffsetDateTime::from_unix_timestamp(i).map_err(FromSqlError::other));
+        }
         value.as_str().and_then(|s| {
             if let Some(b' ') = s.as_bytes().get(23) {
                 // legacy
@@ -164,7 +169,7 @@ mod test {
 
     fn checked_memory_handle() -> Result<Connection> {
         let db = Connection::open_in_memory()?;
-        db.execute_batch("CREATE TABLE foo (t TEXT, i INTEGER, f FLOAT, b BLOB)")?;
+        db.execute_batch("CREATE TABLE foo (t TEXT, i INTEGER AS (strftime('%s', t)), b BLOB)")?;
         Ok(db)
     }
 
@@ -189,10 +194,12 @@ mod test {
             db.execute("INSERT INTO foo(t) VALUES (?1)", [ts])?;
 
             let from: OffsetDateTime = db.one_column("SELECT t FROM foo", [])?;
+            assert_eq!(from, ts);
+
+            let from: OffsetDateTime = db.one_column("SELECT i FROM foo", [])?;
+            assert_eq!(from, ts.truncate_to_second());
 
             db.execute("DELETE FROM foo", [])?;
-
-            assert_eq!(from, ts);
         }
         Ok(())
     }
