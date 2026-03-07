@@ -140,8 +140,10 @@ impl InnerConnection {
         if self.db.is_null() {
             return Ok(());
         }
-        self.remove_hooks();
-        self.remove_preupdate_hook();
+        if self.owned {
+            self.remove_hooks();
+            self.remove_preupdate_hook();
+        }
         let mut shared_handle = self.interrupt_lock.lock().unwrap();
         assert!(
             !self.owned || !shared_handle.is_null(),
@@ -216,13 +218,29 @@ impl InnerConnection {
         let c_sql = sql.as_bytes().as_ptr().cast::<c_char>();
         let mut c_tail: *const c_char = ptr::null();
         #[cfg(not(feature = "unlock_notify"))]
-        let r = unsafe { self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail) };
+        let r = unsafe {
+            ffi::sqlite3_prepare_v3(
+                self.db(),
+                c_sql,
+                len,
+                flags.bits(),
+                &mut c_stmt,
+                &mut c_tail,
+            )
+        };
         #[cfg(feature = "unlock_notify")]
         let r = unsafe {
             use crate::unlock_notify;
             let mut rc;
             loop {
-                rc = self.prepare_(c_sql, len, flags, &mut c_stmt, &mut c_tail);
+                rc = ffi::sqlite3_prepare_v3(
+                    self.db(),
+                    c_sql,
+                    len,
+                    flags.bits(),
+                    &mut c_stmt,
+                    &mut c_tail,
+                );
                 if !unlock_notify::is_locked(self.db, rc) {
                     break;
                 }
@@ -253,32 +271,6 @@ impl InnerConnection {
             Statement::new(conn, unsafe { RawStatement::new(c_stmt) }),
             tail,
         ))
-    }
-
-    #[inline]
-    #[cfg(not(feature = "modern_sqlite"))]
-    unsafe fn prepare_(
-        &self,
-        z_sql: *const c_char,
-        n_byte: c_int,
-        _: PrepFlags,
-        pp_stmt: *mut *mut ffi::sqlite3_stmt,
-        pz_tail: *mut *const c_char,
-    ) -> c_int {
-        ffi::sqlite3_prepare_v2(self.db(), z_sql, n_byte, pp_stmt, pz_tail)
-    }
-
-    #[inline]
-    #[cfg(feature = "modern_sqlite")]
-    unsafe fn prepare_(
-        &self,
-        z_sql: *const c_char,
-        n_byte: c_int,
-        flags: PrepFlags,
-        pp_stmt: *mut *mut ffi::sqlite3_stmt,
-        pz_tail: *mut *const c_char,
-    ) -> c_int {
-        ffi::sqlite3_prepare_v3(self.db(), z_sql, n_byte, flags.bits(), pp_stmt, pz_tail)
     }
 
     #[inline]
@@ -378,6 +370,14 @@ impl InnerConnection {
     #[cfg(feature = "modern_sqlite")] // 3.41.0
     pub fn is_interrupted(&self) -> bool {
         unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
+    }
+
+    #[cfg(any(feature = "hooks", feature = "preupdate_hook"))]
+    pub fn check_owned(&self) -> Result<()> {
+        if !self.owned {
+            return Err(err!(ffi::SQLITE_MISUSE, "Connection is not owned"));
+        }
+        Ok(())
     }
 }
 

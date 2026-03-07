@@ -20,7 +20,7 @@
 - [ ] `sqlite3_os_init`
 - [ ] `sqlite3_os_end`
 
-- [ ] `sqlite3_config` (partially, `fn` callback for SQLITE_CONFIG_LOG)
+- [ ] `sqlite3_config` (partially, `fn` callback for SQLITE_CONFIG_LOG) (cannot be used by a loadable extension)
 - [X] `sqlite3_db_config`
 
 - [X] `sqlite3_extended_result_codes` (not public, internal use only)
@@ -217,8 +217,9 @@
 - [X] `sqlite3_table_column_metadata`
 
 - [X] `sqlite3_load_extension`
-- [X] `sqlite3_enable_load_extension`
+- [X] `sqlite3_enable_load_extension` (cannot be used by a loadable extension)
 - [X] `sqlite3_auto_extension` (`fn` callbak with Connection ref)
+- [X] `sqlite3_cancel_auto_extension`
 - [X] `sqlite3_reset_auto_extension`
 
 - [ ] `sqlite3_create_module`
@@ -283,7 +284,7 @@
 - [X] `sqlite3_log`
 
 - [X] `sqlite3_wal_hook` (`fn` callback with Connection ref)
-- [X] `sqlite3_wal_autocheckpoint`
+- [ ] `sqlite3_wal_autocheckpoint`
 - [X] `sqlite3_wal_checkpoint`
 - [X] `sqlite3_wal_checkpoint_v2`
 
@@ -292,10 +293,10 @@
 - [X] `sqlite3_vtab_nochange`
 - [X] `sqlite3_vtab_collation`
 - [X] `sqlite3_vtab_distinct`
-- [ ] `sqlite3_vtab_in`
-- [ ] `sqlite3_vtab_in_first`
-- [ ] `sqlite3_vtab_in_next`
-- [ ] `sqlite3_vtab_rhs_value`
+- [X] `sqlite3_vtab_in`
+- [X] `sqlite3_vtab_in_first`
+- [X] `sqlite3_vtab_in_next`
+- [X] `sqlite3_vtab_rhs_value`
 
 - [ ] `sqlite3_stmt_scanstatus`
 - [ ] `sqlite3_stmt_scanstatus_v2`
@@ -303,7 +304,7 @@
 
 - [X] `sqlite3_db_cacheflush`
 
-- [X] `sqlite3_preupdate_hook` (`FnMut` callback with Connection ref, reference kept)
+- [X] `sqlite3_preupdate_hook` (`FnMut` callback with Connection ref, reference kept) (cannot be used by a loadable extension)
 - [X] `sqlite3_preupdate_old`
 - [X] `sqlite3_preupdate_count`
 - [X] `sqlite3_preupdate_depth`
@@ -330,7 +331,7 @@
 - [X] `sqlite3session_enable`
 - [X] `sqlite3session_indirect`
 - [X] `sqlite3session_attach`
-- [X] `sqlite3session_table_filter`
+- [X] `sqlite3session_table_filter` (Boxed callback, reference kept)
 - [X] `sqlite3session_changeset`
 - [ ] `sqlite3session_changeset_size`
 - [X] `sqlite3session_diff`
@@ -375,3 +376,30 @@
 - [X] `sqlite3changegroup_output_strm`
 - [ ] `sqlite3rebaser_rebase_strm`
 - [ ] `sqlite3session_config`
+
+## List of virtual table methods supported
+
+- [X] `xCreate`
+- [X] `xConnect`
+- [X] `xBestIndex`
+- [X] `xDisconnect`
+- [X] `xDestroy`
+- [X] `xOpen`
+- [X] `xClose`
+- [X] `xFilter`
+- [X] `xNext`
+- [X] `xEof`
+- [X] `xColumn`
+- [X] `xRowid`
+- [X] `xUpdate`
+- [X] `xBegin`
+- [X] `xSync`
+- [X] `xCommit`
+- [X] `xRollback`
+- [ ] `xFindFunction`
+- [ ] `xRename`
+- [ ] `xSavepoint`
+- [ ] `xRelease`
+- [ ] `xRollbackTo`
+- [ ] `xShadowName`
+- [ ] `xIntegrity`

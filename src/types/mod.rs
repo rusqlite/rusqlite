@@ -137,6 +137,9 @@ impl fmt::Display for Type {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::Value;
     use crate::{params, Connection, Error, Result, Statement};
     use std::ffi::{c_double, c_int};
@@ -385,7 +388,7 @@ mod test {
     #[test]
     #[expect(clippy::float_cmp)]
     fn test_numeric_conversions() -> Result<()> {
-        // Test what happens when we store an f32 and retrieve an i32 etc.
+        // Test what happens when we store a f32 and retrieve an i32 etc.
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo (x)")?;
 

@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
 use crate::Result;
 
 /// ISO 8601 calendar date without timezone => "YYYY-MM-DD"
@@ -104,9 +104,14 @@ impl ToSql for DateTime<FixedOffset> {
     }
 }
 
-/// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") into `DateTime<Utc>`.
+/// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") or unix timestamp (in seconds) into `DateTime<Utc>`.
 impl FromSql for DateTime<Utc> {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        if value.data_type() == Type::Integer {
+            return value.as_i64().and_then(|i| {
+                DateTime::from_timestamp_secs(i).ok_or_else(|| FromSqlError::OutOfRange(i))
+            });
+        }
         {
             // Try to parse value as rfc3339 first.
             let s = value.as_str()?;
@@ -127,7 +132,7 @@ impl FromSql for DateTime<Utc> {
     }
 }
 
-/// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") into `DateTime<Local>`.
+/// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") or unix timestamp (in seconds) into `DateTime<Local>`.
 impl FromSql for DateTime<Local> {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
@@ -149,17 +154,21 @@ impl FromSql for DateTime<FixedOffset> {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{
         types::{FromSql, ValueRef},
         Connection, Result,
     };
     use chrono::{
-        DateTime, Duration, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc,
+        DateTime, Duration, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone,
+        Timelike, Utc,
     };
 
     fn checked_memory_handle() -> Result<Connection> {
         let db = Connection::open_in_memory()?;
-        db.execute_batch("CREATE TABLE foo (t TEXT, i INTEGER, f FLOAT, b BLOB)")?;
+        db.execute_batch("CREATE TABLE foo (t TEXT, i INTEGER AS (strftime('%s', t)), b BLOB)")?;
         Ok(db)
     }
 
@@ -224,6 +233,8 @@ mod test {
 
         let v1: DateTime<Utc> = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(utc, v1);
+        let v1: DateTime<Utc> = db.one_column("SELECT i FROM foo", [])?;
+        assert_eq!(utc.with_nanosecond(0).unwrap(), v1);
 
         let v2: DateTime<Utc> = db.one_column("SELECT '2016-02-23 23:56:04.789'", [])?;
         assert_eq!(utc, v2);
@@ -252,6 +263,8 @@ mod test {
 
         let v: DateTime<Local> = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(local, v);
+        let v: DateTime<Local> = db.one_column("SELECT i FROM foo", [])?;
+        assert_eq!(local.with_nanosecond(0).unwrap(), v);
         Ok(())
     }
 

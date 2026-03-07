@@ -85,11 +85,18 @@ pub unsafe fn wait_for_unlock_notify(db: *mut ffi::sqlite3) -> c_int {
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use crate::{Connection, OpenFlags, Result, Transaction, TransactionBehavior};
     use std::sync::mpsc::sync_channel;
     use std::thread;
     use std::time;
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no thread on this platform"
+    )]
     #[test]
     fn test_unlock_notify() -> Result<()> {
         let url = "file::memory:?cache=shared";

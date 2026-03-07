@@ -26,3 +26,23 @@ ID: 1, Name: Steven
 ID: 2, Name: John
 ID: 3, Name: Alex
 ```
+
+## Run (wasm32-unknown-unknown)
+
+### Requisites
+
+- [emscripten](https://emscripten.org/docs/getting_started/downloads.html)
+- [wasm-bindgen-cli](https://github.com/wasm-bindgen/wasm-bindgen)
+
+```
+# Build
+$ cargo build --example persons --target wasm32-unknown-unknown --release
+# Bindgen
+$ wasm-bindgen target/wasm32-unknown-unknown/release/examples/persons.wasm --out-dir target/pkg --nodejs
+# Run
+$ node target/pkg/persons.js
+Found persons:
+ID: 1, Name: Steven
+ID: 2, Name: John
+ID: 3, Name: Alex
+```

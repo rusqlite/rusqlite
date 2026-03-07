@@ -129,11 +129,13 @@ impl Connection {
     /// - a variant of the PreUpdateCase enum which allows access to extra functions depending
     ///   on whether it's an update, delete or insert.
     #[inline]
-    pub fn preupdate_hook<F>(&self, hook: Option<F>)
+    pub fn preupdate_hook<F>(&self, hook: Option<F>) -> Result<()>
     where
         F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
     {
+        self.db.borrow().check_owned()?;
         self.db.borrow_mut().preupdate_hook(hook);
+        Ok(())
     }
 }
 
@@ -206,28 +208,25 @@ impl InnerConnection {
             }));
         }
 
-        match hook {
-            Some(hook) => {
-                let boxed_hook = Box::new(hook);
-                unsafe {
-                    ffi::sqlite3_preupdate_hook(
-                        self.db(),
-                        Some(call_boxed_closure::<F>),
-                        &*boxed_hook as *const F as *mut _,
-                    )
-                };
-                self.preupdate_hook = Some(boxed_hook);
-            }
-            _ => {
-                unsafe { ffi::sqlite3_preupdate_hook(self.db(), None, ptr::null_mut()) };
-                self.preupdate_hook = None;
-            }
-        }
+        let boxed_hook = hook.map(Box::new);
+        unsafe {
+            ffi::sqlite3_preupdate_hook(
+                self.db(),
+                boxed_hook.as_ref().map(|_| call_boxed_closure::<F> as _),
+                boxed_hook
+                    .as_ref()
+                    .map_or_else(ptr::null_mut, |h| &**h as *const F as *mut _),
+            )
+        };
+        self.preupdate_hook = boxed_hook.map(|bh| bh as _);
     }
 }
 
 #[cfg(test)]
 mod test {
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use super::super::Action;
@@ -260,7 +259,7 @@ mod test {
                 _ => panic!("wrong preupdate case"),
             }
             CALLED.store(true, Ordering::Relaxed);
-        }));
+        }))?;
         db.execute_batch("CREATE TABLE foo (t TEXT)")?;
         db.execute_batch("INSERT INTO foo VALUES ('lisa')")?;
         assert!(CALLED.load(Ordering::Relaxed));
@@ -296,7 +295,7 @@ mod test {
                 _ => panic!("wrong preupdate case"),
             }
             CALLED.store(true, Ordering::Relaxed);
-        }));
+        }))?;
 
         db.execute_batch("DELETE from foo")?;
         assert!(CALLED.load(Ordering::Relaxed));
@@ -354,7 +353,7 @@ mod test {
                 _ => panic!("wrong preupdate case"),
             }
             CALLED.store(true, Ordering::Relaxed);
-        }));
+        }))?;
 
         db.execute_batch("UPDATE foo SET t = 'janice'")?;
         assert!(CALLED.load(Ordering::Relaxed));
