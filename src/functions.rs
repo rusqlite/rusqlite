@@ -1218,7 +1218,7 @@ mod test {
 
     #[test]
     #[cfg(feature = "pointer")]
-    fn test_pointer() -> Result<()> {
+    fn test_rc_pointer() -> Result<()> {
         use crate::types::ToSqlOutput;
         use std::ops::Deref;
         use std::rc::Rc;
@@ -1242,6 +1242,31 @@ mod test {
             assert_eq!(result.unwrap(), *rc.deref());
         }
         assert_eq!(1, Rc::strong_count(&rc));
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "pointer")]
+    fn test_box_pointer() -> Result<()> {
+        use crate::types::ToSqlOutput;
+
+        const PTR_TYPE: &std::ffi::CStr = c"my_rust_ptr";
+        let value = 1;
+        {
+            let ptr = ToSqlOutput::new_boxed(value, PTR_TYPE);
+            fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
+                let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
+                assert_eq!(x, Some(&1));
+                Ok(ToSqlOutput::new_boxed(*x.unwrap(), PTR_TYPE))
+            }
+            let db = Connection::open_in_memory()?;
+            db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;
+            let mut stmt = db.prepare("SELECT myfunc(?)")?;
+            let result = stmt.query_one([ptr], |r| {
+                unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) }.map(|opt| opt.cloned())
+            })?;
+            assert_eq!(result.unwrap(), value);
+        }
         Ok(())
     }
 }

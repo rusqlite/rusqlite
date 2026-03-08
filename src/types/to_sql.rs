@@ -43,9 +43,19 @@ impl<'a> ToSqlOutput<'a> {
             std::rc::Rc::decrement_strong_count(p);
         }
         ToSqlOutput::Pointer((
-            std::rc::Rc::into_raw(rc) as *mut std::ffi::c_void,
+            std::rc::Rc::into_raw(rc).cast::<std::ffi::c_void>(),
             ptr_type,
             Some(free_rc),
+        ))
+    }
+    /// Pass a `Box` as a raw pointer to SQLite
+    pub fn new_boxed<T>(v: T, ptr_type: &'static std::ffi::CStr) -> ToSqlOutput<'a> {
+        use crate::util::free_boxed_value;
+
+        ToSqlOutput::Pointer((
+            Box::into_raw(Box::new(v)).cast::<std::ffi::c_void>(),
+            ptr_type,
+            Some(free_boxed_value::<T>),
         ))
     }
 }
