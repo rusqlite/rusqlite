@@ -662,4 +662,18 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    #[cfg(feature = "pointer")]
+    fn test_pointer() -> Result<()> {
+        use crate::ffi::fts5_api;
+        use crate::types::ToSqlOutput;
+        const PTR_TYPE: &std::ffi::CStr = c"fts5_api_ptr";
+        let p_ret: *mut fts5_api = std::ptr::null_mut();
+        let ptr = ToSqlOutput::Pointer((&p_ret as *const *mut fts5_api as _, PTR_TYPE, None));
+        let db = Connection::open_in_memory()?;
+        db.query_row("SELECT fts5(?)", [ptr], |_| Ok(()))?;
+        assert!(!p_ret.is_null());
+        Ok(())
+    }
 }
