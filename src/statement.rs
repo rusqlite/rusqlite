@@ -371,14 +371,15 @@ impl Statement<'_> {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn query_row<T, P, F>(&mut self, params: P, f: F) -> Result<T>
+    pub fn query_row<T, E, P, F>(&mut self, params: P, f: F) -> Result<T, E>
     where
         P: Params,
-        F: FnOnce(&Row<'_>) -> Result<T>,
+        E: From<Error>,
+        F: FnOnce(&Row<'_>) -> Result<T, E>,
     {
         let mut rows = self.query(params)?;
 
-        rows.get_expected_row().and_then(f)
+        Ok(rows.get_expected_row()?).and_then(f)
     }
 
     /// Convenience method to execute a query that is expected to return exactly
@@ -395,17 +396,18 @@ impl Statement<'_> {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn query_one<T, P, F>(&mut self, params: P, f: F) -> Result<T>
+    pub fn query_one<T, E, P, F>(&mut self, params: P, f: F) -> Result<T, E>
     where
         P: Params,
-        F: FnOnce(&Row<'_>) -> Result<T>,
+        E: From<Error>,
+        F: FnOnce(&Row<'_>) -> Result<T, E>,
     {
         let mut rows = self.query(params)?;
-        let row = rows.get_expected_row().and_then(f)?;
+        let row = Ok(rows.get_expected_row()?).and_then(f);
         if rows.next()?.is_some() {
-            return Err(Error::QueryReturnedMoreThanOneRow);
+            return Err(Error::QueryReturnedMoreThanOneRow.into());
         }
-        Ok(row)
+        row
     }
 
     /// Consumes the statement.
@@ -969,7 +971,7 @@ mod test {
         let mut stmt = db.prepare("SELECT COUNT(*) FROM test WHERE name = :name")?;
         assert_eq!(
             2i32,
-            stmt.query_row::<i32, _, _>(&[(":name", "one")], |r| r.get(0))?
+            stmt.query_row::<i32, _, _, _>(&[(":name", "one")], |r| r.get(0))?
         );
         Ok(())
     }
