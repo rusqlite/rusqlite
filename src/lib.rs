@@ -1262,9 +1262,6 @@ bitflags::bitflags! {
         const SQLITE_PREPARE_NO_VTAB = 0x04;
         /// Prevents SQL compiler errors from being sent to the error log.
         const SQLITE_PREPARE_DONT_LOG = 0x10;
-        /// Causes the SQL compiler to enforce security constraints that would otherwise only be enforced when parsing
-        /// the database schema.
-        const SQLITE_PREPARE_FROM_DDL = 0x20; // 3.52.0
     }
 }
 

@@ -43,8 +43,6 @@ pub enum Limit {
     /// The maximum number of auxiliary worker threads that a single prepared
     /// statement may start.
     SQLITE_LIMIT_WORKER_THREADS = ffi::SQLITE_LIMIT_WORKER_THREADS,
-    /// The maximum depth of the parse tree on any expression.
-    SQLITE_LIMIT_PARSER_DEPTH = 12, // 3.52.0
     /// Only used for testing
     #[cfg(test)]
     INVALID = -1,
