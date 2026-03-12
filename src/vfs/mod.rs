@@ -180,7 +180,7 @@ pub enum FileType<'a> {
     /// Mirrors SQLITE_OPEN_TRANSIENT_DB.
     TransientDb,
     /// Mirrors SQLITE_OPEN_SUBJOURNAL.
-    Subjournal(VfsPath<'a>),
+    Subjournal,
     /// Mirrors SQLITE_OPEN_SUPER_JOURNAL.
     SuperJournal(VfsPath<'a>),
     /// Mirrors SQLITE_OPEN_WAL.
@@ -193,10 +193,12 @@ impl<'a> FileType<'a> {
         match self {
             FileType::MainDb(path)
             | FileType::MainJournal(path)
-            | FileType::Subjournal(path)
             | FileType::SuperJournal(path)
             | FileType::Wal(path) => Some(path),
-            FileType::TempDb | FileType::TempJournal | FileType::TransientDb => None,
+            FileType::TempDb
+            | FileType::TempJournal
+            | FileType::TransientDb
+            | FileType::Subjournal => None,
         }
     }
 }
@@ -1364,9 +1366,7 @@ unsafe extern "C" fn x_open<T: Vfs, M: VfsMethodTableExt>(
         sqlite3::SQLITE_OPEN_TEMP_DB => FileType::TempDb,
         sqlite3::SQLITE_OPEN_TEMP_JOURNAL => FileType::TempJournal,
         sqlite3::SQLITE_OPEN_TRANSIENT_DB => FileType::TransientDb,
-        sqlite3::SQLITE_OPEN_SUBJOURNAL => {
-            FileType::Subjournal(path.expect("internal error: NULL database path"))
-        }
+        sqlite3::SQLITE_OPEN_SUBJOURNAL => FileType::Subjournal,
         sqlite3::SQLITE_OPEN_SUPER_JOURNAL => {
             FileType::SuperJournal(path.expect("internal error: NULL database path"))
         }
