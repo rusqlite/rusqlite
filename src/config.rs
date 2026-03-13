@@ -71,10 +71,6 @@ pub enum DbConfig {
     /// Enables or disables the ability to include comments in SQL text.
     #[cfg(feature = "modern_sqlite")]
     SQLITE_DBCONFIG_ENABLE_COMMENTS = 1022, // 3.49.0
-    /// Determines the number of significant digits that SQLite will attempt to preserve
-    /// when converting floating point numbers (IEEE 754 "doubles") into text.
-    #[cfg(feature = "modern_sqlite")]
-    SQLITE_DBCONFIG_FP_DIGITS = 1023, // 3.52.0
 }
 
 impl Connection {
