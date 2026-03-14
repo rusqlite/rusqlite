@@ -38,6 +38,9 @@ pub enum ToSqlOutput<'a> {
 #[cfg(feature = "pointer")]
 impl<'a> ToSqlOutput<'a> {
     /// Pass an `Rc` as a raw pointer to SQLite
+    ///
+    /// # Warning
+    /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
     pub fn from_rc<T>(rc: std::rc::Rc<T>, ptr_type: &'static std::ffi::CStr) -> ToSqlOutput<'a> {
         unsafe extern "C" fn free_rc(p: *mut std::ffi::c_void) {
             std::rc::Rc::decrement_strong_count(p);
@@ -49,6 +52,9 @@ impl<'a> ToSqlOutput<'a> {
         ))
     }
     /// Pass a `Box` as a raw pointer to SQLite
+    ///
+    /// # Warning
+    /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
     pub fn new_boxed<T>(v: T, ptr_type: &'static std::ffi::CStr) -> ToSqlOutput<'a> {
         use crate::util::free_boxed_value;
 
