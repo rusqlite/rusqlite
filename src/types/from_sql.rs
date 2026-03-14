@@ -2,6 +2,7 @@ use super::{Value, ValueRef};
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
+use std::str::Utf8Error;
 
 /// Enum listing possible errors from [`FromSql`] trait.
 #[derive(Debug)]
@@ -14,6 +15,9 @@ pub enum FromSqlError {
     /// Error when the i64 value returned by SQLite cannot be stored into the
     /// requested type.
     OutOfRange(i64),
+
+    /// Error converting a string to UTF-8.
+    Utf8Error(Utf8Error),
 
     /// Error when the blob result returned by SQLite cannot be stored into the
     /// requested type due to a size mismatch.
@@ -45,6 +49,7 @@ impl PartialEq for FromSqlError {
         match (self, other) {
             (Self::InvalidType, Self::InvalidType) => true,
             (Self::OutOfRange(n1), Self::OutOfRange(n2)) => n1 == n2,
+            (Self::Utf8Error(u1), Self::Utf8Error(u2)) => u1 == u2,
             (
                 Self::InvalidBlobSize {
                     expected_size: es1,
@@ -65,6 +70,7 @@ impl fmt::Display for FromSqlError {
         match *self {
             Self::InvalidType => write!(f, "Invalid type"),
             Self::OutOfRange(i) => write!(f, "Value {i} out of range"),
+            Self::Utf8Error(ref err) => err.fmt(f),
             Self::InvalidBlobSize {
                 expected_size,
                 blob_size,
@@ -81,10 +87,10 @@ impl fmt::Display for FromSqlError {
 
 impl Error for FromSqlError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        if let Self::Other(ref err) = self {
-            Some(&**err)
-        } else {
-            None
+        match self {
+            Self::Utf8Error(ref err) => Some(err),
+            Self::Other(ref err) => Some(&**err),
+            _ => None,
         }
     }
 }
@@ -294,7 +300,7 @@ where
 impl FromSql for Value {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-        Ok(value.into())
+        value.try_into()
     }
 }
 

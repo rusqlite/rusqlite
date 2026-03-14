@@ -84,7 +84,7 @@ impl<'a> ValueRef<'a> {
     #[inline]
     pub fn as_str(&self) -> FromSqlResult<&'a str> {
         match *self {
-            ValueRef::Text(t) => std::str::from_utf8(t).map_err(FromSqlError::other),
+            ValueRef::Text(t) => std::str::from_utf8(t).map_err(FromSqlError::Utf8Error),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -97,7 +97,7 @@ impl<'a> ValueRef<'a> {
         match *self {
             ValueRef::Null => Ok(None),
             ValueRef::Text(t) => std::str::from_utf8(t)
-                .map_err(FromSqlError::other)
+                .map_err(FromSqlError::Utf8Error)
                 .map(Some),
             _ => Err(FromSqlError::InvalidType),
         }
@@ -148,19 +148,20 @@ impl<'a> ValueRef<'a> {
     }
 }
 
-impl From<ValueRef<'_>> for Value {
+impl TryFrom<ValueRef<'_>> for Value {
+    type Error = FromSqlError;
+
     #[inline]
     #[track_caller]
-    fn from(borrowed: ValueRef<'_>) -> Self {
+    fn try_from(borrowed: ValueRef<'_>) -> Result<Self, Self::Error> {
         match borrowed {
-            ValueRef::Null => Self::Null,
-            ValueRef::Integer(i) => Self::Integer(i),
-            ValueRef::Real(r) => Self::Real(r),
-            ValueRef::Text(s) => {
-                let s = std::str::from_utf8(s).expect("invalid UTF-8");
-                Self::Text(s.to_string())
-            }
-            ValueRef::Blob(b) => Self::Blob(b.to_vec()),
+            ValueRef::Null => Ok(Self::Null),
+            ValueRef::Integer(i) => Ok(Self::Integer(i)),
+            ValueRef::Real(r) => Ok(Self::Real(r)),
+            ValueRef::Text(s) => std::str::from_utf8(s)
+                .map(|s| Self::Text(s.to_string()))
+                .map_err(FromSqlError::Utf8Error),
+            ValueRef::Blob(b) => Ok(Self::Blob(b.to_vec())),
         }
     }
 }

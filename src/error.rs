@@ -29,7 +29,7 @@ pub enum Error {
     IntegralValueOutOfRange(usize, i64),
 
     /// Error converting a string to UTF-8.
-    Utf8Error(str::Utf8Error),
+    Utf8Error(usize, str::Utf8Error),
 
     /// Error converting a string to a C-compatible string because it contained
     /// an embedded nul.
@@ -150,7 +150,7 @@ impl PartialEq for Error {
             (Self::IntegralValueOutOfRange(i1, n1), Self::IntegralValueOutOfRange(i2, n2)) => {
                 i1 == i2 && n1 == n2
             }
-            (Self::Utf8Error(e1), Self::Utf8Error(e2)) => e1 == e2,
+            (Self::Utf8Error(i1, e1), Self::Utf8Error(i2, e2)) => i1 == i2 && e1 == e2,
             (Self::NulError(e1), Self::NulError(e2)) => e1 == e2,
             (Self::InvalidParameterName(n1), Self::InvalidParameterName(n2)) => n1 == n2,
             (Self::InvalidPath(p1), Self::InvalidPath(p2)) => p1 == p2,
@@ -211,7 +211,7 @@ impl PartialEq for Error {
 impl From<str::Utf8Error> for Error {
     #[cold]
     fn from(err: str::Utf8Error) -> Self {
-        Self::Utf8Error(err)
+        Self::Utf8Error(UNKNOWN_COLUMN, err)
     }
 }
 
@@ -275,7 +275,13 @@ impl fmt::Display for Error {
                     write!(f, "Integer {val} out of range")
                 }
             }
-            Self::Utf8Error(ref err) => err.fmt(f),
+            Self::Utf8Error(col, ref err) => {
+                if col != UNKNOWN_COLUMN {
+                    write!(f, "{err} at index {col}")
+                } else {
+                    err.fmt(f)
+                }
+            }
             Self::NulError(ref err) => err.fmt(f),
             Self::InvalidParameterName(ref name) => write!(f, "Invalid parameter name: {name}"),
             Self::InvalidPath(ref p) => write!(f, "Invalid path: {}", p.to_string_lossy()),
@@ -334,7 +340,7 @@ impl error::Error for Error {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match *self {
             Self::SqliteFailure(ref err, _) => Some(err),
-            Self::Utf8Error(ref err) => Some(err),
+            Self::Utf8Error(_, ref err) => Some(err),
             Self::NulError(ref err) => Some(err),
 
             Self::IntegralValueOutOfRange(..)
