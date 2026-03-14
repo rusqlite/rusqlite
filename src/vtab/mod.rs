@@ -918,6 +918,7 @@ impl Values<'_> {
                 Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
             }
             FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
+            FromSqlError::Utf8Error(err) => Error::Utf8Error(idx, err),
         })
     }
 
