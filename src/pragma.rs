@@ -51,7 +51,7 @@ impl Sql {
         let value = match value {
             ToSqlOutput::Borrowed(v) => v,
             ToSqlOutput::Owned(ref v) => ValueRef::from(v),
-            #[cfg(any(feature = "blob", feature = "functions", feature = "array"))]
+            #[cfg(any(feature = "blob", feature = "functions", feature = "pointer"))]
             _ => {
                 return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
             }
