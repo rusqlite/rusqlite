@@ -13,6 +13,7 @@ use crate::bind::BindIndex;
 use crate::types::{ToSql, ToSqlOutput};
 #[cfg(feature = "array")]
 use crate::vtab::array::{free_array, ARRAY_TYPE};
+use crate::OptionalExtension;
 
 /// A prepared statement.
 pub struct Statement<'conn> {
@@ -363,22 +364,42 @@ impl Statement<'_> {
     /// ignored.
     ///
     /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
-    /// query truly is optional, you can call
-    /// [`.optional()`](crate::OptionalExtension::optional) on the result of
-    /// this to get a `Result<Option<T>>` (requires that the trait
-    /// `rusqlite::OptionalExtension` is imported).
+    /// query truly is optional, you can use
+    /// [`query_row_optional`](Statement::query_row_optional) instead
+    /// to get a `Result<Option<T>>`.
     ///
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn query_row<T, P, F>(&mut self, params: P, f: F) -> Result<T>
+    pub fn query_row<T, E, P, F>(&mut self, params: P, f: F) -> Result<T, E>
     where
         P: Params,
-        F: FnOnce(&Row<'_>) -> Result<T>,
+        E: From<Error>,
+        F: FnOnce(&Row<'_>) -> Result<T, E>,
     {
         let mut rows = self.query(params)?;
 
-        rows.get_expected_row().and_then(f)
+        Ok(rows.get_expected_row()?).and_then(f)
+    }
+
+    /// Convenience method to execute a query that is expected to possibly return a
+    /// single row.
+    ///
+    /// If the query returns more than one row, all rows except the first are
+    /// ignored.
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if the underlying SQLite call fails.
+    pub fn query_row_optional<T, E, P, F>(&mut self, params: P, f: F) -> Result<Option<T>, E>
+    where
+        P: Params,
+        E: From<Error>,
+        F: FnOnce(&Row<'_>) -> Result<T, E>,
+    {
+        let mut rows = self.query(params)?;
+
+        rows.get_expected_row().optional()?.map(f).transpose()
     }
 
     /// Convenience method to execute a query that is expected to return exactly
@@ -387,25 +408,47 @@ impl Statement<'_> {
     /// Returns `Err(QueryReturnedMoreThanOneRow)` if the query returns more than one row.
     ///
     /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
-    /// query truly is optional, you can call
-    /// [`.optional()`](crate::OptionalExtension::optional) on the result of
-    /// this to get a `Result<Option<T>>` (requires that the trait
-    /// `rusqlite::OptionalExtension` is imported).
+    /// query truly is optional, you can use
+    /// [`query_row_optional`](Statement::query_one_optional) instead
+    /// to get a `Result<Option<T>>`.
     ///
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    pub fn query_one<T, P, F>(&mut self, params: P, f: F) -> Result<T>
+    pub fn query_one<T, E, P, F>(&mut self, params: P, f: F) -> Result<T, E>
     where
         P: Params,
-        F: FnOnce(&Row<'_>) -> Result<T>,
+        E: From<Error>,
+        F: FnOnce(&Row<'_>) -> Result<T, E>,
     {
         let mut rows = self.query(params)?;
-        let row = rows.get_expected_row().and_then(f)?;
+        let row = Ok(rows.get_expected_row()?).and_then(f);
         if rows.next()?.is_some() {
-            return Err(Error::QueryReturnedMoreThanOneRow);
+            return Err(Error::QueryReturnedMoreThanOneRow.into());
         }
-        Ok(row)
+        row
+    }
+
+    /// Convenience method to execute a query that is expected to return at most
+    /// one row.
+    ///
+    /// Returns `Err(QueryReturnedMoreThanOneRow)` if the query returns more than one row.
+    ///
+    /// # Failure
+    ///
+    /// Will return `Err` if the underlying SQLite call fails.
+    pub fn query_one_optional<T, E, P, F>(&mut self, params: P, f: F) -> Result<Option<T>, E>
+    where
+        P: Params,
+        E: From<Error>,
+        F: FnOnce(&Row<'_>) -> Result<T, E>,
+    {
+        let mut rows = self.query(params)?;
+        let row = rows.get_expected_row().optional()?.map(f).transpose();
+        if rows.next()?.is_some() {
+            return Err(Error::QueryReturnedMoreThanOneRow.into());
+        }
+        row
     }
 
     /// Consumes the statement.
@@ -969,7 +1012,7 @@ mod test {
         let mut stmt = db.prepare("SELECT COUNT(*) FROM test WHERE name = :name")?;
         assert_eq!(
             2i32,
-            stmt.query_row::<i32, _, _>(&[(":name", "one")], |r| r.get(0))?
+            stmt.query_row::<i32, _, _, _>(&[(":name", "one")], |r| r.get(0))?
         );
         Ok(())
     }
@@ -1195,18 +1238,43 @@ mod test {
         let db = Connection::open_in_memory()?;
         let sql = "BEGIN;
                    CREATE TABLE foo(x INTEGER, y INTEGER);
-                   INSERT INTO foo VALUES(1, 3);
                    INSERT INTO foo VALUES(2, 4);
                    END;";
         db.execute_batch(sql)?;
         let mut stmt = db.prepare("SELECT y FROM foo WHERE x = ?1")?;
+        let y: Result<i64> = stmt.query_row([1i32], |r| r.get(0));
+        assert_eq!(Error::QueryReturnedNoRows, y.unwrap_err());
+        db.execute_batch("INSERT INTO foo VALUES(1, 3);")?;
+        let y: Result<i64> = stmt.query_row([1i32], |r| r.get(0));
+        assert_eq!(3i64, y?);
+        db.execute_batch("INSERT INTO foo VALUES(1, 3);")?;
         let y: Result<i64> = stmt.query_row([1i32], |r| r.get(0));
         assert_eq!(3i64, y?);
         Ok(())
     }
 
     #[test]
-    fn query_one() -> Result<()> {
+    fn test_query_row_optional() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let sql = "BEGIN;
+                   CREATE TABLE foo(x INTEGER, y INTEGER);
+                   INSERT INTO foo VALUES(2, 4);
+                   END;";
+        db.execute_batch(sql)?;
+        let mut stmt = db.prepare("SELECT y FROM foo WHERE x = ?1")?;
+        let y: Result<Option<i64>> = stmt.query_row_optional([1i32], |r| r.get(0));
+        assert_eq!(None, y?);
+        db.execute_batch("INSERT INTO foo VALUES(1, 3);")?;
+        let y: Result<Option<i64>> = stmt.query_row_optional([1i32], |r| r.get(0));
+        assert_eq!(Some(3i64), y?);
+        db.execute_batch("INSERT INTO foo VALUES(1, 3);")?;
+        let y: Result<Option<i64>> = stmt.query_row_optional([1i32], |r| r.get(0));
+        assert_eq!(Some(3i64), y?);
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_one() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(x INTEGER, y INTEGER);")?;
         let mut stmt = db.prepare("SELECT y FROM foo WHERE x = ?1")?;
@@ -1217,6 +1285,22 @@ mod test {
         assert_eq!(3i64, y?);
         db.execute_batch("INSERT INTO foo VALUES(1, 3);")?;
         let y: Result<i64> = stmt.query_one([1i32], |r| r.get(0));
+        assert_eq!(Error::QueryReturnedMoreThanOneRow, y.unwrap_err());
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_one_optional() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE foo(x INTEGER, y INTEGER);")?;
+        let mut stmt = db.prepare("SELECT y FROM foo WHERE x = ?1")?;
+        let y: Result<Option<i64>> = stmt.query_one_optional([1i32], |r| r.get(0));
+        assert_eq!(None, y?);
+        db.execute_batch("INSERT INTO foo VALUES(1, 3);")?;
+        let y: Result<Option<i64>> = stmt.query_one_optional([1i32], |r| r.get(0));
+        assert_eq!(Some(3i64), y?);
+        db.execute_batch("INSERT INTO foo VALUES(1, 3);")?;
+        let y: Result<Option<i64>> = stmt.query_one_optional([1i32], |r| r.get(0));
         assert_eq!(Error::QueryReturnedMoreThanOneRow, y.unwrap_err());
         Ok(())
     }
