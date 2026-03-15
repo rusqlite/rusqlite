@@ -146,6 +146,8 @@ pub mod types;
 #[cfg(feature = "unlock_notify")]
 mod unlock_notify;
 mod version;
+#[cfg(all(feature = "vfs", not(target_family = "wasm")))]
+pub mod vfs;
 #[cfg(feature = "vtab")]
 pub mod vtab;
 
