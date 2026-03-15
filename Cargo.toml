@@ -31,7 +31,7 @@ maintenance = { status = "actively-developed" }
 name = "rusqlite"
 
 [workspace]
-members = ["libsqlite3-sys"]
+members = ["libsqlite3-sys", "sqlcipher-crypto-provider"]
 
 [features]
 # if not SQLITE_OMIT_LOAD_EXTENSION
@@ -53,6 +53,7 @@ trace = []
 bundled = ["libsqlite3-sys/bundled", "modern_sqlite"]
 # Use SQLCipher instead of SQLite
 bundled-sqlcipher = ["libsqlite3-sys/bundled-sqlcipher", "bundled"]
+bundled-sqlcipher-custom-crypto = ["libsqlite3-sys/bundled-sqlcipher-custom-crypto", "bundled-sqlcipher"]
 bundled-sqlcipher-vendored-openssl = [
     "libsqlite3-sys/bundled-sqlcipher-vendored-openssl",
     "bundled-sqlcipher",

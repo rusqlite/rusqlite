@@ -1,0 +1,11 @@
+--- sqlite3.c	2026-02-25 13:22:10.080553910 +0100
++++ sqlite3.c	2026-02-26 16:32:53.212431233 +0100
+@@ -108877,7 +108877,7 @@
+     }
+   }
+ 
+-  default_provider->ctx_free(provider_ctx);
++  default_provider->ctx_free(&provider_ctx);
+ 
+   sqlcipher_init = 1;
+   sqlcipher_shutdown = 0;

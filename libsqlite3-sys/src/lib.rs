@@ -4,6 +4,12 @@
 #[cfg(feature = "bundled-sqlcipher-vendored-openssl")]
 extern crate openssl_sys;
 
+#[cfg(feature = "bundled-sqlcipher-custom-crypto")]
+mod sqlcipher_custom_crypto;
+
+#[cfg(feature = "bundled-sqlcipher-custom-crypto")]
+extern crate alloc;
+
 pub use self::error::*;
 
 use core::mem;
