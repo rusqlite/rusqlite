@@ -1,0 +1,16 @@
+[package]
+name = "sqlcipher-crypto-provider"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+rand = "0.10"
+aes = "0.8"
+cbc = "0.1"
+pbkdf2 = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
+hmac = "0.12"

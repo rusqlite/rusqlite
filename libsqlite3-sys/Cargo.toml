@@ -19,6 +19,7 @@ bundled = ["cc", "bundled_bindings"]
 bundled-windows = ["cc", "bundled_bindings"]
 # Use bundled SQLCipher sources
 bundled-sqlcipher = ["bundled"]
+bundled-sqlcipher-custom-crypto = ["bundled-sqlcipher", "dep:sqlcipher-crypto-provider"]
 bundled-sqlcipher-vendored-openssl = [
     "bundled-sqlcipher",
     "openssl-sys/vendored",
@@ -47,6 +48,7 @@ wasm32-wasi-vfs = []
 
 [dependencies]
 openssl-sys = { version = "0.9.103", optional = true }
+sqlcipher-crypto-provider = { path = "../sqlcipher-crypto-provider", optional = true }
 
 [build-dependencies]
 bindgen = { version = "0.72", optional = true, default-features = false, features = [

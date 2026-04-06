@@ -16,8 +16,21 @@ tar xzf "v${SQLCIPHER_VERSION}.tar.gz" --strip-components=1 -C "$SCRIPT_DIR/sqlc
 cd "$SCRIPT_DIR/sqlcipher.src"
 ./configure
 make sqlite3.c
-cp sqlite3.c sqlite3.h sqlite3ext.h "$SCRIPT_DIR/sqlcipher/"
+cp sqlite3.c src/sqlcipher.h sqlite3.h sqlite3ext.h "$SCRIPT_DIR/sqlcipher/"
+# The `sqlcipher_codec_pragma` fails to parse correctly, even with
+# ```rust
+# let bindings = bindings
+#   .blocklist_item("sqlcipher_codec_pragma")
+#   .blocklist_type("Parse");
+# ```
+# This `sed` comments out that specific function.
+sed -i 's#int sqlcipher_codec_pragma#//int sqlcipher_codec_pragma#' "$SCRIPT_DIR/sqlcipher/sqlcipher.h"
 cd "$SCRIPT_DIR"
+# SQLCipher versions 4.10 and older call `ctx_free` at one point
+# with a direct pointer (`void *`), not `void **`, despite what the
+# public header declares. This is fixed in commit c89bab0b4 (SQLCipher ≥ 4.10).
+# ctx_free.patch backports this change to 4.10.0 in the amalgamation.
+patch < ctx_free.patch
 rm -rf "v${SQLCIPHER_VERSION}.tar.gz" sqlcipher.src
 
 # Regenerate bindgen file for sqlcipher
