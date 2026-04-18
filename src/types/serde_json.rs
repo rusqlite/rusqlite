@@ -46,6 +46,8 @@ impl FromSql for Value {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         match value {
             ValueRef::Text(s) => serde_json::from_slice(s), // KO for b"text"
+            #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+            ValueRef::ZText(s) => serde_json::from_slice(s.to_bytes()),
             ValueRef::Blob(b) => serde_json::from_slice(b),
             ValueRef::Integer(i) => Ok(Self::Number(Number::from(i))),
             ValueRef::Real(f) => {
