@@ -1153,17 +1153,39 @@ pub fn escape_double_quote(identifier: &str) -> Cow<'_, str> {
 }
 /// Dequote string
 #[must_use]
-pub fn dequote(s: &str) -> &str {
-    if s.len() < 2 {
-        return s;
+pub fn dequote(mut s: &str) -> Cow<'_, str> {
+    let mut chars = s.chars();
+    let (Some(first), Some(last)) = (chars.next(), chars.next_back()) else {
+        return Cow::Borrowed(s);
+    };
+    if (first == '"' || first == '\'' || first == '`' || first == '[')
+        && (last == first || first == '[' && last == ']')
+    {
+        s = chars.as_str();
+        if first != '[' && s.contains(first) {
+            // handle inner escaped quote(s)
+            let mut owned = String::with_capacity(s.len());
+            let mut escaped = false;
+            for c in s.chars() {
+                if c == first {
+                    if !escaped {
+                        escaped = true;
+                        continue;
+                    } else {
+                        escaped = false;
+                    }
+                } else if escaped {
+                    // not properly escaped
+                    return Cow::Borrowed(s);
+                }
+                owned.push(c);
+            }
+            if !escaped {
+                return Cow::Owned(owned);
+            }
+        }
     }
-    match s.bytes().next() {
-        Some(b) if b == b'"' || b == b'\'' => match s.bytes().next_back() {
-            Some(e) if e == b => &s[1..s.len() - 1], // FIXME handle inner escaped quote(s)
-            _ => s,
-        },
-        _ => s,
-    }
+    Cow::Borrowed(s)
 }
 /// The boolean can be one of:
 /// ```text
@@ -1189,8 +1211,8 @@ pub fn parse_boolean(s: &str) -> Option<bool> {
     }
 }
 
-/// `<param_name>=['"]?<param_value>['"]?` => `(<param_name>, <param_value>)`
-pub fn parameter(c_slice: &[u8]) -> Result<(&str, &str)> {
+/// `<param_name>=['"`[]?<param_value>['"`]]?` => `(<param_name>, <param_value>)`
+pub fn parameter(c_slice: &[u8]) -> Result<(&str, Cow<'_, str>)> {
     let arg = std::str::from_utf8(c_slice)?.trim();
     match arg.split_once('=') {
         Some((key, value)) => {
@@ -1549,6 +1571,8 @@ mod vtablog;
 
 #[cfg(test)]
 mod test {
+    use std::borrow::Cow;
+
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -1557,12 +1581,25 @@ mod test {
         assert_eq!("", super::dequote(""));
         assert_eq!("'", super::dequote("'"));
         assert_eq!("\"", super::dequote("\""));
+
         assert_eq!("'\"", super::dequote("'\""));
+
         assert_eq!("", super::dequote("''"));
         assert_eq!("", super::dequote("\"\""));
+        assert_eq!("", super::dequote("``"));
+        assert_eq!("", super::dequote("[]"));
+
         assert_eq!("x", super::dequote("'x'"));
         assert_eq!("x", super::dequote("\"x\""));
         assert_eq!("x", super::dequote("x"));
+        assert_eq!("x", super::dequote("`x`"));
+        assert_eq!("x", super::dequote("[x]"));
+
+        assert_eq!("x'", super::dequote("'x'''"));
+        assert_eq!("x`", super::dequote("`x```"));
+
+        assert_eq!("x'", super::dequote("'x''"));
+        assert_eq!("x`", super::dequote("`x``"));
     }
     #[test]
     fn test_parse_boolean() {
@@ -1578,7 +1615,13 @@ mod test {
     }
     #[test]
     fn test_parse_parameters() {
-        assert_eq!(Ok(("key", "value")), super::parameter(b"key='value'"));
-        assert_eq!(Ok(("key", "foo=bar")), super::parameter(b"key='foo=bar'"));
+        assert_eq!(
+            Ok(("key", Cow::Borrowed("value"))),
+            super::parameter(b"key='value'")
+        );
+        assert_eq!(
+            Ok(("key", Cow::Borrowed("foo=bar"))),
+            super::parameter(b"key='foo=bar'")
+        );
     }
 }

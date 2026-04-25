@@ -66,6 +66,7 @@ impl VTabLog {
 
         for c_slice in args {
             let (param, value) = super::parameter(c_slice)?;
+            let value = value.as_ref();
             match param {
                 "schema" => {
                     if schema.is_some() {

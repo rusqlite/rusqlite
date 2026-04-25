@@ -407,6 +407,14 @@ impl Error {
     pub fn sqlite_error_code(&self) -> Option<ffi::ErrorCode> {
         self.sqlite_error().map(|error| error.code)
     }
+
+    /// Returns the underlying SQLite extended error code if this is
+    /// [`Error::SqliteFailure`].
+    #[inline]
+    #[must_use]
+    pub fn sqlite_extended_error_code(&self) -> Option<c_int> {
+        self.sqlite_error().map(|error| error.extended_code)
+    }
 }
 
 // These are public but not re-exported by lib.rs, so only visible within crate.
@@ -510,5 +518,26 @@ pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut c_char) -> c_int {
             *err_msg = alloc(&err.to_string());
             ffi::SQLITE_ERROR
         }
+    }
+}
+
+/// Set error code and message
+/// # Safety
+/// This function is unsafe because it uses raw pointer
+#[cfg(feature = "modern_sqlite")] // 3.51.0
+pub unsafe fn set_errmsg(
+    db: *mut ffi::sqlite3,
+    code: c_int,
+    msg: Option<&std::ffi::CStr>,
+) -> Result<()> {
+    unsafe {
+        decode_result_raw(
+            db,
+            ffi::sqlite3_set_errmsg(
+                db,
+                code,
+                msg.map_or(std::ptr::null(), std::ffi::CStr::as_ptr),
+            ),
+        )
     }
 }

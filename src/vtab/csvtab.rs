@@ -118,6 +118,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
 
         for c_slice in args {
             let (param, value) = super::parameter(c_slice)?;
+            let value = value.as_ref();
             match param {
                 "filename" => {
                     if !Path::new(value).exists() {

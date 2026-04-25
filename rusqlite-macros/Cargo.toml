@@ -12,6 +12,6 @@ categories = ["database"]
 proc-macro = true
 
 [dependencies]
-sqlite3-parser = { version = "0.15", default-features = false, features = ["YYNOERRORRECOVERY"] }
+sqlite3-parser = { version = "0.16", default-features = false, features = ["YYNOERRORRECOVERY"] }
 fallible-iterator = "0.3"
 litrs = "1.0.0"
