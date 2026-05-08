@@ -13,13 +13,13 @@
 #[cfg(all(feature = "memvfs", unix))]
 pub mod memvfs;
 
-use crate::ffi as sqlite3;
 use crate::ffi::{
     sqlite3_file, sqlite3_filename, sqlite3_int64, sqlite3_io_methods, sqlite3_vfs, Error,
 };
+use crate::{ffi as sqlite3, vfs};
+use libsqlite3_sys::{sqlite3_malloc, SQLITE_NOMEM};
 use rand::RngCore;
 use std::borrow::Cow;
-use std::error;
 use std::ffi::{c_char, c_int, CStr, CString, OsStr};
 use std::fmt::{self, Display};
 use std::marker::PhantomData;
@@ -31,6 +31,7 @@ use std::sync::atomic::{self, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, SystemTime};
+use std::{error, result};
 use std::{mem, slice};
 
 use crate::{Connection, OpenFlags};
@@ -1524,7 +1525,12 @@ unsafe extern "C" fn x_dlerror(_: *mut sqlite3_vfs, n: c_int, out: *mut c_char) 
     unsafe {
         let err = dlerror();
         if !err.is_null() {
-            sqlite3::sqlite3_snprintf(n, out, c"%s".as_ptr() as *const c_char, err);
+            let err = CStr::from_ptr(err).to_bytes_with_nul();
+            if err.len() <= n as usize {
+                std::ptr::copy_nonoverlapping(err.as_ptr(), out as *mut u8, err.len());
+            } else {
+                std::ptr::copy_nonoverlapping(err.as_ptr(), out as *mut u8, n as usize);
+            }
         }
     }
 }
@@ -1807,6 +1813,18 @@ unsafe extern "C" fn x_check_reserved_lock<T: Vfs>(
     file.is_write_locked().write_to_output(out).into_rc()
 }
 
+unsafe fn strdup(str: &[u8]) -> Result<NonNull<u8>> {
+    let len = str.len();
+    let ret = {
+        let mem = sqlite3_malloc((len + 1) as c_int) as *mut u8;
+        NonNull::new(mem).ok_or_else(|| Error::new(sqlite3::SQLITE_NOMEM))?
+    };
+    let ret_slice = unsafe { slice::from_raw_parts_mut(ret.as_ptr(), len + 1) };
+    ret_slice[..len].copy_from_slice(str);
+    ret_slice[len] = 0;
+    Ok(ret)
+}
+
 unsafe extern "C" fn x_file_control<T: Vfs>(
     file: *mut sqlite3_file,
     op: c_int,
@@ -1838,12 +1856,11 @@ unsafe extern "C" fn x_file_control<T: Vfs>(
             file.hint_overwrite(size).into_rc()
         }
         sqlite3::SQLITE_FCNTL_VFSNAME => {
-            let name_ptr = arg.cast::<*mut c_char>();
-            unsafe {
-                name_ptr.write(sqlite3::sqlite3_mprintf(
-                    c"%s".as_ptr() as *const c_char,
-                    storage.vfs().name.as_ptr(),
-                ));
+            let name_ptr = NonNull::new(arg.cast::<*mut c_char>())
+                .expect("internal error: invalid output pointer for SQLITE_FCNTL_VFSNAME");
+            match strdup(storage.vfs().name.as_bytes()) {
+                Ok(ptr) => name_ptr.write(ptr.as_ptr() as *mut c_char),
+                Err(e) => return e.extended_code,
             }
             sqlite3::SQLITE_OK
         }
@@ -1884,22 +1901,20 @@ unsafe extern "C" fn x_file_control<T: Vfs>(
                     // as the column name.
                     let result_string = result.as_deref().or(arg).unwrap_or(name);
                     args[0] = unsafe {
-                        sqlite3::sqlite3_mprintf(
-                            c"%.*s".as_ptr() as *const c_char,
-                            result_string.len(),
-                            result_string.as_bytes(),
-                        )
+                        match strdup(result_string.as_bytes()) {
+                            Ok(ptr) => ptr.as_ptr() as *mut c_char,
+                            Err(e) => return e.extended_code,
+                        }
                     };
                     sqlite3::SQLITE_OK
                 }
                 Err(PragmaError { code, message }) => {
                     if let Some(result) = message {
                         args[0] = unsafe {
-                            sqlite3::sqlite3_mprintf(
-                                c"%.*s".as_ptr() as *const c_char,
-                                result.len(),
-                                result.as_bytes(),
-                            )
+                            match strdup(result.as_bytes()) {
+                                Ok(ptr) => ptr.as_ptr() as *mut c_char,
+                                Err(e) => return e.extended_code,
+                            }
                         };
                     }
                     code.extended_code
