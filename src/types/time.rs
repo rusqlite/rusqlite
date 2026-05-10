@@ -16,7 +16,7 @@ use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Typ
 use crate::{Error, Result};
 use time::format_description::FormatItem;
 use time::macros::format_description;
-use time::{Date, OffsetDateTime, PrimitiveDateTime, Time};
+use time::{Date, OffsetDateTime, PrimitiveDateTime, Time, UtcDateTime};
 
 const OFFSET_DATE_TIME_ENCODING: &[FormatItem<'_>] = format_description!(
     version = 2,
@@ -141,6 +141,16 @@ impl ToSql for PrimitiveDateTime {
     }
 }
 
+impl ToSql for UtcDateTime {
+    #[inline]
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        let date_time_str = self
+            .format(&PRIMITIVE_DATE_TIME_ENCODING)
+            .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
+        Ok(ToSqlOutput::from(date_time_str))
+    }
+}
+
 /// YYYY-MM-DD HH:MM
 /// YYYY-MM-DDTHH:MM
 /// YYYY-MM-DD HH:MM:SS
@@ -158,14 +168,24 @@ impl FromSql for PrimitiveDateTime {
     }
 }
 
+impl FromSql for UtcDateTime {
+    #[inline]
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        value.as_str().and_then(|s| {
+            Self::parse(s, &PRIMITIVE_DATE_TIME_FORMAT)
+                .map_err(|err| FromSqlError::Other(err.into()))
+        })
+    }
+}
+
 #[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use crate::{Connection, Result};
-    use time::macros::{date, datetime, time};
-    use time::{Date, OffsetDateTime, PrimitiveDateTime, Time};
+    use crate::{Connection, Result, ToSql};
+    use time::macros::{date, datetime, time, utc_datetime};
+    use time::{Date, OffsetDateTime, PrimitiveDateTime, Time, UtcDateTime};
 
     fn checked_memory_handle() -> Result<Connection> {
         let db = Connection::open_in_memory()?;
@@ -324,6 +344,24 @@ mod test {
     }
 
     #[test]
+    fn test_utc_date_time() -> Result<()> {
+        let db = checked_memory_handle()?;
+        let dt = UtcDateTime::new(date!(2016 - 02 - 23), time!(23:56:04));
+
+        db.execute("INSERT INTO foo (t) VALUES (?1)", [dt])?;
+
+        let s: String = db.one_column("SELECT t FROM foo", [])?;
+        assert_eq!("2016-02-23 23:56:04.0", s);
+        let v: UtcDateTime = db.one_column("SELECT t FROM foo", [])?;
+        assert_eq!(dt, v);
+
+        db.execute("UPDATE foo set b = datetime(t)", [])?; // "YYYY-MM-DD HH:MM:SS"
+        let hms: UtcDateTime = db.one_column("SELECT b FROM foo", [])?;
+        assert_eq!(dt, hms);
+        Ok(())
+    }
+
+    #[test]
     fn test_date_parsing() -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Date = db.one_column("SELECT ?1", ["2013-10-07"])?;
@@ -368,11 +406,38 @@ mod test {
     }
 
     #[test]
+    fn test_utc_date_time_parsing() -> Result<()> {
+        let db = checked_memory_handle()?;
+
+        let tests = vec![
+            ("2013-10-07T08:23", utc_datetime!(2013-10-07 8:23)),
+            ("2013-10-07T08:23:19", utc_datetime!(2013-10-07 8:23:19)),
+            (
+                "2013-10-07T08:23:19.111",
+                utc_datetime!(2013-10-07 8:23:19.111),
+            ),
+            ("2013-10-07 08:23", utc_datetime!(2013-10-07 8:23)),
+            ("2013-10-07 08:23:19", utc_datetime!(2013-10-07 8:23:19)),
+            (
+                "2013-10-07 08:23:19.111",
+                utc_datetime!(2013-10-07 8:23:19.111),
+            ),
+        ];
+
+        for (s, t) in tests {
+            let result: UtcDateTime = db.one_column("SELECT ?1", [s])?;
+            assert_eq!(result, t);
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_sqlite_functions() -> Result<()> {
         let db = checked_memory_handle()?;
         db.one_column::<Time, _>("SELECT CURRENT_TIME", [])?;
         db.one_column::<Date, _>("SELECT CURRENT_DATE", [])?;
         db.one_column::<PrimitiveDateTime, _>("SELECT CURRENT_TIMESTAMP", [])?;
+        db.one_column::<UtcDateTime, _>("SELECT CURRENT_TIMESTAMP", [])?;
         db.one_column::<OffsetDateTime, _>("SELECT CURRENT_TIMESTAMP", [])?;
         Ok(())
     }
@@ -403,25 +468,27 @@ mod test {
 
     #[test]
     fn test_primitive_date_time_param() -> Result<()> {
-        let db = checked_memory_handle()?;
-        let now = PrimitiveDateTime::new(
+        test_param(PrimitiveDateTime::new(
             OffsetDateTime::now_utc().date(),
             OffsetDateTime::now_utc().time(),
-        );
-        let result: Result<bool> = db.one_column(
-            "SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')",
-            [now],
-        );
-        result?;
-        Ok(())
+        ))
+    }
+
+    #[test]
+    fn test_utc_date_time_param() -> Result<()> {
+        test_param(UtcDateTime::now())
     }
 
     #[test]
     fn test_offset_date_time_param() -> Result<()> {
+        test_param(OffsetDateTime::now_utc())
+    }
+
+    fn test_param<P: ToSql>(p: P) -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Result<bool> = db.one_column(
             "SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')",
-            [OffsetDateTime::now_utc()],
+            [p],
         );
         result?;
         Ok(())
