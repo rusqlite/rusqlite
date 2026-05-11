@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::{Type, Value};
 use crate::types::{FromSqlError, FromSqlResult};
 
@@ -173,6 +175,83 @@ impl<'a> From<&'a [u8]> for ValueRef<'a> {
     #[inline]
     fn from(s: &[u8]) -> ValueRef<'_> {
         ValueRef::Blob(s)
+    }
+}
+
+impl<'a> From<&'a Cow<'_, str>> for ValueRef<'a> {
+    #[inline]
+    fn from(s: &'a Cow<'_, str>) -> ValueRef<'a> {
+        ValueRef::Text(s.as_bytes())
+    }
+}
+
+impl<'a> From<&'a Cow<'_, [u8]>> for ValueRef<'a> {
+    #[inline]
+    fn from(b: &'a Cow<'_, [u8]>) -> ValueRef<'a> {
+        ValueRef::Blob(b)
+    }
+}
+
+impl<'a, const N: usize> From<&'a [u8; N]> for ValueRef<'a> {
+    #[inline]
+    fn from(b: &'a [u8; N]) -> ValueRef<'a> {
+        ValueRef::Blob(b)
+    }
+}
+
+impl From<crate::types::Null> for ValueRef<'_> {
+    #[inline]
+    fn from(_: crate::types::Null) -> Self {
+        ValueRef::Null
+    }
+}
+
+/// Stores the UUID as a 16-byte `Blob`, matching `From<Uuid> for Value`.
+#[cfg(feature = "uuid")]
+impl<'a> From<&'a uuid::Uuid> for ValueRef<'a> {
+    #[inline]
+    fn from(id: &'a uuid::Uuid) -> Self {
+        Self::Blob(id.as_bytes())
+    }
+}
+
+macro_rules! from_via_i64(
+    ($t:ty) => (
+        impl From<$t> for ValueRef<'_> {
+            #[inline]
+            fn from(i: $t) -> Self {
+                ValueRef::Integer(i64::from(i))
+            }
+        }
+    )
+);
+
+from_via_i64!(bool);
+from_via_i64!(i8);
+from_via_i64!(i16);
+from_via_i64!(i32);
+from_via_i64!(u8);
+from_via_i64!(u16);
+from_via_i64!(u32);
+
+impl From<i64> for ValueRef<'_> {
+    #[inline]
+    fn from(i: i64) -> Self {
+        Self::Integer(i)
+    }
+}
+
+impl From<f32> for ValueRef<'_> {
+    #[inline]
+    fn from(f: f32) -> Self {
+        Self::Real(f64::from(f))
+    }
+}
+
+impl From<f64> for ValueRef<'_> {
+    #[inline]
+    fn from(f: f64) -> Self {
+        Self::Real(f)
     }
 }
 

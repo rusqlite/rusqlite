@@ -88,7 +88,7 @@ use crate::types::ValueRef;
 
 pub use crate::bind::BindIndex;
 #[cfg(feature = "cache")]
-pub use crate::cache::CachedStatement;
+pub use crate::cache::{CachedBorrowingStatement, CachedStatement};
 #[cfg(feature = "column_decltype")]
 pub use crate::column::Column;
 #[cfg(feature = "column_metadata")]
@@ -99,7 +99,7 @@ pub use crate::ffi::ErrorCode;
 pub use crate::load_extension_guard::LoadExtensionGuard;
 pub use crate::params::{params_from_iter, Params, ParamsFromIter};
 pub use crate::row::{AndThenRows, Map, MappedRows, Row, RowIndex, Rows};
-pub use crate::statement::{Statement, StatementStatus};
+pub use crate::statement::{BorrowingStatement, Statement, StatementStatus};
 #[cfg(feature = "modern_sqlite")]
 pub use crate::transaction::TransactionState;
 pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
@@ -318,6 +318,7 @@ fn str_to_cstring(s: &str) -> Result<util::SmallCString> {
 /// The `sqlite3_destructor_type` item is always `SQLITE_TRANSIENT` unless
 /// the string was empty (in which case it's `SQLITE_STATIC`, and the ptr is
 /// static).
+#[cfg(any(feature = "functions", feature = "vtab"))]
 fn str_for_sqlite(
     s: &[u8],
 ) -> (
@@ -795,6 +796,31 @@ impl Connection {
         } else {
             Ok(stmt)
         }
+    }
+
+    /// Prepare a SQL statement and wrap it as a [`BorrowingStatement`] so its
+    /// parameters can be bound by reference using `SQLITE_STATIC`.
+    ///
+    /// See [`BorrowingStatement`] for the lifetime model and safety
+    /// guarantees.
+    #[inline]
+    pub fn prepare_borrowing<'conn, 'stmt>(
+        &'conn self,
+        sql: &str,
+    ) -> Result<BorrowingStatement<'conn, 'stmt>> {
+        self.prepare(sql).map(BorrowingStatement::from)
+    }
+
+    /// Like [`prepare_cached`](Self::prepare_cached), but returns a
+    /// [`CachedBorrowingStatement`] for zero-copy parameter binding via
+    /// `SQLITE_STATIC`.
+    #[cfg(feature = "cache")]
+    #[inline]
+    pub fn prepare_cached_borrowing<'conn, 'stmt>(
+        &'conn self,
+        sql: &str,
+    ) -> Result<CachedBorrowingStatement<'conn, 'stmt>> {
+        self.prepare_cached(sql).map(CachedBorrowingStatement::from)
     }
 
     /// Close the SQLite connection.
