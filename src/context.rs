@@ -44,7 +44,16 @@ pub(super) unsafe fn set_result(
         ValueRef::Text(s) => {
             let (c_str, len, destructor) = str_for_sqlite(s);
             ffi::sqlite3_result_text64(ctx, c_str, len, destructor, ffi::SQLITE_UTF8 as _);
-            // TODO SQLITE_UTF8_ZT
+        }
+        #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+        ValueRef::ZText(s) => {
+            ffi::sqlite3_result_text64(
+                ctx,
+                s.as_ptr(),
+                s.count_bytes() as ffi::sqlite3_uint64,
+                ffi::SQLITE_TRANSIENT(),
+                ffi::SQLITE_UTF8_ZT as _,
+            );
         }
         ValueRef::Blob(b) => {
             let length = b.len();

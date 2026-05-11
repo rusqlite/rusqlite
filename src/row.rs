@@ -403,6 +403,10 @@ impl std::fmt::Debug for Row<'_> {
                         ValueRef::Blob(b) => {
                             dm.value(&(dt, b.len()));
                         }
+                        #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+                        ValueRef::ZText(s) => {
+                            dm.value(&(dt, s));
+                        }
                     }
                 }
                 Err(ref _err) => {
