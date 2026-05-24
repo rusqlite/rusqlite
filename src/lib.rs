@@ -335,16 +335,17 @@ fn str_for_sqlite(
     (ptr, len as ffi::sqlite3_uint64, dtor_info)
 }
 
-#[cfg(unix)]
 fn path_to_cstring(p: &Path) -> Result<CString> {
-    use std::os::unix::ffi::OsStrExt as _;
-    Ok(CString::new(p.as_os_str().as_bytes())?)
-}
-
-#[cfg(not(unix))]
-fn path_to_cstring(p: &Path) -> Result<CString> {
-    let s = p.to_str().ok_or_else(|| Error::InvalidPath(p.to_owned()))?;
-    Ok(CString::new(s)?)
+    cfg_select! {
+        unix => {
+            use std::os::unix::ffi::OsStrExt as _;
+            Ok(CString::new(p.as_os_str().as_bytes())?)
+        }
+        _ => {
+            let s = p.to_str().ok_or_else(|| Error::InvalidPath(p.to_owned()))?;
+            Ok(CString::new(s)?)
+        }
+    }
 }
 
 /// Shorthand for `Main` database.

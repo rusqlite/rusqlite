@@ -691,19 +691,17 @@ impl Statement<'_> {
         self.conn.decode_result(stmt.finalize())
     }
 
-    #[cfg(feature = "extra_check")]
     #[inline]
+    #[allow(clippy::unnecessary_wraps)]
     fn check_update(&self) -> Result<()> {
-        if self.column_count() > 0 && self.stmt.readonly() {
-            return Err(Error::ExecuteReturnedResults);
+        cfg_select! {
+          feature = "extra_check" => {
+              if self.column_count() > 0 && self.stmt.readonly() {
+                  return Err(Error::ExecuteReturnedResults);
+              }
+          }
+          _ => {}
         }
-        Ok(())
-    }
-
-    #[cfg(not(feature = "extra_check"))]
-    #[inline]
-    #[expect(clippy::unnecessary_wraps)]
-    fn check_update(&self) -> Result<()> {
         Ok(())
     }
 
