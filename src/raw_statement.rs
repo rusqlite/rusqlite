@@ -142,37 +142,36 @@ impl RawStatement {
     }
 
     #[inline]
-    #[cfg(not(feature = "unlock_notify"))]
     pub fn step(&self) -> c_int {
-        unsafe { ffi::sqlite3_step(self.ptr) }
-    }
-
-    #[cfg(feature = "unlock_notify")]
-    pub fn step(&self) -> c_int {
-        use crate::unlock_notify;
-        let mut db = ptr::null_mut::<ffi::sqlite3>();
-        loop {
-            unsafe {
-                let mut rc = ffi::sqlite3_step(self.ptr);
-                // Bail out early for success and errors unrelated to locking. We
-                // still need check `is_locked` after this, but checking now lets us
-                // avoid one or two (admittedly cheap) calls into SQLite that we
-                // don't need to make.
-                if (rc & 0xff) != ffi::SQLITE_LOCKED {
-                    break rc;
-                }
-                if db.is_null() {
-                    db = ffi::sqlite3_db_handle(self.ptr);
-                }
-                if !unlock_notify::is_locked(db, rc) {
-                    break rc;
-                }
-                rc = unlock_notify::wait_for_unlock_notify(db);
-                if rc != ffi::SQLITE_OK {
-                    break rc;
-                }
-                self.reset();
-            }
+        cfg_select! {
+          feature = "unlock_notify" => {
+              use crate::unlock_notify;
+              let mut db = ptr::null_mut::<ffi::sqlite3>();
+              loop {
+                  unsafe {
+                      let mut rc = ffi::sqlite3_step(self.ptr);
+                      // Bail out early for success and errors unrelated to locking. We
+                      // still need check `is_locked` after this, but checking now lets us
+                      // avoid one or two (admittedly cheap) calls into SQLite that we
+                      // don't need to make.
+                      if (rc & 0xff) != ffi::SQLITE_LOCKED {
+                          break rc;
+                      }
+                      if db.is_null() {
+                          db = ffi::sqlite3_db_handle(self.ptr);
+                      }
+                      if !unlock_notify::is_locked(db, rc) {
+                          break rc;
+                      }
+                      rc = unlock_notify::wait_for_unlock_notify(db);
+                      if rc != ffi::SQLITE_OK {
+                          break rc;
+                      }
+                      self.reset();
+                  }
+              }
+          }
+          _ => unsafe { ffi::sqlite3_step(self.ptr) }
         }
     }
 

@@ -107,15 +107,15 @@ mod build_bundled {
         assert!(!(cfg!(feature = "bundled-windows") && !cfg!(feature = "bundled") && !win_target()),
             "This module should not be used: we're not on Windows and the bundled feature has not been enabled");
 
-        #[cfg(feature = "buildtime_bindgen")]
-        {
-            use super::{bindings, HeaderLocation};
-            let header = HeaderLocation::FromPath(lib_name.to_owned());
-            bindings::write_to_out_dir(header, out_path);
-        }
-        #[cfg(not(feature = "buildtime_bindgen"))]
-        {
-            super::copy_bindings(lib_name, "bindgen_bundled_version", out_path);
+        cfg_select! {
+            feature = "buildtime_bindgen" => {
+                use super::{bindings, HeaderLocation};
+                let header = HeaderLocation::FromPath(lib_name.to_owned());
+                bindings::write_to_out_dir(header, out_path);
+            }
+            _ => {
+                super::copy_bindings(lib_name, "bindgen_bundled_version", out_path);
+            }
         }
         println!("cargo:include={}/{lib_name}", env!("CARGO_MANIFEST_DIR"));
         println!("cargo:rerun-if-changed={lib_name}/sqlite3.c");
@@ -640,21 +640,21 @@ mod bindings {
             .generate()
             .unwrap_or_else(|_| panic!("could not run bindgen on header {header}"));
 
-        #[cfg(feature = "loadable_extension")]
-        {
-            let mut output = Vec::new();
-            bindings
-                .write(Box::new(&mut output))
-                .expect("could not write output of bindgen");
-            let mut output = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
-            super::loadable_extension::generate_functions(&mut output);
-            std::fs::write(out_path, output.as_bytes())
-                .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
+        cfg_select! {
+            feature = "loadable_extension" => {
+                let mut output = Vec::new();
+                bindings
+                    .write(Box::new(&mut output))
+                    .expect("could not write output of bindgen");
+                let mut output = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
+                super::loadable_extension::generate_functions(&mut output);
+                std::fs::write(out_path, output.as_bytes())
+                    .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
+            }
+            _ => bindings
+                .write_to_file(out_path)
+                .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"))
         }
-        #[cfg(not(feature = "loadable_extension"))]
-        bindings
-            .write_to_file(out_path)
-            .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
     }
 }
 
