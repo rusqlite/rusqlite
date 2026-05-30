@@ -503,11 +503,11 @@ mod test {
         assert_eq!(4, reader.read_line(&mut line).unwrap());
         assert_eq!("one\n", line);
 
-        line.truncate(0);
+        line.clear();
         assert_eq!(4, reader.read_line(&mut line).unwrap());
         assert_eq!("two\n", line);
 
-        line.truncate(0);
+        line.clear();
         assert_eq!(2, reader.read_line(&mut line).unwrap());
         assert_eq!("\0\0", line);
         Ok(())
