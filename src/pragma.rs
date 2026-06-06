@@ -15,14 +15,24 @@ impl Sql {
         Self { buf: String::new() }
     }
 
-    pub fn push_pragma(&mut self, schema_name: Option<&str>, pragma_name: &str) -> Result<()> {
+    pub fn push_pragma(
+        &mut self,
+        conn: &Connection,
+        schema_name: Option<&str>,
+        pragma_name: &str,
+    ) -> Result<()> {
         self.push_keyword("PRAGMA")?;
         self.push_space();
         if let Some(schema_name) = schema_name {
             self.push_schema_name(schema_name);
             self.push_dot();
         }
-        if !pragma_name.is_empty() && is_identifier(pragma_name) {
+        const SQL: &str = "SELECT 1 FROM pragma_pragma_list WHERE name = ?";
+        let mut stmt = cfg_select! {
+            feature = "cache" => {conn.prepare_cached(SQL)}
+            _ => conn.prepare(SQL)
+        }?;
+        if stmt.exists([pragma_name])? {
             self.buf.push_str(pragma_name);
             Ok(())
         } else {
@@ -155,7 +165,7 @@ impl Connection {
         F: FnOnce(&Row<'_>) -> Result<T>,
     {
         let mut query = Sql::new();
-        query.push_pragma(schema_name, pragma_name)?;
+        query.push_pragma(self, schema_name, pragma_name)?;
         self.query_row(&query, [], f)
     }
 
@@ -173,7 +183,7 @@ impl Connection {
         F: FnMut(&Row<'_>) -> Result<()>,
     {
         let mut query = Sql::new();
-        query.push_pragma(schema_name, pragma_name)?;
+        query.push_pragma(self, schema_name, pragma_name)?;
         let mut stmt = self.prepare(&query)?;
         let mut rows = stmt.query([])?;
         while let Some(result_row) = rows.next()? {
@@ -204,7 +214,7 @@ impl Connection {
         V: ToSql,
     {
         let mut sql = Sql::new();
-        sql.push_pragma(schema_name, pragma_name)?;
+        sql.push_pragma(self, schema_name, pragma_name)?;
         // The argument may be either in parentheses
         // or it may be separated from the pragma name by an equal sign.
         // The two syntaxes yield identical results.
@@ -234,7 +244,7 @@ impl Connection {
         V: ToSql,
     {
         let mut sql = Sql::new();
-        sql.push_pragma(schema_name, pragma_name)?;
+        sql.push_pragma(self, schema_name, pragma_name)?;
         // The argument may be either in parentheses
         // or it may be separated from the pragma name by an equal sign.
         // The two syntaxes yield identical results.
@@ -258,7 +268,7 @@ impl Connection {
         V: ToSql,
     {
         let mut sql = Sql::new();
-        sql.push_pragma(schema_name, pragma_name)?;
+        sql.push_pragma(self, schema_name, pragma_name)?;
         // The argument may be either in parentheses
         // or it may be separated from the pragma name by an equal sign.
         // The two syntaxes yield identical results.
@@ -310,8 +320,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::Sql;
-    use crate::pragma;
-    use crate::{Connection, Result};
+    use crate::{error::error_from_sqlite_code, ffi, pragma, Connection, Result};
 
     #[test]
     #[cfg_attr(miri, ignore)]
@@ -444,6 +453,21 @@ mod test {
     fn locking_mode() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.pragma_update(None, "locking_mode", "exclusive")?;
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn invalid_pragma() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let err = db.pragma_update(None, "boom", "1").unwrap_err();
+        assert_eq!(
+            err,
+            error_from_sqlite_code(
+                ffi::SQLITE_MISUSE,
+                Some("Invalid pragma \"boom\"".to_owned())
+            )
+        );
         Ok(())
     }
 }
