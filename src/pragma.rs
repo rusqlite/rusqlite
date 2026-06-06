@@ -22,11 +22,16 @@ impl Sql {
             self.push_schema_name(schema_name);
             self.push_dot();
         }
-        self.push_keyword(pragma_name)
+        if !pragma_name.is_empty() && is_identifier(pragma_name) {
+            self.buf.push_str(pragma_name);
+            Ok(())
+        } else {
+            Err(err!(ffi::SQLITE_MISUSE, "Invalid pragma \"{pragma_name}\""))
+        }
     }
 
     pub fn push_keyword(&mut self, keyword: &str) -> Result<()> {
-        if !keyword.is_empty() && is_identifier(keyword) {
+        if !keyword.is_empty() && is_keyword(keyword) {
             self.buf.push_str(keyword);
             Ok(())
         } else {
@@ -288,6 +293,15 @@ fn is_identifier_continue(c: char) -> bool {
         || c == '_'
         || c.is_ascii_lowercase()
         || c > '\x7F'
+}
+
+fn is_keyword(s: &str) -> bool {
+    unsafe {
+        ffi::sqlite3_keyword_check(
+            s.as_ptr().cast::<std::ffi::c_char>(),
+            s.len().try_into().unwrap(),
+        ) != 0
+    }
 }
 
 #[cfg(test)]
