@@ -145,7 +145,7 @@ impl ToSql for UtcDateTime {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         let date_time_str = self
-            .format(&PRIMITIVE_DATE_TIME_ENCODING)
+            .format(&UTC_DATE_TIME_FORMAT)
             .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
         Ok(ToSqlOutput::from(date_time_str))
     }
@@ -172,8 +172,7 @@ impl FromSql for UtcDateTime {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         value.as_str().and_then(|s| {
-            Self::parse(s, &PRIMITIVE_DATE_TIME_FORMAT)
-                .map_err(|err| FromSqlError::Other(err.into()))
+            Self::parse(s, &UTC_DATE_TIME_FORMAT).map_err(|err| FromSqlError::Other(err.into()))
         })
     }
 }
@@ -351,7 +350,7 @@ mod test {
         db.execute("INSERT INTO foo (t) VALUES (?1)", [dt])?;
 
         let s: String = db.one_column("SELECT t FROM foo", [])?;
-        assert_eq!("2016-02-23 23:56:04.0", s);
+        assert_eq!("2016-02-23 23:56:04.0Z", s);
         let v: UtcDateTime = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(dt, v);
 
