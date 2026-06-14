@@ -1,9 +1,9 @@
-use std::ffi::{c_int, c_void};
+use std::ffi::{c_char, c_int, c_void};
+use std::ops::{Deref, DerefMut};
 use std::slice::from_raw_parts;
 use std::{fmt, mem, ptr, str};
 
 use super::ffi;
-use super::str_for_sqlite;
 use super::{
     AndThenRows, Connection, Error, MappedRows, Params, RawStatement, Result, Row, Rows, ValueRef,
 };
@@ -14,6 +14,253 @@ use crate::types::{ToSql, ToSqlOutput};
 pub struct Statement<'conn> {
     pub(crate) conn: &'conn Connection,
     pub(crate) stmt: RawStatement,
+}
+
+/// A prepared statement that supports zero-copy parameter binding.
+///
+/// The regular [`Statement::raw_bind_parameter`] API binds data using
+/// `SQLITE_TRANSIENT`, which causes SQLite to copy the bound bytes.
+/// `BorrowingStatement` instead passes a raw pointer to SQLite using
+/// `SQLITE_STATIC`, so no copy occurs. The `'stmt` lifetime parameter ties
+/// any bound data to the wrapper, and the borrow checker prevents accessing
+/// the statement after the data has been dropped.
+///
+/// For cached statements, see [`crate::CachedBorrowingStatement`] (requires
+/// the `cache` feature).
+///
+/// # Restriction
+///
+/// All parameters bound on a single wrapper share one `'stmt` lifetime. Once
+/// the lifetime is fixed by the first bind, every subsequent bind must use
+/// data that lives at least as long. Re-binding a slot to shorter-lived data
+/// after the original has been dropped is rejected by the borrow checker even
+/// when it would be safe at runtime.
+///
+/// # Safety guarantees
+///
+/// The borrow checker rejects all of the following at compile time:
+///
+/// Dropping bound data while the wrapper is still in use:
+///
+/// ```compile_fail
+/// use rusqlite::Connection;
+/// let conn = Connection::open_in_memory().unwrap();
+/// let mut stmt = conn.prepare_borrowing("SELECT ?1").unwrap();
+/// let s = String::from("data");
+/// stmt.raw_bind_parameter_ref(1, s.as_str()).unwrap();
+/// drop(s);
+/// stmt.raw_execute().unwrap();
+/// ```
+///
+/// Moving bound data:
+///
+/// ```compile_fail
+/// use rusqlite::Connection;
+/// let conn = Connection::open_in_memory().unwrap();
+/// let mut stmt = conn.prepare_borrowing("SELECT ?1").unwrap();
+/// let s = String::from("data");
+/// stmt.raw_bind_parameter_ref(1, s.as_str()).unwrap();
+/// let _moved = s;
+/// stmt.raw_execute().unwrap();
+/// ```
+///
+/// Mutating bound data:
+///
+/// ```compile_fail
+/// use rusqlite::Connection;
+/// let conn = Connection::open_in_memory().unwrap();
+/// let mut stmt = conn.prepare_borrowing("SELECT ?1").unwrap();
+/// let mut s = String::from("data");
+/// stmt.raw_bind_parameter_ref(1, s.as_str()).unwrap();
+/// s.push_str("more");
+/// stmt.raw_execute().unwrap();
+/// ```
+///
+/// Binding data that does not outlive the wrapper:
+///
+/// ```compile_fail
+/// use rusqlite::Connection;
+/// let conn = Connection::open_in_memory().unwrap();
+/// let mut stmt = conn.prepare_borrowing("SELECT ?1").unwrap();
+/// {
+///     let local = String::from("scoped");
+///     stmt.raw_bind_parameter_ref(1, local.as_str()).unwrap();
+/// }
+/// stmt.raw_execute().unwrap();
+/// ```
+pub struct BorrowingStatement<'conn, 'stmt> {
+    pub(crate) inner: Statement<'conn>,
+    pub(crate) _marker: core::marker::PhantomData<&'stmt ()>,
+}
+
+impl<'conn, 'stmt> BorrowingStatement<'conn, 'stmt> {
+    /// Binds a parameter by reference using `SQLITE_STATIC`.
+    ///
+    /// Unlike [`Statement::raw_bind_parameter`] which binds with
+    /// `SQLITE_TRANSIENT` (causing SQLite to copy the data), this passes the
+    /// data by pointer. The `'stmt` lifetime parameter on the wrapper
+    /// guarantees the pointed-to data outlives any subsequent SQLite call
+    /// that could read the binding.
+    ///
+    /// In general, statements bound this way should be executed via
+    /// [`Statement::raw_execute`] / [`Statement::raw_query`], the same as for
+    /// [`Statement::raw_bind_parameter`].
+    //
+    // `&mut self` is taken (rather than `&self`, which is all the inner
+    // SQLite call needs) for exclusivity with outstanding `Rows<'_>` from
+    // `raw_query` (which borrow `&mut Statement` via `DerefMut`) and with
+    // `clear_bindings` / the consuming `into_*` methods. `'stmt` is a type
+    // parameter fixed at wrapper construction, so the accepted lifetime of
+    // `param` is the same across successive calls.
+    #[inline]
+    pub fn raw_bind_parameter_ref<I, R>(&mut self, one_based_index: I, param: R) -> Result<()>
+    where
+        I: BindIndex,
+        R: Into<ValueRef<'stmt>>,
+    {
+        let ndx = one_based_index.idx(&self.inner)?;
+        // SAFETY: `'stmt` on the wrapper, enforced via `PhantomData<&'stmt ()>`,
+        // ties the bound data's lifetime to this wrapper. While the wrapper
+        // exists, the borrow checker forbids dropping or mutating the data.
+        // When the wrapper is dropped, the inner `Statement` is finalized via
+        // `sqlite3_finalize`, which does not read bindings. So SQLite never
+        // reads the data after it has been freed.
+        unsafe { bind_value_ref_static(&self.inner, ndx, param.into()) }
+    }
+
+    /// Clears all parameter bindings on this statement.
+    ///
+    /// After this call, every slot reads as `NULL` until re-bound. The
+    /// `'stmt` lifetime parameter on the wrapper is **not** reset — to bind
+    /// data of a shorter lifetime than the original `'stmt`, consume the
+    /// wrapper with [`into_statement`](Self::into_statement) and re-wrap the
+    /// returned [`Statement`] with a fresh `'stmt`.
+    #[inline]
+    pub fn clear_bindings(&mut self) {
+        self.inner.stmt.clear_bindings();
+    }
+
+    /// Clears all parameter bindings and unwraps the inner [`Statement`].
+    ///
+    /// Use this to "reset" the `'stmt` lifetime: after `sqlite3_clear_bindings`
+    /// runs, no `SQLITE_STATIC` pointer remains in SQLite, so any previously
+    /// bound borrow is safe to drop. The returned [`Statement`] can then be
+    /// re-wrapped via `BorrowingStatement::from` with a brand-new `'stmt`.
+    #[inline]
+    pub fn into_statement(mut self) -> Statement<'conn> {
+        self.inner.stmt.clear_bindings();
+        self.inner
+    }
+}
+
+impl<'conn, 'stmt> From<Statement<'conn>> for BorrowingStatement<'conn, 'stmt> {
+    /// Wraps a [`Statement`] so its parameters can be bound by reference
+    /// using `SQLITE_STATIC`, avoiding the data copy performed by the regular
+    /// bind API.
+    #[inline]
+    fn from(inner: Statement<'conn>) -> Self {
+        Self {
+            inner,
+            _marker: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<'conn> Deref for BorrowingStatement<'conn, '_> {
+    type Target = Statement<'conn>;
+
+    #[inline]
+    fn deref(&self) -> &Statement<'conn> {
+        &self.inner
+    }
+}
+
+impl<'conn> DerefMut for BorrowingStatement<'conn, '_> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Statement<'conn> {
+        &mut self.inner
+    }
+}
+
+/// Binds a [`ValueRef`] to a prepared statement using `SQLITE_STATIC` for
+/// `Text` and `Blob` arms.
+///
+/// # Safety
+///
+/// `SQLITE_STATIC` tells SQLite *not* to copy or take ownership of the data,
+/// so the caller must guarantee the bytes referenced by `value` remain valid
+/// for as long as SQLite might read them — i.e. until the binding is
+/// overwritten, `sqlite3_clear_bindings` is called, or the statement is
+/// finalized. The [`BorrowingStatement`] / [`crate::CachedBorrowingStatement`]
+/// wrappers establish this guarantee via their `'stmt` lifetime parameter
+/// and Drop chain; do not call this helper from anywhere else.
+#[inline]
+pub(crate) unsafe fn bind_value_ref_static(
+    stmt: &Statement<'_>,
+    ndx: usize,
+    value: ValueRef<'_>,
+) -> Result<()> {
+    // SAFETY: forwarded to the caller of `bind_value_ref_static`.
+    unsafe { bind_value_ref_inner(stmt, ndx, value, ffi::SQLITE_STATIC(), ffi::SQLITE_STATIC()) }
+}
+
+/// Inner binding helper shared by [`Statement::bind_parameter`] (with
+/// `SQLITE_TRANSIENT`) and [`bind_value_ref_static`] (with `SQLITE_STATIC`).
+///
+/// # Safety
+///
+/// If `text_dtor` or `blob_dtor` is `SQLITE_STATIC`, the corresponding bytes
+/// in `value` must outlive every subsequent SQLite call that could read the
+/// binding. With `SQLITE_TRANSIENT` SQLite copies eagerly, so this is
+/// trivially satisfied. The caller chooses the destructor and is responsible
+/// for the lifetime contract.
+#[inline]
+unsafe fn bind_value_ref_inner(
+    stmt: &Statement<'_>,
+    ndx: usize,
+    value: ValueRef<'_>,
+    text_dtor: ffi::sqlite3_destructor_type,
+    blob_dtor: ffi::sqlite3_destructor_type,
+) -> Result<()> {
+    let ptr = unsafe { stmt.stmt.ptr() };
+    stmt.conn.decode_result(match value {
+        ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, ndx as c_int) },
+        ValueRef::Integer(i) => unsafe { ffi::sqlite3_bind_int64(ptr, ndx as c_int, i) },
+        ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, ndx as c_int, r) },
+        ValueRef::Text(s) => unsafe {
+            // For empty text, SQLite ignores the data pointer; force
+            // `SQLITE_STATIC` so we don't pay for a no-op transient copy and
+            // (defensively) hand SQLite a pointer that lives forever.
+            let len = s.len();
+            let (cstr, dtor) = if len == 0 {
+                ("".as_ptr().cast::<c_char>(), ffi::SQLITE_STATIC())
+            } else {
+                (s.as_ptr().cast::<c_char>(), text_dtor)
+            };
+            ffi::sqlite3_bind_text64(
+                ptr,
+                ndx as c_int,
+                cstr,
+                len as ffi::sqlite3_uint64,
+                dtor,
+                ffi::SQLITE_UTF8 as _, // TODO SQLITE_UTF8_ZT
+            )
+        },
+        ValueRef::Blob(b) => unsafe {
+            let length = b.len();
+            if length == 0 {
+                ffi::sqlite3_bind_zeroblob(ptr, ndx as c_int, 0)
+            } else {
+                ffi::sqlite3_bind_blob64(
+                    ptr,
+                    ndx as c_int,
+                    b.as_ptr().cast::<c_void>(),
+                    length as ffi::sqlite3_uint64,
+                    blob_dtor,
+                )
+            }
+        },
+    })
 }
 
 impl Statement<'_> {
@@ -614,13 +861,13 @@ impl Statement<'_> {
     fn bind_parameter<P: ?Sized + ToSql>(&self, param: &P, ndx: usize) -> Result<()> {
         let value = param.to_sql()?;
 
-        let ptr = unsafe { self.stmt.ptr() };
         let value = match value {
             ToSqlOutput::Borrowed(v) => v,
             ToSqlOutput::Owned(ref v) => ValueRef::from(v),
 
             #[cfg(feature = "blob")]
             ToSqlOutput::ZeroBlob(len) => {
+                let ptr = unsafe { self.stmt.ptr() };
                 // TODO sqlite3_bind_zeroblob64 // 3.8.11
                 return self
                     .conn
@@ -632,41 +879,23 @@ impl Statement<'_> {
             }
             #[cfg(feature = "pointer")]
             ToSqlOutput::Pointer(p) => {
+                let ptr = unsafe { self.stmt.ptr() };
                 return self.conn.decode_result(unsafe {
                     ffi::sqlite3_bind_pointer(ptr, ndx as c_int, p.0 as _, p.1.as_ptr(), p.2)
                 });
             }
         };
-        self.conn.decode_result(match value {
-            ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, ndx as c_int) },
-            ValueRef::Integer(i) => unsafe { ffi::sqlite3_bind_int64(ptr, ndx as c_int, i) },
-            ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, ndx as c_int, r) },
-            ValueRef::Text(s) => unsafe {
-                let (c_str, len, destructor) = str_for_sqlite(s);
-                ffi::sqlite3_bind_text64(
-                    ptr,
-                    ndx as c_int,
-                    c_str,
-                    len,
-                    destructor,
-                    ffi::SQLITE_UTF8 as _, // TODO SQLITE_UTF8_ZT
-                )
-            },
-            ValueRef::Blob(b) => unsafe {
-                let length = b.len();
-                if length == 0 {
-                    ffi::sqlite3_bind_zeroblob(ptr, ndx as c_int, 0)
-                } else {
-                    ffi::sqlite3_bind_blob64(
-                        ptr,
-                        ndx as c_int,
-                        b.as_ptr().cast::<c_void>(),
-                        length as ffi::sqlite3_uint64,
-                        ffi::SQLITE_TRANSIENT(),
-                    )
-                }
-            },
-        })
+        // SAFETY: `SQLITE_TRANSIENT` causes SQLite to copy eagerly, so the
+        // lifetime contract on `bind_value_ref_inner` is trivially satisfied.
+        unsafe {
+            bind_value_ref_inner(
+                self,
+                ndx,
+                value,
+                ffi::SQLITE_TRANSIENT(),
+                ffi::SQLITE_TRANSIENT(),
+            )
+        }
     }
 
     #[inline]
@@ -901,7 +1130,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use crate::types::ToSql;
-    use crate::{params_from_iter, Connection, Error, Result};
+    use crate::{params_from_iter, BorrowingStatement, Connection, Error, Result};
 
     #[test]
     fn test_execute_named() -> Result<()> {
@@ -1393,6 +1622,145 @@ mod test {
             }
             err => panic!("Unexpected error {err}"),
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_borrowing_stmt() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute("CREATE TABLE items (x TEXT);", ())?;
+
+        let mut ref_stmt = conn.prepare_borrowing("INSERT INTO items (x) VALUES (?)")?;
+        let x_static = "X Value";
+
+        let x_owned = x_static.to_string();
+
+        ref_stmt.raw_bind_parameter_ref(1, x_owned.as_str())?;
+        // can't drop x until after ref_stmt is executed, because it holds a reference to x
+        // drop(x);
+        ref_stmt.raw_execute()?;
+        // dropping here is fine, because ref_stmt can be dropped first
+        drop(x_owned);
+
+        let item: String = conn.query_row("SELECT x FROM items", [], |r| r.get(0))?;
+        assert_eq!(item, x_static);
+        Ok(())
+    }
+
+    #[test]
+    fn test_borrowing_stmt_all_value_types() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute("CREATE TABLE items (n INTEGER, r REAL, t TEXT, b BLOB)", ())?;
+
+        let text = String::from("hello");
+        let blob = vec![0u8, 1, 2, 3, 4];
+
+        let mut ref_stmt = conn.prepare_borrowing("INSERT INTO items VALUES (?, ?, ?, ?)")?;
+        ref_stmt.raw_bind_parameter_ref(1, 42i64)?;
+        ref_stmt.raw_bind_parameter_ref(2, std::f64::consts::PI)?;
+        ref_stmt.raw_bind_parameter_ref(3, text.as_str())?;
+        ref_stmt.raw_bind_parameter_ref(4, blob.as_slice())?;
+        ref_stmt.raw_execute()?;
+        drop(ref_stmt);
+
+        let (n, r, t, b): (i64, f64, String, Vec<u8>) =
+            conn.query_row("SELECT n, r, t, b FROM items", [], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            })?;
+        assert_eq!(n, 42);
+        assert!((r - std::f64::consts::PI).abs() < f64::EPSILON);
+        assert_eq!(t, text);
+        assert_eq!(b, blob);
+
+        // Null type via the Null marker.
+        let mut ref_stmt = conn.prepare_borrowing("INSERT INTO items (n) VALUES (?)")?;
+        ref_stmt.raw_bind_parameter_ref(1, crate::types::Null)?;
+        ref_stmt.raw_execute()?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_borrowing_stmt_empty_text_and_blob() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute("CREATE TABLE items (t TEXT, b BLOB)", ())?;
+
+        let empty_text = String::new();
+        let empty_blob: Vec<u8> = Vec::new();
+
+        let mut ref_stmt = conn.prepare_borrowing("INSERT INTO items VALUES (?, ?)")?;
+        ref_stmt.raw_bind_parameter_ref(1, empty_text.as_str())?;
+        ref_stmt.raw_bind_parameter_ref(2, empty_blob.as_slice())?;
+        ref_stmt.raw_execute()?;
+        drop(ref_stmt);
+
+        let (t, b): (String, Vec<u8>) = conn.query_row("SELECT t, b FROM items", [], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
+        assert_eq!(t, "");
+        assert_eq!(b, Vec::<u8>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn test_borrowing_stmt_rebind_after_execute() -> Result<()> {
+        let conn = Connection::open_in_memory()?;
+        conn.execute("CREATE TABLE items (x TEXT)", ())?;
+
+        let a = String::from("first");
+        let b = String::from("second");
+
+        let mut ref_stmt = conn.prepare_borrowing("INSERT INTO items VALUES (?)")?;
+        ref_stmt.raw_bind_parameter_ref(1, a.as_str())?;
+        ref_stmt.raw_execute()?;
+        // raw_execute resets the statement internally; rebinding overwrites
+        // the previous SQLITE_STATIC pointer in slot 1.
+        ref_stmt.raw_bind_parameter_ref(1, b.as_str())?;
+        ref_stmt.raw_execute()?;
+        drop(ref_stmt);
+
+        let mut stmt = conn.prepare("SELECT x FROM items ORDER BY rowid")?;
+        let rows: Vec<String> = stmt
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<Result<_>>()?;
+        assert_eq!(rows, vec!["first".to_owned(), "second".to_owned()]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_borrowing_stmt_into_statement() -> Result<()> {
+        // Bind to data with a short lifetime, clear-and-unwrap to release
+        // the SQLITE_STATIC pointer, then re-wrap and bind to data with a
+        // different (incompatible) short lifetime.
+        let conn = Connection::open_in_memory()?;
+        conn.execute("CREATE TABLE items (x TEXT)", ())?;
+
+        let stmt = conn.prepare("INSERT INTO items VALUES (?)")?;
+        let inner = {
+            let first = String::from("first");
+            let mut wrapper = BorrowingStatement::from(stmt);
+            wrapper.raw_bind_parameter_ref(1, first.as_str())?;
+            wrapper.raw_execute()?;
+            // `first` would be tied to the wrapper's `'stmt` if we just
+            // dropped `wrapper`. Instead clear bindings and unwrap, which
+            // returns a plain `Statement` with no `'stmt` constraint.
+            wrapper.into_statement()
+            // `first` is dropped here, after SQLite no longer holds the ptr.
+        };
+
+        // Re-wrap with a fresh `'stmt`. Binding `second.as_str()` here would
+        // not have type-checked through the original wrapper.
+        let mut wrapper = BorrowingStatement::from(inner);
+        let second = String::from("second");
+        wrapper.raw_bind_parameter_ref(1, second.as_str())?;
+        wrapper.raw_execute()?;
+        drop(wrapper);
+        drop(second);
+
+        let rows: Vec<String> = conn
+            .prepare("SELECT x FROM items ORDER BY rowid")?
+            .query_map([], |r| r.get::<_, String>(0))?
+            .collect::<Result<_>>()?;
+        assert_eq!(rows, vec!["first".to_owned(), "second".to_owned()]);
         Ok(())
     }
 }

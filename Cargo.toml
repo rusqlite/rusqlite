@@ -225,6 +225,10 @@ harness = false
 name = "exec"
 harness = false
 
+[[bench]]
+name = "borrowing_stmt"
+harness = false
+
 [[example]]
 name = "loadable_extension"
 crate-type = ["cdylib"]
