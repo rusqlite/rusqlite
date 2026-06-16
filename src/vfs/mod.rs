@@ -1596,11 +1596,18 @@ unsafe extern "C" fn x_dlsym(
     _: *mut sqlite3_vfs,
     p: *mut c_void,
     sym: *const c_char,
-) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const i8)> {
+) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const c_char)> {
+    assert!(!p.is_null() && !sym.is_null());
+
+    let func_ptr = unsafe { dlsym(p, sym) };
+    if func_ptr.is_null() {
+        return None;
+    }
     Some(unsafe {
-        mem::transmute::<*mut c_void, unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const i8)>(
-            dlsym(p, sym),
-        )
+        mem::transmute::<
+            *mut c_void,
+            unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const c_char),
+        >(func_ptr)
     })
 }
 
@@ -1609,21 +1616,19 @@ unsafe extern "C" fn x_dlsym(
     _: *mut sqlite3_vfs,
     p: *mut c_void,
     sym: *const c_char,
-) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const i8)> {
-    if p.is_null() || sym.is_null() {
-        return None;
-    }
+) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const c_char)> {
+    assert!(!p.is_null() && !sym.is_null());
 
     let func_ptr = unsafe { GetProcAddress(p as *mut c_void, sym) };
     if func_ptr.is_null() {
-        None
-    } else {
-        Some(unsafe {
-            mem::transmute::<_, unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const i8)>(
-                func_ptr,
-            )
-        })
+        return None;
     }
+    Some(unsafe {
+        mem::transmute::<
+            *const c_void,
+            unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const c_char),
+        >(func_ptr)
+    })
 }
 
 #[cfg(all(target_family = "wasm", target_os = "unknown"))]
@@ -1631,7 +1636,7 @@ unsafe extern "C" fn x_dlsym(
     _: *mut sqlite3_vfs,
     _p: *mut c_void,
     _sym: *const c_char,
-) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const i8)> {
+) -> Option<unsafe extern "C" fn(*mut sqlite3_vfs, *mut c_void, *const c_char)> {
     panic!("dynamic loading is not supported on wasm32-unknown");
 }
 
