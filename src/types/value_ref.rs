@@ -1,3 +1,5 @@
+use std::ffi::CStr;
+
 use super::{Type, Value};
 use crate::types::{FromSqlError, FromSqlResult};
 
@@ -17,6 +19,9 @@ pub enum ValueRef<'a> {
     Text(&'a [u8]),
     /// The value is a blob of data
     Blob(&'a [u8]),
+    /// The value is a UTF-8 encoded string and that it is zero-terminated.
+    #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+    ZText(&'a CStr),
 }
 
 impl ValueRef<'_> {
@@ -30,6 +35,8 @@ impl ValueRef<'_> {
             ValueRef::Real(_) => Type::Real,
             ValueRef::Text(_) => Type::Text,
             ValueRef::Blob(_) => Type::Blob,
+            #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+            ValueRef::ZText(_) => Type::Text,
         }
     }
 }
@@ -85,6 +92,8 @@ impl<'a> ValueRef<'a> {
     pub fn as_str(&self) -> FromSqlResult<&'a str> {
         match *self {
             ValueRef::Text(t) => Ok(std::str::from_utf8(t)?),
+            #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+            ValueRef::ZText(t) => Ok(t.to_str()?),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -97,6 +106,8 @@ impl<'a> ValueRef<'a> {
         match *self {
             ValueRef::Null => Ok(None),
             ValueRef::Text(t) => Ok(Some(std::str::from_utf8(t)?)),
+            #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+            ValueRef::ZText(t) => Ok(Some(t.to_str()?)),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -129,6 +140,8 @@ impl<'a> ValueRef<'a> {
     pub fn as_bytes(&self) -> FromSqlResult<&'a [u8]> {
         match self {
             ValueRef::Text(s) | ValueRef::Blob(s) => Ok(s),
+            #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+            ValueRef::ZText(t) => Ok(t.to_bytes_with_nul()),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -141,6 +154,8 @@ impl<'a> ValueRef<'a> {
         match *self {
             ValueRef::Null => Ok(None),
             ValueRef::Text(s) | ValueRef::Blob(s) => Ok(Some(s)),
+            #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+            ValueRef::ZText(t) => Ok(Some(t.to_bytes_with_nul())),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -157,6 +172,8 @@ impl TryFrom<ValueRef<'_>> for Value {
             ValueRef::Integer(i) => Self::Integer(i),
             ValueRef::Real(r) => Self::Real(r),
             ValueRef::Text(s) => Self::Text(std::str::from_utf8(s)?.to_owned()),
+            #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+            ValueRef::ZText(t) => Self::Text(t.to_str()?.to_owned()),
             ValueRef::Blob(b) => Self::Blob(b.to_vec()),
         })
     }
@@ -173,6 +190,14 @@ impl<'a> From<&'a [u8]> for ValueRef<'a> {
     #[inline]
     fn from(s: &[u8]) -> ValueRef<'_> {
         ValueRef::Blob(s)
+    }
+}
+
+#[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+impl<'a> From<&'a CStr> for ValueRef<'a> {
+    #[inline]
+    fn from(s: &CStr) -> ValueRef<'_> {
+        ValueRef::ZText(s)
     }
 }
 
@@ -294,6 +319,8 @@ mod test {
     fn as_str() -> FromSqlResult<()> {
         assert!(ValueRef::Null.as_str().is_err());
         assert_eq!(ValueRef::Text(b"").as_str(), Ok(""));
+        #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+        assert_eq!(ValueRef::ZText(c"").as_str(), Ok(""));
         Ok(())
     }
     #[test]
@@ -301,6 +328,8 @@ mod test {
         assert_eq!(ValueRef::Null.as_str_or_null(), Ok(None));
         assert!(ValueRef::Integer(1).as_str_or_null().is_err());
         assert_eq!(ValueRef::Text(b"").as_str_or_null(), Ok(Some("")));
+        #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+        assert_eq!(ValueRef::ZText(c"").as_str_or_null(), Ok(Some("")));
         Ok(())
     }
     #[test]
@@ -320,6 +349,8 @@ mod test {
     fn as_bytes() -> FromSqlResult<()> {
         assert!(ValueRef::Null.as_bytes().is_err());
         assert_eq!(ValueRef::Blob(b"").as_bytes(), Ok(&b""[..]));
+        #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+        assert_eq!(ValueRef::ZText(c"").as_bytes(), Ok(&[0u8][..]));
         Ok(())
     }
     #[test]

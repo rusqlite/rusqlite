@@ -649,7 +649,18 @@ impl Statement<'_> {
                     c_str,
                     len,
                     destructor,
-                    ffi::SQLITE_UTF8 as _, // TODO SQLITE_UTF8_ZT
+                    ffi::SQLITE_UTF8 as _,
+                )
+            },
+            #[cfg(feature = "modern_sqlite")] // SQLite >= 3.53.0
+            ValueRef::ZText(s) => unsafe {
+                ffi::sqlite3_bind_text64(
+                    ptr,
+                    ndx as c_int,
+                    s.as_ptr(),
+                    s.count_bytes() as ffi::sqlite3_uint64,
+                    ffi::SQLITE_TRANSIENT(),
+                    ffi::SQLITE_UTF8_ZT as _,
                 )
             },
             ValueRef::Blob(b) => unsafe {
