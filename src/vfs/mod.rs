@@ -989,6 +989,14 @@ pub enum AtomicWrite {
 #[must_use]
 pub struct VfsRegistrationGuard<V>(Arc<VfsStorage<V>>);
 
+impl<V> VfsRegistrationGuard<V> {
+    /// Returns the name of this VFS registration.
+    pub fn name(&self) -> &str {
+        let storage = &self.0;
+        storage.name.to_str().expect("VFS name must be valid UTF-8")
+    }
+}
+
 impl<V> Deref for VfsRegistrationGuard<V> {
     type Target = V;
 
