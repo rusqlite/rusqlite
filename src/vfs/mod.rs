@@ -558,6 +558,15 @@ pub trait VfsFile {
         let _ = size;
         Err(Error::new(sqlite3::SQLITE_NOTFOUND))
     }
+
+    /// Implements low-level custom file control operations.
+    ///
+    /// This is used for operations outside of the sqlite reserved range, hence `op` is always greater than 100.
+    unsafe fn file_control(&mut self, op: c_int, arg: *mut c_void) -> Result<()> {
+        let _ = op;
+        let _ = arg;
+        Err(Error::new(sqlite3::SQLITE_NOTFOUND))
+    }
 }
 
 /// Options for syncing a file.
@@ -2121,8 +2130,7 @@ unsafe extern "C" fn x_file_control<T: Vfs>(
         // Newer codes that we don't need to handle yet
         fcntl if fcntl <= 100 => sqlite3::SQLITE_NOTFOUND,
 
-        // TODO: allow extensions to handle custom opcodes
-        _ => sqlite3::SQLITE_NOTFOUND,
+        op => file.file_control(op, arg).into_rc(),
     }
 }
 
