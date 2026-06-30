@@ -320,7 +320,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::Sql;
-    use crate::{error::error_from_sqlite_code, ffi, pragma, Connection, Result};
+    use crate::{Connection, Result, error::error_from_sqlite_code, ffi, pragma};
 
     #[test]
     #[cfg_attr(miri, ignore)]

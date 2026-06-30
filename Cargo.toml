@@ -3,7 +3,7 @@ name = "rusqlite"
 # Note: Update version in README.md when you change this.
 version = "0.40.1"
 authors = ["The rusqlite developers"]
-edition = "2021"
+edition = "2024"
 description = "Ergonomic wrapper for SQLite"
 repository = "https://github.com/rusqlite/rusqlite"
 documentation = "https://docs.rs/rusqlite/"

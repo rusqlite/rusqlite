@@ -31,8 +31,10 @@ impl LoadExtensionGuard<'_> {
     /// details.
     #[inline]
     pub unsafe fn new(conn: &Connection) -> Result<LoadExtensionGuard<'_>> {
-        conn.load_extension_enable()
-            .map(|_| LoadExtensionGuard { conn })
+        unsafe {
+            conn.load_extension_enable()
+                .map(|_| LoadExtensionGuard { conn })
+        }
     }
 }
 

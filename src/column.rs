@@ -1,4 +1,4 @@
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 use std::ptr;
 use std::str;
 
@@ -465,7 +465,7 @@ mod test {
 
     #[test]
     fn test_column_name_in_error() -> Result<()> {
-        use crate::{types::Type, Error};
+        use crate::{Error, types::Type};
         let db = Connection::open_in_memory()?;
         db.execute_batch(
             "BEGIN;

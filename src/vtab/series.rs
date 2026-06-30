@@ -4,7 +4,7 @@
 //! "function"](https://sqlite.org/src/file/ext/misc/series.c):
 //! `https://www.sqlite.org/series.html`
 use std::borrow::Cow;
-use std::ffi::{c_int, CStr};
+use std::ffi::{CStr, c_int};
 use std::marker::PhantomData;
 
 use crate::ffi;

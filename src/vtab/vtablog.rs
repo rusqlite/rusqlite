@@ -1,6 +1,6 @@
 //! Port of C [vtablog](https://sqlite.org/src/file/ext/misc/vtablog.c)
 use std::borrow::Cow;
-use std::ffi::{c_int, CStr, CString};
+use std::ffi::{CStr, CString, c_int};
 use std::marker::PhantomData;
 use std::str::FromStr as _;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -12,8 +12,8 @@ use crate::vtab::{
     Context, CreateVTab, Filters, IndexInfo, Inserts, Module, TransactionVTab, UpdateVTab, Updates,
     VTab, VTabConnection, VTabCursor, VTabKind,
 };
-use crate::{ffi, ValueRef};
 use crate::{Connection, Error, Result};
+use crate::{ValueRef, ffi};
 
 const MODULE_NAME: &CStr = c"vtablog";
 

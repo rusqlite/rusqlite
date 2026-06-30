@@ -1,4 +1,4 @@
-use bencher::{benchmark_group, benchmark_main, Bencher};
+use bencher::{Bencher, benchmark_group, benchmark_main};
 use rusqlite::Connection;
 
 fn bench_execute(b: &mut Bencher) {

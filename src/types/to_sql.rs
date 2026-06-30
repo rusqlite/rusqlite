@@ -43,7 +43,9 @@ impl<'a> ToSqlOutput<'a> {
     /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
     pub fn from_rc<T>(rc: std::rc::Rc<T>, ptr_type: &'static std::ffi::CStr) -> ToSqlOutput<'a> {
         unsafe extern "C" fn free_rc<T>(p: *mut std::ffi::c_void) {
-            std::rc::Rc::decrement_strong_count(p.cast::<T>());
+            unsafe {
+                std::rc::Rc::decrement_strong_count(p.cast::<T>());
+            }
         }
         ToSqlOutput::Pointer((
             std::rc::Rc::into_raw(rc).cast::<std::ffi::c_void>(),
@@ -347,7 +349,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::{ToSql, ToSqlOutput};
-    use crate::{types::Value, types::ValueRef, Result};
+    use crate::{Result, types::Value, types::ValueRef};
 
     fn is_to_sql<T: ToSql>() {}
 
@@ -576,7 +578,7 @@ mod test {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_uuid() -> Result<()> {
-        use crate::{params, Connection};
+        use crate::{Connection, params};
         use uuid::Uuid;
 
         let db = Connection::open_in_memory()?;

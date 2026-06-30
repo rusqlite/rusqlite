@@ -18,45 +18,47 @@ pub(super) unsafe fn set_result(
     #[allow(unused_variables)] args: &[*mut sqlite3_value],
     result: &ToSqlOutput<'_>,
 ) {
-    let value = match *result {
-        ToSqlOutput::Borrowed(v) => v,
-        ToSqlOutput::Owned(ref v) => ValueRef::from(v),
+    unsafe {
+        let value = match *result {
+            ToSqlOutput::Borrowed(v) => v,
+            ToSqlOutput::Owned(ref v) => ValueRef::from(v),
 
-        #[cfg(feature = "blob")]
-        ToSqlOutput::ZeroBlob(len) => {
-            // TODO sqlite3_result_zeroblob64 // 3.8.11
-            return ffi::sqlite3_result_zeroblob(ctx, len);
-        }
-        #[cfg(feature = "functions")]
-        ToSqlOutput::Arg(i) => {
-            return ffi::sqlite3_result_value(ctx, args[i]);
-        }
-        #[cfg(feature = "pointer")]
-        ToSqlOutput::Pointer(ref p) => {
-            return ffi::sqlite3_result_pointer(ctx, p.0 as _, p.1.as_ptr(), p.2);
-        }
-    };
+            #[cfg(feature = "blob")]
+            ToSqlOutput::ZeroBlob(len) => {
+                // TODO sqlite3_result_zeroblob64 // 3.8.11
+                return ffi::sqlite3_result_zeroblob(ctx, len);
+            }
+            #[cfg(feature = "functions")]
+            ToSqlOutput::Arg(i) => {
+                return ffi::sqlite3_result_value(ctx, args[i]);
+            }
+            #[cfg(feature = "pointer")]
+            ToSqlOutput::Pointer(ref p) => {
+                return ffi::sqlite3_result_pointer(ctx, p.0 as _, p.1.as_ptr(), p.2);
+            }
+        };
 
-    match value {
-        ValueRef::Null => ffi::sqlite3_result_null(ctx),
-        ValueRef::Integer(i) => ffi::sqlite3_result_int64(ctx, i),
-        ValueRef::Real(r) => ffi::sqlite3_result_double(ctx, r),
-        ValueRef::Text(s) => {
-            let (c_str, len, destructor) = str_for_sqlite(s);
-            ffi::sqlite3_result_text64(ctx, c_str, len, destructor, ffi::SQLITE_UTF8 as _);
-            // TODO SQLITE_UTF8_ZT
-        }
-        ValueRef::Blob(b) => {
-            let length = b.len();
-            if length == 0 {
-                ffi::sqlite3_result_zeroblob(ctx, 0);
-            } else {
-                ffi::sqlite3_result_blob64(
-                    ctx,
-                    b.as_ptr().cast::<c_void>(),
-                    length as ffi::sqlite3_uint64,
-                    ffi::SQLITE_TRANSIENT(),
-                );
+        match value {
+            ValueRef::Null => ffi::sqlite3_result_null(ctx),
+            ValueRef::Integer(i) => ffi::sqlite3_result_int64(ctx, i),
+            ValueRef::Real(r) => ffi::sqlite3_result_double(ctx, r),
+            ValueRef::Text(s) => {
+                let (c_str, len, destructor) = str_for_sqlite(s);
+                ffi::sqlite3_result_text64(ctx, c_str, len, destructor, ffi::SQLITE_UTF8 as _);
+                // TODO SQLITE_UTF8_ZT
+            }
+            ValueRef::Blob(b) => {
+                let length = b.len();
+                if length == 0 {
+                    ffi::sqlite3_result_zeroblob(ctx, 0);
+                } else {
+                    ffi::sqlite3_result_blob64(
+                        ctx,
+                        b.as_ptr().cast::<c_void>(),
+                        length as ffi::sqlite3_uint64,
+                        ffi::SQLITE_TRANSIENT(),
+                    );
+                }
             }
         }
     }

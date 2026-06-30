@@ -24,13 +24,13 @@ use rusqlite::{Connection, Result};
 /// See <https://sqlite.org/c3ref/load_extension.html> on this function's name and usage.
 /// # Safety
 /// This function is called by SQLite and must be safe to call.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn sqlite3_extension_init(
     db: *mut ffi::sqlite3,
     pz_err_msg: *mut *mut c_char,
     p_api: *mut ffi::sqlite3_api_routines,
 ) -> c_int {
-    Connection::extension_init2(db, pz_err_msg, p_api, extension_init)
+    unsafe { Connection::extension_init2(db, pz_err_msg, p_api, extension_init) }
 }
 
 fn extension_init(db: Connection) -> Result<bool> {

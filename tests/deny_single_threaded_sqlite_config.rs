@@ -7,8 +7,8 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 #[cfg(not(feature = "loadable_extension"))]
 #[test]
 fn test_error_when_singlethread_mode() {
-    use rusqlite::ffi;
     use rusqlite::Connection;
+    use rusqlite::ffi;
     // put SQLite into single-threaded mode
     unsafe {
         // Note: macOS system SQLite seems to return an error if you attempt to
