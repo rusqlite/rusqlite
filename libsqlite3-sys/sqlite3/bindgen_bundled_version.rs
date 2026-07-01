@@ -23,13 +23,13 @@ extern "C" {
     ) -> ::core::ffi::c_int;
 }
 
-pub const SQLITE_VERSION: &::core::ffi::CStr = c"3.53.1";
-pub const SQLITE_VERSION_NUMBER: i32 = 3053001;
+pub const SQLITE_VERSION: &::core::ffi::CStr = c"3.53.3";
+pub const SQLITE_VERSION_NUMBER: i32 = 3053003;
 pub const SQLITE_SOURCE_ID: &::core::ffi::CStr =
-    c"2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9";
+    c"2026-06-26 20:14:12 d4c0e51e4aeb96955b99185ab9cde75c339e2c29c3f3f12428d364a10d782c62";
 pub const SQLITE_SCM_BRANCH: &::core::ffi::CStr = c"branch-3.53";
-pub const SQLITE_SCM_TAGS: &::core::ffi::CStr = c"release version-3.53.1";
-pub const SQLITE_SCM_DATETIME: &::core::ffi::CStr = c"2026-05-05T10:34:17.344Z";
+pub const SQLITE_SCM_TAGS: &::core::ffi::CStr = c"release version-3.53.3";
+pub const SQLITE_SCM_DATETIME: &::core::ffi::CStr = c"2026-06-26T20:14:12.354Z";
 pub const SQLITE_OK: i32 = 0;
 pub const SQLITE_ERROR: i32 = 1;
 pub const SQLITE_INTERNAL: i32 = 2;
@@ -535,6 +535,7 @@ pub const SQLITE_CHANGESETAPPLY_NOSAVEPOINT: i32 = 1;
 pub const SQLITE_CHANGESETAPPLY_INVERT: i32 = 2;
 pub const SQLITE_CHANGESETAPPLY_IGNORENOOP: i32 = 4;
 pub const SQLITE_CHANGESETAPPLY_FKNOACTION: i32 = 8;
+pub const SQLITE_CHANGESETAPPLY_NOUPDATELOOP: i32 = 16;
 pub const SQLITE_CHANGESET_DATA: i32 = 1;
 pub const SQLITE_CHANGESET_NOTFOUND: i32 = 2;
 pub const SQLITE_CHANGESET_CONFLICT: i32 = 3;

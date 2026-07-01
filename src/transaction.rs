@@ -1,3 +1,4 @@
+use crate::pragma::Sql;
 use crate::{Connection, Result};
 use std::ops::Deref;
 
@@ -250,13 +251,13 @@ impl Savepoint<'_> {
     #[inline]
     fn with_name_<T: Into<String>>(conn: &Connection, name: T) -> Result<Savepoint<'_>> {
         let name = name.into();
-        conn.execute_batch(&format!("SAVEPOINT {name}"))
-            .map(|()| Savepoint {
-                conn,
-                name,
-                drop_behavior: DropBehavior::Rollback,
-                committed: false,
-            })
+        let sql = cmd("SAVEPOINT", false, name.as_str())?;
+        conn.execute_batch(sql.as_str()).map(|()| Savepoint {
+            conn,
+            name,
+            drop_behavior: DropBehavior::Rollback,
+            committed: false,
+        })
     }
 
     #[inline]
@@ -311,7 +312,8 @@ impl Savepoint<'_> {
 
     #[inline]
     fn commit_(&mut self) -> Result<()> {
-        self.conn.execute_batch(&format!("RELEASE {}", self.name))?;
+        let sql = cmd("RELEASE", false, self.name.as_str())?;
+        self.conn.execute_batch(sql.as_str())?;
         self.committed = true;
         Ok(())
     }
@@ -324,8 +326,8 @@ impl Savepoint<'_> {
     /// rolled back, and can be rolled back again or committed.
     #[inline]
     pub fn rollback(&mut self) -> Result<()> {
-        self.conn
-            .execute_batch(&format!("ROLLBACK TO {}", self.name))
+        let sql = cmd("ROLLBACK", true, self.name.as_str())?;
+        self.conn.execute_batch(sql.as_str())
     }
 
     /// Consumes the savepoint, committing or rolling back according to the
@@ -352,6 +354,18 @@ impl Savepoint<'_> {
             DropBehavior::Panic => panic!("Savepoint dropped unexpectedly."),
         }
     }
+}
+
+fn cmd(cmd: &'static str, to: bool, name: &str) -> Result<Sql> {
+    let mut sql = Sql::new();
+    sql.push_keyword(cmd)?;
+    sql.push_space();
+    if to {
+        sql.push_keyword("TO")?;
+        sql.push_space();
+    }
+    sql.push_identifier(name);
+    Ok(sql)
 }
 
 impl Deref for Savepoint<'_> {
