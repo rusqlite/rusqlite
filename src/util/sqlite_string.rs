@@ -3,7 +3,7 @@
 // still warn for anything that's not used by either, though.
 #![cfg_attr(not(feature = "vtab"), allow(dead_code))]
 use crate::ffi;
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
@@ -54,7 +54,7 @@ impl SqliteMallocString {
     /// allocated by `sqlite3_malloc64`, and that SQLite expects us to free it!
     #[inline]
     pub(crate) unsafe fn from_raw(ptr: *mut c_char) -> Option<Self> {
-        NonNull::new(ptr).map(|p| Self::from_raw_nonnull(p))
+        unsafe { NonNull::new(ptr).map(|p| Self::from_raw_nonnull(p)) }
     }
 
     /// Get the pointer behind `self`. After this is called, we no longer manage
@@ -125,7 +125,7 @@ impl SqliteMallocString {
                     NonNull::new(ffi::sqlite3_malloc64(len_to_alloc).cast::<c_char>())
                 })
                 .unwrap_or_else(|| {
-                    use std::alloc::{handle_alloc_error, Layout};
+                    use std::alloc::{Layout, handle_alloc_error};
                     // Report via handle_alloc_error so that it can be handled with any
                     // other allocation errors and properly diagnosed.
                     //

@@ -2,7 +2,7 @@
 #[test]
 fn auto_ext() -> rusqlite::Result<()> {
     use rusqlite::auto_extension::*;
-    use rusqlite::{ffi, Connection, Error, Result};
+    use rusqlite::{Connection, Error, Result, ffi};
     use std::os::raw::{c_char, c_int};
 
     fn test_ok(_: Connection) -> Result<()> {
@@ -13,7 +13,7 @@ fn auto_ext() -> rusqlite::Result<()> {
         pz_err_msg: *mut *mut c_char,
         _: *const ffi::sqlite3_api_routines,
     ) -> c_int {
-        init_auto_extension(db, pz_err_msg, test_ok)
+        unsafe { init_auto_extension(db, pz_err_msg, test_ok) }
     }
     fn test_err(_: Connection) -> Result<()> {
         Err(Error::SqliteFailure(
@@ -26,7 +26,7 @@ fn auto_ext() -> rusqlite::Result<()> {
         pz_err_msg: *mut *mut c_char,
         _: *const ffi::sqlite3_api_routines,
     ) -> c_int {
-        init_auto_extension(db, pz_err_msg, test_err)
+        unsafe { init_auto_extension(db, pz_err_msg, test_err) }
     }
 
     //assert!(!cancel_auto_extension(sqlite_test_ok));

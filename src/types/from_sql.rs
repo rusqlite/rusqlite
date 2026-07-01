@@ -88,8 +88,8 @@ impl fmt::Display for FromSqlError {
 impl Error for FromSqlError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Utf8Error(ref err) => Some(err),
-            Self::Other(ref err) => Some(&**err),
+            Self::Utf8Error(err) => Some(err),
+            Self::Other(err) => Some(&**err),
             _ => None,
         }
     }

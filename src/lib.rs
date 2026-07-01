@@ -72,7 +72,7 @@ pub use sqlite_wasm_rs as ffi;
 
 use std::cell::RefCell;
 use std::default::Default;
-use std::ffi::{c_char, c_int, c_uint, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_int, c_uint};
 use std::fmt;
 
 use std::path::Path;
@@ -93,11 +93,11 @@ pub use crate::cache::CachedStatement;
 pub use crate::column::Column;
 #[cfg(feature = "column_metadata")]
 pub use crate::column::ColumnMetadata;
-pub use crate::error::{to_sqlite_error, Error};
+pub use crate::error::{Error, to_sqlite_error};
 pub use crate::ffi::ErrorCode;
 #[cfg(feature = "load_extension")]
 pub use crate::load_extension_guard::LoadExtensionGuard;
-pub use crate::params::{params_from_iter, Params, ParamsFromIter};
+pub use crate::params::{Params, ParamsFromIter, params_from_iter};
 pub use crate::row::{AndThenRows, Map, MappedRows, Row, RowIndex, Rows};
 pub use crate::statement::{Statement, StatementStatus};
 #[cfg(feature = "modern_sqlite")]
@@ -161,7 +161,9 @@ pub(crate) mod util;
 
 // Actually, only sqlite3_enable_load_extension is disabled (not sqlite3_load_extension)
 #[cfg(all(feature = "loadable_extension", feature = "load_extension"))]
-compile_error!("feature \"loadable_extension\" and feature \"load_extension\" cannot be enabled at the same time");
+compile_error!(
+    "feature \"loadable_extension\" and feature \"load_extension\" cannot be enabled at the same time"
+);
 
 // Number of cached prepared statements we'll hold on to.
 #[cfg(feature = "cache")]
@@ -305,7 +307,9 @@ impl<T> OptionalExtension<T> for Result<T> {
 }
 
 unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
-    CStr::from_ptr(errmsg).to_string_lossy().into_owned()
+    unsafe { CStr::from_ptr(errmsg) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 #[cfg(any(feature = "functions", feature = "vtab", test))]
@@ -871,7 +875,7 @@ impl Connection {
     #[cfg(feature = "load_extension")]
     #[inline]
     pub unsafe fn load_extension_enable(&self) -> Result<()> {
-        self.db.borrow_mut().enable_load_extension(1)
+        unsafe { self.db.borrow_mut().enable_load_extension(1) }
     }
 
     /// Disable loading of SQLite extensions.
@@ -930,9 +934,11 @@ impl Connection {
         dylib_path: P,
         entry_point: Option<N>,
     ) -> Result<()> {
-        self.db
-            .borrow_mut()
-            .load_extension(dylib_path.as_ref(), entry_point)
+        unsafe {
+            self.db
+                .borrow_mut()
+                .load_extension(dylib_path.as_ref(), entry_point)
+        }
     }
 
     /// Get access to the underlying SQLite database connection handle.
@@ -963,7 +969,7 @@ impl Connection {
     /// This function is unsafe because improper use may impact the Connection.
     #[inline]
     pub unsafe fn from_handle(db: *mut ffi::sqlite3) -> Result<Self> {
-        let db = InnerConnection::new(db, false);
+        let db = unsafe { InnerConnection::new(db, false) };
         Ok(Self {
             db: RefCell::new(db),
             #[cfg(feature = "cache")]
@@ -987,14 +993,16 @@ impl Connection {
         if p_api.is_null() {
             return ffi::SQLITE_ERROR;
         }
-        match ffi::rusqlite_extension_init2(p_api)
-            .map_err(Error::from)
-            .and(Self::from_handle(db))
-            .and_then(init)
-        {
-            Err(err) => to_sqlite_error(&err, pz_err_msg),
-            Ok(true) => ffi::SQLITE_OK_LOAD_PERMANENTLY,
-            _ => ffi::SQLITE_OK,
+        unsafe {
+            match ffi::rusqlite_extension_init2(p_api)
+                .map_err(Error::from)
+                .and(Self::from_handle(db))
+                .and_then(init)
+            {
+                Err(err) => to_sqlite_error(&err, pz_err_msg),
+                Ok(true) => ffi::SQLITE_OK_LOAD_PERMANENTLY,
+                _ => ffi::SQLITE_OK,
+            }
         }
     }
 
@@ -1012,7 +1020,7 @@ impl Connection {
     /// `ffi::sqlite3_open`().
     #[inline]
     pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Self> {
-        let db = InnerConnection::new(db, true);
+        let db = unsafe { InnerConnection::new(db, true) };
         Ok(Self {
             db: RefCell::new(db),
             #[cfg(feature = "cache")]

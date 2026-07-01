@@ -1,6 +1,6 @@
 //! [`ToSql`] and [`FromSql`] implementation for [`Url`].
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use crate::Result;
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use url::Url;
 
 /// Serialize `Url` to text.
@@ -30,7 +30,7 @@ mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use crate::{params, Connection, Error, Result};
+    use crate::{Connection, Error, Result, params};
     use url::{ParseError, Url};
 
     fn checked_memory_handle() -> Result<Connection> {

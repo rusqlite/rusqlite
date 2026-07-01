@@ -746,9 +746,11 @@ impl Statement<'_> {
     #[inline]
     #[cfg(feature = "cache")]
     pub(crate) unsafe fn into_raw(mut self) -> RawStatement {
-        let mut stmt = RawStatement::new(ptr::null_mut());
-        mem::swap(&mut stmt, &mut self.stmt);
-        stmt
+        unsafe {
+            let mut stmt = RawStatement::new(ptr::null_mut());
+            mem::swap(&mut stmt, &mut self.stmt);
+            stmt
+        }
     }
 
     /// Reset all bindings
@@ -757,7 +759,7 @@ impl Statement<'_> {
     }
 
     pub(crate) unsafe fn ptr(&self) -> *mut ffi::sqlite3_stmt {
-        self.stmt.ptr()
+        unsafe { self.stmt.ptr() }
     }
 }
 
@@ -901,7 +903,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use crate::types::ToSql;
-    use crate::{params_from_iter, Connection, Error, Result};
+    use crate::{Connection, Error, Result, params_from_iter};
 
     #[test]
     fn test_execute_named() -> Result<()> {

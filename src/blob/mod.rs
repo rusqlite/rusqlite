@@ -423,7 +423,7 @@ mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use crate::{Connection, Result, MAIN_DB};
+    use crate::{Connection, MAIN_DB, Result};
     use std::io::{BufRead as _, BufReader, BufWriter, Read as _, Seek as _, SeekFrom, Write as _};
 
     fn db_with_test_blob() -> Result<(Connection, i64)> {

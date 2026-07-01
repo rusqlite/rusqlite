@@ -4,8 +4,8 @@ use chrono::{
     DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone as _, Utc,
 };
 
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
 use crate::Result;
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
 
 /// ISO 8601 calendar date without timezone => "YYYY-MM-DD"
 impl ToSql for NaiveDate {
@@ -160,8 +160,8 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use crate::{
-        types::{FromSql as _, ValueRef},
         Connection, Result,
+        types::{FromSql as _, ValueRef},
     };
     use chrono::{
         DateTime, Duration, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone as _,
