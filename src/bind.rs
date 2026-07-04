@@ -1,4 +1,4 @@
-use crate::{ffi, Error, Result, Statement};
+use crate::{Error, Result, Statement, ffi};
 use std::ffi::CStr;
 
 mod sealed {
@@ -49,9 +49,9 @@ impl BindIndex for &CStr {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
-    use crate::{ffi, Connection, Error, Result};
+    use crate::{Connection, Error, Result, ffi};
 
     #[test]
     fn invalid_name() -> Result<()> {

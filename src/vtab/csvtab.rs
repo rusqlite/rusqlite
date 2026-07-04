@@ -1,6 +1,6 @@
 //! CSV Virtual Table.
 //!
-//! Port of [csv](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/csv.c) C
+//! Port of [csv](https://sqlite.org/src/file/ext/misc/csv.c) C
 //! extension: `https://www.sqlite.org/csv.html`
 //!
 //! # Example
@@ -21,7 +21,8 @@
 //!     Ok(())
 //! }
 //! ```
-use std::ffi::c_int;
+use std::borrow::Cow;
+use std::ffi::{CStr, CString, c_int};
 use std::fs::File;
 use std::marker::PhantomData;
 use std::path::Path;
@@ -30,10 +31,12 @@ use std::str;
 use crate::ffi;
 use crate::types::Null;
 use crate::vtab::{
-    escape_double_quote, parse_boolean, read_only_module, Context, CreateVTab, Filters, IndexInfo,
-    VTab, VTabConfig, VTabConnection, VTabCursor, VTabKind,
+    Context, CreateVTab, Filters, IndexInfo, Module, VTab, VTabConfig, VTabConnection, VTabCursor,
+    VTabKind, escape_double_quote, parse_boolean,
 };
 use crate::{Connection, Error, Result};
+
+const MODULE_NAME: &CStr = c"csv";
 
 /// Register the "csv" module.
 /// ```sql
@@ -47,8 +50,9 @@ use crate::{Connection, Error, Result};
 /// );
 /// ```
 pub fn load_module(conn: &Connection) -> Result<()> {
+    const MODULE: Module<CsvTab> = Module::read_only_module();
     let aux: Option<()> = None;
-    conn.create_module(c"csv", read_only_module::<CsvTab>(), aux)
+    conn.create_module(MODULE_NAME, &MODULE, aux)
 }
 
 /// An instance of the CSV virtual table
@@ -89,10 +93,15 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
 
     fn connect(
         db: &mut VTabConnection,
-        _aux: Option<&()>,
+        aux: Option<&()>,
+        module_name: &[u8],
+        _database_name: &[u8],
+        _table_name: &[u8],
         args: &[&[u8]],
-    ) -> Result<(String, Self)> {
-        if args.len() < 4 {
+    ) -> Result<(Cow<'static, CStr>, Self)> {
+        debug_assert_eq!(aux, None);
+        debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
+        if args.is_empty() {
             return Err(Error::ModuleError("no CSV file specified".to_owned()));
         }
 
@@ -107,9 +116,9 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
         let mut schema = None;
         let mut n_col = None;
 
-        let args = &args[3..];
         for c_slice in args {
             let (param, value) = super::parameter(c_slice)?;
+            let value = value.as_ref();
             match param {
                 "filename" => {
                     if !Path::new(value).exists() {
@@ -118,7 +127,7 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                     value.clone_into(&mut vtab.filename);
                 }
                 "schema" => {
-                    schema = Some(value.to_owned());
+                    schema = Some(CString::new(value)?);
                 }
                 "columns" => {
                     if let Ok(n) = value.parse::<u16>() {
@@ -226,16 +235,16 @@ unsafe impl<'vtab> VTab<'vtab> for CsvTab {
                     sql.push_str(", ");
                 }
             }
-            schema = Some(sql);
+            schema = Some(CString::new(sql)?);
         }
         db.config(VTabConfig::DirectOnly)?;
-        Ok((schema.unwrap(), vtab))
+        Ok((Cow::Owned(schema.unwrap()), vtab))
     }
 
     // Only a forward full table scan is supported.
-    fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
+    fn best_index(&self, info: &mut IndexInfo) -> Result<bool> {
         info.set_estimated_cost(1_000_000.);
-        Ok(())
+        Ok(true)
     }
 
     fn open(&mut self) -> Result<CsvTabCursor<'_>> {
@@ -340,14 +349,14 @@ impl From<csv::Error> for Error {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use crate::vtab::csvtab;
     use crate::{Connection, Result};
-    use fallible_iterator::FallibleIterator;
+    use fallible_iterator::FallibleIterator as _;
 
     #[cfg_attr(
         all(target_family = "wasm", target_os = "unknown"),

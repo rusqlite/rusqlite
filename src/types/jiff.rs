@@ -1,12 +1,12 @@
 //! Convert some `jiff` types.
 
 use jiff::{
-    civil::{Date, DateTime, Time},
     Timestamp,
+    civil::{Date, DateTime, Time},
 };
 
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
 use crate::Result;
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
 
 /// Gregorian calendar date => "YYYY-MM-DD"
 impl ToSql for Date {
@@ -86,15 +86,15 @@ impl FromSql for Timestamp {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use crate::{Connection, Result};
     use jiff::{
-        civil::{Date, DateTime, Time},
         Timestamp,
+        civil::{Date, DateTime, Time},
     };
 
     fn checked_memory_handle() -> Result<Connection> {

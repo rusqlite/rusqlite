@@ -135,13 +135,13 @@ impl fmt::Display for Type {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::Value;
-    use crate::{params, Connection, Error, Result, Statement};
+    use crate::{Connection, Error, Result, Statement, params};
     use std::ffi::{c_double, c_int};
 
     fn checked_memory_handle() -> Result<Connection> {

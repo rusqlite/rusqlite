@@ -44,7 +44,7 @@ use std::time::Duration;
 use crate::ffi;
 
 use crate::error::error_from_handle;
-use crate::{Connection, Name, Result, MAIN_DB};
+use crate::{Connection, MAIN_DB, Name, Result};
 
 impl Connection {
     /// Back up the `name` database to the given
@@ -318,13 +318,13 @@ impl Drop for Backup<'_, '_> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::{Backup, Progress};
-    use crate::{Connection, Result, MAIN_DB, TEMP_DB};
+    use crate::{Connection, MAIN_DB, Result, TEMP_DB};
     use std::time::Duration;
 
     #[cfg_attr(

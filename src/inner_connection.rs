@@ -1,4 +1,4 @@
-use std::ffi::{c_char, c_int, CStr};
+use std::ffi::{CStr, c_char, c_int};
 #[cfg(feature = "load_extension")]
 use std::path::Path;
 use std::ptr;
@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use super::ffi;
 use super::{Connection, InterruptHandle, Name, OpenFlags, PrepFlags, Result};
-use crate::error::{decode_result_raw, error_from_handle, error_with_offset, Error};
+use crate::error::{Error, decode_result_raw, error_from_handle, error_with_offset};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
 use crate::version_number;
@@ -176,7 +176,7 @@ impl InnerConnection {
     #[inline]
     #[cfg(feature = "load_extension")]
     pub unsafe fn enable_load_extension(&mut self, onoff: c_int) -> Result<()> {
-        let r = ffi::sqlite3_enable_load_extension(self.db, onoff);
+        let r = unsafe { ffi::sqlite3_enable_load_extension(self.db, onoff) };
         self.decode_result(r)
     }
 
@@ -190,13 +190,15 @@ impl InnerConnection {
         let mut errmsg: *mut c_char = ptr::null_mut();
         let cs = entry_point.as_ref().map(N::as_cstr).transpose()?;
         let c_entry = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
-        let r = ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry, &mut errmsg);
-        if r == ffi::SQLITE_OK {
-            Ok(())
-        } else {
-            let message = super::errmsg_to_string(errmsg);
-            ffi::sqlite3_free(errmsg.cast::<std::ffi::c_void>());
-            Err(crate::error::error_from_sqlite_code(r, Some(message)))
+        unsafe {
+            let r = ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry, &mut errmsg);
+            if r == ffi::SQLITE_OK {
+                Ok(())
+            } else {
+                let message = super::errmsg_to_string(errmsg);
+                ffi::sqlite3_free(errmsg.cast::<std::ffi::c_void>());
+                Err(crate::error::error_from_sqlite_code(r, Some(message)))
+            }
         }
     }
 
@@ -217,39 +219,39 @@ impl InnerConnection {
         };
         let c_sql = sql.as_bytes().as_ptr().cast::<c_char>();
         let mut c_tail: *const c_char = ptr::null();
-        #[cfg(not(feature = "unlock_notify"))]
-        let r = unsafe {
-            ffi::sqlite3_prepare_v3(
-                self.db(),
-                c_sql,
-                len,
-                flags.bits(),
-                &mut c_stmt,
-                &mut c_tail,
-            )
-        };
-        #[cfg(feature = "unlock_notify")]
-        let r = unsafe {
-            use crate::unlock_notify;
-            let mut rc;
-            loop {
-                rc = ffi::sqlite3_prepare_v3(
+        let r = cfg_select! {
+            feature = "unlock_notify" => unsafe {
+                use crate::unlock_notify;
+                let mut rc;
+                loop {
+                    rc = ffi::sqlite3_prepare_v3(
+                        self.db(),
+                        c_sql,
+                        len,
+                        flags.bits(),
+                        &mut c_stmt,
+                        &mut c_tail,
+                    );
+                    if !unlock_notify::is_locked(self.db, rc) {
+                        break;
+                    }
+                    rc = unlock_notify::wait_for_unlock_notify(self.db);
+                    if rc != ffi::SQLITE_OK {
+                        break;
+                    }
+                }
+                rc
+            }
+            _ => unsafe {
+                ffi::sqlite3_prepare_v3(
                     self.db(),
                     c_sql,
                     len,
                     flags.bits(),
                     &mut c_stmt,
                     &mut c_tail,
-                );
-                if !unlock_notify::is_locked(self.db, rc) {
-                    break;
-                }
-                rc = unlock_notify::wait_for_unlock_notify(self.db);
-                if rc != ffi::SQLITE_OK {
-                    break;
-                }
+                )
             }
-            rc
         };
         // If there is an error, *ppStmt is set to NULL.
         if r != ffi::SQLITE_OK {
@@ -275,25 +277,21 @@ impl InnerConnection {
 
     #[inline]
     pub fn changes(&self) -> u64 {
-        #[cfg(not(feature = "modern_sqlite"))]
         unsafe {
-            ffi::sqlite3_changes(self.db()) as u64
-        }
-        #[cfg(feature = "modern_sqlite")] // 3.37.0
-        unsafe {
-            ffi::sqlite3_changes64(self.db()) as u64
+            cfg_select! {
+            feature = "modern_sqlite" => ffi::sqlite3_changes64(self.db()) as u64, // 3.37.0
+            _ => ffi::sqlite3_changes(self.db()) as u64
+            }
         }
     }
 
     #[inline]
     pub fn total_changes(&self) -> u64 {
-        #[cfg(not(feature = "modern_sqlite"))]
         unsafe {
-            ffi::sqlite3_total_changes(self.db()) as u64
-        }
-        #[cfg(feature = "modern_sqlite")] // 3.37.0
-        unsafe {
-            ffi::sqlite3_total_changes64(self.db()) as u64
+            cfg_select! {
+            feature = "modern_sqlite" => ffi::sqlite3_total_changes64(self.db()) as u64,  // 3.37.0
+            _ => ffi::sqlite3_total_changes(self.db()) as u64
+            }
         }
     }
 
@@ -401,13 +399,13 @@ impl InnerConnection {
     #[cfg(feature = "modern_sqlite")] // 3.44
     pub unsafe fn get_clientdata<T, N: Name>(&self, name: N) -> Result<*mut T> {
         let name = name.as_cstr()?;
-        Ok(ffi::sqlite3_get_clientdata(self.db, name.as_ptr()).cast::<T>())
+        Ok(unsafe { ffi::sqlite3_get_clientdata(self.db, name.as_ptr()).cast::<T>() })
     }
 }
 
 #[inline]
 pub(crate) unsafe fn get_autocommit(ptr: *mut ffi::sqlite3) -> bool {
-    ffi::sqlite3_get_autocommit(ptr) != 0
+    unsafe { ffi::sqlite3_get_autocommit(ptr) != 0 }
 }
 
 #[inline]
@@ -417,11 +415,13 @@ pub(crate) unsafe fn db_filename<N: Name>(
     db_name: N,
 ) -> Option<&str> {
     let db_name = db_name.as_cstr().unwrap();
-    let db_filename = ffi::sqlite3_db_filename(ptr, db_name.as_ptr());
-    if db_filename.is_null() {
-        None
-    } else {
-        CStr::from_ptr(db_filename).to_str().ok()
+    unsafe {
+        let db_filename = ffi::sqlite3_db_filename(ptr, db_name.as_ptr());
+        if db_filename.is_null() {
+            None
+        } else {
+            CStr::from_ptr(db_filename).to_str().ok()
+        }
     }
 }
 

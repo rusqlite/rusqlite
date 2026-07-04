@@ -56,7 +56,7 @@ use std::any::Any;
 use std::ffi::{c_int, c_uint, c_void};
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::panic::{catch_unwind, RefUnwindSafe, UnwindSafe};
+use std::panic::{RefUnwindSafe, UnwindSafe, catch_unwind};
 use std::ptr;
 use std::slice;
 use std::sync::Arc;
@@ -68,18 +68,20 @@ use crate::ffi::sqlite3_value;
 use crate::context::set_result;
 use crate::types::{FromSql, FromSqlError, ToSql, ToSqlOutput, ValueRef};
 use crate::util::free_boxed_value;
-use crate::{str_to_cstring, Connection, Error, InnerConnection, Name, Result};
+use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
 unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
-    if let Error::SqliteFailure(ref err, ref s) = *err {
-        ffi::sqlite3_result_error_code(ctx, err.extended_code);
-        if let Some(Ok(cstr)) = s.as_ref().map(|s| str_to_cstring(s)) {
-            ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
-        }
-    } else {
-        ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_CONSTRAINT_FUNCTION);
-        if let Ok(cstr) = str_to_cstring(&err.to_string()) {
-            ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
+    unsafe {
+        if let Error::SqliteFailure(ref err, ref s) = *err {
+            ffi::sqlite3_result_error_code(ctx, err.extended_code);
+            if let Some(Ok(cstr)) = s.as_ref().map(|s| str_to_cstring(s)) {
+                ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
+            }
+        } else {
+            ffi::sqlite3_result_error_code(ctx, ffi::SQLITE_CONSTRAINT_FUNCTION);
+            if let Ok(cstr) = str_to_cstring(&err.to_string()) {
+                ffi::sqlite3_result_error(ctx, cstr.as_ptr(), -1);
+            }
         }
     }
 }
@@ -123,6 +125,7 @@ impl Context<'_> {
                 Error::InvalidFunctionParameterType(idx, value.data_type())
             }
             FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
+            FromSqlError::Utf8Error(err) => Error::Utf8Error(idx, err),
             FromSqlError::Other(err) => {
                 Error::FromSqlConversionFailure(idx, value.data_type(), err)
             }
@@ -130,6 +133,24 @@ impl Context<'_> {
                 Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
             }
         })
+    }
+
+    /// Return raw pointer at `idx`
+    /// # Safety
+    /// This function is unsafe because it uses raw pointer and cast
+    #[cfg(feature = "pointer")]
+    pub unsafe fn get_pointer<T: 'static>(
+        &self,
+        idx: usize,
+        ptr_type: &'static std::ffi::CStr,
+    ) -> Option<&T> {
+        let arg = self.args[idx];
+        debug_assert_eq!(unsafe { ffi::sqlite3_value_type(arg) }, ffi::SQLITE_NULL);
+        unsafe {
+            ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr())
+                .cast::<T>()
+                .as_ref()
+        }
     }
 
     /// Returns the `idx`th argument as a `ValueRef`.
@@ -248,11 +269,13 @@ impl Context<'_> {
     /// This function is marked unsafe because there is a potential for other
     /// references to the connection to be sent across threads, [see this comment](https://github.com/rusqlite/rusqlite/issues/643#issuecomment-640181213).
     pub unsafe fn get_connection(&self) -> Result<ConnectionRef<'_>> {
-        let handle = ffi::sqlite3_context_db_handle(self.ctx);
-        Ok(ConnectionRef {
-            conn: Connection::from_handle(handle)?,
-            phantom: PhantomData,
-        })
+        unsafe {
+            let handle = ffi::sqlite3_context_db_handle(self.ctx);
+            Ok(ConnectionRef {
+                conn: Connection::from_handle(handle)?,
+                phantom: PhantomData,
+            })
+        }
     }
 }
 
@@ -313,17 +336,18 @@ unsafe fn sql_result<T: SqlFnOutput>(
     r: Result<T>,
 ) {
     let t = r.as_ref().map(SqlFnOutput::to_sql);
-
-    match t {
-        Ok(Ok((ref value, sub_type))) => {
-            set_result(ctx, args, value);
-            if let Some(sub_type) = sub_type {
-                ffi::sqlite3_result_subtype(ctx, sub_type);
+    unsafe {
+        match t {
+            Ok(Ok((ref value, sub_type))) => {
+                set_result(ctx, args, value);
+                if let Some(sub_type) = sub_type {
+                    ffi::sqlite3_result_subtype(ctx, sub_type);
+                }
             }
+            Ok(Err(err)) => report_error(ctx, &err),
+            Err(err) => report_error(ctx, err),
         }
-        Ok(Err(err)) => report_error(ctx, &err),
-        Err(err) => report_error(ctx, err),
-    };
+    }
 }
 
 /// Aggregate is the callback interface for user-defined
@@ -571,21 +595,23 @@ impl InnerConnection {
             F: Fn(&Context<'_>) -> Result<T>,
             T: SqlFnOutput,
         {
-            let args = slice::from_raw_parts(argv, argc as usize);
-            let r = catch_unwind(|| {
-                let boxed_f: *const F = ffi::sqlite3_user_data(ctx).cast::<F>();
-                assert!(!boxed_f.is_null(), "Internal error - null function pointer");
-                let ctx = Context { ctx, args };
-                (*boxed_f)(&ctx)
-            });
-            let t = match r {
-                Err(_) => {
-                    report_error(ctx, &Error::UnwindingPanic);
-                    return;
-                }
-                Ok(r) => r,
-            };
-            sql_result(ctx, args, t);
+            unsafe {
+                let args = slice::from_raw_parts(argv, argc as usize);
+                let r = catch_unwind(|| {
+                    let boxed_f: *const F = ffi::sqlite3_user_data(ctx).cast::<F>();
+                    assert!(!boxed_f.is_null(), "Internal error - null function pointer");
+                    let ctx = Context { ctx, args };
+                    (*boxed_f)(&ctx)
+                });
+                let t = match r {
+                    Err(_) => {
+                        report_error(ctx, &Error::UnwindingPanic);
+                        return;
+                    }
+                    Ok(r) => r,
+                };
+                sql_result(ctx, args, t);
+            }
         }
 
         let boxed_f: *mut F = Box::into_raw(Box::new(x_func));
@@ -688,7 +714,7 @@ impl InnerConnection {
 }
 
 unsafe fn aggregate_context<A>(ctx: *mut sqlite3_context, bytes: usize) -> Option<*mut *mut A> {
-    let pac = ffi::sqlite3_aggregate_context(ctx, bytes as c_int) as *mut *mut A;
+    let pac = unsafe { ffi::sqlite3_aggregate_context(ctx, bytes as c_int) as *mut *mut A };
     if pac.is_null() {
         return None;
     }
@@ -704,40 +730,42 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
     D: Aggregate<A, T>,
     T: SqlFnOutput,
 {
-    let Some(pac) = aggregate_context(ctx, size_of::<*mut A>()) else {
-        ffi::sqlite3_result_error_nomem(ctx);
-        return;
-    };
-
-    let r = catch_unwind(|| {
-        let boxed_aggr: *mut D = ffi::sqlite3_user_data(ctx).cast::<D>();
-        assert!(
-            !boxed_aggr.is_null(),
-            "Internal error - null aggregate pointer"
-        );
-        let mut ctx = Context {
-            ctx,
-            args: slice::from_raw_parts(argv, argc as usize),
+    unsafe {
+        let Some(pac) = aggregate_context(ctx, size_of::<*mut A>()) else {
+            ffi::sqlite3_result_error_nomem(ctx);
+            return;
         };
 
-        #[expect(clippy::unnecessary_cast)]
-        if (*pac as *mut A).is_null() {
-            *pac = Box::into_raw(Box::new((*boxed_aggr).init(&mut ctx)?));
-        }
+        let r = catch_unwind(|| {
+            let boxed_aggr: *mut D = ffi::sqlite3_user_data(ctx).cast::<D>();
+            assert!(
+                !boxed_aggr.is_null(),
+                "Internal error - null aggregate pointer"
+            );
+            let mut ctx = Context {
+                ctx,
+                args: slice::from_raw_parts(argv, argc as usize),
+            };
 
-        (*boxed_aggr).step(&mut ctx, &mut **pac)
-    });
-    let r = match r {
-        Err(_) => {
-            report_error(ctx, &Error::UnwindingPanic);
-            return;
+            #[expect(clippy::unnecessary_cast)]
+            if (*pac as *mut A).is_null() {
+                *pac = Box::into_raw(Box::new((*boxed_aggr).init(&mut ctx)?));
+            }
+
+            (*boxed_aggr).step(&mut ctx, &mut **pac)
+        });
+        let r = match r {
+            Err(_) => {
+                report_error(ctx, &Error::UnwindingPanic);
+                return;
+            }
+            Ok(r) => r,
+        };
+        match r {
+            Ok(_) => {}
+            Err(err) => report_error(ctx, &err),
         }
-        Ok(r) => r,
-    };
-    match r {
-        Ok(_) => {}
-        Err(err) => report_error(ctx, &err),
-    };
+    }
 }
 
 #[cfg(feature = "window")]
@@ -750,34 +778,36 @@ unsafe extern "C" fn call_boxed_inverse<A, W, T>(
     W: WindowAggregate<A, T>,
     T: SqlFnOutput,
 {
-    let Some(pac) = aggregate_context(ctx, size_of::<*mut A>()) else {
-        ffi::sqlite3_result_error_nomem(ctx);
-        return;
-    };
-
-    let r = catch_unwind(|| {
-        let boxed_aggr: *mut W = ffi::sqlite3_user_data(ctx).cast::<W>();
-        assert!(
-            !boxed_aggr.is_null(),
-            "Internal error - null aggregate pointer"
-        );
-        let mut ctx = Context {
-            ctx,
-            args: slice::from_raw_parts(argv, argc as usize),
-        };
-        (*boxed_aggr).inverse(&mut ctx, &mut **pac)
-    });
-    let r = match r {
-        Err(_) => {
-            report_error(ctx, &Error::UnwindingPanic);
+    unsafe {
+        let Some(pac) = aggregate_context(ctx, size_of::<*mut A>()) else {
+            ffi::sqlite3_result_error_nomem(ctx);
             return;
+        };
+
+        let r = catch_unwind(|| {
+            let boxed_aggr: *mut W = ffi::sqlite3_user_data(ctx).cast::<W>();
+            assert!(
+                !boxed_aggr.is_null(),
+                "Internal error - null aggregate pointer"
+            );
+            let mut ctx = Context {
+                ctx,
+                args: slice::from_raw_parts(argv, argc as usize),
+            };
+            (*boxed_aggr).inverse(&mut ctx, &mut **pac)
+        });
+        let r = match r {
+            Err(_) => {
+                report_error(ctx, &Error::UnwindingPanic);
+                return;
+            }
+            Ok(r) => r,
+        };
+        match r {
+            Ok(_) => {}
+            Err(err) => report_error(ctx, &err),
         }
-        Ok(r) => r,
-    };
-    match r {
-        Ok(_) => {}
-        Err(err) => report_error(ctx, &err),
-    };
+    }
 }
 
 unsafe extern "C" fn call_boxed_final<A, D, T>(ctx: *mut sqlite3_context)
@@ -786,39 +816,41 @@ where
     D: Aggregate<A, T>,
     T: SqlFnOutput,
 {
-    // Within the xFinal callback, it is customary to set N=0 in calls to
-    // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
-    let a: Option<A> = match aggregate_context(ctx, 0) {
-        Some(pac) =>
-        {
-            #[expect(clippy::unnecessary_cast)]
-            if (*pac as *mut A).is_null() {
-                None
-            } else {
-                let a = Box::from_raw(*pac);
-                Some(*a)
+    unsafe {
+        // Within the xFinal callback, it is customary to set N=0 in calls to
+        // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
+        let a: Option<A> = match aggregate_context(ctx, 0) {
+            Some(pac) =>
+            {
+                #[expect(clippy::unnecessary_cast)]
+                if (*pac as *mut A).is_null() {
+                    None
+                } else {
+                    let a = Box::from_raw(*pac);
+                    Some(*a)
+                }
             }
-        }
-        None => None,
-    };
+            None => None,
+        };
 
-    let r = catch_unwind(|| {
-        let boxed_aggr: *mut D = ffi::sqlite3_user_data(ctx).cast::<D>();
-        assert!(
-            !boxed_aggr.is_null(),
-            "Internal error - null aggregate pointer"
-        );
-        let mut ctx = Context { ctx, args: &mut [] };
-        (*boxed_aggr).finalize(&mut ctx, a)
-    });
-    let t = match r {
-        Err(_) => {
-            report_error(ctx, &Error::UnwindingPanic);
-            return;
-        }
-        Ok(r) => r,
-    };
-    sql_result(ctx, &[], t);
+        let r = catch_unwind(|| {
+            let boxed_aggr: *mut D = ffi::sqlite3_user_data(ctx).cast::<D>();
+            assert!(
+                !boxed_aggr.is_null(),
+                "Internal error - null aggregate pointer"
+            );
+            let mut ctx = Context { ctx, args: &mut [] };
+            (*boxed_aggr).finalize(&mut ctx, a)
+        });
+        let t = match r {
+            Err(_) => {
+                report_error(ctx, &Error::UnwindingPanic);
+                return;
+            }
+            Ok(r) => r,
+        };
+        sql_result(ctx, &[], t);
+    }
 }
 
 #[cfg(feature = "window")]
@@ -828,43 +860,44 @@ where
     W: WindowAggregate<A, T>,
     T: SqlFnOutput,
 {
-    // Within the xValue callback, it is customary to set N=0 in calls to
-    // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
-    let pac = aggregate_context(ctx, 0).filter(|&pac| {
-        #[expect(clippy::unnecessary_cast)]
-        !(*pac as *mut A).is_null()
-    });
+    unsafe {
+        // Within the xValue callback, it is customary to set N=0 in calls to
+        // sqlite3_aggregate_context(C,N) so that no pointless memory allocations occur.
+        let pac = aggregate_context(ctx, 0).filter(|&pac| {
+            #[expect(clippy::unnecessary_cast)]
+            !(*pac as *mut A).is_null()
+        });
 
-    let r = catch_unwind(|| {
-        let boxed_aggr: *mut W = ffi::sqlite3_user_data(ctx).cast::<W>();
-        assert!(
-            !boxed_aggr.is_null(),
-            "Internal error - null aggregate pointer"
-        );
-        (*boxed_aggr).value(pac.map(|pac| &mut **pac))
-    });
-    let t = match r {
-        Err(_) => {
-            report_error(ctx, &Error::UnwindingPanic);
-            return;
-        }
-        Ok(r) => r,
-    };
-    sql_result(ctx, &[], t);
+        let r = catch_unwind(|| {
+            let boxed_aggr: *mut W = ffi::sqlite3_user_data(ctx).cast::<W>();
+            assert!(
+                !boxed_aggr.is_null(),
+                "Internal error - null aggregate pointer"
+            );
+            (*boxed_aggr).value(pac.map(|pac| &mut **pac))
+        });
+        let t = match r {
+            Err(_) => {
+                report_error(ctx, &Error::UnwindingPanic);
+                return;
+            }
+            Ok(r) => r,
+        };
+        sql_result(ctx, &[], t);
+    }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
-
-    use regex::Regex;
-    use std::ffi::c_double;
 
     #[cfg(feature = "window")]
     use crate::functions::WindowAggregate;
     use crate::functions::{Aggregate, Context, FunctionFlags, SqlFnArg, SubType};
     use crate::{Connection, Error, Result};
+    use regex::Regex;
+    use std::ffi::c_double;
 
     fn half(ctx: &Context<'_>) -> Result<c_double> {
         assert!(!ctx.is_empty());
@@ -1106,7 +1139,7 @@ mod test {
     #[test]
     #[cfg(feature = "window")]
     fn test_window() -> Result<()> {
-        use fallible_iterator::FallibleIterator;
+        use fallible_iterator::FallibleIterator as _;
 
         let db = Connection::open_in_memory()?;
         db.create_window_function(
@@ -1196,6 +1229,58 @@ mod test {
         );
         assert_eq!(0, db.one_column::<u32, _>("SELECT test_len(X'');", [])?);
         assert_eq!(0, db.one_column::<u32, _>("SELECT test_len(NULL);", [])?);
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "pointer")]
+    fn test_rc_pointer() -> Result<()> {
+        use crate::types::ToSqlOutput;
+        use std::ops::Deref as _;
+        use std::rc::Rc;
+
+        const PTR_TYPE: &std::ffi::CStr = c"my_rust_ptr";
+        let rc = Rc::new(1);
+        {
+            let ptr = ToSqlOutput::from_rc(rc.clone(), PTR_TYPE);
+            assert_eq!(2, Rc::strong_count(&rc));
+            fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
+                let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
+                assert_eq!(x, Some(&1));
+                Ok(ToSqlOutput::from_rc(Rc::new(*x.unwrap()), PTR_TYPE))
+            }
+            let db = Connection::open_in_memory()?;
+            db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;
+            let mut stmt = db.prepare("SELECT myfunc(?)")?;
+            let result = stmt.query_one([ptr], |r| {
+                unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) }.map(|opt| opt.cloned())
+            })?;
+            assert_eq!(result.unwrap(), *rc.deref());
+        }
+        assert_eq!(1, Rc::strong_count(&rc));
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "pointer")]
+    fn test_box_pointer() -> Result<()> {
+        use crate::types::ToSqlOutput;
+
+        const PTR_TYPE: &std::ffi::CStr = c"my_rust_ptr";
+        let value = 1;
+        let ptr = ToSqlOutput::new_boxed(value, PTR_TYPE);
+        fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
+            let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
+            assert_eq!(x, Some(&1));
+            Ok(ToSqlOutput::new_boxed(*x.unwrap(), PTR_TYPE))
+        }
+        let db = Connection::open_in_memory()?;
+        db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;
+        let mut stmt = db.prepare("SELECT myfunc(?)")?;
+        let result = stmt.query_one([ptr], |r| {
+            unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) }.map(|opt| opt.cloned())
+        })?;
+        assert_eq!(result.unwrap(), value);
         Ok(())
     }
 }

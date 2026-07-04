@@ -57,14 +57,22 @@
 pub use fallible_iterator;
 pub use fallible_streaming_iterator;
 
-#[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+#[cfg(not(all(
+    target_family = "wasm",
+    target_os = "unknown",
+    any(test, feature = "ffi-sqlite-wasm-rs")
+)))]
 pub use libsqlite3_sys as ffi;
-#[cfg(all(target_family = "wasm", target_os = "unknown"))]
+#[cfg(all(
+    target_family = "wasm",
+    target_os = "unknown",
+    any(test, feature = "ffi-sqlite-wasm-rs")
+))]
 pub use sqlite_wasm_rs as ffi;
 
 use std::cell::RefCell;
 use std::default::Default;
-use std::ffi::{c_char, c_int, c_uint, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_int, c_uint};
 use std::fmt;
 
 use std::path::Path;
@@ -85,11 +93,11 @@ pub use crate::cache::CachedStatement;
 pub use crate::column::Column;
 #[cfg(feature = "column_metadata")]
 pub use crate::column::ColumnMetadata;
-pub use crate::error::{to_sqlite_error, Error};
+pub use crate::error::{Error, to_sqlite_error};
 pub use crate::ffi::ErrorCode;
 #[cfg(feature = "load_extension")]
 pub use crate::load_extension_guard::LoadExtensionGuard;
-pub use crate::params::{params_from_iter, Params, ParamsFromIter};
+pub use crate::params::{Params, ParamsFromIter, params_from_iter};
 pub use crate::row::{AndThenRows, Map, MappedRows, Row, RowIndex, Rows};
 pub use crate::statement::{Statement, StatementStatus};
 #[cfg(feature = "modern_sqlite")]
@@ -153,7 +161,9 @@ pub(crate) mod util;
 
 // Actually, only sqlite3_enable_load_extension is disabled (not sqlite3_load_extension)
 #[cfg(all(feature = "loadable_extension", feature = "load_extension"))]
-compile_error!("feature \"loadable_extension\" and feature \"load_extension\" cannot be enabled at the same time");
+compile_error!(
+    "feature \"loadable_extension\" and feature \"load_extension\" cannot be enabled at the same time"
+);
 
 // Number of cached prepared statements we'll hold on to.
 #[cfg(feature = "cache")]
@@ -297,7 +307,9 @@ impl<T> OptionalExtension<T> for Result<T> {
 }
 
 unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
-    CStr::from_ptr(errmsg).to_string_lossy().into_owned()
+    unsafe { CStr::from_ptr(errmsg) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 #[cfg(any(feature = "functions", feature = "vtab", test))]
@@ -327,16 +339,17 @@ fn str_for_sqlite(
     (ptr, len as ffi::sqlite3_uint64, dtor_info)
 }
 
-#[cfg(unix)]
 fn path_to_cstring(p: &Path) -> Result<CString> {
-    use std::os::unix::ffi::OsStrExt;
-    Ok(CString::new(p.as_os_str().as_bytes())?)
-}
-
-#[cfg(not(unix))]
-fn path_to_cstring(p: &Path) -> Result<CString> {
-    let s = p.to_str().ok_or_else(|| Error::InvalidPath(p.to_owned()))?;
-    Ok(CString::new(s)?)
+    cfg_select! {
+        unix => {
+            use std::os::unix::ffi::OsStrExt as _;
+            Ok(CString::new(p.as_os_str().as_bytes())?)
+        }
+        _ => {
+            let s = p.to_str().ok_or_else(|| Error::InvalidPath(p.to_owned()))?;
+            Ok(CString::new(s)?)
+        }
+    }
 }
 
 /// Shorthand for `Main` database.
@@ -862,7 +875,7 @@ impl Connection {
     #[cfg(feature = "load_extension")]
     #[inline]
     pub unsafe fn load_extension_enable(&self) -> Result<()> {
-        self.db.borrow_mut().enable_load_extension(1)
+        unsafe { self.db.borrow_mut().enable_load_extension(1) }
     }
 
     /// Disable loading of SQLite extensions.
@@ -921,9 +934,11 @@ impl Connection {
         dylib_path: P,
         entry_point: Option<N>,
     ) -> Result<()> {
-        self.db
-            .borrow_mut()
-            .load_extension(dylib_path.as_ref(), entry_point)
+        unsafe {
+            self.db
+                .borrow_mut()
+                .load_extension(dylib_path.as_ref(), entry_point)
+        }
     }
 
     /// Get access to the underlying SQLite database connection handle.
@@ -954,7 +969,7 @@ impl Connection {
     /// This function is unsafe because improper use may impact the Connection.
     #[inline]
     pub unsafe fn from_handle(db: *mut ffi::sqlite3) -> Result<Self> {
-        let db = InnerConnection::new(db, false);
+        let db = unsafe { InnerConnection::new(db, false) };
         Ok(Self {
             db: RefCell::new(db),
             #[cfg(feature = "cache")]
@@ -978,14 +993,16 @@ impl Connection {
         if p_api.is_null() {
             return ffi::SQLITE_ERROR;
         }
-        match ffi::rusqlite_extension_init2(p_api)
-            .map_err(Error::from)
-            .and(Self::from_handle(db))
-            .and_then(init)
-        {
-            Err(err) => to_sqlite_error(&err, pz_err_msg),
-            Ok(true) => ffi::SQLITE_OK_LOAD_PERMANENTLY,
-            _ => ffi::SQLITE_OK,
+        unsafe {
+            match ffi::rusqlite_extension_init2(p_api)
+                .map_err(Error::from)
+                .and(Self::from_handle(db))
+                .and_then(init)
+            {
+                Err(err) => to_sqlite_error(&err, pz_err_msg),
+                Ok(true) => ffi::SQLITE_OK_LOAD_PERMANENTLY,
+                _ => ffi::SQLITE_OK,
+            }
         }
     }
 
@@ -1003,7 +1020,7 @@ impl Connection {
     /// `ffi::sqlite3_open`().
     #[inline]
     pub unsafe fn from_handle_owned(db: *mut ffi::sqlite3) -> Result<Self> {
-        let db = InnerConnection::new(db, true);
+        let db = unsafe { InnerConnection::new(db, true) };
         Ok(Self {
             db: RefCell::new(db),
             #[cfg(feature = "cache")]
@@ -1109,10 +1126,18 @@ impl Connection {
     /// Caller must be certain that data associated to `name` is of type `T`.
     #[cfg(feature = "modern_sqlite")] // 3.44
     pub unsafe fn get_clientdata<T, N: Name>(&self, name: N) -> Result<Option<&T>> {
-        self.db
-            .borrow()
-            .get_clientdata(name)
-            .map(|p: *mut T| unsafe { p.as_ref() })
+        unsafe {
+            self.db
+                .borrow()
+                .get_clientdata(name)
+                .map(|p: *mut T| p.as_ref())
+        }
+    }
+
+    /// Set error code and message
+    #[cfg(feature = "modern_sqlite")] // 3.51.0
+    pub fn set_errmsg(&self, code: c_int, msg: Option<&std::ffi::CStr>) -> Result<()> {
+        unsafe { error::set_errmsg(self.handle(), code, msg) }
     }
 }
 
@@ -1286,6 +1311,9 @@ bitflags::bitflags! {
         const SQLITE_PREPARE_NO_VTAB = 0x04;
         /// Prevents SQL compiler errors from being sent to the error log.
         const SQLITE_PREPARE_DONT_LOG = 0x10;
+        /// Causes the SQL compiler to enforce security constraints that would otherwise only be enforced when parsing
+        /// the database schema.
+        const SQLITE_PREPARE_FROM_DDL = 0x20; // 3.53.0
     }
 }
 
@@ -1311,13 +1339,13 @@ impl InterruptHandle {
 #[cfg(doctest)]
 doc_comment::doctest!("../README.md");
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::*;
-    use fallible_iterator::FallibleIterator;
+    use fallible_iterator::FallibleIterator as _;
     use std::error::Error as StdError;
     use std::fmt;
 
@@ -1461,7 +1489,7 @@ mod test {
     fn test_invalid_unicode_file_names() -> Result<()> {
         use std::ffi::OsStr;
         use std::fs::File;
-        use std::os::unix::ffi::OsStrExt;
+        use std::os::unix::ffi::OsStrExt as _;
         let temp_dir = tempfile::tempdir().unwrap();
 
         let path = temp_dir.path();
@@ -2366,6 +2394,22 @@ mod test {
                 assert_eq!(*data, "my_value");
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "modern_sqlite")] // 3.51.0
+    fn set_errmsg() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let code: i32 = ffi::SQLITE_MISUSE;
+        let msg = c"Oops";
+        db.set_errmsg(code, Some(msg))?;
+        let ptr = unsafe { db.handle() };
+        assert_eq!(unsafe { ffi::sqlite3_errcode(ptr) }, code);
+        assert_eq!(
+            unsafe { std::ffi::CStr::from_ptr(ffi::sqlite3_errmsg(ptr)) },
+            msg
+        );
         Ok(())
     }
 }

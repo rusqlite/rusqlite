@@ -3,7 +3,7 @@
 //! Note: `rarray`, not `carray` is the name of the table valued function we
 //! define.
 //!
-//! Port of [carray](http://www.sqlite.org/cgi/src/finfo?name=ext/misc/carray.c)
+//! Port of [carray](https://sqlite.org/src/file/ext/misc/carray.c)
 //! C extension: `https://www.sqlite.org/carray.html`
 //!
 //! # Example
@@ -26,25 +26,22 @@
 //! }
 //! ```
 
-use std::ffi::{c_char, c_int, c_void};
+use std::borrow::Cow;
+use std::ffi::{CStr, c_int};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::ffi;
 use crate::types::{ToSql, ToSqlOutput, Value};
 use crate::vtab::{
-    eponymous_only_module, Context, Filters, IndexConstraintOp, IndexInfo, VTab, VTabConnection,
-    VTabCursor,
+    Context, Filters, IndexConstraintOp, IndexInfo, Module, VTab, VTabConnection, VTabCursor,
 };
 use crate::{Connection, Result};
 
 // http://sqlite.org/bindptr.html
 
-pub(crate) const ARRAY_TYPE: *const c_char = c"rarray".as_ptr();
-
-pub(crate) unsafe extern "C" fn free_array(p: *mut c_void) {
-    Rc::decrement_strong_count(p as *const Vec<Value>);
-}
+const ARRAY_TYPE: &CStr = c"rarray";
+const MODULE_NAME: &CStr = ARRAY_TYPE;
 
 /// Array parameter / pointer
 pub type Array = Rc<Vec<Value>>;
@@ -52,14 +49,15 @@ pub type Array = Rc<Vec<Value>>;
 impl ToSql for Array {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::Array(self.clone()))
+        Ok(ToSqlOutput::from_rc(self.clone(), ARRAY_TYPE))
     }
 }
 
 /// Register the "rarray" module.
 pub fn load_module(conn: &Connection) -> Result<()> {
+    const MODULE: Module<ArrayTab> = Module::eponymous_only_module();
     let aux: Option<()> = None;
-    conn.create_module(c"rarray", eponymous_only_module::<ArrayTab>(), aux)
+    conn.create_module(MODULE_NAME, &MODULE, aux)
 }
 
 // Column numbers
@@ -79,16 +77,23 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
 
     fn connect(
         _: &mut VTabConnection,
-        _aux: Option<&()>,
-        _args: &[&[u8]],
-    ) -> Result<(String, Self)> {
+        aux: Option<&()>,
+        module_name: &[u8],
+        _database_name: &[u8],
+        table_name: &[u8],
+        args: &[&[u8]],
+    ) -> Result<(Cow<'static, CStr>, Self)> {
+        debug_assert_eq!(aux, None);
+        debug_assert_eq!(module_name, MODULE_NAME.to_bytes());
+        debug_assert_eq!(table_name, MODULE_NAME.to_bytes());
+        debug_assert_eq!(args.len(), 0);
         let vtab = Self {
             base: ffi::sqlite3_vtab::default(),
         };
-        Ok(("CREATE TABLE x(value,pointer hidden)".to_owned(), vtab))
+        Ok((Cow::Borrowed(c"CREATE TABLE x(value,pointer hidden)"), vtab))
     }
 
-    fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
+    fn best_index(&self, info: &mut IndexInfo) -> Result<bool> {
         // Index of the pointer= constraint
         let mut ptr_idx = false;
         for (constraint, mut constraint_usage) in info.constraints_and_usages() {
@@ -113,15 +118,16 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
             info.set_estimated_rows(2_147_483_647);
             info.set_idx_num(0);
         }
-        Ok(())
+        Ok(true)
     }
 
     fn open(&mut self) -> Result<ArrayTabCursor<'_>> {
-        Ok(ArrayTabCursor::new())
+        Ok(ArrayTabCursor::default())
     }
 }
 
 /// A cursor for the Array virtual table
+#[derive(Default)]
 #[repr(C)]
 struct ArrayTabCursor<'vtab> {
     /// Base class. Must be first
@@ -129,23 +135,14 @@ struct ArrayTabCursor<'vtab> {
     /// The rowid
     row_id: i64,
     /// Pointer to the array of values ("pointer")
-    ptr: Option<Array>,
+    ptr: Option<&'vtab Vec<Value>>,
     phantom: PhantomData<&'vtab ArrayTab>,
 }
 
 impl ArrayTabCursor<'_> {
-    fn new<'vtab>() -> ArrayTabCursor<'vtab> {
-        ArrayTabCursor {
-            base: ffi::sqlite3_vtab_cursor::default(),
-            row_id: 0,
-            ptr: None,
-            phantom: PhantomData,
-        }
-    }
-
     fn len(&self) -> i64 {
         match self.ptr {
-            Some(ref a) => a.len() as i64,
+            Some(a) => a.len() as i64,
             _ => 0,
         }
     }
@@ -153,7 +150,7 @@ impl ArrayTabCursor<'_> {
 unsafe impl VTabCursor for ArrayTabCursor<'_> {
     fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Filters<'_>) -> Result<()> {
         if idx_num > 0 {
-            self.ptr = args.get_array(0);
+            self.ptr = unsafe { args.get_pointer(0, ARRAY_TYPE) };
         } else {
             self.ptr = None;
         }
@@ -174,7 +171,7 @@ unsafe impl VTabCursor for ArrayTabCursor<'_> {
         match i {
             CARRAY_COLUMN_POINTER => Ok(()),
             _ => {
-                if let Some(ref array) = self.ptr {
+                if let Some(array) = self.ptr {
                     let value = &array[(self.row_id - 1) as usize];
                     ctx.set_result(&value)
                 } else {
@@ -189,7 +186,7 @@ unsafe impl VTabCursor for ArrayTabCursor<'_> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;

@@ -6,14 +6,16 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 #[test]
 fn test_dummy_module() -> rusqlite::Result<()> {
     use rusqlite::vtab::{
-        eponymous_only_module, sqlite3_vtab, sqlite3_vtab_cursor, Context, Filters, IndexInfo,
-        VTab, VTabConnection, VTabCursor,
+        Context, Filters, IndexInfo, Module, VTab, VTabConnection, VTabCursor, sqlite3_vtab,
+        sqlite3_vtab_cursor,
     };
-    use rusqlite::{version_number, Connection, Result};
+    use rusqlite::{Connection, Result, version_number};
+    use std::borrow::Cow;
+    use std::ffi::CStr;
     use std::marker::PhantomData;
     use std::os::raw::c_int;
 
-    let module = eponymous_only_module::<DummyTab>();
+    const MODULE: Module<DummyTab> = Module::eponymous_only_module();
 
     #[repr(C)]
     struct DummyTab {
@@ -27,18 +29,22 @@ fn test_dummy_module() -> rusqlite::Result<()> {
 
         fn connect(
             _: &mut VTabConnection,
-            _aux: Option<&()>,
+            aux: Option<&()>,
+            _module_name: &[u8],
+            _database_name: &[u8],
+            _table_name: &[u8],
             _args: &[&[u8]],
-        ) -> Result<(String, Self)> {
+        ) -> Result<(Cow<'static, CStr>, Self)> {
+            debug_assert_eq!(aux, None);
             let vtab = Self {
                 base: sqlite3_vtab::default(),
             };
-            Ok(("CREATE TABLE x(value)".to_owned(), vtab))
+            Ok((Cow::Borrowed(c"CREATE TABLE x(value)"), vtab))
         }
 
-        fn best_index(&self, info: &mut IndexInfo) -> Result<()> {
+        fn best_index(&self, info: &mut IndexInfo) -> Result<bool> {
             info.set_estimated_cost(1.);
-            Ok(())
+            Ok(true)
         }
 
         fn open(&'vtab mut self) -> Result<DummyTabCursor<'vtab>> {
@@ -87,7 +93,7 @@ fn test_dummy_module() -> rusqlite::Result<()> {
 
     let db = Connection::open_in_memory()?;
 
-    db.create_module::<DummyTab, _>(c"dummy", module, None)?;
+    db.create_module::<DummyTab, _>(c"dummy", &MODULE, None)?;
 
     let version = version_number();
     if version < 3_009_000 {

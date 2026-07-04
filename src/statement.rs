@@ -1,6 +1,4 @@
 use std::ffi::{c_int, c_void};
-#[cfg(feature = "array")]
-use std::rc::Rc;
 use std::slice::from_raw_parts;
 use std::{fmt, mem, ptr, str};
 
@@ -11,8 +9,6 @@ use super::{
 };
 use crate::bind::BindIndex;
 use crate::types::{ToSql, ToSqlOutput};
-#[cfg(feature = "array")]
-use crate::vtab::array::{free_array, ARRAY_TYPE};
 
 /// A prepared statement.
 pub struct Statement<'conn> {
@@ -634,16 +630,10 @@ impl Statement<'_> {
             ToSqlOutput::Arg(_) => {
                 return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
             }
-            #[cfg(feature = "array")]
-            ToSqlOutput::Array(a) => {
+            #[cfg(feature = "pointer")]
+            ToSqlOutput::Pointer(p) => {
                 return self.conn.decode_result(unsafe {
-                    ffi::sqlite3_bind_pointer(
-                        ptr,
-                        ndx as c_int,
-                        Rc::into_raw(a) as *mut c_void,
-                        ARRAY_TYPE,
-                        Some(free_array),
-                    )
+                    ffi::sqlite3_bind_pointer(ptr, ndx as c_int, p.0 as _, p.1.as_ptr(), p.2)
                 });
             }
         };
@@ -659,7 +649,7 @@ impl Statement<'_> {
                     c_str,
                     len,
                     destructor,
-                    ffi::SQLITE_UTF8 as _,
+                    ffi::SQLITE_UTF8 as _, // TODO SQLITE_UTF8_ZT
                 )
             },
             ValueRef::Blob(b) => unsafe {
@@ -701,19 +691,17 @@ impl Statement<'_> {
         self.conn.decode_result(stmt.finalize())
     }
 
-    #[cfg(feature = "extra_check")]
     #[inline]
+    #[allow(clippy::unnecessary_wraps)]
     fn check_update(&self) -> Result<()> {
-        if self.column_count() > 0 && self.stmt.readonly() {
-            return Err(Error::ExecuteReturnedResults);
+        cfg_select! {
+          feature = "extra_check" => {
+              if self.column_count() > 0 && self.stmt.readonly() {
+                  return Err(Error::ExecuteReturnedResults);
+              }
+          }
+          _ => {}
         }
-        Ok(())
-    }
-
-    #[cfg(not(feature = "extra_check"))]
-    #[inline]
-    #[expect(clippy::unnecessary_wraps)]
-    fn check_update(&self) -> Result<()> {
         Ok(())
     }
 
@@ -758,9 +746,11 @@ impl Statement<'_> {
     #[inline]
     #[cfg(feature = "cache")]
     pub(crate) unsafe fn into_raw(mut self) -> RawStatement {
-        let mut stmt = RawStatement::new(ptr::null_mut());
-        mem::swap(&mut stmt, &mut self.stmt);
-        stmt
+        unsafe {
+            let mut stmt = RawStatement::new(ptr::null_mut());
+            mem::swap(&mut stmt, &mut self.stmt);
+            stmt
+        }
     }
 
     /// Reset all bindings
@@ -769,7 +759,7 @@ impl Statement<'_> {
     }
 
     pub(crate) unsafe fn ptr(&self) -> *mut ffi::sqlite3_stmt {
-        self.stmt.ptr()
+        unsafe { self.stmt.ptr() }
     }
 }
 
@@ -907,13 +897,13 @@ pub enum StatementStatus {
     MemUsed = 99,
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use crate::types::ToSql;
-    use crate::{params_from_iter, Connection, Error, Result};
+    use crate::{Connection, Error, Result, params_from_iter};
 
     #[test]
     fn test_execute_named() -> Result<()> {
@@ -1319,6 +1309,10 @@ mod test {
         stmt.parameter_index("test")?;
         let err = stmt.step().unwrap_err();
         assert_eq!(err.sqlite_error_code(), Some(crate::ErrorCode::ApiMisuse));
+        assert_eq!(
+            err.sqlite_extended_error_code(),
+            Some(crate::ffi::SQLITE_MISUSE)
+        );
         // error msg is different with sqlcipher, so we use assert_ne:
         assert_ne!(err.to_string(), "not an error".to_owned());
         stmt.reset()?; // SQLITE_OMIT_AUTORESET = false

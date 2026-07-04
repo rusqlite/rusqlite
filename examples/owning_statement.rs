@@ -1,6 +1,6 @@
 extern crate rusqlite;
 use rusqlite::{CachedStatement, Connection, Result, Rows};
-use self_cell::{self_cell, MutBorrow};
+use self_cell::{MutBorrow, self_cell};
 
 type CachedStatementRef<'a> = CachedStatement<'a>;
 

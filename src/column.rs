@@ -1,4 +1,4 @@
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 use std::ptr;
 use std::str;
 
@@ -227,7 +227,7 @@ impl Statement<'_> {
                     s.to_str()
                         .expect("Invalid UTF-8 sequence in column origin name")
                 }),
-            })
+            });
         }
         col_mets
     }
@@ -393,7 +393,7 @@ impl Connection {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -465,7 +465,7 @@ mod test {
 
     #[test]
     fn test_column_name_in_error() -> Result<()> {
-        use crate::{types::Type, Error};
+        use crate::{Error, types::Type};
         let db = Connection::open_in_memory()?;
         db.execute_batch(
             "BEGIN;

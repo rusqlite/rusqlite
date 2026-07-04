@@ -15,18 +15,33 @@ impl Sql {
         Self { buf: String::new() }
     }
 
-    pub fn push_pragma(&mut self, schema_name: Option<&str>, pragma_name: &str) -> Result<()> {
+    pub fn push_pragma(
+        &mut self,
+        conn: &Connection,
+        schema_name: Option<&str>,
+        pragma_name: &str,
+    ) -> Result<()> {
         self.push_keyword("PRAGMA")?;
         self.push_space();
         if let Some(schema_name) = schema_name {
             self.push_schema_name(schema_name);
             self.push_dot();
         }
-        self.push_keyword(pragma_name)
+        const SQL: &str = "SELECT 1 FROM pragma_pragma_list WHERE name = ?";
+        let mut stmt = cfg_select! {
+            feature = "cache" => {conn.prepare_cached(SQL)}
+            _ => conn.prepare(SQL)
+        }?;
+        if stmt.exists([pragma_name])? {
+            self.buf.push_str(pragma_name);
+            Ok(())
+        } else {
+            Err(err!(ffi::SQLITE_MISUSE, "Invalid pragma \"{pragma_name}\""))
+        }
     }
 
     pub fn push_keyword(&mut self, keyword: &str) -> Result<()> {
-        if !keyword.is_empty() && is_identifier(keyword) {
+        if !keyword.is_empty() && is_keyword(keyword) {
             self.buf.push_str(keyword);
             Ok(())
         } else {
@@ -51,7 +66,7 @@ impl Sql {
         let value = match value {
             ToSqlOutput::Borrowed(v) => v,
             ToSqlOutput::Owned(ref v) => ValueRef::from(v),
-            #[cfg(any(feature = "blob", feature = "functions", feature = "array"))]
+            #[cfg(any(feature = "blob", feature = "functions", feature = "pointer"))]
             _ => {
                 return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
             }
@@ -70,7 +85,7 @@ impl Sql {
             _ => {
                 return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
             }
-        };
+        }
         Ok(())
     }
 
@@ -150,7 +165,7 @@ impl Connection {
         F: FnOnce(&Row<'_>) -> Result<T>,
     {
         let mut query = Sql::new();
-        query.push_pragma(schema_name, pragma_name)?;
+        query.push_pragma(self, schema_name, pragma_name)?;
         self.query_row(&query, [], f)
     }
 
@@ -168,7 +183,7 @@ impl Connection {
         F: FnMut(&Row<'_>) -> Result<()>,
     {
         let mut query = Sql::new();
-        query.push_pragma(schema_name, pragma_name)?;
+        query.push_pragma(self, schema_name, pragma_name)?;
         let mut stmt = self.prepare(&query)?;
         let mut rows = stmt.query([])?;
         while let Some(result_row) = rows.next()? {
@@ -199,7 +214,7 @@ impl Connection {
         V: ToSql,
     {
         let mut sql = Sql::new();
-        sql.push_pragma(schema_name, pragma_name)?;
+        sql.push_pragma(self, schema_name, pragma_name)?;
         // The argument may be either in parentheses
         // or it may be separated from the pragma name by an equal sign.
         // The two syntaxes yield identical results.
@@ -229,7 +244,7 @@ impl Connection {
         V: ToSql,
     {
         let mut sql = Sql::new();
-        sql.push_pragma(schema_name, pragma_name)?;
+        sql.push_pragma(self, schema_name, pragma_name)?;
         // The argument may be either in parentheses
         // or it may be separated from the pragma name by an equal sign.
         // The two syntaxes yield identical results.
@@ -253,7 +268,7 @@ impl Connection {
         V: ToSql,
     {
         let mut sql = Sql::new();
-        sql.push_pragma(schema_name, pragma_name)?;
+        sql.push_pragma(self, schema_name, pragma_name)?;
         // The argument may be either in parentheses
         // or it may be separated from the pragma name by an equal sign.
         // The two syntaxes yield identical results.
@@ -290,16 +305,25 @@ fn is_identifier_continue(c: char) -> bool {
         || c > '\x7F'
 }
 
+fn is_keyword(s: &str) -> bool {
+    unsafe {
+        ffi::sqlite3_keyword_check(
+            s.as_ptr().cast::<std::ffi::c_char>(),
+            s.len().try_into().unwrap(),
+        ) != 0
+    }
+}
+
 #[cfg(test)]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::Sql;
-    use crate::pragma;
-    use crate::{Connection, Result};
+    use crate::{Connection, Result, error::error_from_sqlite_code, ffi, pragma};
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn pragma_query_value() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let user_version: i32 = db.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -308,6 +332,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn pragma_func_query_value() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let user_version: i32 =
@@ -317,6 +342,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn pragma_query_no_schema() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let mut user_version = -1;
@@ -329,6 +355,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn pragma_query_with_schema() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let mut user_version = -1;
@@ -341,6 +368,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn pragma() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let mut columns = Vec::new();
@@ -354,6 +382,7 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn pragma_func() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let mut table_info = db.prepare("SELECT * FROM pragma_table_info(?1)")?;
@@ -369,12 +398,14 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn pragma_update() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.pragma_update(None, "user_version", 1)
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn pragma_update_and_check() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let journal_mode: String =
@@ -418,9 +449,25 @@ mod test {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn locking_mode() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.pragma_update(None, "locking_mode", "exclusive")?;
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn invalid_pragma() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let err = db.pragma_update(None, "boom", "1").unwrap_err();
+        assert_eq!(
+            err,
+            error_from_sqlite_code(
+                ffi::SQLITE_MISUSE,
+                Some("Invalid pragma \"boom\"".to_owned())
+            )
+        );
         Ok(())
     }
 }

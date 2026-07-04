@@ -1,9 +1,11 @@
 //! Convert most of the [Time Strings](http://sqlite.org/lang_datefunc.html) to chrono types.
 
-use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{
+    DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone as _, Utc,
+};
 
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
 use crate::Result;
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
 
 /// ISO 8601 calendar date without timezone => "YYYY-MM-DD"
 impl ToSql for NaiveDate {
@@ -152,18 +154,18 @@ impl FromSql for DateTime<FixedOffset> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use crate::{
-        types::{FromSql, ValueRef},
         Connection, Result,
+        types::{FromSql as _, ValueRef},
     };
     use chrono::{
-        DateTime, Duration, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone,
-        Timelike, Utc,
+        DateTime, Duration, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone as _,
+        Timelike as _, Utc,
     };
 
     fn checked_memory_handle() -> Result<Connection> {

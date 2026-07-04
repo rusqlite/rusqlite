@@ -1,4 +1,4 @@
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::ffi::{CStr, CString, NulError};
 
 /// Similar to `std::ffi::CString`, but avoids heap allocating if the string is

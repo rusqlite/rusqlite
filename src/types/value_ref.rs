@@ -84,7 +84,7 @@ impl<'a> ValueRef<'a> {
     #[inline]
     pub fn as_str(&self) -> FromSqlResult<&'a str> {
         match *self {
-            ValueRef::Text(t) => std::str::from_utf8(t).map_err(FromSqlError::other),
+            ValueRef::Text(t) => Ok(std::str::from_utf8(t)?),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -96,9 +96,7 @@ impl<'a> ValueRef<'a> {
     pub fn as_str_or_null(&self) -> FromSqlResult<Option<&'a str>> {
         match *self {
             ValueRef::Null => Ok(None),
-            ValueRef::Text(t) => std::str::from_utf8(t)
-                .map_err(FromSqlError::other)
-                .map(Some),
+            ValueRef::Text(t) => Ok(Some(std::str::from_utf8(t)?)),
             _ => Err(FromSqlError::InvalidType),
         }
     }
@@ -148,20 +146,19 @@ impl<'a> ValueRef<'a> {
     }
 }
 
-impl From<ValueRef<'_>> for Value {
+impl TryFrom<ValueRef<'_>> for Value {
+    type Error = FromSqlError;
+
     #[inline]
     #[track_caller]
-    fn from(borrowed: ValueRef<'_>) -> Self {
-        match borrowed {
+    fn try_from(borrowed: ValueRef<'_>) -> Result<Self, Self::Error> {
+        Ok(match borrowed {
             ValueRef::Null => Self::Null,
             ValueRef::Integer(i) => Self::Integer(i),
             ValueRef::Real(r) => Self::Real(r),
-            ValueRef::Text(s) => {
-                let s = std::str::from_utf8(s).expect("invalid UTF-8");
-                Self::Text(s.to_string())
-            }
+            ValueRef::Text(s) => Self::Text(std::str::from_utf8(s)?.to_owned()),
             ValueRef::Blob(b) => Self::Blob(b.to_vec()),
-        }
+        })
     }
 }
 
@@ -216,43 +213,45 @@ impl ValueRef<'_> {
         use crate::ffi;
         use std::slice::from_raw_parts;
 
-        match ffi::sqlite3_value_type(value) {
-            ffi::SQLITE_NULL => ValueRef::Null,
-            ffi::SQLITE_INTEGER => ValueRef::Integer(ffi::sqlite3_value_int64(value)),
-            ffi::SQLITE_FLOAT => ValueRef::Real(ffi::sqlite3_value_double(value)),
-            ffi::SQLITE_TEXT => {
-                let text = ffi::sqlite3_value_text(value);
-                let len = ffi::sqlite3_value_bytes(value);
-                assert!(
-                    !text.is_null(),
-                    "unexpected SQLITE_TEXT value type with NULL data"
-                );
-                let s = from_raw_parts(text.cast::<u8>(), len as usize);
-                ValueRef::Text(s)
-            }
-            ffi::SQLITE_BLOB => {
-                let (blob, len) = (
-                    ffi::sqlite3_value_blob(value),
-                    ffi::sqlite3_value_bytes(value),
-                );
-
-                assert!(
-                    len >= 0,
-                    "unexpected negative return from sqlite3_value_bytes"
-                );
-                if len > 0 {
+        unsafe {
+            match ffi::sqlite3_value_type(value) {
+                ffi::SQLITE_NULL => ValueRef::Null,
+                ffi::SQLITE_INTEGER => ValueRef::Integer(ffi::sqlite3_value_int64(value)),
+                ffi::SQLITE_FLOAT => ValueRef::Real(ffi::sqlite3_value_double(value)),
+                ffi::SQLITE_TEXT => {
+                    let text = ffi::sqlite3_value_text(value);
+                    let len = ffi::sqlite3_value_bytes(value);
                     assert!(
-                        !blob.is_null(),
-                        "unexpected SQLITE_BLOB value type with NULL data"
+                        !text.is_null(),
+                        "unexpected SQLITE_TEXT value type with NULL data"
                     );
-                    ValueRef::Blob(from_raw_parts(blob.cast::<u8>(), len as usize))
-                } else {
-                    // The return value from sqlite3_value_blob() for a zero-length BLOB
-                    // is a NULL pointer.
-                    ValueRef::Blob(&[])
+                    let s = from_raw_parts(text.cast::<u8>(), len as usize);
+                    ValueRef::Text(s)
                 }
+                ffi::SQLITE_BLOB => {
+                    let (blob, len) = (
+                        ffi::sqlite3_value_blob(value),
+                        ffi::sqlite3_value_bytes(value),
+                    );
+
+                    assert!(
+                        len >= 0,
+                        "unexpected negative return from sqlite3_value_bytes"
+                    );
+                    if len > 0 {
+                        assert!(
+                            !blob.is_null(),
+                            "unexpected SQLITE_BLOB value type with NULL data"
+                        );
+                        ValueRef::Blob(from_raw_parts(blob.cast::<u8>(), len as usize))
+                    } else {
+                        // The return value from sqlite3_value_blob() for a zero-length BLOB
+                        // is a NULL pointer.
+                        ValueRef::Blob(&[])
+                    }
+                }
+                _ => unreachable!("sqlite3_value_type returned invalid value"),
             }
-            _ => unreachable!("sqlite3_value_type returned invalid value"),
         }
     }
 
