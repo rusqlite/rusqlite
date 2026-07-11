@@ -87,6 +87,8 @@ mod serde_json;
 #[cfg(feature = "time")]
 mod time;
 mod to_sql;
+#[cfg(feature = "ulid")]
+mod ulid;
 #[cfg(feature = "url")]
 mod url;
 mod value;
