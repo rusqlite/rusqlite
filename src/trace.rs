@@ -1,7 +1,7 @@
 //! Tracing and profiling functions. Error and warning log.
 
 use std::borrow::Cow;
-use std::ffi::{c_char, c_int, c_uint, c_void, CStr, CString};
+use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
 use std::marker::PhantomData;
 use std::mem;
 use std::panic::catch_unwind;
@@ -9,7 +9,7 @@ use std::ptr;
 use std::time::Duration;
 
 use super::ffi;
-use crate::{Connection, StatementStatus, MAIN_DB};
+use crate::{Connection, MAIN_DB, StatementStatus};
 
 /// Set up the process-wide SQLite error logging callback.
 ///
@@ -33,18 +33,18 @@ pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> crate::Result<()>
 
         drop(catch_unwind(|| callback(err, &s)));
     }
-
-    let rc = if let Some(f) = callback {
-        ffi::sqlite3_config(
-            ffi::SQLITE_CONFIG_LOG,
-            log_callback as extern "C" fn(_, _, _),
-            f as *mut c_void,
-        )
-    } else {
-        let nullptr: *mut c_void = ptr::null_mut();
-        ffi::sqlite3_config(ffi::SQLITE_CONFIG_LOG, nullptr, nullptr)
+    let rc = unsafe {
+        if let Some(f) = callback {
+            ffi::sqlite3_config(
+                ffi::SQLITE_CONFIG_LOG,
+                log_callback as extern "C" fn(_, _, _),
+                f as *mut c_void,
+            )
+        } else {
+            let nullptr: *mut c_void = ptr::null_mut();
+            ffi::sqlite3_config(ffi::SQLITE_CONFIG_LOG, nullptr, nullptr)
+        }
     };
-
     if rc == ffi::SQLITE_OK {
         Ok(())
     } else {
@@ -107,6 +107,7 @@ impl StmtRef<'_> {
             phantom: PhantomData,
         }
     }
+
     /// SQL text
     pub fn sql(&self) -> Cow<'_, str> {
         let sql = unsafe { ffi::sqlite3_sql(self.ptr) };
@@ -118,12 +119,14 @@ impl StmtRef<'_> {
         // Safety: sql is a valid pointer to a cstr returned by sqlite3
         unsafe { CStr::from_ptr(sql).to_string_lossy() }
     }
+
     /// Expanded SQL text
     pub fn expanded_sql(&self) -> Option<String> {
         unsafe {
             crate::raw_statement::expanded_sql(self.ptr).map(|s| s.to_string_lossy().to_string())
         }
     }
+
     /// Get the value for one of the status counters for this statement.
     pub fn get_status(&self, status: StatementStatus) -> i32 {
         unsafe { crate::raw_statement::stmt_status(self.ptr, status, false) }
@@ -141,6 +144,7 @@ impl ConnRef<'_> {
     pub fn is_autocommit(&self) -> bool {
         unsafe { crate::inner_connection::get_autocommit(self.ptr) }
     }
+
     /// the path to the database file, if one exists and is known.
     pub fn db_filename(&self) -> Option<&str> {
         unsafe { crate::inner_connection::db_filename(self.phantom, self.ptr, MAIN_DB) }
@@ -158,9 +162,11 @@ impl Connection {
     #[deprecated(since = "0.33.0", note = "use trace_v2 instead")]
     pub fn trace(&mut self, trace_fn: Option<fn(&str)>) {
         unsafe extern "C" fn trace_callback(p_arg: *mut c_void, z_sql: *const c_char) {
-            let trace_fn: fn(&str) = mem::transmute(p_arg);
-            let s = CStr::from_ptr(z_sql).to_string_lossy();
-            drop(catch_unwind(|| trace_fn(&s)));
+            unsafe {
+                let trace_fn: fn(&str) = mem::transmute(p_arg);
+                let s = CStr::from_ptr(z_sql).to_string_lossy();
+                drop(catch_unwind(|| trace_fn(&s)));
+            }
         }
 
         let c = self.db.borrow_mut();
@@ -186,11 +192,13 @@ impl Connection {
             z_sql: *const c_char,
             nanoseconds: u64,
         ) {
-            let profile_fn: fn(&str, Duration) = mem::transmute(p_arg);
-            let s = CStr::from_ptr(z_sql).to_string_lossy();
+            unsafe {
+                let profile_fn: fn(&str, Duration) = mem::transmute(p_arg);
+                let s = CStr::from_ptr(z_sql).to_string_lossy();
 
-            let duration = Duration::from_nanos(nanoseconds);
-            drop(catch_unwind(|| profile_fn(&s, duration)));
+                let duration = Duration::from_nanos(nanoseconds);
+                drop(catch_unwind(|| profile_fn(&s, duration)));
+            }
         }
 
         let c = self.db.borrow_mut();
@@ -211,34 +219,36 @@ impl Connection {
             p: *mut c_void,
             x: *mut c_void,
         ) -> c_int {
-            let trace_fn: fn(TraceEvent<'_>) = mem::transmute(ctx);
-            drop(catch_unwind(|| match evt {
-                ffi::SQLITE_TRACE_STMT => {
-                    let str = CStr::from_ptr(x as *const c_char).to_string_lossy();
-                    trace_fn(TraceEvent::Stmt(
-                        StmtRef::new(p as *mut ffi::sqlite3_stmt),
-                        &str,
-                    ));
-                }
-                ffi::SQLITE_TRACE_PROFILE => {
-                    let ns = *(x as *const i64);
-                    trace_fn(TraceEvent::Profile(
-                        StmtRef::new(p as *mut ffi::sqlite3_stmt),
-                        Duration::from_nanos(u64::try_from(ns).unwrap_or_default()),
-                    ));
-                }
-                ffi::SQLITE_TRACE_ROW => {
-                    trace_fn(TraceEvent::Row(StmtRef::new(p as *mut ffi::sqlite3_stmt)));
-                }
-                ffi::SQLITE_TRACE_CLOSE => trace_fn(TraceEvent::Close(ConnRef {
-                    ptr: p as *mut ffi::sqlite3,
-                    phantom: PhantomData,
-                })),
-                _ => {}
-            }));
-            // The integer return value from the callback is currently ignored, though this may change in future releases.
-            // Callback implementations should return zero to ensure future compatibility.
-            ffi::SQLITE_OK
+            unsafe {
+                let trace_fn: fn(TraceEvent<'_>) = mem::transmute(ctx);
+                drop(catch_unwind(|| match evt {
+                    ffi::SQLITE_TRACE_STMT => {
+                        let str = CStr::from_ptr(x as *const c_char).to_string_lossy();
+                        trace_fn(TraceEvent::Stmt(
+                            StmtRef::new(p as *mut ffi::sqlite3_stmt),
+                            &str,
+                        ));
+                    }
+                    ffi::SQLITE_TRACE_PROFILE => {
+                        let ns = *(x as *const i64);
+                        trace_fn(TraceEvent::Profile(
+                            StmtRef::new(p as *mut ffi::sqlite3_stmt),
+                            Duration::from_nanos(u64::try_from(ns).unwrap_or_default()),
+                        ));
+                    }
+                    ffi::SQLITE_TRACE_ROW => {
+                        trace_fn(TraceEvent::Row(StmtRef::new(p as *mut ffi::sqlite3_stmt)));
+                    }
+                    ffi::SQLITE_TRACE_CLOSE => trace_fn(TraceEvent::Close(ConnRef {
+                        ptr: p as *mut ffi::sqlite3,
+                        phantom: PhantomData,
+                    })),
+                    _ => {}
+                }));
+                // The integer return value from the callback is currently ignored, though this may change in future releases.
+                // Callback implementations should return zero to ensure future compatibility.
+                ffi::SQLITE_OK
+            }
         }
         let c = self.db.borrow_mut();
         unsafe {
@@ -262,7 +272,7 @@ mod test {
     use std::time::Duration;
 
     use super::{TraceEvent, TraceEventCodes};
-    use crate::{Connection, Result, MAIN_DB};
+    use crate::{Connection, MAIN_DB, Result};
 
     #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
     #[test]
@@ -335,7 +345,10 @@ mod test {
                     assert_eq!(d.cmp(&Duration::ZERO), Ordering::Greater);
                     // Timers on the web are not very accurate
                     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-                    assert_matches!(d.cmp(&Duration::ZERO), Ordering::Equal | Ordering::Greater);
+                    std::assert_matches!(
+                        d.cmp(&Duration::ZERO),
+                        Ordering::Equal | Ordering::Greater
+                    );
                 }
                 TraceEvent::Row(s) => {
                     assert_eq!(s.expanded_sql().as_deref(), Some(s.sql().borrow()));

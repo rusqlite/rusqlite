@@ -1,13 +1,13 @@
 //! Commit, Data Change and Rollback Notification Callbacks
 #![expect(non_camel_case_types)]
 
-use std::ffi::{c_char, c_int, c_void, CStr};
+use std::ffi::{CStr, c_char, c_int, c_void};
 use std::panic::catch_unwind;
 use std::ptr;
 
 use crate::ffi;
 
-use crate::{error::decode_result_raw, Connection, InnerConnection, Result};
+use crate::{Connection, InnerConnection, Result, error::decode_result_raw};
 
 #[cfg(feature = "preupdate_hook")]
 pub use preupdate_hook::*;
@@ -402,15 +402,17 @@ impl Connection {
             db_name: *const c_char,
             pages: c_int,
         ) -> c_int {
-            let hook_fn: fn(&Wal, c_int) -> Result<()> = std::mem::transmute(client_data);
-            let wal = Wal { db, db_name };
-            catch_unwind(|| match hook_fn(&wal, pages) {
-                Ok(_) => ffi::SQLITE_OK,
-                Err(e) => e
-                    .sqlite_error()
-                    .map_or(ffi::SQLITE_ERROR, |x| x.extended_code),
-            })
-            .unwrap_or_default()
+            unsafe {
+                let hook_fn: fn(&Wal, c_int) -> Result<()> = std::mem::transmute(client_data);
+                let wal = Wal { db, db_name };
+                catch_unwind(|| match hook_fn(&wal, pages) {
+                    Ok(_) => ffi::SQLITE_OK,
+                    Err(e) => e
+                        .sqlite_error()
+                        .map_or(ffi::SQLITE_ERROR, |x| x.extended_code),
+                })
+                .unwrap_or_default()
+            }
         }
         let c = self.db.borrow_mut();
         unsafe {
@@ -545,11 +547,13 @@ impl InnerConnection {
         where
             F: FnMut() -> bool,
         {
-            let r = catch_unwind(|| {
-                let boxed_hook: *mut F = p_arg.cast::<F>();
-                (*boxed_hook)()
-            });
-            c_int::from(r.unwrap_or_default())
+            unsafe {
+                let r = catch_unwind(|| {
+                    let boxed_hook: *mut F = p_arg.cast::<F>();
+                    (*boxed_hook)()
+                });
+                c_int::from(r.unwrap_or_default())
+            }
         }
         let boxed_hook = hook.map(Box::new);
         unsafe {
@@ -592,10 +596,12 @@ impl InnerConnection {
         where
             F: FnMut(),
         {
-            drop(catch_unwind(|| {
-                let boxed_hook: *mut F = p_arg.cast::<F>();
-                (*boxed_hook)();
-            }));
+            unsafe {
+                drop(catch_unwind(|| {
+                    let boxed_hook: *mut F = p_arg.cast::<F>();
+                    (*boxed_hook)();
+                }));
+            }
         }
 
         let boxed_hook = hook.map(Box::new);
@@ -638,15 +644,17 @@ impl InnerConnection {
             F: FnMut(Action, &str, &str, i64),
         {
             let action = Action::from(action_code);
-            drop(catch_unwind(|| {
-                let boxed_hook: *mut F = p_arg.cast::<F>();
-                (*boxed_hook)(
-                    action,
-                    expect_utf8(p_db_name, "database name"),
-                    expect_utf8(p_table_name, "table name"),
-                    row_id,
-                );
-            }));
+            unsafe {
+                drop(catch_unwind(|| {
+                    let boxed_hook: *mut F = p_arg.cast::<F>();
+                    (*boxed_hook)(
+                        action,
+                        expect_utf8(p_db_name, "database name"),
+                        expect_utf8(p_table_name, "table name"),
+                        row_id,
+                    );
+                }));
+            }
         }
 
         let boxed_hook = hook.map(Box::new);
@@ -690,11 +698,13 @@ impl InnerConnection {
         where
             F: FnMut() -> bool,
         {
-            let r = catch_unwind(|| {
-                let boxed_handler: *mut F = p_arg.cast::<F>();
-                (*boxed_handler)()
-            });
-            c_int::from(r.unwrap_or_default())
+            unsafe {
+                let r = catch_unwind(|| {
+                    let boxed_handler: *mut F = p_arg.cast::<F>();
+                    (*boxed_handler)()
+                });
+                c_int::from(r.unwrap_or_default())
+            }
         }
 
         let boxed_handler = handler.map(Box::new);
@@ -743,24 +753,26 @@ impl InnerConnection {
         where
             F: FnMut(AuthContext<'c>) -> Authorization + Send + 'static,
         {
-            catch_unwind(|| {
-                let action = AuthAction::from_raw(
-                    action_code,
-                    expect_optional_utf8(param1, "authorizer param 1"),
-                    expect_optional_utf8(param2, "authorizer param 2"),
-                );
-                let auth_ctx = AuthContext {
-                    action,
-                    database_name: expect_optional_utf8(db_name, "database name"),
-                    accessor: expect_optional_utf8(
-                        trigger_or_view_name,
-                        "accessor (inner-most trigger or view)",
-                    ),
-                };
-                let boxed_hook: *mut F = p_arg.cast::<F>();
-                (*boxed_hook)(auth_ctx)
-            })
-            .map_or_else(|_| ffi::SQLITE_ERROR, Authorization::into_raw)
+            unsafe {
+                catch_unwind(|| {
+                    let action = AuthAction::from_raw(
+                        action_code,
+                        expect_optional_utf8(param1, "authorizer param 1"),
+                        expect_optional_utf8(param2, "authorizer param 2"),
+                    );
+                    let auth_ctx = AuthContext {
+                        action,
+                        database_name: expect_optional_utf8(db_name, "database name"),
+                        accessor: expect_optional_utf8(
+                            trigger_or_view_name,
+                            "accessor (inner-most trigger or view)",
+                        ),
+                    };
+                    let boxed_hook: *mut F = p_arg.cast::<F>();
+                    (*boxed_hook)(auth_ctx)
+                })
+                .map_or_else(|_| ffi::SQLITE_ERROR, Authorization::into_raw)
+            }
         }
 
         let boxed_authorizer = authorizer.map(Box::new);
@@ -794,8 +806,10 @@ impl InnerConnection {
 }
 
 unsafe fn expect_utf8<'a>(p_str: *const c_char, description: &'static str) -> &'a str {
-    expect_optional_utf8(p_str, description)
-        .unwrap_or_else(|| panic!("received empty {description}"))
+    unsafe {
+        expect_optional_utf8(p_str, description)
+            .unwrap_or_else(|| panic!("received empty {description}"))
+    }
 }
 
 unsafe fn expect_optional_utf8<'a>(
@@ -805,10 +819,12 @@ unsafe fn expect_optional_utf8<'a>(
     if p_str.is_null() {
         return None;
     }
-    CStr::from_ptr(p_str)
-        .to_str()
-        .unwrap_or_else(|_| panic!("received non-utf8 string as {description}"))
-        .into()
+    unsafe {
+        CStr::from_ptr(p_str)
+            .to_str()
+            .unwrap_or_else(|_| panic!("received non-utf8 string as {description}"))
+            .into()
+    }
 }
 
 #[cfg(all(test, not(miri)))]
@@ -817,7 +833,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::Action;
-    use crate::{Connection, Result, MAIN_DB};
+    use crate::{Connection, MAIN_DB, Result};
     use std::sync::atomic::{AtomicBool, Ordering};
 
     #[test]

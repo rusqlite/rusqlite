@@ -2,7 +2,9 @@ use std::env;
 use std::path::Path;
 
 #[cfg(all(feature = "loadable_extension", feature = "preupdate_hook"))]
-compile_error!("feature \"loadable_extension\" and feature \"preupdate_hook\" cannot be enabled at the same time");
+compile_error!(
+    "feature \"loadable_extension\" and feature \"preupdate_hook\" cannot be enabled at the same time"
+);
 
 /// Tells whether we're building for Windows. This is more suitable than a plain
 /// `cfg!(windows)`, since the latter does not properly handle cross-compilation
@@ -104,8 +106,10 @@ mod build_bundled {
         let lib_name = super::lib_name();
 
         // This is just a sanity check, the top level `main` should ensure this.
-        assert!(!(cfg!(feature = "bundled-windows") && !cfg!(feature = "bundled") && !win_target()),
-            "This module should not be used: we're not on Windows and the bundled feature has not been enabled");
+        assert!(
+            !(cfg!(feature = "bundled-windows") && !cfg!(feature = "bundled") && !win_target()),
+            "This module should not be used: we're not on Windows and the bundled feature has not been enabled"
+        );
 
         cfg_select! {
             feature = "buildtime_bindgen" => {
@@ -168,7 +172,9 @@ mod build_bundled {
                 (lib_dir, inc_dir) => match find_openssl_dir(&host, &target) {
                     None => {
                         if is_windows && !cfg!(feature = "bundled-sqlcipher-vendored-openssl") {
-                            panic!("Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set")
+                            panic!(
+                                "Missing environment variable OPENSSL_DIR or OPENSSL_DIR is not set"
+                            )
                         } else {
                             (vec![PathBuf::new()], PathBuf::new())
                         }
@@ -386,7 +392,7 @@ mod build_linked {
     #[cfg(feature = "vcpkg")]
     extern crate vcpkg;
 
-    use super::{bindings, env_prefix, is_compiler, lib_name, win_target, HeaderLocation};
+    use super::{HeaderLocation, bindings, env_prefix, is_compiler, lib_name, win_target};
     use std::env;
     use std::path::Path;
 
@@ -441,7 +447,7 @@ mod build_linked {
         if let Ok(dir) = env::var(format!("{}_LIB_DIR", env_prefix())) {
             // Try to use pkg-config to determine link commands
             let pkgconfig_path = Path::new(&dir).join("pkgconfig");
-            env::set_var("PKG_CONFIG_PATH", pkgconfig_path);
+            unsafe { env::set_var("PKG_CONFIG_PATH", pkgconfig_path) };
             #[cfg(not(feature = "loadable_extension"))]
             if pkg_config::Config::new()
                 .atleast_version("3.34.1")
@@ -484,10 +490,10 @@ mod build_linked {
     fn try_vcpkg() -> Option<HeaderLocation> {
         if cfg!(feature = "vcpkg") && is_compiler("msvc") {
             // See if vcpkg can find it.
-            if let Ok(mut lib) = vcpkg::Config::new().probe(lib_name()) {
-                if let Some(header) = lib.include_paths.pop() {
-                    return Some(HeaderLocation::FromPath(header.to_string_lossy().into()));
-                }
+            if let Ok(mut lib) = vcpkg::Config::new().probe(lib_name())
+                && let Some(header) = lib.include_paths.pop()
+            {
+                return Some(HeaderLocation::FromPath(header.to_string_lossy().into()));
             }
             None
         } else {
@@ -562,7 +568,7 @@ mod bindings {
             bindings = bindings
                 .blocklist_function("sqlite3_auto_extension")
                 .raw_line(
-                    r#"extern "C" {
+                    r#"unsafe extern "C" {
     pub fn sqlite3_auto_extension(
         xEntryPoint: ::core::option::Option<
             unsafe extern "C" fn(
@@ -576,7 +582,7 @@ mod bindings {
                 )
                 .blocklist_function("sqlite3_cancel_auto_extension")
                 .raw_line(
-                    r#"extern "C" {
+                    r#"unsafe extern "C" {
     pub fn sqlite3_cancel_auto_extension(
         xEntryPoint: ::core::option::Option<
             unsafe extern "C" fn(
@@ -735,30 +741,36 @@ mod loadable_extension {
                 quote::quote! {
                     static #ptr_name: ::core::sync::atomic::AtomicPtr<()> = ::core::sync::atomic::AtomicPtr::new(::core::ptr::null_mut());
                     pub unsafe fn #sqlite3_fn_name(#args arg3: ::core::ffi::c_int, arg4: *mut ::core::ffi::c_int) #ty {
-                        let ptr = #ptr_name.load(::core::sync::atomic::Ordering::Acquire);
-                        assert!(!ptr.is_null(), "SQLite API not initialized");
-                        let fun: unsafe extern "C" fn(#args #varargs) #ty = ::core::mem::transmute(ptr);
-                        (fun)(#arg_names, arg3, arg4)
+                        unsafe {
+                            let ptr = #ptr_name.load(::core::sync::atomic::Ordering::Acquire);
+                            assert!(!ptr.is_null(), "SQLite API not initialized");
+                            let fun: unsafe extern "C" fn(#args #varargs) #ty = ::core::mem::transmute(ptr);
+                            (fun)(#arg_names, arg3, arg4)
+                        }
                     }
                 }
             } else if "log" == name {
                 quote::quote! {
                     static #ptr_name: ::core::sync::atomic::AtomicPtr<()> = ::core::sync::atomic::AtomicPtr::new(::core::ptr::null_mut());
                     pub unsafe fn #sqlite3_fn_name(#args arg3: *const ::core::ffi::c_char) #ty {
-                        let ptr = #ptr_name.load(::core::sync::atomic::Ordering::Acquire);
-                        assert!(!ptr.is_null(), "SQLite API not initialized");
-                        let fun: unsafe extern "C" fn(#args #varargs) #ty = ::core::mem::transmute(ptr);
-                        (fun)(#arg_names, arg3)
+                        unsafe {
+                            let ptr = #ptr_name.load(::core::sync::atomic::Ordering::Acquire);
+                            assert!(!ptr.is_null(), "SQLite API not initialized");
+                            let fun: unsafe extern "C" fn(#args #varargs) #ty = ::core::mem::transmute(ptr);
+                            (fun)(#arg_names, arg3)
+                        }
                     }
                 }
             } else {
                 quote::quote! {
                     static #ptr_name: ::core::sync::atomic::AtomicPtr<()> = ::core::sync::atomic::AtomicPtr::new(::core::ptr::null_mut());
                     pub unsafe fn #sqlite3_fn_name(#args) #ty {
-                        let ptr = #ptr_name.load(::core::sync::atomic::Ordering::Acquire);
-                        assert!(!ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
-                        let fun: unsafe extern "C" fn(#args #varargs) #ty = ::core::mem::transmute(ptr);
-                        (fun)(#arg_names)
+                        unsafe {
+                            let ptr = #ptr_name.load(::core::sync::atomic::Ordering::Acquire);
+                            assert!(!ptr.is_null(), "SQLite API not initialized or SQLite feature omitted");
+                            let fun: unsafe extern "C" fn(#args #varargs) #ty = ::core::mem::transmute(ptr);
+                            (fun)(#arg_names)
+                        }
                     }
                 }
             };
@@ -784,17 +796,19 @@ mod loadable_extension {
         let tokens = quote::quote! {
             /// Like SQLITE_EXTENSION_INIT2 macro
             pub unsafe fn rusqlite_extension_init2(#p_api: *mut #sqlite3_api_routines_ident) -> ::core::result::Result<(), crate::InitError> {
-                #(#malloc)* // sqlite3_malloc needed by to_sqlite_error
-                if let Some(fun) = (*#p_api).libversion_number {
-                    let version = fun();
-                    if SQLITE_VERSION_NUMBER > version {
-                        return Err(crate::InitError::VersionMismatch{compile_time: SQLITE_VERSION_NUMBER, runtime: version});
+                unsafe {
+                    #(#malloc)* // sqlite3_malloc needed by to_sqlite_error
+                    if let Some(fun) = (*#p_api).libversion_number {
+                        let version = fun();
+                        if SQLITE_VERSION_NUMBER > version {
+                            return Err(crate::InitError::VersionMismatch{compile_time: SQLITE_VERSION_NUMBER, runtime: version});
+                        }
+                    } else {
+                        return Err(crate::InitError::NullFunctionPointer);
                     }
-                } else {
-                    return Err(crate::InitError::NullFunctionPointer);
+                    #(#stores)*
+                    Ok(())
                 }
-                #(#stores)*
-                Ok(())
             }
         };
         output.push_str(&prettyplease::unparse(

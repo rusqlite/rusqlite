@@ -4,8 +4,9 @@ use litrs::StringLit;
 use proc_macro::{Delimiter, Group, Literal, Span, TokenStream, TokenTree};
 
 use fallible_iterator::FallibleIterator;
-use sqlite3_parser::ast::fmt::ToTokens;
+use sqlite3_parser::Bump;
 use sqlite3_parser::ast::ParameterInfo;
+use sqlite3_parser::ast::fmt::ToTokens;
 use sqlite3_parser::lexer::sql::Parser;
 
 // https://internals.rust-lang.org/t/custom-error-diagnostics-with-procedural-macros-on-almost-stable-rust/8113
@@ -37,7 +38,8 @@ fn try_bind(input: TokenStream) -> Result<TokenStream> {
     };
     let sql = string_lit.value();
 
-    let mut parser = Parser::new(sql.as_bytes());
+    let bump = Bump::new();
+    let mut parser = Parser::new(&bump, sql.as_bytes());
     let ast = match parser.next() {
         Ok(None) => return Err("Invalid input".to_owned()),
         Err(err) => {

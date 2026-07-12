@@ -1,6 +1,6 @@
 use core::error;
-use core::ffi::c_int;
 use core::ffi::CStr;
+use core::ffi::c_int;
 use core::fmt;
 
 /// Error Codes

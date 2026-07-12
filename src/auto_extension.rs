@@ -28,14 +28,16 @@ pub unsafe fn init_auto_extension(
     pz_err_msg: *mut *mut c_char,
     ax: AutoExtension,
 ) -> c_int {
-    let r = catch_unwind(|| {
-        let c = Connection::from_handle(db);
-        c.and_then(ax)
-    })
-    .unwrap_or_else(|_| Err(Error::UnwindingPanic));
-    match r {
-        Err(e) => to_sqlite_error(&e, pz_err_msg),
-        _ => ffi::SQLITE_OK,
+    unsafe {
+        let r = catch_unwind(|| {
+            let c = Connection::from_handle(db);
+            c.and_then(ax)
+        })
+        .unwrap_or_else(|_| Err(Error::UnwindingPanic));
+        match r {
+            Err(e) => to_sqlite_error(&e, pz_err_msg),
+            _ => ffi::SQLITE_OK,
+        }
     }
 }
 
@@ -48,7 +50,7 @@ pub unsafe fn init_auto_extension(
 /// * Results are undefined if the given db is closed by an auto-extension.
 /// * The list of auto-extensions should not be manipulated from an auto-extension.
 pub unsafe fn register_auto_extension(ax: RawAutoExtension) -> Result<()> {
-    check(ffi::sqlite3_auto_extension(Some(ax)))
+    check(unsafe { ffi::sqlite3_auto_extension(Some(ax)) })
 }
 
 /// Unregister the initialization routine

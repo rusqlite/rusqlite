@@ -111,8 +111,8 @@
 - [X] `sqlite3_bind_text64`
 - [ ] `sqlite3_bind_value`
 - [X] `sqlite3_bind_pointer`
-- [X] `sqlite3_bind_zeroblob`
-- [ ] `sqlite3_bind_zeroblob64`
+- [ ] `sqlite3_bind_zeroblob`
+- [X] `sqlite3_bind_zeroblob64`
 
 - [X] `sqlite3_bind_parameter_count`
 - [X] `sqlite3_bind_parameter_name`
@@ -184,8 +184,8 @@
 - [X] `sqlite3_result_text64`
 - [X] `sqlite3_result_value`
 - [X] `sqlite3_result_pointer`
-- [X] `sqlite3_result_zeroblob`
-- [ ] `sqlite3_result_zeroblob64`
+- [ ] `sqlite3_result_zeroblob`
+- [X] `sqlite3_result_zeroblob64`
 - [X] `sqlite3_result_subtype`
 
 - [ ] `sqlite3_create_collation`

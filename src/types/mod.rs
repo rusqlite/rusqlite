@@ -141,7 +141,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::Value;
-    use crate::{params, Connection, Error, Result, Statement};
+    use crate::{Connection, Error, Result, Statement, params};
     use std::ffi::{c_double, c_int};
 
     fn checked_memory_handle() -> Result<Connection> {

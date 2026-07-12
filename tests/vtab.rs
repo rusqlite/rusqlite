@@ -6,10 +6,10 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 #[test]
 fn test_dummy_module() -> rusqlite::Result<()> {
     use rusqlite::vtab::{
-        sqlite3_vtab, sqlite3_vtab_cursor, Context, Filters, IndexInfo, Module, VTab,
-        VTabConnection, VTabCursor,
+        Context, Filters, IndexInfo, Module, VTab, VTabConnection, VTabCursor, sqlite3_vtab,
+        sqlite3_vtab_cursor,
     };
-    use rusqlite::{version_number, Connection, Result};
+    use rusqlite::{Connection, Result, version_number};
     use std::borrow::Cow;
     use std::ffi::CStr;
     use std::marker::PhantomData;

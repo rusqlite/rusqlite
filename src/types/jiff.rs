@@ -1,12 +1,12 @@
 //! Convert some `jiff` types.
 
 use jiff::{
-    civil::{Date, DateTime, Time},
     Timestamp,
+    civil::{Date, DateTime, Time},
 };
 
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
 use crate::Result;
+use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
 
 /// Gregorian calendar date => "YYYY-MM-DD"
 impl ToSql for Date {
@@ -93,8 +93,8 @@ mod test {
 
     use crate::{Connection, Result};
     use jiff::{
-        civil::{Date, DateTime, Time},
         Timestamp,
+        civil::{Date, DateTime, Time},
     };
 
     fn checked_memory_handle() -> Result<Connection> {

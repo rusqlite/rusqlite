@@ -1,6 +1,6 @@
 //! Run-Time Limits
 
-use crate::{ffi, Connection, Result};
+use crate::{Connection, Result, ffi};
 use std::ffi::c_int;
 
 /// Run-Time limit categories, for use with [`Connection::limit`] and
@@ -175,9 +175,10 @@ mod test {
         #[cfg(all(target_family = "wasm", target_os = "unknown"))]
         assert_eq!(0, db.limit(Limit::SQLITE_LIMIT_WORKER_THREADS)?);
 
-        assert!(db
-            .set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, -1)
-            .is_err());
+        assert!(
+            db.set_limit(Limit::SQLITE_LIMIT_WORKER_THREADS, -1)
+                .is_err()
+        );
         assert!(db.set_limit(Limit::INVALID, 0).is_err());
         assert!(db.limit(Limit::INVALID).is_err());
         Ok(())

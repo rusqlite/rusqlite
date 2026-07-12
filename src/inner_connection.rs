@@ -1,4 +1,4 @@
-use std::ffi::{c_char, c_int, CStr};
+use std::ffi::{CStr, c_char, c_int};
 #[cfg(feature = "load_extension")]
 use std::path::Path;
 use std::ptr;
@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use super::ffi;
 use super::{Connection, InterruptHandle, Name, OpenFlags, PrepFlags, Result};
-use crate::error::{decode_result_raw, error_from_handle, error_with_offset, Error};
+use crate::error::{Error, decode_result_raw, error_from_handle, error_with_offset};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
 use crate::version_number;
@@ -176,7 +176,7 @@ impl InnerConnection {
     #[inline]
     #[cfg(feature = "load_extension")]
     pub unsafe fn enable_load_extension(&mut self, onoff: c_int) -> Result<()> {
-        let r = ffi::sqlite3_enable_load_extension(self.db, onoff);
+        let r = unsafe { ffi::sqlite3_enable_load_extension(self.db, onoff) };
         self.decode_result(r)
     }
 
@@ -190,13 +190,15 @@ impl InnerConnection {
         let mut errmsg: *mut c_char = ptr::null_mut();
         let cs = entry_point.as_ref().map(N::as_cstr).transpose()?;
         let c_entry = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
-        let r = ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry, &mut errmsg);
-        if r == ffi::SQLITE_OK {
-            Ok(())
-        } else {
-            let message = super::errmsg_to_string(errmsg);
-            ffi::sqlite3_free(errmsg.cast::<std::ffi::c_void>());
-            Err(crate::error::error_from_sqlite_code(r, Some(message)))
+        unsafe {
+            let r = ffi::sqlite3_load_extension(self.db, dylib_str.as_ptr(), c_entry, &mut errmsg);
+            if r == ffi::SQLITE_OK {
+                Ok(())
+            } else {
+                let message = super::errmsg_to_string(errmsg);
+                ffi::sqlite3_free(errmsg.cast::<std::ffi::c_void>());
+                Err(crate::error::error_from_sqlite_code(r, Some(message)))
+            }
         }
     }
 
@@ -379,7 +381,7 @@ impl InnerConnection {
 
 #[inline]
 pub(crate) unsafe fn get_autocommit(ptr: *mut ffi::sqlite3) -> bool {
-    ffi::sqlite3_get_autocommit(ptr) != 0
+    unsafe { ffi::sqlite3_get_autocommit(ptr) != 0 }
 }
 
 #[inline]
@@ -389,11 +391,13 @@ pub(crate) unsafe fn db_filename<N: Name>(
     db_name: N,
 ) -> Option<&str> {
     let db_name = db_name.as_cstr().unwrap();
-    let db_filename = ffi::sqlite3_db_filename(ptr, db_name.as_ptr());
-    if db_filename.is_null() {
-        None
-    } else {
-        CStr::from_ptr(db_filename).to_str().ok()
+    unsafe {
+        let db_filename = ffi::sqlite3_db_filename(ptr, db_name.as_ptr());
+        if db_filename.is_null() {
+            None
+        } else {
+            CStr::from_ptr(db_filename).to_str().ok()
+        }
     }
 }
 

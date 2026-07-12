@@ -1,8 +1,8 @@
-use super::ffi;
 use super::StatementStatus;
+use super::ffi;
 use crate::util::ParamIndexCache;
 use crate::util::SqliteMallocString;
-use std::ffi::{c_int, CStr};
+use std::ffi::{CStr, c_int};
 use std::ptr;
 #[cfg(feature = "cache")]
 use std::sync::Arc;
@@ -262,7 +262,7 @@ impl RawStatement {
 
 #[inline]
 pub(crate) unsafe fn expanded_sql(ptr: *mut ffi::sqlite3_stmt) -> Option<SqliteMallocString> {
-    SqliteMallocString::from_raw(ffi::sqlite3_expanded_sql(ptr))
+    unsafe { SqliteMallocString::from_raw(ffi::sqlite3_expanded_sql(ptr)) }
 }
 #[inline]
 pub(crate) unsafe fn stmt_status(
@@ -271,7 +271,7 @@ pub(crate) unsafe fn stmt_status(
     reset: bool,
 ) -> i32 {
     assert!(!ptr.is_null());
-    ffi::sqlite3_stmt_status(ptr, status as i32, reset as i32)
+    unsafe { ffi::sqlite3_stmt_status(ptr, status as i32, reset as i32) }
 }
 
 impl Drop for RawStatement {

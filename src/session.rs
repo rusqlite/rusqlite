@@ -1,7 +1,7 @@
 //! [Session Extension](https://sqlite.org/sessionintro.html)
 #![expect(non_camel_case_types)]
 
-use std::ffi::{c_char, c_int, c_uchar, c_void, CStr};
+use std::ffi::{CStr, c_char, c_int, c_uchar, c_void};
 use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::panic::catch_unwind;
@@ -10,11 +10,11 @@ use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 use fallible_streaming_iterator::FallibleStreamingIterator;
 
-use crate::error::{check, error_from_sqlite_code, Error};
+use crate::error::{Error, check, error_from_sqlite_code};
 use crate::ffi;
 use crate::hooks::Action;
 use crate::types::ValueRef;
-use crate::{errmsg_to_string, Connection, Name, Result, MAIN_DB};
+use crate::{Connection, MAIN_DB, Name, Result, errmsg_to_string};
 
 // https://sqlite.org/session.html
 
@@ -64,14 +64,16 @@ impl Session<'_> {
         where
             F: Fn(&str) -> bool,
         {
-            let tbl_name = CStr::from_ptr(tbl_str).to_str();
-            c_int::from(
-                catch_unwind(|| {
-                    let boxed_filter: *mut F = p_arg.cast::<F>();
-                    (*boxed_filter)(tbl_name.expect("non-utf8 table name"))
-                })
-                .unwrap_or_default(),
-            )
+            unsafe {
+                let tbl_name = CStr::from_ptr(tbl_str).to_str();
+                c_int::from(
+                    catch_unwind(|| {
+                        let boxed_filter: *mut F = p_arg.cast::<F>();
+                        (*boxed_filter)(tbl_name.expect("non-utf8 table name"))
+                    })
+                    .unwrap_or_default(),
+                )
+            }
         }
 
         match filter {
@@ -696,18 +698,20 @@ where
     F: Fn(&str) -> bool + Send + 'static,
     C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
 {
-    let tbl_name = CStr::from_ptr(tbl_str).to_str();
-    c_int::from(
-        catch_unwind(|| {
-            let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
-            if let Some(ref filter) = (*tuple).0 {
-                filter(tbl_name.expect("illegal table name"))
-            } else {
-                true
-            }
-        })
-        .unwrap_or_default(),
-    )
+    unsafe {
+        let tbl_name = CStr::from_ptr(tbl_str).to_str();
+        c_int::from(
+            catch_unwind(|| {
+                let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
+                if let Some(ref filter) = (*tuple).0 {
+                    filter(tbl_name.expect("illegal table name"))
+                } else {
+                    true
+                }
+            })
+            .unwrap_or_default(),
+        )
+    }
 }
 
 unsafe extern "C" fn call_conflict<F, C>(
@@ -721,13 +725,15 @@ where
 {
     let conflict_type = ConflictType::from(e_conflict);
     let item = ChangesetItem { it: p };
-    if let Ok(action) = catch_unwind(|| {
-        let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
-        (*tuple).1(conflict_type, item)
-    }) {
-        action as c_int
-    } else {
-        ffi::SQLITE_CHANGESET_ABORT
+    unsafe {
+        if let Ok(action) = catch_unwind(|| {
+            let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
+            (*tuple).1(conflict_type, item)
+        }) {
+            action as c_int
+        } else {
+            ffi::SQLITE_CHANGESET_ABORT
+        }
     }
 }
 
@@ -735,15 +741,17 @@ unsafe extern "C" fn x_input(p_in: *mut c_void, data: *mut c_void, len: *mut c_i
     if p_in.is_null() {
         return ffi::SQLITE_MISUSE;
     }
-    let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, *len as usize);
-    let input = p_in as *mut &mut dyn Read;
-    match (*input).read(bytes) {
-        Ok(n) => {
-            *len = n as i32; // TODO Validate: n = 0 may not mean the reader will always no longer be able to
-                             // produce bytes.
-            ffi::SQLITE_OK
+    unsafe {
+        let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, *len as usize);
+        let input = p_in as *mut &mut dyn Read;
+        match (*input).read(bytes) {
+            Ok(n) => {
+                *len = n as i32; // TODO Validate: n = 0 may not mean the reader will always no longer be able to
+                // produce bytes.
+                ffi::SQLITE_OK
+            }
+            Err(_) => ffi::SQLITE_IOERR_READ, // TODO check if err is a (ru)sqlite Error => propagate
         }
-        Err(_) => ffi::SQLITE_IOERR_READ, // TODO check if err is a (ru)sqlite Error => propagate
     }
 }
 
@@ -751,13 +759,15 @@ unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_in
     if p_out.is_null() {
         return ffi::SQLITE_MISUSE;
     }
-    // The sessions module never invokes an xOutput callback with the third
-    // parameter set to a value less than or equal to zero.
-    let bytes: &[u8] = from_raw_parts(data as *const u8, len as usize);
-    let output = p_out as *mut &mut dyn Write;
-    match (*output).write_all(bytes) {
-        Ok(_) => ffi::SQLITE_OK,
-        Err(_) => ffi::SQLITE_IOERR_WRITE, // TODO check if err is a (ru)sqlite Error => propagate
+    unsafe {
+        // The sessions module never invokes an xOutput callback with the third
+        // parameter set to a value less than or equal to zero.
+        let bytes: &[u8] = from_raw_parts(data as *const u8, len as usize);
+        let output = p_out as *mut &mut dyn Write;
+        match (*output).write_all(bytes) {
+            Ok(_) => ffi::SQLITE_OK,
+            Err(_) => ffi::SQLITE_IOERR_WRITE, // TODO check if err is a (ru)sqlite Error => propagate
+        }
     }
 }
 

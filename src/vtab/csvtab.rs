@@ -22,7 +22,7 @@
 //! }
 //! ```
 use std::borrow::Cow;
-use std::ffi::{c_int, CStr, CString};
+use std::ffi::{CStr, CString, c_int};
 use std::fs::File;
 use std::marker::PhantomData;
 use std::path::Path;
@@ -31,8 +31,8 @@ use std::str;
 use crate::ffi;
 use crate::types::Null;
 use crate::vtab::{
-    escape_double_quote, parse_boolean, Context, CreateVTab, Filters, IndexInfo, Module, VTab,
-    VTabConfig, VTabConnection, VTabCursor, VTabKind,
+    Context, CreateVTab, Filters, IndexInfo, Module, VTab, VTabConfig, VTabConnection, VTabCursor,
+    VTabKind, escape_double_quote, parse_boolean,
 };
 use crate::{Connection, Error, Result};
 
