@@ -8,12 +8,6 @@ pub(crate) use small_cstr::SmallCString;
 mod sqlite_string;
 pub(crate) use sqlite_string::{SqliteMallocString, alloc};
 
-#[cfg(any(
-    feature = "collation",
-    feature = "functions",
-    feature = "vtab",
-    feature = "pointer"
-))]
 pub(crate) unsafe extern "C" fn free_boxed_value<T>(p: *mut std::ffi::c_void) {
     drop(unsafe { Box::from_raw(p.cast::<T>()) });
 }
