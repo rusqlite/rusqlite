@@ -8,6 +8,7 @@ use super::{
     AndThenRows, Connection, Error, MappedRows, Params, RawStatement, Result, Row, Rows, ValueRef,
 };
 use crate::bind::BindIndex;
+use crate::types::RawValue;
 use crate::types::{ToSql, ToSqlOutput, Value};
 
 /// A prepared statement.
@@ -631,11 +632,32 @@ impl Statement<'_> {
              ToSqlOutput::Owned(Value::Text(s)) => {
                 Self::bind_text(ptr, ndx, s.as_bytes())
             },
+            ToSqlOutput::Raw(RawValue::Text { ptr: p, bytes, destroy, flags }) => {
+                unsafe {
+                    ffi::sqlite3_bind_text64(
+                    ptr,
+                    ndx as c_int,
+                    p,
+                    bytes as _,
+                    destroy,
+                    flags,
+                )}
+            },
             ToSqlOutput::Borrowed(ValueRef::Blob(b)) => {
                 Self::bind_blob(ptr, ndx, b)
             },
             ToSqlOutput::Owned(Value::Blob(b)) => {
                 Self::bind_blob(ptr, ndx, b.as_slice())
+            },
+            ToSqlOutput::Raw(RawValue::Blob { ptr: p, bytes, destroy }) => {
+                unsafe {
+                    ffi::sqlite3_bind_blob64(
+                    ptr,
+                    ndx as c_int,
+                    p,
+                    bytes as _,
+                    destroy,
+                )}
             },
             #[cfg(feature = "blob")]
             ToSqlOutput::ZeroBlob(len) => {
@@ -648,9 +670,9 @@ impl Statement<'_> {
                 return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
             }
             #[cfg(feature = "pointer")]
-            ToSqlOutput::Pointer(p) => {
+            ToSqlOutput::Raw(RawValue::Pointer { ptr: p, ptr_type, destroy }) => {
                 unsafe {
-                    ffi::sqlite3_bind_pointer(ptr, ndx as c_int, p.0 as _, p.1.as_ptr(), p.2)
+                    ffi::sqlite3_bind_pointer(ptr, ndx as c_int, p as _, ptr_type.as_ptr(), destroy)
                 }
             }
         })

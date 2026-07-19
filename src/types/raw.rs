@@ -9,11 +9,13 @@ use crate::{
 };
 
 /// Raw value to be passed to SQLite (`sqlite3_bind_*` or `sqlite3_result_*`)
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RawValue {
     //Null,
     //Integer(i64),
     //Real(f64),
     /// Pointer passing interface
+    #[cfg(feature = "pointer")]
     Pointer {
         /// Raw pointer
         ptr: *const c_void,
@@ -29,10 +31,10 @@ pub enum RawValue {
         /// Bytes count.
         /// This does not include the nul terminator if any.
         bytes: usize,
-        /// Text encoding
-        flags: u64,
         /// `ptr` destructor
         destroy: sqlite3_destructor_type,
+        /// Text encoding
+        flags: u8,
     },
     /// BLOB
     Blob {
@@ -45,25 +47,68 @@ pub enum RawValue {
     },
 }
 
+#[cfg(feature = "pointer")]
+impl<T> From<(Rc<T>, &'static CStr)> for RawValue {
+    /// Pass a `Rc` as a raw pointer to SQLite
+    ///
+    /// # Warning
+    /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
+    fn from(value: (Rc<T>, &'static CStr)) -> Self {
+        unsafe extern "C" fn free_rc<T>(p: *mut std::ffi::c_void) {
+            unsafe {
+                Rc::decrement_strong_count(p.cast::<T>());
+            }
+        }
+        RawValue::Pointer {
+            ptr: Rc::into_raw(value.0) as *const _,
+            ptr_type: value.1,
+            destroy: Some(free_rc::<T>),
+        }
+    }
+}
+
+#[cfg(feature = "pointer")]
+impl<T> From<(Box<T>, &'static CStr)> for RawValue {
+    /// Pass a `Box` as a raw pointer to SQLite
+    ///
+    /// # Warning
+    /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
+    fn from(value: (Box<T>, &'static CStr)) -> Self {
+        RawValue::Pointer {
+            ptr: Box::into_raw(value.0) as *const _,
+            ptr_type: value.1,
+            destroy: Some(free_boxed_value::<T>),
+        }
+    }
+}
+
 impl From<CString> for RawValue {
+    /// Pass a `CString` as UTF-8 slice to SQLite
+    ///
+    /// # Warning
+    /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
     fn from(value: CString) -> Self {
         unsafe extern "C" fn free_cstring(p: *mut std::ffi::c_void) {
             drop(unsafe { CString::from_raw(p as *mut _) });
         }
         #[cfg(feature = "modern_sqlite")]
-        let flags: u64 = (SQLITE_UTF8 | crate::ffi::SQLITE_UTF8_ZT) as _;
+        let flags: u8 = (SQLITE_UTF8 | crate::ffi::SQLITE_UTF8_ZT) as _;
         #[cfg(not(feature = "modern_sqlite"))]
-        let flags: u64 = SQLITE_UTF8 as _;
+        let flags: u8 = SQLITE_UTF8 as _;
         let bytes = value.count_bytes();
         RawValue::Text {
             ptr: value.into_raw() as *const _,
             bytes,
-            flags,
             destroy: Some(free_cstring),
+            flags,
         }
     }
 }
 impl From<Rc<str>> for RawValue {
+    /// Pass a `Rc<str>` as UTF-8 slice to SQLite
+    ///
+    /// # Warning
+    /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
     fn from(value: Rc<str>) -> Self {
         unsafe extern "C" fn free_rc_str(p: *mut std::ffi::c_void) {
             unsafe { Rc::decrement_strong_count(p.cast::<*const str>()) };
@@ -73,12 +118,16 @@ impl From<Rc<str>> for RawValue {
         RawValue::Text {
             ptr: Rc::into_raw(rb) as *const _,
             bytes,
-            flags: SQLITE_UTF8 as _,
             destroy: Some(free_rc_str),
+            flags: SQLITE_UTF8 as _,
         }
     }
 }
 impl From<Rc<[u8]>> for RawValue {
+    /// Pass a `Rc<[u8]>` as a BLOB to SQLite
+    ///
+    /// # Warning
+    /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
     fn from(value: Rc<[u8]>) -> Self {
         unsafe extern "C" fn free_rc_slice(p: *mut std::ffi::c_void) {
             unsafe { Rc::decrement_strong_count(p.cast::<*const [u8]>()) };
@@ -92,6 +141,10 @@ impl From<Rc<[u8]>> for RawValue {
     }
 }
 impl<const N: usize> From<Box<[u8; N]>> for RawValue {
+    /// Pass a `Box<[u8; N]>` as a BLOB to SQLite
+    ///
+    /// # Warning
+    /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
     fn from(value: Box<[u8; N]>) -> Self {
         let bytes = value.len();
         RawValue::Blob {
@@ -109,6 +162,38 @@ mod test {
     use super::RawValue;
     use std::ffi::CString;
     use std::rc::Rc;
+
+    #[test]
+    fn rc_ptr() {
+        let rc = std::rc::Rc::new("rc".to_owned());
+        let rv = RawValue::from((rc, c"rc"));
+        let RawValue::Pointer {
+            ptr,
+            ptr_type,
+            destroy,
+        } = rv
+        else {
+            panic!("RawValue::Pointer expected");
+        };
+        assert_eq!(ptr_type, c"rc");
+        unsafe { destroy.unwrap()(ptr as *mut _) };
+    }
+
+    #[test]
+    fn box_ptr() {
+        let data = Box::new("box".to_owned());
+        let rv = RawValue::from((data, c"box"));
+        let RawValue::Pointer {
+            ptr,
+            ptr_type,
+            destroy,
+        } = rv
+        else {
+            panic!("RawValue::Pointer expected");
+        };
+        assert_eq!(ptr_type, c"box");
+        unsafe { destroy.unwrap()(ptr as *mut _) };
+    }
 
     #[test]
     fn cstring() {

@@ -5,7 +5,7 @@ use std::ffi::c_void;
 use crate::ffi::{self, sqlite3_context, sqlite3_value};
 use crate::{Result, str_for_sqlite};
 
-use crate::types::{ToSqlOutput, Value, ValueRef};
+use crate::types::{RawValue, ToSqlOutput, Value, ValueRef};
 
 // This function is inline despite it's size because what's in the ToSqlOutput
 // is often known to the compiler, and thus const prop/DCE can substantially
@@ -28,8 +28,19 @@ pub(super) unsafe fn set_result(
         }
         ToSqlOutput::Borrowed(ValueRef::Text(s)) => result_text(ctx, s),
         ToSqlOutput::Owned(Value::Text(s)) => result_text(ctx, s.as_bytes()),
+        ToSqlOutput::Raw(RawValue::Text {
+            ptr,
+            bytes,
+            destroy,
+            flags,
+        }) => unsafe { ffi::sqlite3_result_text64(ctx, ptr, bytes as _, destroy, flags) },
         ToSqlOutput::Borrowed(ValueRef::Blob(b)) => result_blob(ctx, b),
         ToSqlOutput::Owned(Value::Blob(b)) => result_blob(ctx, b.as_slice()),
+        ToSqlOutput::Raw(RawValue::Blob {
+            ptr,
+            bytes,
+            destroy,
+        }) => unsafe { ffi::sqlite3_result_blob64(ctx, ptr, bytes as _, destroy) },
         #[cfg(feature = "blob")]
         ToSqlOutput::ZeroBlob(len) => {
             let code = unsafe { ffi::sqlite3_result_zeroblob64(ctx, len) };
@@ -44,8 +55,12 @@ pub(super) unsafe fn set_result(
             unsafe { ffi::sqlite3_result_value(ctx, args[i]) };
         }
         #[cfg(feature = "pointer")]
-        ToSqlOutput::Pointer(ref p) => {
-            unsafe { ffi::sqlite3_result_pointer(ctx, p.0 as _, p.1.as_ptr(), p.2) };
+        ToSqlOutput::Raw(RawValue::Pointer {
+            ptr,
+            ptr_type,
+            destroy,
+        }) => {
+            unsafe { ffi::sqlite3_result_pointer(ctx, ptr as _, ptr_type.as_ptr(), destroy) };
         }
     }
     Ok(())
