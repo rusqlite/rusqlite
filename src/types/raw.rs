@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// Raw value to be passed to SQLite (`sqlite3_bind_*` or `sqlite3_result_*`)
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub enum RawValue {
     //Null,
     //Integer(i64),

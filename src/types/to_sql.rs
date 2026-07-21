@@ -6,7 +6,7 @@ use std::borrow::Cow;
 
 /// `ToSqlOutput` represents the possible output types for implementers of the
 /// [`ToSql`] trait.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum ToSqlOutput<'a> {
     /// A borrowed SQLite-representable value.
@@ -325,23 +325,9 @@ mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use super::{ToSql, ToSqlOutput};
-    use crate::{Result, types::Value, types::ValueRef};
+    use super::ToSql;
 
     fn is_to_sql<T: ToSql>() {}
-
-    #[test]
-    fn to_sql() -> Result<()> {
-        assert_eq!(
-            ToSqlOutput::Borrowed(ValueRef::Null).to_sql()?,
-            ToSqlOutput::Borrowed(ValueRef::Null)
-        );
-        assert_eq!(
-            ToSqlOutput::Owned(Value::Null).to_sql()?,
-            ToSqlOutput::Borrowed(ValueRef::Null)
-        );
-        Ok(())
-    }
 
     #[test]
     fn test_integral_types() {
