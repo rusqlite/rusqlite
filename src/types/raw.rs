@@ -1,5 +1,7 @@
+#[cfg(feature = "pointer")]
+use std::ffi::CStr;
 use std::{
-    ffi::{CStr, CString, c_char, c_void},
+    ffi::{CString, c_char, c_void},
     rc::Rc,
 };
 
@@ -164,6 +166,7 @@ mod test {
     use std::rc::Rc;
 
     #[test]
+    #[cfg(feature = "pointer")]
     fn rc_ptr() {
         let rc = std::rc::Rc::new("rc".to_owned());
         let rv = RawValue::from((rc, c"rc"));
@@ -180,6 +183,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "pointer")]
     fn box_ptr() {
         let data = Box::new("box".to_owned());
         let rv = RawValue::from((data, c"box"));
@@ -226,7 +230,7 @@ mod test {
             panic!("RawValue::Text expected");
         };
         assert_eq!(bytes, 13);
-        assert_eq!(flags, SQLITE_UTF8 as _);
+        assert_eq!(flags, SQLITE_UTF8 as u8);
         unsafe { destroy.unwrap()(ptr as *mut _) };
     }
 

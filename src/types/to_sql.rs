@@ -326,6 +326,8 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::ToSql;
+    #[cfg(any(feature = "i128_blob", feature = "uuid"))]
+    use crate::Result;
 
     fn is_to_sql<T: ToSql>() {}
 
