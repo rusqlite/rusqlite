@@ -72,7 +72,7 @@ impl ToSql for DateTimeSql {
 
 pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
 pub use self::raw::RawValue;
-pub use self::to_sql::{ToSql, ToSqlOutput};
+pub use self::to_sql::{IntoSql, ToSql, ToSqlOutput};
 pub use self::value::Value;
 pub use self::value_ref::ValueRef;
 

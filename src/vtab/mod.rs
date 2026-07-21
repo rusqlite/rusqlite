@@ -22,7 +22,7 @@ use crate::context::set_result;
 use crate::error::{check, error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
-use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
+use crate::types::{FromSql, FromSqlError, IntoSql, ValueRef};
 use crate::util::{alloc, free_boxed_value};
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
@@ -804,8 +804,8 @@ pub struct Context(*mut ffi::sqlite3_context);
 impl Context {
     /// Set current cell value
     #[inline]
-    pub fn set_result<T: ToSql>(&mut self, value: T) -> Result<()> {
-        let t = value.to_sql()?;
+    pub fn set_result<T: IntoSql>(&mut self, value: T) -> Result<()> {
+        let t = value.into_sql()?;
         unsafe { set_result(self.0, &[], t) }
     }
 

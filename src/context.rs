@@ -1,11 +1,9 @@
 //! Code related to `sqlite3_context` common to `functions` and `vtab` modules.
 
-use std::ffi::c_void;
+use crate::Result;
+use crate::ffi::{self, SQLITE_STATIC, SQLITE_UTF8, sqlite3_context, sqlite3_value};
 
-use crate::ffi::{self, sqlite3_context, sqlite3_value};
-use crate::{Result, str_for_sqlite};
-
-use crate::types::{RawValue, ToSqlOutput, Value, ValueRef};
+use crate::types::RawValue;
 
 // This function is inline despite it's size because what's in the ToSqlOutput
 // is often known to the compiler, and thus const prop/DCE can substantially
@@ -14,35 +12,33 @@ use crate::types::{RawValue, ToSqlOutput, Value, ValueRef};
 pub(super) unsafe fn set_result(
     ctx: *mut sqlite3_context,
     #[allow(unused_variables)] args: &[*mut sqlite3_value],
-    result: ToSqlOutput<'_>,
+    result: RawValue,
 ) -> Result<()> {
     match result {
-        ToSqlOutput::Borrowed(ValueRef::Null) | ToSqlOutput::Owned(Value::Null) => {
+        RawValue::Null => {
             unsafe { ffi::sqlite3_result_null(ctx) };
         }
-        ToSqlOutput::Borrowed(ValueRef::Integer(i)) | ToSqlOutput::Owned(Value::Integer(i)) => {
+        RawValue::Integer(i) => {
             unsafe { ffi::sqlite3_result_int64(ctx, i) };
         }
-        ToSqlOutput::Borrowed(ValueRef::Real(r)) | ToSqlOutput::Owned(Value::Real(r)) => {
+        RawValue::Real(r) => {
             unsafe { ffi::sqlite3_result_double(ctx, r) };
         }
-        ToSqlOutput::Borrowed(ValueRef::Text(s)) => result_text(ctx, s),
-        ToSqlOutput::Owned(Value::Text(s)) => result_text(ctx, s.as_bytes()),
-        ToSqlOutput::Raw(RawValue::Text {
+        RawValue::Text {
             ptr,
             bytes,
-            destroy,
+            destructor,
             flags,
-        }) => unsafe { ffi::sqlite3_result_text64(ctx, ptr, bytes as _, destroy, flags) },
-        ToSqlOutput::Borrowed(ValueRef::Blob(b)) => result_blob(ctx, b),
-        ToSqlOutput::Owned(Value::Blob(b)) => result_blob(ctx, b.as_slice()),
-        ToSqlOutput::Raw(RawValue::Blob {
+        } => unsafe { ffi::sqlite3_result_text64(ctx, ptr, bytes.get() as _, destructor, flags) },
+        RawValue::EmptyText => unsafe {
+            ffi::sqlite3_result_text64(ctx, "".as_ptr() as _, 0, SQLITE_STATIC(), SQLITE_UTF8 as _);
+        },
+        RawValue::Blob {
             ptr,
             bytes,
-            destroy,
-        }) => unsafe { ffi::sqlite3_result_blob64(ctx, ptr, bytes as _, destroy) },
-        #[cfg(feature = "blob")]
-        ToSqlOutput::ZeroBlob(len) => {
+            destructor,
+        } => unsafe { ffi::sqlite3_result_blob64(ctx, ptr, bytes.get() as _, destructor) },
+        RawValue::ZeroBlob(len) => {
             let code = unsafe { ffi::sqlite3_result_zeroblob64(ctx, len) };
             if code != ffi::SQLITE_OK {
                 return Err(unsafe {
@@ -51,39 +47,17 @@ pub(super) unsafe fn set_result(
             }
         }
         #[cfg(feature = "functions")]
-        ToSqlOutput::Arg(i) => {
+        RawValue::Arg(i) => {
             unsafe { ffi::sqlite3_result_value(ctx, args[i]) };
         }
         #[cfg(feature = "pointer")]
-        ToSqlOutput::Raw(RawValue::Pointer {
+        RawValue::Pointer {
             ptr,
             ptr_type,
-            destroy,
-        }) => {
-            unsafe { ffi::sqlite3_result_pointer(ctx, ptr as _, ptr_type.as_ptr(), destroy) };
+            destructor,
+        } => {
+            unsafe { ffi::sqlite3_result_pointer(ctx, ptr as _, ptr_type.as_ptr(), destructor) };
         }
     }
     Ok(())
-}
-
-fn result_blob(ctx: *mut sqlite3_context, b: &[u8]) {
-    let length = b.len();
-    if length == 0 {
-        unsafe { ffi::sqlite3_result_zeroblob64(ctx, 0) };
-    } else {
-        unsafe {
-            ffi::sqlite3_result_blob64(
-                ctx,
-                b.as_ptr().cast::<c_void>(),
-                length as ffi::sqlite3_uint64,
-                ffi::SQLITE_TRANSIENT(),
-            );
-        };
-    }
-}
-
-fn result_text(ctx: *mut sqlite3_context, s: &[u8]) {
-    let (c_str, len, destructor) = str_for_sqlite(s);
-    unsafe { ffi::sqlite3_result_text64(ctx, c_str, len, destructor, ffi::SQLITE_UTF8 as _) };
-    // TODO SQLITE_UTF8_ZT
 }

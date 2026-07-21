@@ -15,11 +15,6 @@ pub enum ToSqlOutput<'a> {
     /// An owned SQLite-representable value.
     Owned(Value),
 
-    /// A BLOB of the given length that is filled with
-    /// zeroes.
-    #[cfg(feature = "blob")]
-    ZeroBlob(u64),
-
     /// n-th arg of an SQL scalar function
     #[cfg(feature = "functions")]
     Arg(usize),
@@ -119,13 +114,36 @@ impl ToSql for ToSqlOutput<'_> {
         Ok(match *self {
             ToSqlOutput::Borrowed(v) => ToSqlOutput::Borrowed(v),
             ToSqlOutput::Owned(ref v) => ToSqlOutput::Borrowed(ValueRef::from(v)),
-
-            #[cfg(feature = "blob")]
-            ToSqlOutput::ZeroBlob(i) => ToSqlOutput::ZeroBlob(i),
             #[cfg(feature = "functions")]
             ToSqlOutput::Arg(i) => ToSqlOutput::Arg(i),
             ToSqlOutput::Raw(v) => ToSqlOutput::Raw(v),
         })
+    }
+}
+/// A by-value conversion trait to `RawValue`
+pub trait IntoSql {
+    /// Converts Rust value to SQLite value
+    fn into_sql(self) -> Result<RawValue>;
+}
+impl<T: ToSql + ?Sized> IntoSql for &T {
+    fn into_sql(self) -> Result<RawValue> {
+        Ok(match self.to_sql()? {
+            ToSqlOutput::Borrowed(v) => RawValue::from(v),
+            ToSqlOutput::Owned(v) => RawValue::from(v),
+            ToSqlOutput::Raw(r) => r,
+            #[cfg(feature = "functions")]
+            ToSqlOutput::Arg(i) => RawValue::Arg(i),
+        })
+    }
+}
+impl IntoSql for RawValue {
+    fn into_sql(self) -> Result<RawValue> {
+        Ok(self)
+    }
+}
+impl IntoSql for Value {
+    fn into_sql(self) -> Result<RawValue> {
+        Ok(RawValue::from(self))
     }
 }
 

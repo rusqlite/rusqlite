@@ -676,7 +676,7 @@ mod tests {
         let ptr = ToSqlOutput::Raw(RawValue::Pointer {
             ptr: &p_ret as *const *mut fts5_api as _,
             ptr_type: PTR_TYPE,
-            destroy: None,
+            destructor: None,
         });
         let db = Connection::open_in_memory()?;
         db.query_row("SELECT fts5(?)", [ptr], |_| Ok(()))?;

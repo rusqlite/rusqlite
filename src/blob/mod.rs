@@ -191,7 +191,7 @@ use std::io;
 use std::ptr;
 
 use super::ffi;
-use super::types::{ToSql, ToSqlOutput};
+use super::types::{RawValue, ToSql, ToSqlOutput};
 use crate::{Connection, Name, Result};
 
 mod pos_io;
@@ -413,8 +413,7 @@ pub struct ZeroBlob(pub u64);
 impl ToSql for ZeroBlob {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let Self(length) = *self;
-        Ok(ToSqlOutput::ZeroBlob(length))
+        Ok(ToSqlOutput::Raw(RawValue::ZeroBlob(self.0)))
     }
 }
 

@@ -66,7 +66,7 @@ use crate::ffi::sqlite3_context;
 use crate::ffi::sqlite3_value;
 
 use crate::context::set_result;
-use crate::types::{FromSql, FromSqlError, ToSql, ToSqlOutput, ValueRef};
+use crate::types::{FromSql, FromSqlError, IntoSql, RawValue, ValueRef};
 use crate::util::free_boxed_value;
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
@@ -304,19 +304,19 @@ pub type SubType = Option<c_uint>;
 /// Result of an SQL function
 pub trait SqlFnOutput {
     /// Converts Rust value to SQLite value with an optional subtype
-    fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)>;
+    fn into_sql(self) -> Result<(RawValue, SubType)>;
 }
 
-impl<T: ToSql> SqlFnOutput for T {
+impl<T: IntoSql> SqlFnOutput for T {
     #[inline]
-    fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> {
-        ToSql::to_sql(self).map(|o| (o, None))
+    fn into_sql(self) -> Result<(RawValue, SubType)> {
+        IntoSql::into_sql(self).map(|o| (o, None))
     }
 }
 
-impl<T: ToSql> SqlFnOutput for (T, SubType) {
-    fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> {
-        ToSql::to_sql(&self.0).map(|o| (o, self.1))
+impl<T: IntoSql> SqlFnOutput for (T, SubType) {
+    fn into_sql(self) -> Result<(RawValue, SubType)> {
+        IntoSql::into_sql(self.0).map(|o| (o, self.1))
     }
 }
 
@@ -324,9 +324,9 @@ impl<T: ToSql> SqlFnOutput for (T, SubType) {
 pub struct SqlFnArg {
     idx: usize,
 }
-impl ToSql for SqlFnArg {
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::Arg(self.idx))
+impl IntoSql for SqlFnArg {
+    fn into_sql(self) -> Result<RawValue> {
+        Ok(RawValue::Arg(self.idx))
     }
 }
 
@@ -348,7 +348,7 @@ unsafe fn _sql_result<T: SqlFnOutput>(
     r: Result<T>,
 ) -> Result<()> {
     let r = r?;
-    let (value, sub_type) = r.to_sql()?;
+    let (value, sub_type) = r.into_sql()?;
     unsafe {
         set_result(ctx, args, value)?;
         if let Some(sub_type) = sub_type {
