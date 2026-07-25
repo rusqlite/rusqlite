@@ -817,7 +817,7 @@ mod loadable_extension {
         output.push('\n');
     }
 
-    fn extract_method(ty: &syn::Type) -> Option<&syn::TypeBareFn> {
+    fn extract_method(ty: &syn::Type) -> Option<&syn::TypeFnPtr> {
         match ty {
             syn::Type::Path(tp) => tp.path.segments.last(),
             _ => None,
@@ -831,7 +831,7 @@ mod loadable_extension {
             _ => None,
         })?
         .map(|ty| match ty {
-            syn::Type::BareFn(r) => Some(r),
+            syn::Type::FnPtr(r) => Some(r),
             _ => None,
         })?
     }
