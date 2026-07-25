@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     ffi::{SQLITE_STATIC, SQLITE_TRANSIENT, SQLITE_UTF8, sqlite3_destructor_type},
-    types::{Value, ValueRef},
+    types::{Null, Value, ValueRef},
     util::free_boxed_value,
 };
 
@@ -62,6 +62,110 @@ pub enum RawValue {
     ZeroBlob(u64),
 }
 
+impl From<Null> for RawValue {
+    #[inline]
+    fn from(_: Null) -> Self {
+        Self::Null
+    }
+}
+impl From<isize> for RawValue {
+    #[inline]
+    fn from(i: isize) -> Self {
+        Self::Integer(i as i64)
+    }
+}
+macro_rules! from_i64(
+    ($t:ty) => (
+        impl From<$t> for RawValue {
+            #[inline]
+            fn from(i: $t) -> Self {
+                Self::Integer(i64::from(i))
+            }
+        }
+    );
+    (non_zero $t:ty) => (
+        impl From<$t> for RawValue {
+            #[inline]
+            fn from(t: $t) -> Self { Self::from(t.get()) }
+        }
+    )
+);
+from_i64!(bool);
+from_i64!(i8);
+from_i64!(i16);
+from_i64!(i32);
+from_i64!(u8);
+from_i64!(u16);
+from_i64!(u32);
+impl From<i64> for RawValue {
+    #[inline]
+    fn from(i: i64) -> Self {
+        Self::Integer(i)
+    }
+}
+from_i64!(non_zero std::num::NonZeroI8);
+from_i64!(non_zero std::num::NonZeroI16);
+from_i64!(non_zero std::num::NonZeroI32);
+from_i64!(non_zero std::num::NonZeroI64);
+from_i64!(non_zero std::num::NonZeroIsize);
+from_i64!(non_zero std::num::NonZeroU8);
+from_i64!(non_zero std::num::NonZeroU16);
+from_i64!(non_zero std::num::NonZeroU32);
+
+impl From<f32> for RawValue {
+    #[inline]
+    fn from(f: f32) -> Self {
+        Self::Real(f.into())
+    }
+}
+impl From<f64> for RawValue {
+    #[inline]
+    fn from(f: f64) -> Self {
+        Self::Real(f)
+    }
+}
+impl From<String> for RawValue {
+    fn from(s: String) -> Self {
+        if let Some(bytes) = NonZeroUsize::new(s.len()) {
+            Self::Text {
+                ptr: s.as_ptr() as _,
+                bytes,
+                destructor: SQLITE_TRANSIENT(),
+                flags: SQLITE_UTF8 as _,
+            }
+        } else {
+            Self::EmptyText
+        }
+    }
+}
+
+impl From<Vec<u8>> for RawValue {
+    #[inline]
+    fn from(v: Vec<u8>) -> Self {
+        if let Some(bytes) = NonZeroUsize::new(v.len()) {
+            Self::Blob {
+                ptr: v.as_ptr() as _,
+                bytes,
+                destructor: SQLITE_TRANSIENT(),
+            }
+        } else {
+            Self::ZeroBlob(0)
+        }
+    }
+}
+impl<T> From<Option<T>> for RawValue
+where
+    T: Into<Self>,
+{
+    #[inline]
+    fn from(v: Option<T>) -> Self {
+        match v {
+            Some(x) => x.into(),
+            None => Self::Null,
+        }
+    }
+}
+
 impl<'a> From<ValueRef<'a>> for RawValue {
     fn from(value: ValueRef<'a>) -> Self {
         match value {
@@ -101,29 +205,8 @@ impl From<Value> for RawValue {
             Value::Null => Self::Null,
             Value::Integer(i) => Self::Integer(i),
             Value::Real(r) => Self::Real(r),
-            Value::Text(t) => {
-                if let Some(bytes) = NonZeroUsize::new(t.len()) {
-                    Self::Text {
-                        ptr: t.as_ptr() as _,
-                        bytes,
-                        destructor: SQLITE_TRANSIENT(),
-                        flags: SQLITE_UTF8 as _,
-                    }
-                } else {
-                    Self::EmptyText
-                }
-            }
-            Value::Blob(b) => {
-                if let Some(bytes) = NonZeroUsize::new(b.len()) {
-                    Self::Blob {
-                        ptr: b.as_ptr() as _,
-                        bytes,
-                        destructor: SQLITE_TRANSIENT(),
-                    }
-                } else {
-                    Self::ZeroBlob(0)
-                }
-            }
+            Value::Text(t) => t.into(),
+            Value::Blob(b) => b.into(),
         }
     }
 }
