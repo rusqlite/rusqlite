@@ -262,7 +262,7 @@ unsafe impl VTabCursor for SeriesTabCursor<'_> {
             SERIES_COLUMN_STEP => self.step,
             _ => self.value,
         };
-        ctx.set_result(&x)
+        ctx.set_result(x)
     }
 
     fn rowid(&self) -> Result<i64> {

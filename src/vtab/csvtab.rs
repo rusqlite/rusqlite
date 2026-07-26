@@ -331,10 +331,10 @@ unsafe impl VTabCursor for CsvTabCursor<'_> {
             )));
         }
         if self.cols.is_empty() {
-            return ctx.set_result(&Null);
+            return ctx.set_result(Null);
         }
         // TODO Affinity
-        ctx.set_result(&self.cols[col as usize].to_owned())
+        ctx.set_result(&self.cols[col as usize])
     }
 
     fn rowid(&self) -> Result<i64> {
@@ -373,7 +373,7 @@ mod test {
         {
             let mut s = db.prepare("SELECT rowid, * FROM vtab")?;
             {
-                let headers = s.column_names();
+                let headers = s.column_names().collect::<Vec<_>>();
                 assert_eq!(vec!["rowid", "colA", "colB", "colC"], headers);
             }
 

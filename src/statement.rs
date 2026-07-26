@@ -2,13 +2,13 @@ use std::ffi::{c_int, c_void};
 use std::slice::from_raw_parts;
 use std::{fmt, mem, ptr, str};
 
-use super::ffi;
+use super::ffi::{self, sqlite3_stmt};
 use super::str_for_sqlite;
 use super::{
     AndThenRows, Connection, Error, MappedRows, Params, RawStatement, Result, Row, Rows, ValueRef,
 };
 use crate::bind::BindIndex;
-use crate::types::{ToSql, ToSqlOutput};
+use crate::types::{ToSql, ToSqlOutput, Value};
 
 /// A prepared statement.
 pub struct Statement<'conn> {
@@ -615,16 +615,33 @@ impl Statement<'_> {
         let value = param.to_sql()?;
 
         let ptr = unsafe { self.stmt.ptr() };
-        let value = match value {
-            ToSqlOutput::Borrowed(v) => v,
-            ToSqlOutput::Owned(ref v) => ValueRef::from(v),
-
+        self.conn.decode_result(match value {
+            ToSqlOutput::Borrowed(ValueRef::Null) | ToSqlOutput::Owned(Value::Null) => {
+                unsafe { ffi::sqlite3_bind_null(ptr, ndx as c_int) }
+            },
+            ToSqlOutput::Borrowed(ValueRef::Integer(i)) | ToSqlOutput::Owned(Value::Integer(i)) => {
+                unsafe { ffi::sqlite3_bind_int64(ptr, ndx as c_int, i) }
+            },
+            ToSqlOutput::Borrowed(ValueRef::Real(r)) | ToSqlOutput::Owned(Value::Real(r)) => {
+                unsafe { ffi::sqlite3_bind_double(ptr, ndx as c_int, r) }
+            },
+            ToSqlOutput::Borrowed(ValueRef::Text(s)) => {
+                Self::bind_text(ptr, ndx, s)
+            },
+             ToSqlOutput::Owned(Value::Text(s)) => {
+                Self::bind_text(ptr, ndx, s.as_bytes())
+            },
+            ToSqlOutput::Borrowed(ValueRef::Blob(b)) => {
+                Self::bind_blob(ptr, ndx, b)
+            },
+            ToSqlOutput::Owned(Value::Blob(b)) => {
+                Self::bind_blob(ptr, ndx, b.as_slice())
+            },
             #[cfg(feature = "blob")]
             ToSqlOutput::ZeroBlob(len) => {
-                // TODO sqlite3_bind_zeroblob64 // 3.8.11
-                return self
-                    .conn
-                    .decode_result(unsafe { ffi::sqlite3_bind_zeroblob(ptr, ndx as c_int, len) });
+                unsafe {
+                    ffi::sqlite3_bind_zeroblob64(ptr, ndx as c_int, len)
+                }
             }
             #[cfg(feature = "functions")]
             ToSqlOutput::Arg(_) => {
@@ -632,41 +649,42 @@ impl Statement<'_> {
             }
             #[cfg(feature = "pointer")]
             ToSqlOutput::Pointer(p) => {
-                return self.conn.decode_result(unsafe {
+                unsafe {
                     ffi::sqlite3_bind_pointer(ptr, ndx as c_int, p.0 as _, p.1.as_ptr(), p.2)
-                });
-            }
-        };
-        self.conn.decode_result(match value {
-            ValueRef::Null => unsafe { ffi::sqlite3_bind_null(ptr, ndx as c_int) },
-            ValueRef::Integer(i) => unsafe { ffi::sqlite3_bind_int64(ptr, ndx as c_int, i) },
-            ValueRef::Real(r) => unsafe { ffi::sqlite3_bind_double(ptr, ndx as c_int, r) },
-            ValueRef::Text(s) => unsafe {
-                let (c_str, len, destructor) = str_for_sqlite(s);
-                ffi::sqlite3_bind_text64(
-                    ptr,
-                    ndx as c_int,
-                    c_str,
-                    len,
-                    destructor,
-                    ffi::SQLITE_UTF8 as _, // TODO SQLITE_UTF8_ZT
-                )
-            },
-            ValueRef::Blob(b) => unsafe {
-                let length = b.len();
-                if length == 0 {
-                    ffi::sqlite3_bind_zeroblob(ptr, ndx as c_int, 0)
-                } else {
-                    ffi::sqlite3_bind_blob64(
-                        ptr,
-                        ndx as c_int,
-                        b.as_ptr().cast::<c_void>(),
-                        length as ffi::sqlite3_uint64,
-                        ffi::SQLITE_TRANSIENT(),
-                    )
                 }
-            },
+            }
         })
+    }
+
+    fn bind_text(stmt: *mut sqlite3_stmt, ndx: usize, s: &[u8]) -> c_int {
+        unsafe {
+            let (c_str, len, destructor) = str_for_sqlite(s);
+            ffi::sqlite3_bind_text64(
+                stmt,
+                ndx as c_int,
+                c_str,
+                len,
+                destructor,
+                ffi::SQLITE_UTF8 as _, // TODO SQLITE_UTF8_ZT
+            )
+        }
+    }
+
+    fn bind_blob(stmt: *mut sqlite3_stmt, ndx: usize, b: &[u8]) -> c_int {
+        unsafe {
+            let length = b.len();
+            if length == 0 {
+                ffi::sqlite3_bind_zeroblob64(stmt, ndx as c_int, 0)
+            } else {
+                ffi::sqlite3_bind_blob64(
+                    stmt,
+                    ndx as c_int,
+                    b.as_ptr().cast::<c_void>(),
+                    length as ffi::sqlite3_uint64,
+                    ffi::SQLITE_TRANSIENT(),
+                )
+            }
+        }
     }
 
     #[inline]

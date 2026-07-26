@@ -173,7 +173,7 @@ unsafe impl VTabCursor for ArrayTabCursor<'_> {
             _ => {
                 if let Some(array) = self.ptr {
                     let value = &array[(self.row_id - 1) as usize];
-                    ctx.set_result(&value)
+                    ctx.set_result(value)
                 } else {
                     Ok(())
                 }

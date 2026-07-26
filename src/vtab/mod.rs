@@ -804,10 +804,9 @@ pub struct Context(*mut ffi::sqlite3_context);
 impl Context {
     /// Set current cell value
     #[inline]
-    pub fn set_result<T: ToSql>(&mut self, value: &T) -> Result<()> {
+    pub fn set_result<T: ToSql>(&mut self, value: T) -> Result<()> {
         let t = value.to_sql()?;
-        unsafe { set_result(self.0, &[], &t) };
-        Ok(())
+        unsafe { set_result(self.0, &[], t) }
     }
 
     /// Determine if column access is for UPDATE

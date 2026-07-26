@@ -4,10 +4,10 @@ use litrs::StringLit;
 use proc_macro::{Delimiter, Group, Literal, Span, TokenStream, TokenTree};
 
 use fallible_iterator::FallibleIterator;
+use sqlite3_parser::Bump;
 use sqlite3_parser::ast::ParameterInfo;
 use sqlite3_parser::ast::fmt::ToTokens;
 use sqlite3_parser::lexer::sql::Parser;
-use sqlite3_parser::Bump;
 
 // https://internals.rust-lang.org/t/custom-error-diagnostics-with-procedural-macros-on-almost-stable-rust/8113
 

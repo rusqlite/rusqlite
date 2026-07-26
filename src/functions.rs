@@ -335,19 +335,27 @@ unsafe fn sql_result<T: SqlFnOutput>(
     args: &[*mut sqlite3_value],
     r: Result<T>,
 ) {
-    let t = r.as_ref().map(SqlFnOutput::to_sql);
     unsafe {
-        match t {
-            Ok(Ok((ref value, sub_type))) => {
-                set_result(ctx, args, value);
-                if let Some(sub_type) = sub_type {
-                    ffi::sqlite3_result_subtype(ctx, sub_type);
-                }
-            }
-            Ok(Err(err)) => report_error(ctx, &err),
-            Err(err) => report_error(ctx, err),
+        if let Err(err) = _sql_result(ctx, args, r) {
+            report_error(ctx, &err);
         }
     }
+}
+
+unsafe fn _sql_result<T: SqlFnOutput>(
+    ctx: *mut sqlite3_context,
+    args: &[*mut sqlite3_value],
+    r: Result<T>,
+) -> Result<()> {
+    let r = r?;
+    let (value, sub_type) = r.to_sql()?;
+    unsafe {
+        set_result(ctx, args, value)?;
+        if let Some(sub_type) = sub_type {
+            ffi::sqlite3_result_subtype(ctx, sub_type);
+        }
+    }
+    Ok(())
 }
 
 /// Aggregate is the callback interface for user-defined

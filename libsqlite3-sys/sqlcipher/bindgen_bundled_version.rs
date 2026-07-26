@@ -23,13 +23,13 @@ unsafe extern "C" {
     ) -> ::core::ffi::c_int;
 }
 
-pub const SQLITE_VERSION: &::core::ffi::CStr = c"3.51.3";
-pub const SQLITE_VERSION_NUMBER: i32 = 3051003;
+pub const SQLITE_VERSION: &::core::ffi::CStr = c"3.53.3";
+pub const SQLITE_VERSION_NUMBER: i32 = 3053003;
 pub const SQLITE_SOURCE_ID: &::core::ffi::CStr =
-    c"2026-03-13 10:38:09 737ae4a34738ffa0c3ff7f9bb18df914dd1cad163f28fd6b6e114a344fe6alt1";
-pub const SQLITE_SCM_BRANCH: &::core::ffi::CStr = c"branch-3.51";
-pub const SQLITE_SCM_TAGS: &::core::ffi::CStr = c"release version-3.51.3";
-pub const SQLITE_SCM_DATETIME: &::core::ffi::CStr = c"2026-03-13T10:38:09.694Z";
+    c"2026-06-26 20:14:12 d4c0e51e4aeb96955b99185ab9cde75c339e2c29c3f3f12428d364a10d78alt1";
+pub const SQLITE_SCM_BRANCH: &::core::ffi::CStr = c"branch-3.53";
+pub const SQLITE_SCM_TAGS: &::core::ffi::CStr = c"release version-3.53.3";
+pub const SQLITE_SCM_DATETIME: &::core::ffi::CStr = c"2026-06-26T20:14:12.354Z";
 pub const SQLITE_OK: i32 = 0;
 pub const SQLITE_ERROR: i32 = 1;
 pub const SQLITE_INTERNAL: i32 = 2;
@@ -297,7 +297,8 @@ pub const SQLITE_DBCONFIG_REVERSE_SCANORDER: i32 = 1019;
 pub const SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE: i32 = 1020;
 pub const SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE: i32 = 1021;
 pub const SQLITE_DBCONFIG_ENABLE_COMMENTS: i32 = 1022;
-pub const SQLITE_DBCONFIG_MAX: i32 = 1022;
+pub const SQLITE_DBCONFIG_FP_DIGITS: i32 = 1023;
+pub const SQLITE_DBCONFIG_MAX: i32 = 1023;
 pub const SQLITE_SETLK_BLOCK_ON_CONNECT: i32 = 1;
 pub const SQLITE_DENY: i32 = 1;
 pub const SQLITE_IGNORE: i32 = 2;
@@ -351,10 +352,12 @@ pub const SQLITE_LIMIT_LIKE_PATTERN_LENGTH: i32 = 8;
 pub const SQLITE_LIMIT_VARIABLE_NUMBER: i32 = 9;
 pub const SQLITE_LIMIT_TRIGGER_DEPTH: i32 = 10;
 pub const SQLITE_LIMIT_WORKER_THREADS: i32 = 11;
+pub const SQLITE_LIMIT_PARSER_DEPTH: i32 = 12;
 pub const SQLITE_PREPARE_PERSISTENT: ::core::ffi::c_uint = 1;
 pub const SQLITE_PREPARE_NORMALIZE: ::core::ffi::c_uint = 2;
 pub const SQLITE_PREPARE_NO_VTAB: ::core::ffi::c_uint = 4;
 pub const SQLITE_PREPARE_DONT_LOG: ::core::ffi::c_uint = 16;
+pub const SQLITE_PREPARE_FROM_DDL: ::core::ffi::c_uint = 32;
 pub const SQLITE_INTEGER: i32 = 1;
 pub const SQLITE_FLOAT: i32 = 2;
 pub const SQLITE_BLOB: i32 = 4;
@@ -367,6 +370,7 @@ pub const SQLITE_UTF16BE: i32 = 3;
 pub const SQLITE_UTF16: i32 = 4;
 pub const SQLITE_ANY: i32 = 5;
 pub const SQLITE_UTF16_ALIGNED: i32 = 8;
+pub const SQLITE_UTF8_ZT: i32 = 16;
 pub const SQLITE_DETERMINISTIC: i32 = 2048;
 pub const SQLITE_DIRECTONLY: i32 = 524288;
 pub const SQLITE_SUBTYPE: i32 = 1048576;
@@ -450,6 +454,7 @@ pub const SQLITE_TESTCTRL_TRACEFLAGS: i32 = 31;
 pub const SQLITE_TESTCTRL_TUNE: i32 = 32;
 pub const SQLITE_TESTCTRL_LOGEST: i32 = 33;
 pub const SQLITE_TESTCTRL_USELONGDOUBLE: i32 = 34;
+pub const SQLITE_TESTCTRL_ATOF: i32 = 34;
 pub const SQLITE_TESTCTRL_LAST: i32 = 34;
 pub const SQLITE_STATUS_MEMORY_USED: i32 = 0;
 pub const SQLITE_STATUS_PAGECACHE_USED: i32 = 1;
@@ -530,6 +535,7 @@ pub const SQLITE_CHANGESETAPPLY_NOSAVEPOINT: i32 = 1;
 pub const SQLITE_CHANGESETAPPLY_INVERT: i32 = 2;
 pub const SQLITE_CHANGESETAPPLY_IGNORENOOP: i32 = 4;
 pub const SQLITE_CHANGESETAPPLY_FKNOACTION: i32 = 8;
+pub const SQLITE_CHANGESETAPPLY_NOUPDATELOOP: i32 = 16;
 pub const SQLITE_CHANGESET_DATA: i32 = 1;
 pub const SQLITE_CHANGESET_NOTFOUND: i32 = 2;
 pub const SQLITE_CHANGESET_CONFLICT: i32 = 3;
@@ -539,6 +545,7 @@ pub const SQLITE_CHANGESET_OMIT: i32 = 0;
 pub const SQLITE_CHANGESET_REPLACE: i32 = 1;
 pub const SQLITE_CHANGESET_ABORT: i32 = 2;
 pub const SQLITE_SESSION_CONFIG_STRMSIZE: i32 = 1;
+pub const SQLITE_CHANGEGROUP_CONFIG_PATCHSET: i32 = 1;
 pub const FTS5_TOKENIZE_QUERY: i32 = 1;
 pub const FTS5_TOKENIZE_PREFIX: i32 = 2;
 pub const FTS5_TOKENIZE_DOCUMENT: i32 = 4;
@@ -1637,9 +1644,9 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn sqlite3_result_text64(
         arg1: *mut sqlite3_context,
-        arg2: *const ::core::ffi::c_char,
-        arg3: sqlite3_uint64,
-        arg4: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>,
+        z: *const ::core::ffi::c_char,
+        n: sqlite3_uint64,
+        arg2: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>,
         encoding: ::core::ffi::c_uchar,
     );
 }
@@ -2236,6 +2243,9 @@ unsafe extern "C" {
     pub fn sqlite3_str_finish(arg1: *mut sqlite3_str) -> *mut ::core::ffi::c_char;
 }
 unsafe extern "C" {
+    pub fn sqlite3_str_free(arg1: *mut sqlite3_str);
+}
+unsafe extern "C" {
     pub fn sqlite3_str_appendf(arg1: *mut sqlite3_str, zFormat: *const ::core::ffi::c_char, ...);
 }
 unsafe extern "C" {
@@ -2257,6 +2267,9 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn sqlite3_str_reset(arg1: *mut sqlite3_str);
+}
+unsafe extern "C" {
+    pub fn sqlite3_str_truncate(arg1: *mut sqlite3_str, N: ::core::ffi::c_int);
 }
 unsafe extern "C" {
     pub fn sqlite3_str_errcode(arg1: *mut sqlite3_str) -> ::core::ffi::c_int;
@@ -2681,6 +2694,17 @@ unsafe extern "C" {
         szDb: sqlite3_int64,
         szBuf: sqlite3_int64,
         mFlags: ::core::ffi::c_uint,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlite3_carray_bind_v2(
+        pStmt: *mut sqlite3_stmt,
+        i: ::core::ffi::c_int,
+        aData: *mut ::core::ffi::c_void,
+        nData: ::core::ffi::c_int,
+        mFlags: ::core::ffi::c_int,
+        xDel: ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>,
+        pDel: *mut ::core::ffi::c_void,
     ) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
@@ -3292,6 +3316,70 @@ unsafe extern "C" {
     pub fn sqlite3session_config(
         op: ::core::ffi::c_int,
         pArg: *mut ::core::ffi::c_void,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlite3changegroup_config(
+        arg1: *mut sqlite3_changegroup,
+        arg2: ::core::ffi::c_int,
+        pArg: *mut ::core::ffi::c_void,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlite3changegroup_change_begin(
+        arg1: *mut sqlite3_changegroup,
+        eOp: ::core::ffi::c_int,
+        zTab: *const ::core::ffi::c_char,
+        bIndirect: ::core::ffi::c_int,
+        pzErr: *mut *mut ::core::ffi::c_char,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlite3changegroup_change_int64(
+        arg1: *mut sqlite3_changegroup,
+        bNew: ::core::ffi::c_int,
+        iCol: ::core::ffi::c_int,
+        iVal: sqlite3_int64,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlite3changegroup_change_null(
+        arg1: *mut sqlite3_changegroup,
+        arg2: ::core::ffi::c_int,
+        arg3: ::core::ffi::c_int,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlite3changegroup_change_double(
+        arg1: *mut sqlite3_changegroup,
+        arg2: ::core::ffi::c_int,
+        arg3: ::core::ffi::c_int,
+        arg4: f64,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlite3changegroup_change_text(
+        arg1: *mut sqlite3_changegroup,
+        arg2: ::core::ffi::c_int,
+        arg3: ::core::ffi::c_int,
+        pVal: *const ::core::ffi::c_char,
+        nVal: ::core::ffi::c_int,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlite3changegroup_change_blob(
+        arg1: *mut sqlite3_changegroup,
+        arg2: ::core::ffi::c_int,
+        arg3: ::core::ffi::c_int,
+        pVal: *const ::core::ffi::c_void,
+        nVal: ::core::ffi::c_int,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn sqlite3changegroup_change_finish(
+        arg1: *mut sqlite3_changegroup,
+        bDiscard: ::core::ffi::c_int,
+        pzErr: *mut *mut ::core::ffi::c_char,
     ) -> ::core::ffi::c_int;
 }
 #[repr(C)]

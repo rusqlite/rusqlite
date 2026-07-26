@@ -83,7 +83,7 @@ fn test_dummy_module() -> rusqlite::Result<()> {
         }
 
         fn column(&self, ctx: &mut Context, _: c_int) -> Result<()> {
-            ctx.set_result(&self.row_id)
+            ctx.set_result(self.row_id)
         }
 
         fn rowid(&self) -> Result<i64> {

@@ -18,7 +18,7 @@ pub enum ToSqlOutput<'a> {
     /// A BLOB of the given length that is filled with
     /// zeroes.
     #[cfg(feature = "blob")]
-    ZeroBlob(i32),
+    ZeroBlob(u64),
 
     /// n-th arg of an SQL scalar function
     #[cfg(feature = "functions")]

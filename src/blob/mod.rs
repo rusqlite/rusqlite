@@ -408,7 +408,7 @@ impl Drop for Blob<'_> {
 ///
 /// A negative value for the zeroblob results in a zero-length BLOB.
 #[derive(Copy, Clone)]
-pub struct ZeroBlob(pub i32);
+pub struct ZeroBlob(pub u64);
 
 impl ToSql for ZeroBlob {
     #[inline]
