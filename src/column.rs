@@ -77,14 +77,8 @@ impl Statement<'_> {
     /// If associated DB schema can be altered concurrently, you should make
     /// sure that current statement has already been stepped once before
     /// calling this method.
-    pub fn column_names(&self) -> Vec<&str> {
-        let n = self.column_count();
-        let mut cols = Vec::with_capacity(n);
-        for i in 0..n {
-            let s = self.column_name_unwrap(i);
-            cols.push(s);
-        }
-        cols
+    pub fn column_names(&self) -> impl DoubleEndedIterator<Item = &str> + ExactSizeIterator {
+        ColumnsIter::new(self, |s, i| s.column_name_unwrap(i))
     }
 
     /// Return the number of columns in the result set returned by the prepared
@@ -185,51 +179,40 @@ impl Statement<'_> {
     /// sure that current statement has already been stepped once before
     /// calling this method.
     #[cfg(feature = "column_decltype")]
-    pub fn columns(&self) -> Vec<Column<'_>> {
-        let n = self.column_count();
-        let mut cols = Vec::with_capacity(n);
-        for i in 0..n {
-            let name = self.column_name_unwrap(i);
-            let slice = self.stmt.column_decltype(i);
-            let decl_type = slice.map(|s| {
+    pub fn columns(&self) -> impl DoubleEndedIterator<Item = Column<'_>> + ExactSizeIterator {
+        ColumnsIter::new(self, |s, i| Column {
+            name: s.column_name_unwrap(i),
+            decl_type: s.stmt.column_decltype(i).map(|s| {
                 s.to_str()
                     .expect("Invalid UTF-8 sequence in column declaration")
-            });
-            cols.push(Column { name, decl_type });
-        }
-        cols
+            }),
+        })
     }
 
     /// Returns the names of the database, table, and row from which
     /// each column of this query's results originate.
     ///
     /// Computed or otherwise derived columns will have None values for these fields.
+    // FIXME
     #[cfg(feature = "column_metadata")]
-    pub fn columns_with_metadata(&self) -> Vec<ColumnMetadata<'_>> {
-        let n = self.column_count();
-        let mut col_mets = Vec::with_capacity(n);
-        for i in 0..n {
-            let name = self.column_name_unwrap(i);
-            let db_slice = self.stmt.column_database_name(i);
-            let tbl_slice = self.stmt.column_table_name(i);
-            let origin_slice = self.stmt.column_origin_name(i);
-            col_mets.push(ColumnMetadata {
-                name,
-                database_name: db_slice.map(|s| {
-                    s.to_str()
-                        .expect("Invalid UTF-8 sequence in column db name")
-                }),
-                table_name: tbl_slice.map(|s| {
-                    s.to_str()
-                        .expect("Invalid UTF-8 sequence in column table name")
-                }),
-                origin_name: origin_slice.map(|s| {
-                    s.to_str()
-                        .expect("Invalid UTF-8 sequence in column origin name")
-                }),
-            });
-        }
-        col_mets
+    pub fn columns_with_metadata(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = ColumnMetadata<'_>> + ExactSizeIterator {
+        ColumnsIter::new(self, |s, i| ColumnMetadata {
+            name: s.column_name_unwrap(i),
+            database_name: s.stmt.column_database_name(i).map(|s| {
+                s.to_str()
+                    .expect("Invalid UTF-8 sequence in column db name")
+            }),
+            table_name: s.stmt.column_table_name(i).map(|s| {
+                s.to_str()
+                    .expect("Invalid UTF-8 sequence in column table name")
+            }),
+            origin_name: s.stmt.column_origin_name(i).map(|s| {
+                s.to_str()
+                    .expect("Invalid UTF-8 sequence in column origin name")
+            }),
+        })
     }
 
     /// Extract metadata of column at specified index
@@ -393,6 +376,47 @@ impl Connection {
     }
 }
 
+struct ColumnsIter<'s, T> {
+    stmt: &'s Statement<'s>,
+    range: std::ops::Range<usize>,
+    map: fn(stmt: &'s Statement<'s>, col: usize) -> T,
+}
+impl<'s, T> ColumnsIter<'s, T> {
+    fn new(stmt: &'s Statement<'s>, map: fn(stmt: &'s Statement<'s>, col: usize) -> T) -> Self {
+        Self {
+            stmt,
+            range: 0..stmt.column_count(),
+            map,
+        }
+    }
+}
+impl<'s, T> Iterator for ColumnsIter<'s, T> {
+    type Item = T;
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        Some((self.map)(self.stmt, self.range.next()?))
+    }
+    #[inline]
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        Some((self.map)(self.stmt, self.range.nth(n)?))
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.range.size_hint()
+    }
+}
+impl<'s, T> DoubleEndedIterator for ColumnsIter<'s, T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        Some((self.map)(self.stmt, self.range.next_back()?))
+    }
+    #[inline]
+    fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
+        Some((self.map)(self.stmt, self.range.nth_back(n)?))
+    }
+}
+impl<'s, T> ExactSizeIterator for ColumnsIter<'s, T> {}
+
 #[cfg(all(test, not(miri)))]
 mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
@@ -407,7 +431,7 @@ mod test {
 
         let db = Connection::open_in_memory()?;
         let query = db.prepare("SELECT * FROM sqlite_master")?;
-        let columns = query.columns();
+        let columns = query.columns().collect::<Vec<_>>();
         let column_names: Vec<&str> = columns.iter().map(Column::name).collect();
         assert_eq!(
             column_names.as_slice(),
@@ -434,7 +458,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         let query = db.prepare("SELECT *, 1 FROM sqlite_master")?;
 
-        let col_mets = query.columns_with_metadata();
+        let col_mets = query.columns_with_metadata().collect::<Vec<_>>();
 
         assert_eq!(col_mets.len(), 6);
 
