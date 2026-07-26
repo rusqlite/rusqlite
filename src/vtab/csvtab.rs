@@ -373,7 +373,7 @@ mod test {
         {
             let mut s = db.prepare("SELECT rowid, * FROM vtab")?;
             {
-                let headers = s.column_names();
+                let headers = s.column_names().collect::<Vec<_>>();
                 assert_eq!(vec!["rowid", "colA", "colB", "colC"], headers);
             }
 

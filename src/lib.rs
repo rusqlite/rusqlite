@@ -1615,11 +1615,11 @@ mod test {
 
         let stmt = db.prepare("SELECT * FROM foo")?;
         assert_eq!(stmt.column_count(), 1);
-        assert_eq!(stmt.column_names(), vec!["x"]);
+        assert_eq!(stmt.column_names().collect::<Vec<_>>(), vec!["x"]);
 
         let stmt = db.prepare("SELECT x AS a, x AS b FROM foo")?;
         assert_eq!(stmt.column_count(), 2);
-        assert_eq!(stmt.column_names(), vec!["a", "b"]);
+        assert_eq!(stmt.column_names().collect::<Vec<_>>(), vec!["a", "b"]);
         Ok(())
     }
 
