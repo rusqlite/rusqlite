@@ -10,7 +10,7 @@
 //!
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
 use std::borrow::Cow::{self, Borrowed, Owned};
-use std::ffi::{CStr, c_char, c_int, c_void};
+use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr;
@@ -941,6 +941,19 @@ impl Values<'_> {
         })
     }
 
+    /// Returns the subtype of value at `idx`.
+    ///
+    /// # Failure
+    ///
+    /// Will panic if `idx` is greater than or equal to
+    /// [`self.len()`](Values::len).
+    #[inline]
+    #[must_use]
+    pub fn get_subtype(&self, idx: usize) -> c_uint {
+        let arg = self.args[idx];
+        unsafe { ffi::sqlite3_value_subtype(arg) }
+    }
+
     /// Return raw pointer at `idx`
     /// # Safety
     /// This function is unsafe because it uses raw pointer and cast
@@ -1646,5 +1659,169 @@ mod test {
             Ok(("key", Cow::Borrowed("foo=bar"))),
             super::parameter(b"key='foo=bar'")
         );
+    }
+
+    #[cfg(all(feature = "functions", not(miri)))]
+    #[test]
+    fn test_values_get_subtype() -> crate::Result<()> {
+        use std::ffi::{CStr, c_int, c_uint};
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        use crate::ffi;
+        use crate::functions::{FunctionFlags, SqlFnArg, SubType};
+        use crate::types::Value;
+        use crate::vtab::{
+            Context, CreateVTab, Filters, IndexConstraintOp, IndexInfo, Inserts, Module,
+            UpdateVTab, Updates, VTab, VTabConnection, VTabCursor, VTabKind,
+        };
+        use crate::{Connection, Result};
+
+        static FILTER_SUBTYPE: AtomicU32 = AtomicU32::new(0);
+        static INSERT_SUBTYPE: AtomicU32 = AtomicU32::new(0);
+
+        fn set_subtype(ctx: &crate::functions::Context<'_>) -> Result<(SqlFnArg, SubType)> {
+            let value = ctx.get_arg(0);
+            let sub_type = ctx.get::<c_uint>(1)?;
+            Ok((value, Some(sub_type)))
+        }
+
+        #[repr(C)]
+        struct SubTypeVTab {
+            base: ffi::sqlite3_vtab,
+        }
+        #[repr(C)]
+        struct SubTypeVTabCursor {
+            base: ffi::sqlite3_vtab_cursor,
+        }
+
+        unsafe impl<'vtab> VTab<'vtab> for SubTypeVTab {
+            type Aux = ();
+            type Cursor = SubTypeVTabCursor;
+
+            fn connect(
+                _db: &mut VTabConnection,
+                _aux: Option<&Self::Aux>,
+                _module_name: &[u8],
+                _database_name: &[u8],
+                _table_name: &[u8],
+                _args: &[&[u8]],
+            ) -> Result<(Cow<'static, CStr>, Self)> {
+                Ok((
+                    Cow::Borrowed(c"CREATE TABLE x(value BLOB)"),
+                    Self {
+                        base: ffi::sqlite3_vtab::default(),
+                    },
+                ))
+            }
+
+            fn best_index(&self, info: &mut IndexInfo) -> Result<bool> {
+                let mut argv_index = 1;
+                let mut usable_constraints = Vec::new();
+                for (i, constraint) in info.constraints().enumerate() {
+                    if constraint.is_usable()
+                        && constraint.operator() == IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ
+                    {
+                        usable_constraints.push(i);
+                    }
+                }
+                for i in usable_constraints {
+                    let mut usage = info.constraint_usage(i);
+                    usage.set_argv_index(argv_index);
+                    usage.set_omit(true);
+                    argv_index += 1;
+                }
+                info.set_estimated_cost(1.0);
+                Ok(true)
+            }
+
+            fn open(&'vtab mut self) -> Result<Self::Cursor> {
+                Ok(SubTypeVTabCursor {
+                    base: ffi::sqlite3_vtab_cursor::default(),
+                })
+            }
+        }
+
+        impl CreateVTab<'_> for SubTypeVTab {
+            const KIND: VTabKind = VTabKind::Default;
+        }
+
+        impl UpdateVTab<'_> for SubTypeVTab {
+            fn delete(&mut self, _arg: crate::types::ValueRef<'_>) -> Result<()> {
+                Ok(())
+            }
+
+            fn insert(&mut self, args: &Inserts<'_>) -> Result<i64> {
+                // args[0]: old rowid (NULL for new rows)
+                // args[1]: new rowid
+                // args[2]: first column value
+                INSERT_SUBTYPE.store(args.get_subtype(2), Ordering::SeqCst);
+                Ok(0)
+            }
+
+            fn update(&mut self, _args: &Updates<'_>) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        unsafe impl VTabCursor for SubTypeVTabCursor {
+            fn filter(
+                &mut self,
+                _idx_num: c_int,
+                _idx_str: Option<&str>,
+                args: &Filters<'_>,
+            ) -> Result<()> {
+                FILTER_SUBTYPE.store(args.get_subtype(0), Ordering::SeqCst);
+                Ok(())
+            }
+
+            fn next(&mut self) -> Result<()> {
+                Ok(())
+            }
+
+            fn eof(&self) -> bool {
+                true
+            }
+
+            fn column(&self, ctx: &mut Context, _i: c_int) -> Result<()> {
+                ctx.set_result(Value::Null)
+            }
+
+            fn rowid(&self) -> Result<i64> {
+                Ok(0)
+            }
+        }
+
+        let db = Connection::open_in_memory()?;
+        db.create_scalar_function(
+            c"set_subtype",
+            2,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_RESULT_SUBTYPE,
+            set_subtype,
+        )?;
+        const MODULE: Module<SubTypeVTab> = Module::update_module();
+        db.create_module(c"subtype_vtab", &MODULE, None)?;
+
+        db.execute("CREATE VIRTUAL TABLE st USING subtype_vtab()", [])?;
+
+        FILTER_SUBTYPE.store(0, Ordering::SeqCst);
+        INSERT_SUBTYPE.store(0, Ordering::SeqCst);
+
+        // Test filter callback can read subtype from scalar function result.
+        let _: Result<String> = db.query_row(
+            "SELECT value FROM st WHERE value = set_subtype('a', 223)",
+            [],
+            |row| row.get(0),
+        );
+        assert_eq!(FILTER_SUBTYPE.load(Ordering::SeqCst), 223);
+
+        // Test insert callback can read subtype from scalar function result.
+        // Use a BLOB literal as input so the value remains a BLOB when inserted.
+        db.execute(
+            "INSERT INTO st(rowid, value) VALUES (1, set_subtype(X'62', 225))",
+            [],
+        )?;
+        assert_eq!(INSERT_SUBTYPE.load(Ordering::SeqCst), 225);
+
+        Ok(())
     }
 }
