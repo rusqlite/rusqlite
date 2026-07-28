@@ -558,9 +558,6 @@ impl Connection {
                 .prepare(self, sql, PrepFlags::default())?;
             if !stmt.stmt.is_null() && stmt.step()? {
                 // Some PRAGMA may return rows
-                if false {
-                    return Err(Error::ExecuteReturnedResults);
-                }
             }
             if tail == 0 || tail >= sql.len() {
                 break;
