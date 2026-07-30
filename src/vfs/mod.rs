@@ -16,8 +16,8 @@ pub mod memvfs;
 use crate::ffi::{
     sqlite3_file, sqlite3_filename, sqlite3_int64, sqlite3_io_methods, sqlite3_vfs, Error,
 };
-use crate::{ffi as sqlite3, vfs};
-use libsqlite3_sys::{sqlite3_malloc, SQLITE_NOMEM};
+use crate::ffi as sqlite3;
+use libsqlite3_sys::sqlite3_malloc;
 use rand::RngCore;
 use std::borrow::Cow;
 use std::ffi::{c_char, c_int, CStr, CString, OsStr};
@@ -31,7 +31,7 @@ use std::sync::atomic::{self, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, SystemTime};
-use std::{error, result};
+use std::error;
 use std::{mem, slice};
 
 use crate::{Connection, OpenFlags};
