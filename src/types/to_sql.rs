@@ -202,6 +202,12 @@ macro_rules! to_sql_self(
                 Ok(ToSqlOutput::from(*self))
             }
         }
+        impl IntoSql for $t {
+            #[inline]
+            fn into_sql(self) -> Result<RawValue> {
+                Ok(RawValue::from(self))
+            }
+        }
     )
 );
 
