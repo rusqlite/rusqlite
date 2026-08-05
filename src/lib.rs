@@ -6,7 +6,7 @@
 //! intended.
 //!
 //! ```rust
-//! use rusqlite::{params, Connection, Result};
+//! use rusqlite::{Connection, Result, params};
 //!
 //! #[derive(Debug)]
 //! struct Person {
@@ -72,7 +72,7 @@ pub use sqlite_wasm_rs as ffi;
 
 use std::cell::RefCell;
 use std::default::Default;
-use std::ffi::{CStr, CString, c_char, c_int, c_uint};
+use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
 use std::fmt;
 
 use std::path::Path;
@@ -354,6 +354,8 @@ fn path_to_cstring(p: &Path) -> Result<CString> {
 
 /// Shorthand for `Main` database.
 pub const MAIN_DB: &CStr = c"main";
+/// Shorthand for default name.
+pub const DEFAULT_NAME: Option<&CStr> = None;
 /// Shorthand for `Temp` database.
 pub const TEMP_DB: &CStr = c"temp";
 
@@ -1110,8 +1112,44 @@ impl Connection {
 
     /// Set error code and message
     #[cfg(feature = "modern_sqlite")] // 3.51.0
-    pub fn set_errmsg(&self, code: c_int, msg: Option<&std::ffi::CStr>) -> Result<()> {
+    pub fn set_errmsg(&self, code: c_int, msg: Option<&CStr>) -> Result<()> {
         unsafe { error::set_errmsg(self.handle(), code, msg) }
+    }
+
+    /// Low-level control of database files
+    ///
+    /// See `https://sqlite.org/c3ref/file_control.html` for details.
+    pub fn file_control<N: Name>(&self, db_name: Option<N>, op_and_arg: FileControl) -> Result<()> {
+        let (op, arg) = match op_and_arg {
+            FileControl::SizeHint(p) => (ffi::SQLITE_FCNTL_SIZE_HINT, p as *mut _ as *mut c_void),
+            FileControl::SizeLimit(p) => (ffi::SQLITE_FCNTL_SIZE_LIMIT, p as *mut _ as *mut c_void),
+            FileControl::ChunkSize(p) => (ffi::SQLITE_FCNTL_CHUNK_SIZE, p as *mut _ as *mut c_void),
+            FileControl::PersistWal(p) => {
+                (ffi::SQLITE_FCNTL_PERSIST_WAL, p as *mut _ as *mut c_void)
+            }
+            FileControl::PowerSafeOverwrite(p) => (
+                ffi::SQLITE_FCNTL_POWERSAFE_OVERWRITE,
+                p as *mut _ as *mut c_void,
+            ),
+            FileControl::MMapSize(p) => (ffi::SQLITE_FCNTL_MMAP_SIZE, p as *mut _ as *mut c_void),
+            #[cfg(unix)]
+            FileControl::HasMoved(p) => (ffi::SQLITE_FCNTL_HAS_MOVED, p as *mut _ as *mut c_void),
+            FileControl::LockTimeout(p) => {
+                (ffi::SQLITE_FCNTL_LOCK_TIMEOUT, p as *mut _ as *mut c_void)
+            }
+            #[cfg(feature = "modern_sqlite")]
+            FileControl::BlockOnConnect(p) => (
+                ffi::SQLITE_FCNTL_BLOCK_ON_CONNECT,
+                p as *mut _ as *mut c_void,
+            ),
+            FileControl::DataVersion(p) => {
+                (ffi::SQLITE_FCNTL_DATA_VERSION, p as *mut _ as *mut c_void)
+            }
+            FileControl::ReserveBytes(p) => {
+                (ffi::SQLITE_FCNTL_RESERVE_BYTES, p as *mut _ as *mut c_void)
+            }
+        };
+        unsafe { self.db.borrow().file_control(db_name, op, arg) }
     }
 }
 
@@ -1161,8 +1199,8 @@ impl<'conn, 'sql> Batch<'conn, 'sql> {
     }
 }
 impl<'conn> fallible_iterator::FallibleIterator for Batch<'conn, '_> {
-    type Item = Statement<'conn>;
     type Error = Error;
+    type Item = Statement<'conn>;
 
     /// Iterates on each batch statements.
     ///
@@ -1310,11 +1348,46 @@ impl InterruptHandle {
     }
 }
 
+/// Standard File Control Opcodes
+///
+/// See `https://sqlite.org/c3ref/c_fcntl_begin_atomic_write.html` for explanations of each.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum FileControl<'p> {
+    // Write the current state of the lock
+    //LockState = ffi::SQLITE_FCNTL_LOCKSTATE,
+    /// Give the VFS layer a hint of how large the database file will grow to be during the current transaction.
+    SizeHint(&'p mut ffi::sqlite3_int64),
+    /// Used by in-memory VFS that implements sqlite3_deserialize() to set an upper bound on the size of the in-memory database.
+    SizeLimit(&'p mut ffi::sqlite3_int64),
+    /// Used to request that the VFS extends and truncates the database file in chunks of a size specified by the user.
+    ChunkSize(&'p mut c_int),
+    /// Used to set or query the persistent Write Ahead Log setting.
+    PersistWal(&'p mut c_int),
+    /// Used to set or query the persistent "powersafe-overwrite" or "PSOW" setting.
+    PowerSafeOverwrite(&'p mut c_int),
+    /// Used to query or set the maximum number of bytes that will be used for memory-mapped I/O.
+    MMapSize(&'p mut ffi::sqlite3_int64),
+    /// Whether or not the file has been renamed, moved, or deleted since it was first opened.
+    #[cfg(unix)]
+    HasMoved(&'p mut c_int),
+    /// Used to configure a VFS to block for up to M milliseconds before failing when attempting to obtain a file lock using the xLock or xShmLock methods of the VFS.
+    LockTimeout(&'p mut c_int),
+    /// Used to configure the VFS to block when taking a SHARED lock to connect to a wal mode database.
+    #[cfg(feature = "modern_sqlite")]
+    BlockOnConnect(&'p mut c_int),
+    /// Detect changes to a database file.
+    DataVersion(&'p mut c_uint),
+    /// Used to query or set the reserve bytes
+    ReserveBytes(&'p mut c_int),
+}
+
 #[cfg(doctest)]
 doc_comment::doctest!("../README.md");
 
 #[cfg(all(test, not(miri)))]
 mod test {
+    use std::assert_matches;
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -1444,18 +1517,16 @@ mod test {
     #[test]
     fn test_open_failure() {
         let filename = "no_such_file.db";
-        let result = Connection::open_with_flags(filename, OpenFlags::SQLITE_OPEN_READ_ONLY);
-        let err = result.unwrap_err();
-        if let Error::SqliteFailure(e, Some(msg)) = err {
-            assert_eq!(ErrorCode::CannotOpen, e.code);
-            assert_eq!(ffi::SQLITE_CANTOPEN, e.extended_code);
-            assert!(
-                msg.contains(filename),
-                "error message '{msg}' does not contain '{filename}'"
-            );
-        } else {
-            panic!("SqliteFailure expected");
-        }
+        assert_matches!(
+            Connection::open_with_flags(filename, OpenFlags::SQLITE_OPEN_READ_ONLY),
+            Err(Error::SqliteFailure(
+                ffi::Error {
+                    code: ErrorCode::CannotOpen,
+                    extended_code: ffi::SQLITE_CANTOPEN,
+                },
+                Some(msg)
+            )) if msg.contains(filename)
+        );
     }
 
     #[cfg(unix)]
@@ -1872,13 +1943,16 @@ mod test {
 
         let result = db.execute("INSERT INTO foo (x) VALUES (NULL)", []);
 
-        match result.unwrap_err() {
-            Error::SqliteFailure(err, _) => {
-                assert_eq!(err.code, ErrorCode::ConstraintViolation);
-                assert_eq!(err.extended_code, ffi::SQLITE_CONSTRAINT_NOTNULL);
-            }
-            err => panic!("Unexpected error {err}"),
-        }
+        assert_matches!(
+            result.unwrap_err(),
+            Error::SqliteFailure(
+                ffi::Error {
+                    code: ErrorCode::ConstraintViolation,
+                    extended_code: ffi::SQLITE_CONSTRAINT_NOTNULL
+                },
+                _
+            )
+        );
         Ok(())
     }
 
@@ -2367,6 +2441,69 @@ mod test {
             unsafe { std::ffi::CStr::from_ptr(ffi::sqlite3_errmsg(ptr)) },
             msg
         );
+        Ok(())
+    }
+
+    #[test]
+    fn file_control() -> Result<()> {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("file_control.db3");
+        let db = Connection::open(&path)?;
+
+        let mut size = 20971520;
+        db.file_control(DEFAULT_NAME, FileControl::SizeHint(&mut size))?;
+
+        let mut size = -1;
+        assert_matches!(
+            db.file_control(DEFAULT_NAME, FileControl::SizeLimit(&mut size),),
+            Err(Error::SqliteFailure(
+                ffi::Error {
+                    code: ffi::ErrorCode::NotFound,
+                    extended_code: ffi::SQLITE_NOTFOUND,
+                },
+                None
+            ))
+        );
+
+        let mut size = 32768;
+        db.file_control(DEFAULT_NAME, FileControl::ChunkSize(&mut size))?;
+
+        let mut persist_wal = -1;
+        db.file_control(DEFAULT_NAME, FileControl::PersistWal(&mut persist_wal))?;
+        assert_ne!(persist_wal, -1);
+        persist_wal = 1;
+        db.file_control(DEFAULT_NAME, FileControl::PersistWal(&mut persist_wal))?;
+
+        let mut psow = -1;
+        db.file_control(DEFAULT_NAME, FileControl::PowerSafeOverwrite(&mut psow))?;
+        assert_ne!(psow, -1);
+
+        let mut mmap_size = -1;
+        db.file_control(DEFAULT_NAME, FileControl::MMapSize(&mut mmap_size))?;
+        assert_ne!(mmap_size, -1);
+
+        #[cfg(unix)]
+        {
+            let mut has_moved = -1;
+            db.file_control(DEFAULT_NAME, FileControl::HasMoved(&mut has_moved))?;
+            assert_ne!(has_moved, -1);
+        }
+
+        #[cfg(feature = "modern_sqlite")]
+        {
+            let mut boc = 1;
+            db.file_control(DEFAULT_NAME, FileControl::BlockOnConnect(&mut boc))
+                .unwrap_err();
+        }
+
+        let mut data_version = 0;
+        db.file_control(DEFAULT_NAME, FileControl::DataVersion(&mut data_version))?;
+        assert_ne!(data_version, 0);
+
+        let mut reserve_bytes = -1;
+        db.file_control(DEFAULT_NAME, FileControl::ReserveBytes(&mut reserve_bytes))?;
+        assert_ne!(reserve_bytes, -1);
+
         Ok(())
     }
 }

@@ -248,7 +248,7 @@
 - [ ] `sqlite3_mutex_notheld`
 - [ ] `sqlite3_db_mutex`
 
-- [X] `sqlite3_file_control` (not public, internal use only)
+- [X] `sqlite3_file_control`
 - [ ] `sqlite3_test_control`
 
 - [ ] `sqlite3_keyword_count`
