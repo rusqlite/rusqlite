@@ -27,6 +27,7 @@ pub enum Named<'a> {
 }
 impl std::ops::Deref for Named<'_> {
     type Target = CStr;
+
     #[inline]
     fn deref(&self) -> &CStr {
         match self {

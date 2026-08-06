@@ -566,7 +566,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::DropBehavior;
-    use crate::{Connection, Error, Result};
+    use crate::{Connection, DEFAULT_NAME, Error, Result};
 
     fn checked_memory_handle() -> Result<Connection> {
         let db = Connection::open_in_memory()?;
@@ -804,13 +804,13 @@ mod test {
         use crate::MAIN_DB;
         let db = Connection::open_in_memory()?;
         assert_eq!(TransactionState::None, db.transaction_state(Some(MAIN_DB))?);
-        assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state(DEFAULT_NAME)?);
         db.execute_batch("BEGIN")?;
-        assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state(DEFAULT_NAME)?);
         let _: i32 = db.pragma_query_value(None, "user_version", |row| row.get(0))?;
-        assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
+        assert_eq!(TransactionState::Read, db.transaction_state(DEFAULT_NAME)?);
         db.pragma_update(None, "user_version", 1)?;
-        assert_eq!(TransactionState::Write, db.transaction_state::<&str>(None)?);
+        assert_eq!(TransactionState::Write, db.transaction_state(DEFAULT_NAME)?);
         db.execute_batch("ROLLBACK")?;
         Ok(())
     }
@@ -823,17 +823,17 @@ mod test {
         db.execute_batch("CREATE TABLE t(i UNIQUE);")?;
         assert!(db.is_autocommit());
         let mut stmt = db.prepare("SELECT name FROM sqlite_master")?;
-        assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
+        assert_eq!(TransactionState::None, db.transaction_state(DEFAULT_NAME)?);
         {
             let mut rows = stmt.query([])?;
             assert!(rows.next()?.is_some()); // start reading
-            assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
+            assert_eq!(TransactionState::Read, db.transaction_state(DEFAULT_NAME)?);
             db.execute("INSERT INTO t VALUES (1)", [])?; // auto-commit
-            assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
+            assert_eq!(TransactionState::Read, db.transaction_state(DEFAULT_NAME)?);
             assert!(rows.next()?.is_some()); // still reading
-            assert_eq!(TransactionState::Read, db.transaction_state::<&str>(None)?);
+            assert_eq!(TransactionState::Read, db.transaction_state(DEFAULT_NAME)?);
             assert!(rows.next()?.is_none()); // end
-            assert_eq!(TransactionState::None, db.transaction_state::<&str>(None)?);
+            assert_eq!(TransactionState::None, db.transaction_state(DEFAULT_NAME)?);
         }
         Ok(())
     }

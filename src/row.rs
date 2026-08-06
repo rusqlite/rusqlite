@@ -126,8 +126,8 @@ impl<F, B> FallibleIterator for Map<'_, F>
 where
     F: FnMut(&Row<'_>) -> Result<B>,
 {
-    type Item = B;
     type Error = Error;
+    type Item = B;
 
     #[inline]
     fn next(&mut self) -> Result<Option<B>> {
@@ -208,8 +208,8 @@ where
 /// }
 /// ```
 impl<'stmt> FallibleStreamingIterator for Rows<'stmt> {
-    type Item = Row<'stmt>;
     type Error = Error;
+    type Item = Row<'stmt>;
 
     #[inline]
     fn advance(&mut self) -> Result<()> {

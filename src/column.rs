@@ -392,14 +392,17 @@ impl<'s, T> ColumnsIter<'s, T> {
 }
 impl<'s, T> Iterator for ColumnsIter<'s, T> {
     type Item = T;
+
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         Some((self.map)(self.stmt, self.range.next()?))
     }
+
     #[inline]
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         Some((self.map)(self.stmt, self.range.nth(n)?))
     }
+
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.range.size_hint()
@@ -410,6 +413,7 @@ impl<'s, T> DoubleEndedIterator for ColumnsIter<'s, T> {
     fn next_back(&mut self) -> Option<Self::Item> {
         Some((self.map)(self.stmt, self.range.next_back()?))
     }
+
     #[inline]
     fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
         Some((self.map)(self.stmt, self.range.nth_back(n)?))
