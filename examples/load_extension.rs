@@ -1,6 +1,6 @@
 //! Ensure `loadable_extension.rs` works.
 
-use rusqlite::{Connection, Result};
+use rusqlite::{Connection, DEFAULT_NAME, Result};
 use std::env::consts::{DLL_PREFIX, DLL_SUFFIX};
 
 fn main() -> Result<()> {
@@ -10,7 +10,7 @@ fn main() -> Result<()> {
         db.load_extension_enable()?;
         db.load_extension(
             format!("target/debug/examples/{DLL_PREFIX}loadable_extension{DLL_SUFFIX}"),
-            None::<&str>,
+            DEFAULT_NAME,
         )?;
         db.load_extension_disable()?;
     }

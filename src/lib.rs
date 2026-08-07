@@ -6,7 +6,7 @@
 //! intended.
 //!
 //! ```rust
-//! use rusqlite::{params, Connection, Result};
+//! use rusqlite::{Connection, Result, params};
 //!
 //! #[derive(Debug)]
 //! struct Person {
@@ -354,6 +354,8 @@ fn path_to_cstring(p: &Path) -> Result<CString> {
 
 /// Shorthand for `Main` database.
 pub const MAIN_DB: &CStr = c"main";
+/// Shorthand for default name.
+pub const DEFAULT_NAME: Option<&'static str> = None;
 /// Shorthand for `Temp` database.
 pub const TEMP_DB: &CStr = c"temp";
 
@@ -831,13 +833,13 @@ impl Connection {
     /// # Example
     ///
     /// ```rust,no_run
-    /// # use rusqlite::{Connection, Result};
+    /// # use rusqlite::{Connection, DEFAULT_NAME, Result};
     /// fn load_my_extension(conn: &Connection) -> Result<()> {
     ///     // Safety: We fully trust the loaded extension and execute no untrusted SQL
     ///     // while extension loading is enabled.
     ///     unsafe {
     ///         conn.load_extension_enable()?;
-    ///         let r = conn.load_extension("my/trusted/extension", None::<&str>);
+    ///         let r = conn.load_extension("my/trusted/extension", DEFAULT_NAME);
     ///         conn.load_extension_disable()?;
     ///         r
     ///     }
@@ -904,13 +906,13 @@ impl Connection {
     /// ## Example
     ///
     /// ```rust,no_run
-    /// # use rusqlite::{Connection, Result, LoadExtensionGuard};
+    /// # use rusqlite::{Connection, DEFAULT_NAME, Result, LoadExtensionGuard};
     /// fn load_my_extension(conn: &Connection) -> Result<()> {
     ///     // Safety: we don't execute any SQL statements while
     ///     // extension loading is enabled.
     ///     let _guard = unsafe { LoadExtensionGuard::new(conn)? };
     ///     // Safety: `my_sqlite_extension` is highly trustworthy.
-    ///     unsafe { conn.load_extension("my_sqlite_extension", None::<&str>) }
+    ///     unsafe { conn.load_extension("my_sqlite_extension", DEFAULT_NAME) }
     /// }
     /// ```
     ///
@@ -1161,8 +1163,8 @@ impl<'conn, 'sql> Batch<'conn, 'sql> {
     }
 }
 impl<'conn> fallible_iterator::FallibleIterator for Batch<'conn, '_> {
-    type Item = Statement<'conn>;
     type Error = Error;
+    type Item = Statement<'conn>;
 
     /// Iterates on each batch statements.
     ///
