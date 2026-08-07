@@ -483,6 +483,7 @@ impl Wal {
     pub fn checkpoint(&self) -> Result<()> {
         unsafe { decode_result_raw(self.db, ffi::sqlite3_wal_checkpoint(self.db, self.db_name)) }
     }
+
     /// Checkpoint a database
     pub fn checkpoint_v2(&self, mode: CheckpointMode) -> Result<(c_int, c_int)> {
         let mut n_log = 0;

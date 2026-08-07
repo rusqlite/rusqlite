@@ -513,6 +513,7 @@ impl IndexInfo {
             (*self.0).needToFreeIdxStr = 1;
         }
     }
+
     /// String used to identify the index
     pub fn set_idx_cstr(&mut self, idx_str: &'static CStr) {
         unsafe {
@@ -604,6 +605,7 @@ impl IndexInfo {
         let idx = constraint_idx as c_int;
         Ok(unsafe { ffi::sqlite3_vtab_in(self.0, idx, -1) != 0 })
     }
+
     /// Handle IN constraints
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     pub fn set_in_constraint(&mut self, constraint_idx: usize, filter_all: bool) -> Result<bool> {
