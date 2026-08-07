@@ -2444,6 +2444,10 @@ mod test {
         Ok(())
     }
 
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
     #[test]
     fn file_control() -> Result<()> {
         let temp_dir = tempfile::tempdir().unwrap();
