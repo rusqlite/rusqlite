@@ -562,6 +562,7 @@ impl Connection {
 
 #[cfg(all(test, not(miri)))]
 mod test {
+    use std::assert_matches;
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -594,14 +595,16 @@ mod test {
         Ok(())
     }
     fn assert_nested_tx_error(e: Error) {
-        if let Error::SqliteFailure(e, Some(m)) = &e {
-            assert_eq!(e.extended_code, crate::ffi::SQLITE_ERROR);
-            // FIXME: Not ideal...
-            assert_eq!(e.code, crate::ErrorCode::Unknown);
-            assert!(m.contains("transaction"));
-        } else {
-            panic!("Unexpected error type: {e:?}");
-        }
+        assert_matches!(
+            e,
+            Error::SqliteFailure(
+                crate::ffi::Error {
+                    code: crate::ErrorCode::Unknown,
+                    extended_code: crate::ffi::SQLITE_ERROR,
+                },
+                Some(msg),
+            ) if msg.contains("transaction")
+        );
     }
 
     #[test]

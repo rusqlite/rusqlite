@@ -1,4 +1,4 @@
-use std::ffi::{CStr, c_char, c_int};
+use std::ffi::{CStr, c_char, c_int, c_void};
 #[cfg(feature = "load_extension")]
 use std::path::Path;
 use std::ptr;
@@ -368,6 +368,18 @@ impl InnerConnection {
     #[cfg(feature = "modern_sqlite")] // 3.41.0
     pub fn is_interrupted(&self) -> bool {
         unsafe { ffi::sqlite3_is_interrupted(self.db) == 1 }
+    }
+
+    pub unsafe fn file_control<N: Name>(
+        &self,
+        db_name: Option<N>,
+        op: c_int,
+        arg: *mut c_void,
+    ) -> Result<()> {
+        let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
+        let cn = cs.as_ref().map(|s| s.as_ptr()).unwrap_or(ptr::null());
+        // error code is not remembered and will not be recalled by sqlite3_errcode() or sqlite3_errmsg()
+        crate::error::check(unsafe { ffi::sqlite3_file_control(self.db, cn, op, arg) })
     }
 
     #[cfg(any(feature = "hooks", feature = "preupdate_hook"))]
