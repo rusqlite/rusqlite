@@ -51,6 +51,23 @@
 //!     Ok(())
 //! }
 //! ```
+//!
+//! # Optional Cargo features
+//!
+//! Most optional capabilities are gated behind Cargo features. Notable ones:
+//!
+//! - **`bundled`** — compile and link a bundled SQLite (recommended on Windows and when
+//!   you do not want to depend on a system SQLite). Prefer this for applications; libraries
+//!   that wrap `rusqlite` often leave it off so dependents can choose.
+//! - **`backup`**, **`blob`**, **`functions`**, **`trace`**, **`hooks`**, **`vtab`** —
+//!   expose the corresponding SQLite APIs / extension points.
+//! - **`chrono`**, **`time`**, **`uuid`**, **`serde_json`**, **`url`**, **`jiff`** —
+//!   `FromSql` / `ToSql` integrations for those crates.
+//! - **`sqlcipher`** / **`bundled-sqlcipher`** — link or bundle SQLCipher instead of SQLite.
+//!
+//! See the crate [README](https://github.com/rusqlite/rusqlite#optional-features) for the
+//! full feature list, SQLite version requirements, and build notes
+//! (`SQLITE3_LIB_DIR`, `bundled` flags, and so on).
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
