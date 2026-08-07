@@ -345,10 +345,10 @@ mod test {
                     assert_eq!(d.cmp(&Duration::ZERO), Ordering::Greater);
                     // Timers on the web are not very accurate
                     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-                    assert!(matches!(
+                    std::assert_matches!(
                         d.cmp(&Duration::ZERO),
                         Ordering::Equal | Ordering::Greater
-                    ));
+                    );
                 }
                 TraceEvent::Row(s) => {
                     assert_eq!(s.expanded_sql().as_deref(), Some(s.sql().borrow()));
