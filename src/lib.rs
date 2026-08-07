@@ -355,7 +355,7 @@ fn path_to_cstring(p: &Path) -> Result<CString> {
 /// Shorthand for `Main` database.
 pub const MAIN_DB: &CStr = c"main";
 /// Shorthand for default name.
-pub const DEFAULT_NAME: Option<&CStr> = None;
+pub const DEFAULT_NAME: Option<&'static str> = None;
 /// Shorthand for `Temp` database.
 pub const TEMP_DB: &CStr = c"temp";
 
