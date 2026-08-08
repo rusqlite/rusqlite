@@ -27,7 +27,7 @@ In your Cargo.toml:
 # That said, it's not ideal for all scenarios and in particular, generic
 # libraries built around `rusqlite` should probably not enable it, which
 # is why it is not a default feature -- it could become hard to disable.
-rusqlite = { version = "0.40.1", features = ["bundled"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
 ```
 
 Simple example usage:
@@ -159,8 +159,8 @@ You can adjust this behavior in a number of ways:
 * If you use the `bundled`, `bundled-sqlcipher`, or `bundled-sqlcipher-vendored-openssl` features, `libsqlite3-sys` will use the
   [cc](https://crates.io/crates/cc) crate to compile SQLite or SQLCipher from source and
   link against that. This source is embedded in the `libsqlite3-sys` crate and
-  is currently SQLite 3.53.2 (as of `rusqlite` 0.40.1 / `libsqlite3-sys`
-  0.38.1).  This is probably the simplest solution to any build problems. You can enable this by adding the following in your `Cargo.toml` file:
+  is currently SQLite 3.53.2 (as of `rusqlite` 0.40.2 / `libsqlite3-sys`
+  0.38.2).  This is probably the simplest solution to any build problems. You can enable this by adding the following in your `Cargo.toml` file:
   ```toml
   [dependencies.rusqlite]
   version = "0.40.1"
