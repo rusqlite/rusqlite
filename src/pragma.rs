@@ -29,8 +29,12 @@ impl Sql {
         }
         const SQL: &str = "SELECT 1 FROM pragma_pragma_list WHERE name = ?";
         let mut stmt = cfg_select! {
-            feature = "cache" => {conn.prepare_cached(SQL)}
-            _ => conn.prepare(SQL)
+            feature = "cache" => {
+                conn.prepare_cached(SQL)
+            }
+            _ => {
+                conn.prepare(SQL)
+            }
         }?;
         if stmt.exists([pragma_name])? {
             self.buf.push_str(pragma_name);
