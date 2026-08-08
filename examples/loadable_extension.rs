@@ -39,9 +39,7 @@ fn extension_init(db: Connection) -> Result<bool> {
         0,
         FunctionFlags::SQLITE_DETERMINISTIC,
         |_ctx| {
-            Ok(ToSqlOutput::Owned(Value::Text(
-                "Rusqlite extension loaded correctly!".to_string(),
-            )))
+            Ok("Rusqlite extension loaded correctly!".to_string())
         },
     )?;
     rusqlite::trace::log(ffi::SQLITE_WARNING, "Rusqlite extension initialized");

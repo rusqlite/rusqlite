@@ -26,13 +26,6 @@ impl From<Null> for Value {
     }
 }
 
-impl From<bool> for Value {
-    #[inline]
-    fn from(i: bool) -> Self {
-        Self::Integer(i as i64)
-    }
-}
-
 impl From<isize> for Value {
     #[inline]
     fn from(i: isize) -> Self {
@@ -62,13 +55,14 @@ macro_rules! from_i64(
     ($t:ty) => (
         impl From<$t> for Value {
             #[inline]
-            fn from(i: $t) -> Value {
-                Value::Integer(i64::from(i))
+            fn from(i: $t) -> Self {
+                Self::Integer(i64::from(i))
             }
         }
     )
 );
 
+from_i64!(bool);
 from_i64!(i8);
 from_i64!(i16);
 from_i64!(i32);

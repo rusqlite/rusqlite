@@ -65,8 +65,7 @@ use crate::ffi;
 use crate::ffi::sqlite3_context;
 use crate::ffi::sqlite3_value;
 
-use crate::context::set_result;
-use crate::types::{FromSql, FromSqlError, ToSql, ToSqlOutput, ValueRef};
+use crate::types::{Assign, FromSql, FromSqlError, IntoSql, ToSql, ToSqlOutput, ValueRef};
 use crate::util::free_boxed_value;
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
@@ -304,19 +303,19 @@ pub type SubType = Option<c_uint>;
 /// Result of an SQL function
 pub trait SqlFnOutput {
     /// Converts Rust value to SQLite value with an optional subtype
-    fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)>;
+    fn into_sql<A: Assign>(self, a: A) -> Result<SubType>;
 }
 
-impl<T: ToSql> SqlFnOutput for T {
+impl<T: IntoSql> SqlFnOutput for T {
     #[inline]
-    fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> {
-        ToSql::to_sql(self).map(|o| (o, None))
+    fn into_sql<A: Assign>(self, a: A) -> Result<SubType> {
+        IntoSql::into_sql(self, a).map(|_| None)
     }
 }
 
-impl<T: ToSql> SqlFnOutput for (T, SubType) {
-    fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> {
-        ToSql::to_sql(&self.0).map(|o| (o, self.1))
+impl<T: IntoSql> SqlFnOutput for (T, SubType) {
+    fn into_sql<A: Assign>(self, a: A) -> Result<SubType> {
+        IntoSql::into_sql(self.0, a).map(|_| self.1)
     }
 }
 
@@ -327,6 +326,11 @@ pub struct SqlFnArg {
 impl ToSql for SqlFnArg {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::Arg(self.idx))
+    }
+}
+impl IntoSql for SqlFnArg {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_arg(self.idx)
     }
 }
 
@@ -348,12 +352,8 @@ unsafe fn _sql_result<T: SqlFnOutput>(
     r: Result<T>,
 ) -> Result<()> {
     let r = r?;
-    let (value, sub_type) = r.to_sql()?;
-    unsafe {
-        set_result(ctx, args, value)?;
-        if let Some(sub_type) = sub_type {
-            ffi::sqlite3_result_subtype(ctx, sub_type);
-        }
+    if let Some(sub_type) = r.into_sql((ctx, args))? {
+        unsafe { ffi::sqlite3_result_subtype(ctx, sub_type) };
     }
     Ok(())
 }

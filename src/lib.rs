@@ -103,7 +103,7 @@ pub use crate::statement::{Statement, StatementStatus};
 #[cfg(feature = "modern_sqlite")]
 pub use crate::transaction::TransactionState;
 pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
-pub use crate::types::ToSql;
+pub use crate::types::{IntoSql, ToSql};
 pub use crate::util::Name;
 pub use crate::version::*;
 #[cfg(feature = "rusqlite-macros")]
@@ -127,8 +127,6 @@ mod cache;
 mod collation;
 mod column;
 pub mod config;
-#[cfg(any(feature = "functions", feature = "vtab"))]
-mod context;
 #[cfg(feature = "functions")]
 pub mod functions;
 #[cfg(feature = "hooks")]
@@ -315,28 +313,6 @@ unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
 #[cfg(any(feature = "functions", feature = "vtab", test))]
 fn str_to_cstring(s: &str) -> Result<util::SmallCString> {
     Ok(util::SmallCString::new(s)?)
-}
-
-/// Returns `(string ptr, len as c_int, SQLITE_STATIC | SQLITE_TRANSIENT)`
-/// normally.
-/// The `sqlite3_destructor_type` item is always `SQLITE_TRANSIENT` unless
-/// the string was empty (in which case it's `SQLITE_STATIC`, and the ptr is
-/// static).
-fn str_for_sqlite(
-    s: &[u8],
-) -> (
-    *const c_char,
-    ffi::sqlite3_uint64,
-    ffi::sqlite3_destructor_type,
-) {
-    let len = s.len();
-    let (ptr, dtor_info) = if len != 0 {
-        (s.as_ptr().cast::<c_char>(), ffi::SQLITE_TRANSIENT())
-    } else {
-        // Return a pointer guaranteed to live forever
-        ("".as_ptr().cast::<c_char>(), ffi::SQLITE_STATIC())
-    };
-    (ptr, len as ffi::sqlite3_uint64, dtor_info)
 }
 
 fn path_to_cstring(p: &Path) -> Result<CString> {

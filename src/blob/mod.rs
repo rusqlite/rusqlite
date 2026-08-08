@@ -191,7 +191,7 @@ use std::io;
 use std::ptr;
 
 use super::ffi;
-use super::types::{ToSql, ToSqlOutput};
+use super::types::{Assign, IntoSql, ToSql, ToSqlOutput};
 use crate::{Connection, Name, Result};
 
 mod pos_io;
@@ -415,6 +415,12 @@ impl ToSql for ZeroBlob {
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         let Self(length) = *self;
         Ok(ToSqlOutput::ZeroBlob(length))
+    }
+}
+impl IntoSql for ZeroBlob {
+    #[inline]
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_zeroblob(self.0)
     }
 }
 

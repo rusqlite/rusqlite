@@ -1,14 +1,13 @@
-use std::ffi::{c_int, c_void};
+use std::ffi::c_int;
 use std::slice::from_raw_parts;
 use std::{fmt, mem, ptr, str};
 
-use super::ffi::{self, sqlite3_stmt};
-use super::str_for_sqlite;
+use super::ffi;
 use super::{
     AndThenRows, Connection, Error, MappedRows, Params, RawStatement, Result, Row, Rows, ValueRef,
 };
 use crate::bind::BindIndex;
-use crate::types::{ToSql, ToSqlOutput, Value};
+use crate::types::{IntoSql, ToSql};
 
 /// A prepared statement.
 pub struct Statement<'conn> {
@@ -483,7 +482,7 @@ impl Statement<'_> {
             if index > expected {
                 break;
             }
-            self.bind_parameter(&p, index)?;
+            self.bind_parameter(index, &p)?;
         }
         if index != expected {
             Err(Error::InvalidParameterCount(index, expected))
@@ -510,7 +509,7 @@ impl Statement<'_> {
         for (name, value) in params {
             let i = name.idx(self)?;
             let ts: &dyn ToSql = &value;
-            self.bind_parameter(ts, i)?;
+            self.bind_parameter(i, ts)?;
         }
         Ok(())
     }
@@ -571,7 +570,7 @@ impl Statement<'_> {
     ) -> Result<()> {
         // This is the same as `bind_parameter` but slightly more ergonomic and
         // correctly takes `&mut self`.
-        self.bind_parameter(&param, one_based_index.idx(self)?)
+        self.bind_parameter(one_based_index.idx(self)?, &param)
     }
 
     /// Low level API to execute a statement given that all parameters were
@@ -611,80 +610,9 @@ impl Statement<'_> {
     }
 
     // generic because many of these branches can constant fold away.
-    fn bind_parameter<P: ?Sized + ToSql>(&self, param: &P, ndx: usize) -> Result<()> {
-        let value = param.to_sql()?;
-
+    fn bind_parameter<P: IntoSql>(&self, ndx: usize, param: P) -> Result<()> {
         let ptr = unsafe { self.stmt.ptr() };
-        self.conn.decode_result(match value {
-            ToSqlOutput::Borrowed(ValueRef::Null) | ToSqlOutput::Owned(Value::Null) => {
-                unsafe { ffi::sqlite3_bind_null(ptr, ndx as c_int) }
-            },
-            ToSqlOutput::Borrowed(ValueRef::Integer(i)) | ToSqlOutput::Owned(Value::Integer(i)) => {
-                unsafe { ffi::sqlite3_bind_int64(ptr, ndx as c_int, i) }
-            },
-            ToSqlOutput::Borrowed(ValueRef::Real(r)) | ToSqlOutput::Owned(Value::Real(r)) => {
-                unsafe { ffi::sqlite3_bind_double(ptr, ndx as c_int, r) }
-            },
-            ToSqlOutput::Borrowed(ValueRef::Text(s)) => {
-                Self::bind_text(ptr, ndx, s)
-            },
-             ToSqlOutput::Owned(Value::Text(s)) => {
-                Self::bind_text(ptr, ndx, s.as_bytes())
-            },
-            ToSqlOutput::Borrowed(ValueRef::Blob(b)) => {
-                Self::bind_blob(ptr, ndx, b)
-            },
-            ToSqlOutput::Owned(Value::Blob(b)) => {
-                Self::bind_blob(ptr, ndx, b.as_slice())
-            },
-            #[cfg(feature = "blob")]
-            ToSqlOutput::ZeroBlob(len) => {
-                unsafe {
-                    ffi::sqlite3_bind_zeroblob64(ptr, ndx as c_int, len)
-                }
-            }
-            #[cfg(feature = "functions")]
-            ToSqlOutput::Arg(_) => {
-                return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
-            }
-            #[cfg(feature = "pointer")]
-            ToSqlOutput::Pointer(p) => {
-                unsafe {
-                    ffi::sqlite3_bind_pointer(ptr, ndx as c_int, p.0 as _, p.1.as_ptr(), p.2)
-                }
-            }
-        })
-    }
-
-    fn bind_text(stmt: *mut sqlite3_stmt, ndx: usize, s: &[u8]) -> c_int {
-        unsafe {
-            let (c_str, len, destructor) = str_for_sqlite(s);
-            ffi::sqlite3_bind_text64(
-                stmt,
-                ndx as c_int,
-                c_str,
-                len,
-                destructor,
-                ffi::SQLITE_UTF8 as _, // TODO SQLITE_UTF8_ZT
-            )
-        }
-    }
-
-    fn bind_blob(stmt: *mut sqlite3_stmt, ndx: usize, b: &[u8]) -> c_int {
-        unsafe {
-            let length = b.len();
-            if length == 0 {
-                ffi::sqlite3_bind_zeroblob64(stmt, ndx as c_int, 0)
-            } else {
-                ffi::sqlite3_bind_blob64(
-                    stmt,
-                    ndx as c_int,
-                    b.as_ptr().cast::<c_void>(),
-                    length as ffi::sqlite3_uint64,
-                    ffi::SQLITE_TRANSIENT(),
-                )
-            }
-        }
+        param.into_sql((ptr, ndx as _))
     }
 
     #[inline]
@@ -713,12 +641,12 @@ impl Statement<'_> {
     #[allow(clippy::unnecessary_wraps)]
     fn check_update(&self) -> Result<()> {
         cfg_select! {
-          feature = "extra_check" => {
-              if self.column_count() > 0 && self.stmt.readonly() {
-                  return Err(Error::ExecuteReturnedResults);
-              }
-          }
-          _ => {}
+            feature = "extra_check" => {
+                if self.column_count() > 0 && self.stmt.readonly() {
+                    return Err(Error::ExecuteReturnedResults);
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -1261,7 +1189,7 @@ mod test {
     fn test_expanded_sql() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let stmt = db.prepare("SELECT ?1")?;
-        stmt.bind_parameter(&1, 1)?;
+        stmt.bind_parameter(1, 1)?;
         assert_eq!(Some("SELECT 1".to_owned()), stmt.expanded_sql());
         Ok(())
     }

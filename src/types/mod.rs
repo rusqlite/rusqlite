@@ -70,16 +70,20 @@ impl ToSql for DateTimeSql {
 //! implements [`ToSql`] or [`FromSql`] for the cases where you want to know if
 //! a value was NULL (which gets translated to `None`).
 
+pub use self::assign::Assign;
 pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
+pub use self::into_sql::IntoSql;
 pub use self::to_sql::{ToSql, ToSqlOutput};
 pub use self::value::Value;
 pub use self::value_ref::ValueRef;
 
 use std::fmt;
 
+mod assign;
 #[cfg(feature = "chrono")]
 mod chrono;
 mod from_sql;
+mod into_sql;
 #[cfg(feature = "jiff")]
 mod jiff;
 #[cfg(feature = "serde_json")]
