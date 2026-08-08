@@ -171,7 +171,9 @@ impl RawStatement {
                   }
               }
           }
-          _ => unsafe { ffi::sqlite3_step(self.ptr) }
+          _ => {
+              unsafe { ffi::sqlite3_step(self.ptr) }
+          }
         }
     }
 
