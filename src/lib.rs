@@ -701,7 +701,7 @@ impl Connection {
     ///
     /// Returns `Err(QueryReturnedNoRows)` if no results are returned. If the
     /// query truly is optional, you can call
-    /// [`.optional()`](crate::OptionalExtension::optional) on the result of
+    /// [`.optional()`](OptionalExtension::optional) on the result of
     /// this to get a `Result<Option<T>>` (requires that the trait
     /// `rusqlite::OptionalExtension` is imported).
     ///
@@ -2437,10 +2437,7 @@ mod test {
         db.set_errmsg(code, Some(msg))?;
         let ptr = unsafe { db.handle() };
         assert_eq!(unsafe { ffi::sqlite3_errcode(ptr) }, code);
-        assert_eq!(
-            unsafe { std::ffi::CStr::from_ptr(ffi::sqlite3_errmsg(ptr)) },
-            msg
-        );
+        assert_eq!(unsafe { CStr::from_ptr(ffi::sqlite3_errmsg(ptr)) }, msg);
         Ok(())
     }
 
@@ -2462,7 +2459,7 @@ mod test {
             db.file_control(DEFAULT_NAME, FileControl::SizeLimit(&mut size),),
             Err(Error::SqliteFailure(
                 ffi::Error {
-                    code: ffi::ErrorCode::NotFound,
+                    code: ErrorCode::NotFound,
                     extended_code: ffi::SQLITE_NOTFOUND,
                 },
                 None
