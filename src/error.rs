@@ -7,6 +7,27 @@ use std::fmt;
 use std::path::PathBuf;
 use std::str;
 
+// Just to keep MSRV low
+macro_rules! cfg_select {
+    ({ $($tt:tt)* }) => {{
+        $crate::cfg_select! { $($tt)* }
+    }};
+    (_ => { $($output:tt)* }) => {
+        $($output)*
+    };
+    (
+        $cfg:meta => $output:tt
+        $($( $rest:tt )+)?
+    ) => {{
+        #[cfg($cfg)]
+        cfg_select! { _ => $output }
+        $(
+            #[cfg(not($cfg))]
+            cfg_select! { $($rest)+ }
+        )?
+    }}
+}
+
 /// Enum listing possible errors from rusqlite.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -472,7 +493,7 @@ pub unsafe fn decode_result_raw(db: *mut ffi::sqlite3, code: c_int) -> Result<()
 pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, sql: &str) -> Error {
     unsafe {
         cfg_select! {
-          feature = "modern_sqlite" => // SQLite >= 3.38.0
+          feature = "modern_sqlite" => { // SQLite >= 3.38.0
               if db.is_null() {
                   error_from_sqlite_code(code, None)
               } else {
@@ -491,7 +512,10 @@ pub unsafe fn error_with_offset(db: *mut ffi::sqlite3, code: c_int, sql: &str) -
                   }
                   Error::SqliteFailure(error, msg)
               }
-          _ => error_from_handle(db, code)
+          }
+          _ => {
+              error_from_handle(db, code)
+          }
         }
     }
 }
