@@ -16,7 +16,7 @@ use std::ops::Deref;
 use std::ptr;
 use std::slice;
 
-use crate::ffi::sqlite3_free;
+use crate::ffi::{sqlite3_context, sqlite3_free, sqlite3_value};
 
 use crate::context::set_result;
 use crate::error::{check, error_from_sqlite_code, to_sqlite_error};
@@ -588,7 +588,7 @@ impl IndexInfo {
     #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
     pub fn rhs_value(&self, constraint_idx: usize) -> Result<Option<ValueRef<'_>>> {
         let idx = constraint_idx as c_int;
-        let mut p_value: *mut ffi::sqlite3_value = ptr::null_mut();
+        let mut p_value: *mut sqlite3_value = ptr::null_mut();
         let rc = unsafe { ffi::sqlite3_vtab_rhs_value(self.0, idx, &mut p_value) };
         if rc == ffi::SQLITE_NOTFOUND {
             return Ok(None);
@@ -801,7 +801,7 @@ pub unsafe trait VTabCursor: Sized {
 
 /// Context is used by [`VTabCursor::column`] to specify the
 /// cell value.
-pub struct Context(*mut ffi::sqlite3_context);
+pub struct Context(*mut sqlite3_context);
 
 impl Context {
     /// Set current cell value
@@ -879,7 +879,7 @@ impl<'a> Filters<'a> {
 /// IN values
 #[cfg(feature = "modern_sqlite")] // SQLite >= 3.38.0
 pub struct InValues<'a> {
-    list: *mut ffi::sqlite3_value,
+    list: *mut sqlite3_value,
     phantom: PhantomData<Filters<'a>>,
     first: bool,
 }
@@ -889,7 +889,7 @@ impl<'a> fallible_iterator::FallibleIterator for InValues<'a> {
     type Item = ValueRef<'a>;
 
     fn next(&mut self) -> Result<Option<Self::Item>> {
-        let mut val: *mut ffi::sqlite3_value = ptr::null_mut();
+        let mut val: *mut sqlite3_value = ptr::null_mut();
         let rc = unsafe {
             if self.first {
                 self.first = false;
@@ -908,7 +908,7 @@ impl<'a> fallible_iterator::FallibleIterator for InValues<'a> {
 
 /// Wrapper to [ffi::sqlite3_value]s
 pub struct Values<'a> {
-    args: &'a [*mut ffi::sqlite3_value],
+    args: &'a [*mut sqlite3_value],
 }
 
 impl Values<'_> {
@@ -985,7 +985,7 @@ impl<'a> IntoIterator for &'a Values<'a> {
 
 /// [`Values`] iterator.
 pub struct ValueIter<'a> {
-    iter: slice::Iter<'a, *mut ffi::sqlite3_value>,
+    iter: slice::Iter<'a, *mut sqlite3_value>,
 }
 
 impl<'a> Iterator for ValueIter<'a> {
@@ -1159,7 +1159,7 @@ pub fn escape_double_quote(identifier: &str) -> Cow<'_, str> {
 pub fn dequote(mut s: &str) -> Cow<'_, str> {
     let mut chars = s.chars();
     let (Some(first), Some(last)) = (chars.next(), chars.next_back()) else {
-        return Cow::Borrowed(s);
+        return Borrowed(s);
     };
     if (first == '"' || first == '\'' || first == '`' || first == '[')
         && (last == first || first == '[' && last == ']')
@@ -1179,16 +1179,16 @@ pub fn dequote(mut s: &str) -> Cow<'_, str> {
                     }
                 } else if escaped {
                     // not properly escaped
-                    return Cow::Borrowed(s);
+                    return Borrowed(s);
                 }
                 owned.push(c);
             }
             if !escaped {
-                return Cow::Owned(owned);
+                return Owned(owned);
             }
         }
     }
-    Cow::Borrowed(s)
+    Borrowed(s)
 }
 /// The boolean can be one of:
 /// ```text
@@ -1382,7 +1382,7 @@ unsafe extern "C" fn rust_filter<C>(
     idx_num: c_int,
     idx_str: *const c_char,
     argc: c_int,
-    argv: *mut *mut ffi::sqlite3_value,
+    argv: *mut *mut sqlite3_value,
 ) -> c_int
 where
     C: VTabCursor,
@@ -1420,7 +1420,7 @@ where
 
 unsafe extern "C" fn rust_column<C>(
     cursor: *mut sqlite3_vtab_cursor,
-    ctx: *mut ffi::sqlite3_context,
+    ctx: *mut sqlite3_context,
     i: c_int,
 ) -> c_int
 where
@@ -1453,7 +1453,7 @@ where
 unsafe extern "C" fn rust_update<'vtab, T>(
     vtab: *mut sqlite3_vtab,
     argc: c_int,
-    argv: *mut *mut ffi::sqlite3_value,
+    argv: *mut *mut sqlite3_value,
     p_rowid: *mut ffi::sqlite3_int64,
 ) -> c_int
 where
@@ -1544,7 +1544,7 @@ unsafe fn vtab_error<T>(vtab: *mut sqlite3_vtab, result: Result<T>) -> c_int {
 unsafe fn set_err_msg(vtab: *mut sqlite3_vtab, err_msg: &str) {
     unsafe {
         if !(*vtab).zErrMsg.is_null() {
-            ffi::sqlite3_free((*vtab).zErrMsg.cast::<c_void>());
+            sqlite3_free((*vtab).zErrMsg.cast::<c_void>());
         }
         (*vtab).zErrMsg = alloc(err_msg);
     }
@@ -1553,7 +1553,7 @@ unsafe fn set_err_msg(vtab: *mut sqlite3_vtab, err_msg: &str) {
 /// To raise an error, the `column` method should use this method to set the
 /// error message and return the error code.
 #[cold]
-unsafe fn result_error<T>(ctx: *mut ffi::sqlite3_context, result: Result<T>) -> c_int {
+unsafe fn result_error<T>(ctx: *mut sqlite3_context, result: Result<T>) -> c_int {
     unsafe {
         match result {
             Ok(_) => ffi::SQLITE_OK,
