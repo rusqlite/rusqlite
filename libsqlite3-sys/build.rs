@@ -1,6 +1,33 @@
 use std::env;
 use std::path::Path;
 
+// Just to keep MSRV low
+#[cfg(any(
+    feature = "bundled",
+    feature = "bundled-windows",
+    feature = "bundled-sqlcipher",
+    feature = "buildtime_bindgen",
+))]
+macro_rules! cfg_select {
+    ({ $($tt:tt)* }) => {{
+        $crate::cfg_select! { $($tt)* }
+    }};
+    (_ => { $($output:tt)* }) => {
+        $($output)*
+    };
+    (
+        $cfg:meta => $output:tt
+        $($( $rest:tt )+)?
+    ) => {{
+        #[cfg($cfg)]
+        cfg_select! { _ => $output }
+        $(
+            #[cfg(not($cfg))]
+            cfg_select! { $($rest)+ }
+        )?
+    }}
+}
+
 #[cfg(all(feature = "loadable_extension", feature = "preupdate_hook"))]
 compile_error!(
     "feature \"loadable_extension\" and feature \"preupdate_hook\" cannot be enabled at the same time"
@@ -113,7 +140,7 @@ mod build_bundled {
 
         cfg_select! {
             feature = "buildtime_bindgen" => {
-                use super::{bindings, HeaderLocation};
+                use super::{HeaderLocation, bindings};
                 let header = HeaderLocation::FromPath(lib_name.to_owned());
                 bindings::write_to_out_dir(header, out_path);
             }
@@ -657,9 +684,11 @@ mod bindings {
                 std::fs::write(out_path, output.as_bytes())
                     .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
             }
-            _ => bindings
+            _ => {
+                bindings
                 .write_to_file(out_path)
-                .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"))
+                .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
+            }
         }
     }
 }

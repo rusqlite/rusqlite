@@ -346,7 +346,7 @@ impl_for_array_ref!(
 /// ## Basic usage
 ///
 /// ```rust,no_run
-/// use rusqlite::{params_from_iter, Connection, Result};
+/// use rusqlite::{Connection, Result, params_from_iter};
 /// use std::collections::BTreeSet;
 ///
 /// fn query(conn: &Connection, ids: &BTreeSet<String>) -> Result<()> {

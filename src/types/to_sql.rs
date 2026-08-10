@@ -53,6 +53,7 @@ impl<'a> ToSqlOutput<'a> {
             Some(free_rc::<T>),
         ))
     }
+
     /// Pass a `Box` as a raw pointer to SQLite
     ///
     /// # Warning

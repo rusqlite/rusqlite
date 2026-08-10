@@ -61,9 +61,7 @@ use std::ptr;
 use std::slice;
 use std::sync::Arc;
 
-use crate::ffi;
-use crate::ffi::sqlite3_context;
-use crate::ffi::sqlite3_value;
+use crate::ffi::{self, sqlite3_context, sqlite3_value};
 
 use crate::context::set_result;
 use crate::types::{FromSql, FromSqlError, ToSql, ToSqlOutput, ValueRef};
@@ -913,7 +911,7 @@ mod test {
         assert!(unsafe {
             ctx.get_connection()
                 .as_ref()
-                .map(::std::ops::Deref::deref)
+                .map(std::ops::Deref::deref)
                 .is_ok()
         });
         let value = ctx.get::<c_double>(0)?;

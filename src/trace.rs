@@ -107,6 +107,7 @@ impl StmtRef<'_> {
             phantom: PhantomData,
         }
     }
+
     /// SQL text
     pub fn sql(&self) -> Cow<'_, str> {
         let sql = unsafe { ffi::sqlite3_sql(self.ptr) };
@@ -118,12 +119,14 @@ impl StmtRef<'_> {
         // Safety: sql is a valid pointer to a cstr returned by sqlite3
         unsafe { CStr::from_ptr(sql).to_string_lossy() }
     }
+
     /// Expanded SQL text
     pub fn expanded_sql(&self) -> Option<String> {
         unsafe {
             crate::raw_statement::expanded_sql(self.ptr).map(|s| s.to_string_lossy().to_string())
         }
     }
+
     /// Get the value for one of the status counters for this statement.
     pub fn get_status(&self, status: StatementStatus) -> i32 {
         unsafe { crate::raw_statement::stmt_status(self.ptr, status, false) }
@@ -141,6 +144,7 @@ impl ConnRef<'_> {
     pub fn is_autocommit(&self) -> bool {
         unsafe { crate::inner_connection::get_autocommit(self.ptr) }
     }
+
     /// the path to the database file, if one exists and is known.
     pub fn db_filename(&self) -> Option<&str> {
         unsafe { crate::inner_connection::db_filename(self.phantom, self.ptr, MAIN_DB) }
@@ -341,10 +345,10 @@ mod test {
                     assert_eq!(d.cmp(&Duration::ZERO), Ordering::Greater);
                     // Timers on the web are not very accurate
                     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-                    assert!(matches!(
+                    std::assert_matches!(
                         d.cmp(&Duration::ZERO),
                         Ordering::Equal | Ordering::Greater
-                    ));
+                    );
                 }
                 TraceEvent::Row(s) => {
                     assert_eq!(s.expanded_sql().as_deref(), Some(s.sql().borrow()));
