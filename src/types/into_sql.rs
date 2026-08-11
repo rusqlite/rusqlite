@@ -39,6 +39,12 @@ macro_rules! from_i64(
                 a.assign_int(i64::from(self))
             }
         }
+        impl IntoSql for Box<$t> {
+            #[inline]
+            fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+                a.assign_int(i64::from(*self))
+            }
+        }
     );
     (non_zero $t:ty) => (
         impl IntoSql for $t {
@@ -201,9 +207,9 @@ impl IntoSql for CString {
             drop(unsafe { CString::from_raw(p as *mut _) });
         }
         #[cfg(feature = "modern_sqlite")]
-        let flags: u8 = (crate::ffi::SQLITE_UTF8 | crate::ffi::SQLITE_UTF8_ZT) as _;
+        let flags: u8 = (SQLITE_UTF8 | crate::ffi::SQLITE_UTF8_ZT) as _;
         #[cfg(not(feature = "modern_sqlite"))]
-        let flags: u8 = crate::ffi::SQLITE_UTF8 as _;
+        let flags: u8 = SQLITE_UTF8 as _;
         let bytes = self.count_bytes();
         a.assign_raw_text(self.into_raw(), bytes as _, Some(free_cstring), flags)
     }
@@ -262,7 +268,7 @@ mod test {
     #[test]
     #[cfg(feature = "pointer")]
     fn rc_ptr() -> Result<()> {
-        let rc = std::rc::Rc::new("rc".to_owned());
+        let rc = Rc::new("rc".to_owned());
         rc.into_sql(())
     }
 
@@ -275,13 +281,13 @@ mod test {
 
     #[test]
     fn cstring() -> Result<()> {
-        let cs = CString::new("Hello, world!").unwrap();
+        let cs = CString::new("Hello, world!")?;
         cs.into_sql(())
     }
 
     #[test]
     fn empty_cstring() -> Result<()> {
-        let cs = CString::new("").unwrap();
+        let cs = CString::new("")?;
         cs.into_sql(())
     }
 

@@ -63,7 +63,7 @@ use std::sync::Arc;
 
 use crate::ffi::{self, sqlite3_context, sqlite3_value};
 
-use crate::types::{Assign, FromSql, FromSqlError, IntoSql, ToSql, ToSqlOutput, ValueRef};
+use crate::types::{Assign, FromSql, FromSqlError, IntoSql, ValueRef};
 use crate::util::free_boxed_value;
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
@@ -320,11 +320,6 @@ impl<T: IntoSql> SqlFnOutput for (T, SubType) {
 /// n-th arg of an SQL scalar function
 pub struct SqlFnArg {
     idx: usize,
-}
-impl ToSql for SqlFnArg {
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::Arg(self.idx))
-    }
 }
 impl IntoSql for SqlFnArg {
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {

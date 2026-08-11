@@ -31,8 +31,8 @@ use std::ffi::{CStr, c_int};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::ffi;
-use crate::types::{ToSql, ToSqlOutput, Value};
+use crate::{ffi};
+use crate::types::{Assign, IntoSql, ToSql, ToSqlOutput, Value};
 use crate::vtab::{
     Context, Filters, IndexConstraintOp, IndexInfo, Module, VTab, VTabConnection, VTabCursor,
 };
@@ -50,6 +50,11 @@ impl ToSql for Array {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::from_rc(self.clone(), ARRAY_TYPE))
+    }
+}
+impl IntoSql for Array {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        (self, ARRAY_TYPE).into_sql(a)
     }
 }
 
