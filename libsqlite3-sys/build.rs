@@ -686,8 +686,8 @@ mod bindings {
             }
             _ => {
                 bindings
-                .write_to_file(out_path)
-                .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
+                    .write_to_file(out_path)
+                    .unwrap_or_else(|_| panic!("Could not write to {out_path:?}"));
             }
         }
     }

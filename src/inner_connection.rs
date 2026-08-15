@@ -221,6 +221,7 @@ impl InnerConnection {
         let mut c_tail: *const c_char = ptr::null();
         let r = cfg_select! {
             feature = "unlock_notify" => {
+                // no_fmt
                 unsafe {
                     use crate::unlock_notify;
                     let mut rc;
@@ -245,6 +246,7 @@ impl InnerConnection {
                 }
             }
             _ => {
+                // no_fmt
                 unsafe {
                     ffi::sqlite3_prepare_v3(
                         self.db(),
@@ -283,10 +285,12 @@ impl InnerConnection {
     pub fn changes(&self) -> u64 {
         unsafe {
             cfg_select! {
-                feature = "modern_sqlite" => { // 3.37.0
+                feature = "modern_sqlite" => {
+                    // 3.37.0
                     ffi::sqlite3_changes64(self.db()) as u64
                 }
                 _ => {
+                    // no_fmt
                     ffi::sqlite3_changes(self.db()) as u64
                 }
             }
@@ -297,10 +301,12 @@ impl InnerConnection {
     pub fn total_changes(&self) -> u64 {
         unsafe {
             cfg_select! {
-                feature = "modern_sqlite" => { // 3.37.0
+                feature = "modern_sqlite" => {
+                    // 3.37.0
                     ffi::sqlite3_total_changes64(self.db()) as u64
                 }
                 _ => {
+                    // no_fmt
                     ffi::sqlite3_total_changes(self.db()) as u64
                 }
             }
