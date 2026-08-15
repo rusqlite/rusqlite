@@ -30,9 +30,11 @@ impl Sql {
         const SQL: &str = "SELECT 1 FROM pragma_pragma_list WHERE name = ?";
         let mut stmt = cfg_select! {
             feature = "cache" => {
+                // no_fmt
                 conn.prepare_cached(SQL)
             }
             _ => {
+                // no_fmt
                 conn.prepare(SQL)
             }
         }?;

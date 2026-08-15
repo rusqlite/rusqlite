@@ -713,12 +713,12 @@ impl Statement<'_> {
     #[allow(clippy::unnecessary_wraps)]
     fn check_update(&self) -> Result<()> {
         cfg_select! {
-          feature = "extra_check" => {
-              if self.column_count() > 0 && self.stmt.readonly() {
-                  return Err(Error::ExecuteReturnedResults);
-              }
-          }
-          _ => {}
+            feature = "extra_check" => {
+                if self.column_count() > 0 && self.stmt.readonly() {
+                    return Err(Error::ExecuteReturnedResults);
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
