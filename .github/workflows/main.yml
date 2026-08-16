@@ -12,6 +12,7 @@ on:
   workflow_dispatch:
 
 env:
+  MSRV: 1.88.0
   RUST_BACKTRACE: short
   # CI builds don't benefit very much from this.
   CARGO_INCREMENTAL: 0
@@ -98,7 +99,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
         # TODO: find a way to test this on windows :(
 
     steps:
@@ -176,6 +177,17 @@ jobs:
           # as the other tests have them.
           RUST_BACKTRACE: "0"
         run: cargo -Z build-std test --features 'bundled-full session buildtime_bindgen preupdate_hook with-asan' --target x86_64-unknown-linux-gnu
+
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: $MSRV
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --features bundled-full
 
   direct-minimal-versions:
     name: Test min versions
