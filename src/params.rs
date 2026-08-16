@@ -241,7 +241,7 @@ impl<T: ToSql> Params for (T,) {
     #[inline]
     fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
         stmt.ensure_parameter_count(1)?;
-        stmt.raw_bind_parameter(1, self.0)?;
+        stmt.raw_bind_parameter(1, &self.0)?;
         Ok(())
     }
 }
@@ -254,7 +254,7 @@ macro_rules! single_tuple_impl {
                 stmt.ensure_parameter_count($count)?;
                 $({
                     debug_assert!($field < $count);
-                    stmt.raw_bind_parameter($field + 1, self.$field)?;
+                    stmt.raw_bind_parameter($field + 1, &self.$field)?;
                 })+
                 Ok(())
             }

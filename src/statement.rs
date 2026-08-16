@@ -563,14 +563,14 @@ impl Statement<'_> {
     /// }
     /// ```
     #[inline]
-    pub fn raw_bind_parameter<I: BindIndex, T: ToSql>(
+    pub fn raw_bind_parameter<I: BindIndex, T: IntoSql>(
         &mut self,
         one_based_index: I,
         param: T,
     ) -> Result<()> {
         // This is the same as `bind_parameter` but slightly more ergonomic and
         // correctly takes `&mut self`.
-        self.bind_parameter(one_based_index.idx(self)?, &param)
+        self.bind_parameter(one_based_index.idx(self)?, param)
     }
 
     /// Low level API to execute a statement given that all parameters were
