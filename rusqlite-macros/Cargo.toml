@@ -2,7 +2,8 @@
 name = "rusqlite-macros"
 version = "0.4.3"
 authors = ["The rusqlite developers"]
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
 description = "Private implementation detail of rusqlite crate"
 repository = "https://github.com/rusqlite/rusqlite"
 license = "MIT"

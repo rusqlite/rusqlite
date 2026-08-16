@@ -3,8 +3,8 @@ name = "rusqlite"
 # Note: Update version in README.md when you change this.
 version = "0.40.1"
 authors = ["The rusqlite developers"]
-edition = "2024"
-rust-version = "1.88.0"
+edition.workspace = true
+rust-version.workspace = true
 description = "Ergonomic wrapper for SQLite"
 repository = "https://github.com/rusqlite/rusqlite"
 documentation = "https://docs.rs/rusqlite/"
@@ -33,6 +33,10 @@ name = "rusqlite"
 
 [workspace]
 members = ["libsqlite3-sys"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.88.0"
 
 [features]
 # if not SQLITE_OMIT_LOAD_EXTENSION

@@ -2,8 +2,8 @@
 name = "libsqlite3-sys"
 version = "0.38.1"
 authors = ["The rusqlite developers"]
-edition = "2024"
-rust-version = "1.88.0"
+edition.workspace = true
+rust-version.workspace = true
 repository = "https://github.com/rusqlite/rusqlite"
 description = "Native bindings to the libsqlite3 library"
 license = "MIT"
