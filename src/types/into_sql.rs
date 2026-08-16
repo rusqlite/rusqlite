@@ -211,7 +211,7 @@ impl IntoSql for CString {
         #[cfg(not(feature = "modern_sqlite"))]
         let flags: u8 = SQLITE_UTF8 as _;
         let bytes = self.count_bytes();
-        a.assign_raw_text(self.into_raw(), bytes as _, Some(free_cstring), flags)
+        unsafe { a.assign_raw_text(self.into_raw(), bytes as _, Some(free_cstring), flags) }
     }
 }
 
@@ -222,12 +222,14 @@ impl IntoSql for Rc<str> {
             return a.assign_empty_text();
         }
         let bytes = self.len();
-        a.assign_raw_text(
-            Rc::into_raw(self) as _,
-            bytes as _,
-            Some(free_rc::<*const str>),
-            SQLITE_UTF8 as _,
-        )
+        unsafe {
+            a.assign_raw_text(
+                Rc::into_raw(self) as _,
+                bytes as _,
+                Some(free_rc::<*const str>),
+                SQLITE_UTF8 as _,
+            )
+        }
     }
 }
 impl IntoSql for Rc<[u8]> {
@@ -237,11 +239,13 @@ impl IntoSql for Rc<[u8]> {
             return a.assign_zeroblob(0);
         }
         let bytes = self.len();
-        a.assign_raw_blob(
-            Rc::into_raw(self) as _,
-            bytes as _,
-            Some(free_rc::<*const [u8]>),
-        )
+        unsafe {
+            a.assign_raw_blob(
+                Rc::into_raw(self) as _,
+                bytes as _,
+                Some(free_rc::<*const [u8]>),
+            )
+        }
     }
 }
 
@@ -249,11 +253,13 @@ impl<const N: usize> IntoSql for Box<[u8; N]> {
     /// Pass a `Box<[u8; N]>` as a BLOB to SQLite
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let bytes = self.len();
-        a.assign_raw_blob(
-            Box::into_raw(self) as _,
-            bytes as _,
-            Some(free_boxed_value::<[u8; N]>),
-        )
+        unsafe {
+            a.assign_raw_blob(
+                Box::into_raw(self) as _,
+                bytes as _,
+                Some(free_boxed_value::<[u8; N]>),
+            )
+        }
     }
 }
 
@@ -261,7 +267,7 @@ impl<const N: usize> IntoSql for Box<[u8; N]> {
 mod test {
     use crate::Result;
 
-    use super::IntoSql;
+    use super::IntoSql as _;
     use std::ffi::CString;
     use std::rc::Rc;
 

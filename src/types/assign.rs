@@ -41,15 +41,20 @@ pub trait Assign: sealed::Sealed + Sized {
     fn assign_empty_text(self) -> Result<()>;
     /// `sqlite3_bind_text64` or `sqlite3_result_text64`
     fn assign_text(self, s: &[u8], destructor: sqlite3_destructor_type) -> Result<()> {
-        self.assign_raw_text(
-            s.as_ptr().cast::<c_char>(),
-            s.len() as _,
-            destructor,
-            SQLITE_UTF8 as _,
-        )
+        unsafe {
+            self.assign_raw_text(
+                s.as_ptr().cast::<c_char>(),
+                s.len() as _,
+                destructor,
+                SQLITE_UTF8 as _,
+            )
+        }
     }
     /// `sqlite3_bind_text64` or `sqlite3_result_text64`
-    fn assign_raw_text(
+    ///
+    /// # Safety
+    /// `b` should be NULL or a pointer to a well-formed UTF8 string of `len` bytes
+    unsafe fn assign_raw_text(
         self,
         s: *const c_char,
         len: sqlite3_uint64,
@@ -64,10 +69,13 @@ pub trait Assign: sealed::Sealed + Sized {
     /// `sqlite3_bind_blob64` or `sqlite3_result_blob64`
     #[inline]
     fn assign_blob(self, b: &[u8], destructor: sqlite3_destructor_type) -> Result<()> {
-        self.assign_raw_blob(b.as_ptr().cast::<c_void>(), b.len() as _, destructor)
+        unsafe { self.assign_raw_blob(b.as_ptr().cast::<c_void>(), b.len() as _, destructor) }
     }
-    /// `sqlite3_bind_text64` or `sqlite3_result_text64`
-    fn assign_raw_blob(
+    /// `sqlite3_bind_blob64` or `sqlite3_result_blob64`
+    ///
+    /// # Safety
+    /// `b` should be NULL or a valid pointer to `len` bytes
+    unsafe fn assign_raw_blob(
         self,
         b: *const c_void,
         len: sqlite3_uint64,
@@ -124,7 +132,7 @@ impl Assign for (*mut sqlite3_stmt, c_int) {
         })
     }
 
-    fn assign_raw_text(
+    unsafe fn assign_raw_text(
         self,
         s: *const c_char,
         len: sqlite3_uint64,
@@ -140,7 +148,7 @@ impl Assign for (*mut sqlite3_stmt, c_int) {
             })
         }
     }
-    fn assign_raw_blob(
+    unsafe fn assign_raw_blob(
         self,
         b: *const c_void,
         len: sqlite3_uint64,
@@ -213,7 +221,7 @@ impl Assign for (*mut sqlite3_context, &[*mut sqlite3_value]) {
         Ok(())
     }
 
-    fn assign_raw_text(
+    unsafe fn assign_raw_text(
         self,
         s: *const c_char,
         len: sqlite3_uint64,
@@ -230,7 +238,7 @@ impl Assign for (*mut sqlite3_context, &[*mut sqlite3_value]) {
             Ok(())
         }
     }
-    fn assign_raw_blob(
+    unsafe fn assign_raw_blob(
         self,
         b: *const c_void,
         len: sqlite3_uint64,
@@ -304,7 +312,7 @@ impl Assign for () {
         Ok(())
     }
 
-    fn assign_raw_text(
+    unsafe fn assign_raw_text(
         self,
         s: *const c_char,
         _: sqlite3_uint64,
@@ -315,7 +323,7 @@ impl Assign for () {
         Ok(())
     }
 
-    fn assign_raw_blob(
+    unsafe fn assign_raw_blob(
         self,
         b: *const c_void,
         _: sqlite3_uint64,
@@ -350,7 +358,7 @@ impl Assign for () {
 mod test {
     use std::ptr;
 
-    use crate::{Result, ffi::SQLITE_TRANSIENT, types::Assign};
+    use crate::{Result, ffi::SQLITE_TRANSIENT, types::Assign as _};
 
     #[test]
     fn assign_empty_text() -> Result<()> {
