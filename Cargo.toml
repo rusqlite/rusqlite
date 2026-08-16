@@ -4,6 +4,7 @@ name = "rusqlite"
 version = "0.40.1"
 authors = ["The rusqlite developers"]
 edition = "2024"
+rust-version = "1.88.0"
 description = "Ergonomic wrapper for SQLite"
 repository = "https://github.com/rusqlite/rusqlite"
 documentation = "https://docs.rs/rusqlite/"
