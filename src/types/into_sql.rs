@@ -1,10 +1,8 @@
-#[cfg(feature = "pointer")]
-use std::ffi::CStr;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::rc::Rc;
 
 use super::{Assign, Null, ToSql, ToSqlOutput, Value, ValueRef};
-use crate::ffi::SQLITE_UTF8;
+use crate::ffi::{SQLITE_STATIC, SQLITE_UTF8};
 use crate::util::free_boxed_value;
 use crate::{Error, Result};
 
@@ -215,6 +213,23 @@ impl IntoSql for CString {
     }
 }
 
+impl IntoSql for &'static CStr {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        #[cfg(feature = "modern_sqlite")]
+        let flags: u8 = (SQLITE_UTF8 | crate::ffi::SQLITE_UTF8_ZT) as _;
+        #[cfg(not(feature = "modern_sqlite"))]
+        let flags: u8 = SQLITE_UTF8 as _;
+        unsafe {
+            a.assign_raw_text(
+                self.as_ptr(),
+                self.count_bytes() as _,
+                SQLITE_STATIC(),
+                flags,
+            )
+        }
+    }
+}
+
 impl IntoSql for Rc<str> {
     /// Pass a `Rc<str>` as UTF-8 slice to SQLite
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
@@ -295,6 +310,12 @@ mod test {
     fn empty_cstring() -> Result<()> {
         let cs = CString::new("")?;
         cs.into_sql(())
+    }
+
+    #[test]
+    fn static_cstr() -> Result<()> {
+        let slice = c"Hello, world!";
+        slice.into_sql(())
     }
 
     #[test]
