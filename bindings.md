@@ -167,8 +167,8 @@
 - [X] `sqlite3_context_db_handle` (Connection ref)
 - [X] `sqlite3_get_auxdata`
 - [X] `sqlite3_set_auxdata`
-- [ ] `sqlite3_get_clientdata`
-- [ ] `sqlite3_set_clientdata`
+- [X] `sqlite3_get_clientdata`
+- [X] `sqlite3_set_clientdata`
 
 - [ ] `sqlite3_result_blob`
 - [X] `sqlite3_result_blob64`

@@ -12,6 +12,7 @@ pub(crate) use sqlite_string::{SqliteMallocString, alloc};
     feature = "collation",
     feature = "functions",
     feature = "vtab",
+    feature = "modern_sqlite",
     feature = "pointer"
 ))]
 pub(crate) unsafe extern "C" fn free_boxed_value<T>(p: *mut std::ffi::c_void) {
