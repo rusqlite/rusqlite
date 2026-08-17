@@ -1,4 +1,4 @@
-use crate::{BindIndex, Result, Statement, ToSql};
+use crate::{BindIndex, IntoSql, Result, Statement, ToSql};
 
 mod sealed {
     /// This trait exists just to ensure that the only impls of `trait Params`
@@ -143,7 +143,7 @@ use sealed::Sealed;
 /// The empty tuple:
 ///
 /// ```rust,no_run
-/// # use rusqlite::{Connection, Result, params};
+/// # use rusqlite::{Connection, Result};
 /// fn delete_all_users(conn: &Connection) -> Result<()> {
 ///     // You may also use `()`.
 ///     conn.execute("DELETE FROM users", ())?;
@@ -154,7 +154,7 @@ use sealed::Sealed;
 /// The empty array:
 ///
 /// ```rust,no_run
-/// # use rusqlite::{Connection, Result, params};
+/// # use rusqlite::{Connection, Result};
 /// fn delete_all_users(conn: &Connection) -> Result<()> {
 ///     // Just use an empty array (e.g. `[]`) for no params.
 ///     conn.execute("DELETE FROM users", [])?;
@@ -236,25 +236,25 @@ impl Params for () {
 }
 
 // I'm pretty sure you could tweak the `single_tuple_impl` to accept this.
-impl<T: ToSql> Sealed for (T,) {}
-impl<T: ToSql> Params for (T,) {
+impl<T: IntoSql> Sealed for (T,) {}
+impl<T: IntoSql> Params for (T,) {
     #[inline]
     fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
         stmt.ensure_parameter_count(1)?;
-        stmt.raw_bind_parameter(1, &self.0)?;
+        stmt.raw_bind_parameter(1, self.0)?;
         Ok(())
     }
 }
 
 macro_rules! single_tuple_impl {
     ($count:literal : $(($field:tt $ftype:ident)),* $(,)?) => {
-        impl<$($ftype,)*> Sealed for ($($ftype,)*) where $($ftype: ToSql,)* {}
-        impl<$($ftype,)*> Params for ($($ftype,)*) where $($ftype: ToSql,)* {
+        impl<$($ftype,)*> Sealed for ($($ftype,)*) where $($ftype: IntoSql,)* {}
+        impl<$($ftype,)*> Params for ($($ftype,)*) where $($ftype: IntoSql,)* {
             fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
                 stmt.ensure_parameter_count($count)?;
                 $({
                     debug_assert!($field < $count);
-                    stmt.raw_bind_parameter($field + 1, &self.$field)?;
+                    stmt.raw_bind_parameter($field + 1, self.$field)?;
                 })+
                 Ok(())
             }

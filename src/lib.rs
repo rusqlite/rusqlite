@@ -6,7 +6,7 @@
 //! intended.
 //!
 //! ```rust
-//! use rusqlite::{Connection, Result, params};
+//! use rusqlite::{Connection, Result};
 //!
 //! #[derive(Debug)]
 //! struct Person {
@@ -570,11 +570,11 @@ impl Connection {
     /// ### With positional params of varying types
     ///
     /// ```rust,no_run
-    /// # use rusqlite::{params, Connection};
+    /// # use rusqlite::Connection;
     /// fn update_rows(conn: &Connection) {
     ///     match conn.execute(
     ///         "UPDATE foo SET bar = 'baz' WHERE qux = ?1 AND quux = ?2",
-    ///         params![1i32, 1.5f64],
+    ///         (1i32, 1.5f64),
     ///     ) {
     ///         Ok(updated) => println!("{} rows were updated", updated),
     ///         Err(err) => println!("update failed: {}", err),
@@ -1995,7 +1995,7 @@ mod test {
         let mut insert_stmt = db.prepare("INSERT INTO foo(i, x) VALUES(?1, ?2)")?;
         for (i, v) in vals.iter().enumerate() {
             let i_to_insert = i as i64;
-            assert_eq!(insert_stmt.execute(params![i_to_insert, v])?, 1);
+            assert_eq!(insert_stmt.execute((i_to_insert, v))?, 1);
         }
 
         let mut query = db.prepare("SELECT i, x FROM foo")?;

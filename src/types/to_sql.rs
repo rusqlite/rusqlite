@@ -134,7 +134,13 @@ from_value!(i128);
 from_value!(non_zero std::num::NonZeroI128);
 
 #[cfg(feature = "uuid")]
-from_value!(uuid::Uuid);
+impl ToSql for uuid::Uuid {
+    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+        Ok(ToSqlOutput::Borrowed(ValueRef::Blob(
+            self.as_bytes().as_slice(),
+        )))
+    }
+}
 
 impl ToSql for ToSqlOutput<'_> {
     #[inline]
@@ -238,9 +244,6 @@ to_sql_self!(i128);
 
 #[cfg(feature = "i128_blob")]
 to_sql_self!(std::num::NonZeroI128);
-
-#[cfg(feature = "uuid")]
-to_sql_self!(uuid::Uuid);
 
 #[cfg(feature = "fallible_uint")]
 macro_rules! to_sql_self_fallible(
@@ -579,7 +582,7 @@ mod test {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_uuid() -> Result<()> {
-        use crate::{Connection, params};
+        use crate::Connection;
         use uuid::Uuid;
 
         let db = Connection::open_in_memory()?;
@@ -589,12 +592,12 @@ mod test {
 
         db.execute(
             "INSERT INTO foo (id, label) VALUES (?1, ?2)",
-            params![id, "target"],
+            (id, "target"),
         )?;
 
         let mut stmt = db.prepare("SELECT id, label FROM foo WHERE id = ?1")?;
 
-        let mut rows = stmt.query(params![id])?;
+        let mut rows = stmt.query([id])?;
         let row = rows.next()?.unwrap();
 
         let found_id: Uuid = row.get_unwrap(0);

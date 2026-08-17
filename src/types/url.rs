@@ -1,6 +1,6 @@
 //! [`ToSql`] and [`FromSql`] implementation for [`Url`].
-use crate::Result;
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
+use crate::types::{Assign, FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
+use crate::{IntoSql, Result};
 use url::Url;
 
 /// Serialize `Url` to text.
@@ -8,6 +8,11 @@ impl ToSql for Url {
     #[inline]
     fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
         Ok(ToSqlOutput::from(self.as_str()))
+    }
+}
+impl IntoSql for Url {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_text(self.as_str())
     }
 }
 
@@ -30,7 +35,7 @@ mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use crate::{Connection, Error, Result, params};
+    use crate::{Connection, Error, Result};
     use url::{ParseError, Url};
 
     fn checked_memory_handle() -> Result<Connection> {
@@ -55,7 +60,7 @@ mod test {
             "INSERT INTO urls (i, v) VALUES (0, ?1), (1, ?2), (2, ?3), (3, ?4)",
             // also insert a non-hex encoded url (which might be present if it was
             // inserted separately)
-            params![url0, url1, url2, "illegal"],
+            (&url0, &url1, url2, "illegal"),
         )?;
 
         assert_eq!(get_url(db, 0)?, url0);

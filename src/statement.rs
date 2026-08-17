@@ -90,7 +90,7 @@ impl Statement<'_> {
     /// ### Use without parameters
     ///
     /// ```rust,no_run
-    /// # use rusqlite::{Connection, Result, params};
+    /// # use rusqlite::{Connection, Result};
     /// fn delete_all(conn: &Connection) -> Result<()> {
     ///     let mut stmt = conn.prepare("DELETE FROM users")?;
     ///     stmt.execute([])?;

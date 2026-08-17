@@ -9,7 +9,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! # use rusqlite::{types::Value, Connection, Result, params};
+//! # use rusqlite::{types::Value, Connection, Result};
 //! # use std::rc::Rc;
 //! fn example(db: &Connection) -> Result<()> {
 //!     // Note: This should be done once (usually when opening the DB).
@@ -31,7 +31,7 @@ use std::ffi::{CStr, c_int};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
-use crate::{ffi};
+use crate::ffi;
 use crate::types::{Assign, IntoSql, ToSql, ToSqlOutput, Value};
 use crate::vtab::{
     Context, Filters, IndexConstraintOp, IndexInfo, Module, VTab, VTabConnection, VTabCursor,

@@ -1,8 +1,8 @@
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr, CString, c_char};
 use std::rc::Rc;
 
 use super::{Assign, Null, ToSql, ToSqlOutput, Value, ValueRef};
-use crate::ffi::{SQLITE_STATIC, SQLITE_UTF8};
+use crate::ffi::{SQLITE_STATIC, SQLITE_TRANSIENT, SQLITE_UTF8};
 use crate::util::free_boxed_value;
 use crate::{Error, Result};
 
@@ -120,7 +120,7 @@ impl IntoSql for f32 {
 impl IntoSql for String {
     #[inline]
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
-        a.assign_transient_text(self.as_bytes())
+        a.assign_transient_text(self.as_str())
     }
 }
 
@@ -138,7 +138,14 @@ impl IntoSql for ToSqlOutput<'_> {
                 ValueRef::Null => a.assign_null(),
                 ValueRef::Integer(i) => a.assign_int(i),
                 ValueRef::Real(r) => a.assign_real(r),
-                ValueRef::Text(s) => a.assign_transient_text(s),
+                ValueRef::Text(s) => unsafe {
+                    a.assign_raw_text(
+                        s.as_ptr().cast::<c_char>(),
+                        s.len() as _,
+                        SQLITE_TRANSIENT(),
+                        SQLITE_UTF8 as _,
+                    )
+                },
                 ValueRef::Blob(b) => a.assign_transient_blob(b),
             },
             ToSqlOutput::Owned(value) => value.into_sql(a),
@@ -147,7 +154,7 @@ impl IntoSql for ToSqlOutput<'_> {
             #[cfg(feature = "functions")]
             ToSqlOutput::Arg(i) => a.assign_arg(i),
             #[cfg(feature = "pointer")]
-            ToSqlOutput::Pointer(p) => a.assign_ptr(p.0 as _, p.1, p.2),
+            ToSqlOutput::Pointer(p) => unsafe { a.assign_ptr(p.0 as _, p.1, p.2) },
         }
     }
 }
@@ -158,7 +165,7 @@ impl IntoSql for Value {
             Value::Null => a.assign_null(),
             Value::Integer(i) => a.assign_int(i),
             Value::Real(r) => a.assign_real(r),
-            Value::Text(s) => a.assign_transient_text(s.as_bytes()),
+            Value::Text(s) => a.assign_transient_text(s.as_str()),
             Value::Blob(b) => a.assign_transient_blob(b.as_slice()),
         }
     }
@@ -182,7 +189,7 @@ unsafe extern "C" fn free_rc<T>(p: *mut std::ffi::c_void) {
 impl<T> IntoSql for (Rc<T>, &'static CStr) {
     /// Pass a `Rc` as a raw pointer to SQLite
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
-        a.assign_ptr(Rc::into_raw(self.0) as _, self.1, Some(free_rc::<T>))
+        unsafe { a.assign_ptr(Rc::into_raw(self.0) as _, self.1, Some(free_rc::<T>)) }
     }
 }
 
@@ -190,11 +197,13 @@ impl<T> IntoSql for (Rc<T>, &'static CStr) {
 impl<T> IntoSql for (Box<T>, &'static CStr) {
     /// Pass a `Box` as a raw pointer to SQLite
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
-        a.assign_ptr(
-            Box::into_raw(self.0) as _,
-            self.1,
-            Some(free_boxed_value::<T>),
-        )
+        unsafe {
+            a.assign_ptr(
+                Box::into_raw(self.0) as _,
+                self.1,
+                Some(free_boxed_value::<T>),
+            )
+        }
     }
 }
 
@@ -275,6 +284,22 @@ impl<const N: usize> IntoSql for Box<[u8; N]> {
                 Some(free_boxed_value::<[u8; N]>),
             )
         }
+    }
+}
+
+#[cfg(feature = "i128_blob")]
+impl IntoSql for i128 {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        // We store these biased (e.g. with the most significant bit flipped)
+        // so that comparisons with negative numbers work properly.
+        a.assign_transient_blob(&i128::to_be_bytes(self ^ (1_i128 << 127)))
+    }
+}
+
+#[cfg(feature = "uuid")]
+impl IntoSql for uuid::Uuid {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_blob(self.as_bytes().as_slice())
     }
 }
 

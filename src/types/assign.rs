@@ -40,7 +40,7 @@ pub trait Assign: sealed::Sealed + Sized {
     /// like `sqlite3_bind_zeroblob64` or `sqlite3_result_zeroblob64` for text
     fn assign_empty_text(self) -> Result<()>;
     /// `sqlite3_bind_text64` or `sqlite3_result_text64`
-    fn assign_text(self, s: &[u8], destructor: sqlite3_destructor_type) -> Result<()> {
+    fn assign_text(self, s: &str, destructor: sqlite3_destructor_type) -> Result<()> {
         unsafe {
             self.assign_raw_text(
                 s.as_ptr().cast::<c_char>(),
@@ -63,7 +63,7 @@ pub trait Assign: sealed::Sealed + Sized {
     ) -> Result<()>;
     /// Like `assign_text` with `SQLITE_TRANSIENT`
     #[inline]
-    fn assign_transient_text(self, s: &[u8]) -> Result<()> {
+    fn assign_transient_text(self, s: &str) -> Result<()> {
         self.assign_text(s, SQLITE_TRANSIENT())
     }
     /// `sqlite3_bind_blob64` or `sqlite3_result_blob64`
@@ -93,7 +93,7 @@ pub trait Assign: sealed::Sealed + Sized {
     fn assign_arg(self, idx: usize) -> Result<()>;
     /// `sqlite3_bind_pointer` or `sqlite3_result_pointer`
     #[cfg(feature = "pointer")]
-    fn assign_ptr(
+    unsafe fn assign_ptr(
         self,
         ptr: *mut c_void,
         ptr_type: &'static std::ffi::CStr,
@@ -171,7 +171,7 @@ impl Assign for (*mut sqlite3_stmt, c_int) {
     }
 
     #[cfg(feature = "pointer")]
-    fn assign_ptr(
+    unsafe fn assign_ptr(
         self,
         ptr: *mut c_void,
         ptr_type: &'static std::ffi::CStr,
@@ -269,7 +269,7 @@ impl Assign for (*mut sqlite3_context, &[*mut sqlite3_value]) {
 
     #[cfg(feature = "pointer")]
     #[inline]
-    fn assign_ptr(
+    unsafe fn assign_ptr(
         self,
         ptr: *mut c_void,
         ptr_type: &'static std::ffi::CStr,
@@ -343,7 +343,7 @@ impl Assign for () {
     }
 
     #[cfg(feature = "pointer")]
-    fn assign_ptr(
+    unsafe fn assign_ptr(
         self,
         ptr: *mut c_void,
         _: &'static std::ffi::CStr,
@@ -362,7 +362,7 @@ mod test {
 
     #[test]
     fn assign_empty_text() -> Result<()> {
-        ().assign_text("".as_bytes(), SQLITE_TRANSIENT())
+        ().assign_text("", SQLITE_TRANSIENT())
     }
 
     #[test]
