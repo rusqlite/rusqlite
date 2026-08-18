@@ -1236,24 +1236,24 @@ mod test {
     #[test]
     #[cfg(feature = "pointer")]
     fn test_rc_pointer() -> Result<()> {
-        use crate::types::ToSqlOutput;
+        use std::ffi::CStr;
         use std::ops::Deref as _;
         use std::rc::Rc;
 
-        const PTR_TYPE: &std::ffi::CStr = c"my_rust_ptr";
+        const PTR_TYPE: &CStr = c"my_rust_ptr";
         let rc = Rc::new(1);
         {
-            let ptr = ToSqlOutput::from_rc(rc.clone(), PTR_TYPE);
+            let ptr = (rc.clone(), PTR_TYPE);
             assert_eq!(2, Rc::strong_count(&rc));
-            fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
+            fn myfunc(ctx: &Context<'_>) -> Result<(Rc<i32>, &'static CStr)> {
                 let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
                 assert_eq!(x, Some(&1));
-                Ok(ToSqlOutput::from_rc(Rc::new(*x.unwrap()), PTR_TYPE))
+                Ok((Rc::new(*x.unwrap()), PTR_TYPE))
             }
             let db = Connection::open_in_memory()?;
             db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;
             let mut stmt = db.prepare("SELECT myfunc(?)")?;
-            let result = stmt.query_one([ptr], |r| {
+            let result = stmt.query_one((ptr,), |r| {
                 unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) }.map(|opt| opt.cloned())
             })?;
             assert_eq!(result.unwrap(), *rc.deref());
@@ -1265,20 +1265,20 @@ mod test {
     #[test]
     #[cfg(feature = "pointer")]
     fn test_box_pointer() -> Result<()> {
-        use crate::types::ToSqlOutput;
+        use std::ffi::CStr;
 
-        const PTR_TYPE: &std::ffi::CStr = c"my_rust_ptr";
+        const PTR_TYPE: &CStr = c"my_rust_ptr";
         let value = 1;
-        let ptr = ToSqlOutput::new_boxed(value, PTR_TYPE);
-        fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
+        let ptr = (Box::new(value), PTR_TYPE);
+        fn myfunc(ctx: &Context<'_>) -> Result<(Box<i32>, &'static CStr)> {
             let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
             assert_eq!(x, Some(&1));
-            Ok(ToSqlOutput::new_boxed(*x.unwrap(), PTR_TYPE))
+            Ok((Box::new(*x.unwrap()), PTR_TYPE))
         }
         let db = Connection::open_in_memory()?;
         db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;
         let mut stmt = db.prepare("SELECT myfunc(?)")?;
-        let result = stmt.query_one([ptr], |r| {
+        let result = stmt.query_one((ptr,), |r| {
             unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) }.map(|opt| opt.cloned())
         })?;
         assert_eq!(result.unwrap(), value);

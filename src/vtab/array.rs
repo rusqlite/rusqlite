@@ -18,7 +18,7 @@
 //!     // Note: A `Rc<Vec<Value>>` must be used as the parameter.
 //!     let values = Rc::new(v.iter().copied().map(Value::from).collect::<Vec<Value>>());
 //!     let mut stmt = db.prepare("SELECT value from rarray(?1);")?;
-//!     let rows = stmt.query_map([values], |row| row.get::<_, i64>(0))?;
+//!     let rows = stmt.query_map((values,), |row| row.get::<_, i64>(0))?;
 //!     for value in rows {
 //!         println!("{}", value?);
 //!     }
@@ -32,7 +32,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::ffi;
-use crate::types::{Assign, IntoSql, ToSql, ToSqlOutput, Value};
+use crate::types::{Assign, IntoSql, Value};
 use crate::vtab::{
     Context, Filters, IndexConstraintOp, IndexInfo, Module, VTab, VTabConnection, VTabCursor,
 };
@@ -46,12 +46,6 @@ const MODULE_NAME: &CStr = ARRAY_TYPE;
 /// Array parameter / pointer
 pub type Array = Rc<Vec<Value>>;
 
-impl ToSql for Array {
-    #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from_rc(self.clone(), ARRAY_TYPE))
-    }
-}
 impl IntoSql for Array {
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         (self, ARRAY_TYPE).into_sql(a)
@@ -212,8 +206,7 @@ mod test {
         {
             let mut stmt = db.prepare("SELECT value from rarray(?1);")?;
 
-            let rows = stmt.query_map([&ptr], |row| row.get::<_, i64>(0))?;
-            assert_eq!(2, Rc::strong_count(&ptr));
+            let rows = stmt.query_map((ptr,), |row| row.get::<_, i64>(0))?;
             let mut count = 0;
             for (i, value) in rows.enumerate() {
                 assert_eq!(i as i64, value? - 1);
@@ -221,7 +214,6 @@ mod test {
             }
             assert_eq!(4, count);
         }
-        assert_eq!(1, Rc::strong_count(&ptr));
         Ok(())
     }
 }

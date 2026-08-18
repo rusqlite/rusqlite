@@ -23,50 +23,6 @@ pub enum ToSqlOutput<'a> {
     /// n-th arg of an SQL scalar function
     #[cfg(feature = "functions")]
     Arg(usize),
-
-    /// Pointer passing interface
-    #[cfg(feature = "pointer")]
-    Pointer(
-        (
-            *const std::ffi::c_void,
-            &'static std::ffi::CStr,
-            crate::ffi::sqlite3_destructor_type,
-        ),
-    ),
-}
-
-#[cfg(feature = "pointer")]
-impl<'a> ToSqlOutput<'a> {
-    /// Pass an `Rc` as a raw pointer to SQLite
-    ///
-    /// # Warning
-    /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
-    pub fn from_rc<T>(rc: std::rc::Rc<T>, ptr_type: &'static std::ffi::CStr) -> ToSqlOutput<'a> {
-        unsafe extern "C" fn free_rc<T>(p: *mut std::ffi::c_void) {
-            unsafe {
-                std::rc::Rc::decrement_strong_count(p.cast::<T>());
-            }
-        }
-        ToSqlOutput::Pointer((
-            std::rc::Rc::into_raw(rc).cast::<std::ffi::c_void>(),
-            ptr_type,
-            Some(free_rc::<T>),
-        ))
-    }
-
-    /// Pass a `Box` as a raw pointer to SQLite
-    ///
-    /// # Warning
-    /// Leak memory if an error happens before the returned pointer is bound to an SQLite statement.
-    pub fn new_boxed<T>(v: T, ptr_type: &'static std::ffi::CStr) -> ToSqlOutput<'a> {
-        use crate::util::free_boxed_value;
-
-        ToSqlOutput::Pointer((
-            Box::into_raw(Box::new(v)).cast::<std::ffi::c_void>(),
-            ptr_type,
-            Some(free_boxed_value::<T>),
-        ))
-    }
 }
 
 // Generically allow any type that can be converted into a ValueRef
@@ -153,8 +109,6 @@ impl ToSql for ToSqlOutput<'_> {
             ToSqlOutput::ZeroBlob(i) => ToSqlOutput::ZeroBlob(i),
             #[cfg(feature = "functions")]
             ToSqlOutput::Arg(i) => ToSqlOutput::Arg(i),
-            #[cfg(feature = "pointer")]
-            ToSqlOutput::Pointer(p) => ToSqlOutput::Pointer(p),
         })
     }
 }
@@ -606,25 +560,5 @@ mod test {
         assert_eq!(found_id, id);
         assert_eq!(found_label, "target");
         Ok(())
-    }
-
-    #[cfg(feature = "pointer")]
-    #[test]
-    fn from_rc() {
-        let rc = std::rc::Rc::new("rc".to_owned());
-        if let ToSqlOutput::Pointer((ptr, _, Some(destructor))) = ToSqlOutput::from_rc(rc, c"rc") {
-            unsafe { destructor(ptr.cast_mut()) }
-        }
-    }
-
-    #[cfg(feature = "pointer")]
-    #[test]
-    fn new_boxed() {
-        let data = "box".to_owned();
-        if let ToSqlOutput::Pointer((ptr, _, Some(destructor))) =
-            ToSqlOutput::new_boxed(data, c"box")
-        {
-            unsafe { destructor(ptr.cast_mut()) }
-        }
     }
 }

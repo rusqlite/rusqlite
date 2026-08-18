@@ -153,8 +153,6 @@ impl IntoSql for ToSqlOutput<'_> {
             ToSqlOutput::ZeroBlob(len) => a.assign_zeroblob(len),
             #[cfg(feature = "functions")]
             ToSqlOutput::Arg(i) => a.assign_arg(i),
-            #[cfg(feature = "pointer")]
-            ToSqlOutput::Pointer(p) => unsafe { a.assign_ptr(p.0 as _, p.1, p.2) },
         }
     }
 }
@@ -204,6 +202,14 @@ impl<T> IntoSql for (Box<T>, &'static CStr) {
                 Some(free_boxed_value::<T>),
             )
         }
+    }
+}
+
+#[cfg(feature = "pointer")]
+impl IntoSql for (*mut std::ffi::c_void, &'static CStr) {
+    /// Pass a `Box` as a raw pointer to SQLite
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        unsafe { a.assign_ptr(self.0, self.1, None) }
     }
 }
 
@@ -284,6 +290,13 @@ impl<const N: usize> IntoSql for Box<[u8; N]> {
                 Some(free_boxed_value::<[u8; N]>),
             )
         }
+    }
+}
+impl<const N: usize> IntoSql for [u8; N] {
+    /// Pass a `[u8; N]` as a BLOB to SQLite
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        let bytes = self.len();
+        unsafe { a.assign_raw_blob(self.as_ptr() as _, bytes as _, SQLITE_TRANSIENT()) }
     }
 }
 
