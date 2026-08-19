@@ -88,12 +88,12 @@ mod test {
 
     #[test]
     fn test_limit_values() {
-        assert_eq!(Limit::SQLITE_LIMIT_LENGTH as i32, ffi::SQLITE_LIMIT_LENGTH,);
+        assert_eq!(Limit::SQLITE_LIMIT_LENGTH as i32, ffi::SQLITE_LIMIT_LENGTH);
         assert_eq!(
             Limit::SQLITE_LIMIT_SQL_LENGTH as i32,
             ffi::SQLITE_LIMIT_SQL_LENGTH,
         );
-        assert_eq!(Limit::SQLITE_LIMIT_COLUMN as i32, ffi::SQLITE_LIMIT_COLUMN,);
+        assert_eq!(Limit::SQLITE_LIMIT_COLUMN as i32, ffi::SQLITE_LIMIT_COLUMN);
         assert_eq!(
             Limit::SQLITE_LIMIT_EXPR_DEPTH as i32,
             ffi::SQLITE_LIMIT_EXPR_DEPTH,

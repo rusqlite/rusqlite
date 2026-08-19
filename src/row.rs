@@ -671,13 +671,10 @@ mod tests {
     fn test_pointer() -> Result<()> {
         use crate::ffi::fts5_api;
         const PTR_TYPE: &std::ffi::CStr = c"fts5_api_ptr";
-        let p_ret: *mut fts5_api = std::ptr::null_mut();
-        let ptr = (
-            &p_ret as *const *mut fts5_api as *mut std::ffi::c_void,
-            PTR_TYPE,
-        );
+        let mut p_ret: *mut fts5_api = std::ptr::null_mut();
+        let ptr = (&mut p_ret as *mut *mut _ as *mut _, PTR_TYPE);
         let db = Connection::open_in_memory()?;
-        db.query_row("SELECT fts5(?)", (ptr,), |_| Ok(()))?;
+        db.query_row("SELECT fts5(?)", [ptr], |_| Ok(()))?;
         assert!(!p_ret.is_null());
         Ok(())
     }

@@ -2432,7 +2432,7 @@ mod test {
 
         let mut size = -1;
         assert_matches!(
-            db.file_control(DEFAULT_NAME, FileControl::SizeLimit(&mut size),),
+            db.file_control(DEFAULT_NAME, FileControl::SizeLimit(&mut size)),
             Err(Error::SqliteFailure(
                 ffi::Error {
                     code: ErrorCode::NotFound,

@@ -1253,7 +1253,7 @@ mod test {
             let db = Connection::open_in_memory()?;
             db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;
             let mut stmt = db.prepare("SELECT myfunc(?)")?;
-            let result = stmt.query_one((ptr,), |r| {
+            let result = stmt.query_one([ptr], |r| {
                 unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) }.map(|opt| opt.cloned())
             })?;
             assert_eq!(result.unwrap(), *rc.deref());
@@ -1278,7 +1278,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;
         let mut stmt = db.prepare("SELECT myfunc(?)")?;
-        let result = stmt.query_one((ptr,), |r| {
+        let result = stmt.query_one([ptr], |r| {
             unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) }.map(|opt| opt.cloned())
         })?;
         assert_eq!(result.unwrap(), value);

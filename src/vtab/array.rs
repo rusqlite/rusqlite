@@ -18,7 +18,7 @@
 //!     // Note: A `Rc<Vec<Value>>` must be used as the parameter.
 //!     let values = Rc::new(v.iter().copied().map(Value::from).collect::<Vec<Value>>());
 //!     let mut stmt = db.prepare("SELECT value from rarray(?1);")?;
-//!     let rows = stmt.query_map((values,), |row| row.get::<_, i64>(0))?;
+//!     let rows = stmt.query_map([values], |row| row.get::<_, i64>(0))?;
 //!     for value in rows {
 //!         println!("{}", value?);
 //!     }
@@ -206,7 +206,7 @@ mod test {
         {
             let mut stmt = db.prepare("SELECT value from rarray(?1);")?;
 
-            let rows = stmt.query_map((ptr,), |row| row.get::<_, i64>(0))?;
+            let rows = stmt.query_map([ptr], |row| row.get::<_, i64>(0))?;
             let mut count = 0;
             for (i, value) in rows.enumerate() {
                 assert_eq!(i as i64, value? - 1);

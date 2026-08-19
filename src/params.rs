@@ -304,11 +304,11 @@ macro_rules! impl_for_array_ref {
                 stmt.bind_parameters_named(self)
             }
         }
-        impl<T: ToSql> Sealed for [T; $N] {}
-        impl<T: ToSql> Params for [T; $N] {
+        impl<T: IntoSql> Sealed for [T; $N] {}
+        impl<T: IntoSql> Params for [T; $N] {
             #[inline]
             fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
-                stmt.bind_parameters(&self)
+                stmt.bind_parameters(self)
             }
         }
     )+};
@@ -429,7 +429,7 @@ pub struct ParamsFromIter<I>(I);
 pub fn params_from_iter<I>(iter: I) -> ParamsFromIter<I>
 where
     I: IntoIterator,
-    I::Item: ToSql,
+    I::Item: IntoSql,
 {
     ParamsFromIter(iter)
 }
@@ -437,14 +437,14 @@ where
 impl<I> Sealed for ParamsFromIter<I>
 where
     I: IntoIterator,
-    I::Item: ToSql,
+    I::Item: IntoSql,
 {
 }
 
 impl<I> Params for ParamsFromIter<I>
 where
     I: IntoIterator,
-    I::Item: ToSql,
+    I::Item: IntoSql,
 {
     #[inline]
     fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {

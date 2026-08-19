@@ -63,8 +63,8 @@ pub trait Assign: sealed::Sealed + Sized {
     ) -> Result<()>;
     /// Like `assign_text` with `SQLITE_TRANSIENT`
     #[inline]
-    fn assign_transient_text(self, s: &str) -> Result<()> {
-        self.assign_text(s, SQLITE_TRANSIENT())
+    fn assign_transient_text<T: AsRef<str>>(self, s: T) -> Result<()> {
+        self.assign_text(s.as_ref(), SQLITE_TRANSIENT())
     }
     /// `sqlite3_bind_blob64` or `sqlite3_result_blob64`
     #[inline]
@@ -83,8 +83,8 @@ pub trait Assign: sealed::Sealed + Sized {
     ) -> Result<()>;
     /// Like `assign_blob` with `SQLITE_TRANSIENT`
     #[inline]
-    fn assign_transient_blob(self, b: &[u8]) -> Result<()> {
-        self.assign_blob(b, SQLITE_TRANSIENT())
+    fn assign_transient_blob<T: AsRef<[u8]>>(self, b: T) -> Result<()> {
+        self.assign_blob(b.as_ref(), SQLITE_TRANSIENT())
     }
     /// `sqlite3_bind_zeroblob64` or `sqlite3_result_zeroblob64`
     fn assign_zeroblob(self, len: u64) -> Result<()>;

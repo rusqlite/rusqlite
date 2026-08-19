@@ -95,6 +95,7 @@ macro_rules! try_from_i64 {
 }
 
 try_from_i64!(isize);
+try_from_i64!(non_zero std::num::NonZeroIsize);
 #[cfg(feature = "fallible_uint")]
 try_from_i64!(u64);
 #[cfg(feature = "fallible_uint")]
@@ -120,7 +121,7 @@ impl IntoSql for f32 {
 impl IntoSql for String {
     #[inline]
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
-        a.assign_transient_text(self.as_str())
+        a.assign_transient_text(self)
     }
 }
 
@@ -163,7 +164,7 @@ impl IntoSql for Value {
             Value::Null => a.assign_null(),
             Value::Integer(i) => a.assign_int(i),
             Value::Real(r) => a.assign_real(r),
-            Value::Text(s) => a.assign_transient_text(s.as_str()),
+            Value::Text(s) => a.assign_transient_text(s),
             Value::Blob(b) => a.assign_transient_blob(b.as_slice()),
         }
     }
@@ -306,6 +307,12 @@ impl IntoSql for i128 {
         // We store these biased (e.g. with the most significant bit flipped)
         // so that comparisons with negative numbers work properly.
         a.assign_transient_blob(&i128::to_be_bytes(self ^ (1_i128 << 127)))
+    }
+}
+#[cfg(feature = "i128_blob")]
+impl IntoSql for std::num::NonZeroI128 {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        self.get().into_sql(a)
     }
 }
 

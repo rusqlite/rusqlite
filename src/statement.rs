@@ -473,7 +473,7 @@ impl Statement<'_> {
     pub(crate) fn bind_parameters<P>(&mut self, params: P) -> Result<()>
     where
         P: IntoIterator,
-        P::Item: ToSql,
+        P::Item: IntoSql,
     {
         let expected = self.stmt.bind_parameter_count();
         let mut index = 0;
@@ -482,7 +482,7 @@ impl Statement<'_> {
             if index > expected {
                 break;
             }
-            self.bind_parameter(index, &p)?;
+            self.bind_parameter(index, p)?;
         }
         if index != expected {
             Err(Error::InvalidParameterCount(index, expected))
