@@ -1995,7 +1995,7 @@ mod test {
         let mut insert_stmt = db.prepare("INSERT INTO foo(i, x) VALUES(?1, ?2)")?;
         for (i, v) in vals.iter().enumerate() {
             let i_to_insert = i as i64;
-            assert_eq!(insert_stmt.execute((i_to_insert, v))?, 1);
+            assert_eq!(insert_stmt.execute((i_to_insert, *v))?, 1);
         }
 
         let mut query = db.prepare("SELECT i, x FROM foo")?;

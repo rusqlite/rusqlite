@@ -1,7 +1,8 @@
+use std::borrow::Cow;
 use std::ffi::{CStr, CString, c_char};
 use std::rc::Rc;
 
-use super::{Assign, Null, ToSql, ToSqlOutput, Value, ValueRef};
+use super::{Assign, Null, ToSqlOutput, Value, ValueRef};
 use crate::ffi::{SQLITE_STATIC, SQLITE_TRANSIENT, SQLITE_UTF8};
 use crate::util::free_boxed_value;
 use crate::{Error, Result};
@@ -9,13 +10,16 @@ use crate::{Error, Result};
 /// A by-value conversion trait
 pub trait IntoSql {
     /// Converts Rust value to SQLite
-    fn into_sql<A: Assign>(self, stmt_or_ctx: A) -> Result<()>;
+    fn into_sql<A: Assign>(self, a: A) -> Result<()>;
 }
-impl<T: ToSql + ?Sized> IntoSql for &T {
+// TODO impl<T: IntoSql + ?Sized> IntoSql for &T ~ assign_ptr
+/*impl<T: ToSql + ?Sized> IntoSql for &T {
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         self.to_sql()?.into_sql(a)
     }
-}
+}*/
+// TODO impl<T: IntoSql + ?Sized> IntoSql for Box<T>
+
 impl IntoSql for Null {
     #[inline]
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
@@ -35,12 +39,6 @@ macro_rules! from_i64(
             #[inline]
             fn into_sql<A: Assign>(self, a: A) -> Result<()> {
                 a.assign_int(i64::from(self))
-            }
-        }
-        impl IntoSql for Box<$t> {
-            #[inline]
-            fn into_sql<A: Assign>(self, a: A) -> Result<()> {
-                a.assign_int(i64::from(*self))
             }
         }
     );
@@ -124,11 +122,42 @@ impl IntoSql for String {
         a.assign_transient_text(self)
     }
 }
+impl IntoSql for &str {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_text(self)
+    }
+}
+impl IntoSql for Cow<'_, str> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_text(self)
+    }
+}
+impl IntoSql for Box<str> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_text(self)
+    }
+}
 
 impl IntoSql for Vec<u8> {
     #[inline]
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
-        a.assign_transient_blob(self.as_slice())
+        a.assign_transient_blob(self)
+    }
+}
+impl IntoSql for &Vec<u8> {
+    #[inline]
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_blob(self)
+    }
+}
+impl IntoSql for &[u8] {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_blob(self)
+    }
+}
+impl IntoSql for Cow<'_, [u8]> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_blob(self)
     }
 }
 
@@ -158,14 +187,25 @@ impl IntoSql for ToSqlOutput<'_> {
     }
 }
 
-impl IntoSql for Value {
+/*impl IntoSql for Value {
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         match self {
             Value::Null => a.assign_null(),
             Value::Integer(i) => a.assign_int(i),
             Value::Real(r) => a.assign_real(r),
             Value::Text(s) => a.assign_transient_text(s),
-            Value::Blob(b) => a.assign_transient_blob(b.as_slice()),
+            Value::Blob(b) => a.assign_transient_blob(b),
+        }
+    }
+}*/
+impl IntoSql for &Value {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        match self {
+            Value::Null => a.assign_null(),
+            Value::Integer(i) => a.assign_int(*i),
+            Value::Real(r) => a.assign_real(*r),
+            Value::Text(s) => a.assign_transient_text(s),
+            Value::Blob(b) => a.assign_transient_blob(b),
         }
     }
 }
@@ -319,7 +359,7 @@ impl IntoSql for std::num::NonZeroI128 {
 #[cfg(feature = "uuid")]
 impl IntoSql for uuid::Uuid {
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
-        a.assign_transient_blob(self.as_bytes().as_slice())
+        a.assign_transient_blob(self.as_bytes())
     }
 }
 
@@ -335,7 +375,7 @@ mod test {
     #[cfg(feature = "pointer")]
     fn rc_ptr() -> Result<()> {
         let rc = Rc::new("rc".to_owned());
-        rc.into_sql(())
+        (rc, c"rc").into_sql(())
     }
 
     #[test]

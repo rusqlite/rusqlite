@@ -1297,7 +1297,7 @@ mod test {
         assert_eq!("UTF-16le", encoding);
         db.execute_batch("CREATE TABLE foo(x TEXT)")?;
         let expected = "テスト";
-        db.execute("INSERT INTO foo(x) VALUES (?1)", [&expected])?;
+        db.execute("INSERT INTO foo(x) VALUES (?1)", [expected])?;
         let actual: String = db.one_column("SELECT x FROM foo", [])?;
         assert_eq!(expected, actual);
         Ok(())

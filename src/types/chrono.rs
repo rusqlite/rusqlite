@@ -5,14 +5,14 @@ use chrono::{
 };
 
 use crate::Result;
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
+use crate::types::{Assign, FromSql, FromSqlError, FromSqlResult, IntoSql, Type, ValueRef};
 
 /// ISO 8601 calendar date without timezone => "YYYY-MM-DD"
-impl ToSql for NaiveDate {
+impl IntoSql for NaiveDate {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let date_str = self.format("%F").to_string();
-        Ok(ToSqlOutput::from(date_str))
+        a.assign_transient_text(date_str)
     }
 }
 
@@ -27,11 +27,11 @@ impl FromSql for NaiveDate {
 }
 
 /// ISO 8601 time without timezone => "HH:MM:SS.SSS"
-impl ToSql for NaiveTime {
+impl IntoSql for NaiveTime {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let date_str = self.format("%T%.f").to_string();
-        Ok(ToSqlOutput::from(date_str))
+        a.assign_transient_text(date_str)
     }
 }
 
@@ -51,11 +51,11 @@ impl FromSql for NaiveTime {
 
 /// ISO 8601 combined date and time without timezone =>
 /// "YYYY-MM-DD HH:MM:SS.SSS"
-impl ToSql for NaiveDateTime {
+impl IntoSql for NaiveDateTime {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let date_str = self.format("%F %T%.f").to_string();
-        Ok(ToSqlOutput::from(date_str))
+        a.assign_transient_text(date_str)
     }
 }
 
@@ -78,31 +78,31 @@ impl FromSql for NaiveDateTime {
 
 /// UTC time => UTC RFC3339 timestamp
 /// ("YYYY-MM-DD HH:MM:SS.SSS+00:00").
-impl ToSql for DateTime<Utc> {
+impl IntoSql for DateTime<Utc> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let date_str = self.format("%F %T%.f%:z").to_string();
-        Ok(ToSqlOutput::from(date_str))
+        a.assign_transient_text(date_str)
     }
 }
 
 /// Local time => UTC RFC3339 timestamp
 /// ("YYYY-MM-DD HH:MM:SS.SSS+00:00").
-impl ToSql for DateTime<Local> {
+impl IntoSql for DateTime<Local> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let date_str = self.with_timezone(&Utc).format("%F %T%.f%:z").to_string();
-        Ok(ToSqlOutput::from(date_str))
+        a.assign_transient_text(date_str)
     }
 }
 
 /// Date and time with time zone => RFC3339 timestamp
 /// ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM").
-impl ToSql for DateTime<FixedOffset> {
+impl IntoSql for DateTime<FixedOffset> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let date_str = self.format("%F %T%.f%:z").to_string();
-        Ok(ToSqlOutput::from(date_str))
+        a.assign_transient_text(date_str)
     }
 }
 

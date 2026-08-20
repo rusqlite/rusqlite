@@ -1,18 +1,11 @@
-//! [`ToSql`] and [`FromSql`] implementation for [`Url`].
+//! [`IntoSql`] and [`FromSql`] implementation for [`Url`].
 use crate::Result;
-use crate::types::{
-    Assign, FromSql, FromSqlError, FromSqlResult, IntoSql, ToSql, ToSqlOutput, ValueRef,
-};
+use crate::types::{Assign, FromSql, FromSqlError, FromSqlResult, IntoSql, ValueRef};
 use url::Url;
 
 /// Serialize `Url` to text.
-impl ToSql for Url {
-    #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(self.as_str()))
-    }
-}
 impl IntoSql for Url {
+    #[inline]
     fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         a.assign_transient_text(self.as_str())
     }
