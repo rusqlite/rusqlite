@@ -9,7 +9,7 @@
 //! # Example
 //!
 //! ```rust,no_run
-//! # use rusqlite::{types::Value, Connection, Result, params};
+//! # use rusqlite::{types::Value, Connection, Result};
 //! # use std::rc::Rc;
 //! fn example(db: &Connection) -> Result<()> {
 //!     // Note: This should be done once (usually when opening the DB).
@@ -32,7 +32,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::ffi;
-use crate::types::{ToSql, ToSqlOutput, Value};
+use crate::types::{Assign, IntoSql, Value};
 use crate::vtab::{
     Context, Filters, IndexConstraintOp, IndexInfo, Module, VTab, VTabConnection, VTabCursor,
 };
@@ -46,10 +46,9 @@ const MODULE_NAME: &CStr = ARRAY_TYPE;
 /// Array parameter / pointer
 pub type Array = Rc<Vec<Value>>;
 
-impl ToSql for Array {
-    #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from_rc(self.clone(), ARRAY_TYPE))
+impl IntoSql for Array {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        (self, ARRAY_TYPE).into_sql(a)
     }
 }
 
@@ -207,8 +206,7 @@ mod test {
         {
             let mut stmt = db.prepare("SELECT value from rarray(?1);")?;
 
-            let rows = stmt.query_map([&ptr], |row| row.get::<_, i64>(0))?;
-            assert_eq!(2, Rc::strong_count(&ptr));
+            let rows = stmt.query_map([ptr], |row| row.get::<_, i64>(0))?;
             let mut count = 0;
             for (i, value) in rows.enumerate() {
                 assert_eq!(i as i64, value? - 1);
@@ -216,7 +214,6 @@ mod test {
             }
             assert_eq!(4, count);
         }
-        assert_eq!(1, Rc::strong_count(&ptr));
         Ok(())
     }
 }

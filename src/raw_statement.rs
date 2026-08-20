@@ -213,9 +213,7 @@ impl RawStatement {
 
     #[inline]
     pub fn clear_bindings(&mut self) {
-        unsafe {
-            ffi::sqlite3_clear_bindings(self.ptr);
-        } // rc is always SQLITE_OK
+        unsafe { ffi::sqlite3_clear_bindings(self.ptr) }; // rc is always SQLITE_OK
     }
 
     #[inline]

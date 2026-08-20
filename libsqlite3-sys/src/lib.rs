@@ -11,12 +11,12 @@ use core::mem;
 mod error;
 
 #[must_use]
-pub fn SQLITE_STATIC() -> sqlite3_destructor_type {
+pub const fn SQLITE_STATIC() -> sqlite3_destructor_type {
     None
 }
 
 #[must_use]
-pub fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
+pub const fn SQLITE_TRANSIENT() -> sqlite3_destructor_type {
     Some(unsafe { mem::transmute::<isize, unsafe extern "C" fn(*mut core::ffi::c_void)>(-1_isize) })
 }
 

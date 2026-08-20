@@ -70,16 +70,20 @@ impl ToSql for DateTimeSql {
 //! implements [`ToSql`] or [`FromSql`] for the cases where you want to know if
 //! a value was NULL (which gets translated to `None`).
 
+pub use self::assign::Assign;
 pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
+pub use self::into_sql::IntoSql;
 pub use self::to_sql::{ToSql, ToSqlOutput};
 pub use self::value::Value;
 pub use self::value_ref::ValueRef;
 
 use std::fmt;
 
+mod assign;
 #[cfg(feature = "chrono")]
 mod chrono;
 mod from_sql;
+mod into_sql;
 #[cfg(feature = "jiff")]
 mod jiff;
 #[cfg(feature = "serde_json")]
@@ -141,7 +145,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::Value;
-    use crate::{Connection, Error, Result, Statement, params};
+    use crate::{Connection, Error, Result, Statement};
     use std::ffi::{c_double, c_int};
 
     fn checked_memory_handle() -> Result<Connection> {
@@ -362,7 +366,7 @@ mod test {
 
     macro_rules! test_conversion {
         ($db_etc:ident, $insert_value:expr, $get_type:ty,expect $expected_value:expr) => {
-            $db_etc.insert_statement.execute(params![$insert_value])?;
+            $db_etc.insert_statement.execute([$insert_value])?;
             let res = $db_etc
                 .query_statement
                 .query_row([], |row| row.get::<_, $get_type>(0));
@@ -370,7 +374,7 @@ mod test {
             $db_etc.delete_statement.execute([])?;
         };
         ($db_etc:ident, $insert_value:expr, $get_type:ty,expect_from_sql_error) => {
-            $db_etc.insert_statement.execute(params![$insert_value])?;
+            $db_etc.insert_statement.execute([$insert_value])?;
             let res = $db_etc
                 .query_statement
                 .query_row([], |row| row.get::<_, $get_type>(0));
@@ -380,7 +384,7 @@ mod test {
         ($db_etc:ident, $insert_value:expr, $get_type:ty,expect_to_sql_error) => {
             $db_etc
                 .insert_statement
-                .execute(params![$insert_value])
+                .execute([$insert_value])
                 .unwrap_err();
         };
     }

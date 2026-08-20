@@ -37,9 +37,7 @@ impl OwnedData {
 
 impl Drop for OwnedData {
     fn drop(&mut self) {
-        unsafe {
-            ffi::sqlite3_free(self.ptr.as_ptr().cast());
-        }
+        unsafe { ffi::sqlite3_free(self.ptr.as_ptr().cast()) };
     }
 }
 

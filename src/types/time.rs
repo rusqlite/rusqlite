@@ -1,8 +1,8 @@
 //! Convert formats 1-10 in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) to time types.
-//! [`ToSql`] and [`FromSql`] implementation for [`OffsetDateTime`].
-//! [`ToSql`] and [`FromSql`] implementation for [`PrimitiveDateTime`].
-//! [`ToSql`] and [`FromSql`] implementation for [`Date`].
-//! [`ToSql`] and [`FromSql`] implementation for [`Time`].
+//! [`IntoSql`] and [`FromSql`] implementation for [`OffsetDateTime`].
+//! [`IntoSql`] and [`FromSql`] implementation for [`PrimitiveDateTime`].
+//! [`IntoSql`] and [`FromSql`] implementation for [`Date`].
+//! [`IntoSql`] and [`FromSql`] implementation for [`Time`].
 //! Time Strings in:
 //!  - Format 2: "YYYY-MM-DD HH:MM"
 //!  - Format 5: "YYYY-MM-DDTHH:MM"
@@ -12,7 +12,7 @@
 //! Time String that contain an optional timezone without an explicit date are unsupported.
 //! All other assumptions described in [Time Values](https://sqlite.org/lang_datefunc.html#time_values) section are unsupported.
 
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
+use crate::types::{Assign, FromSql, FromSqlError, FromSqlResult, IntoSql, Type, ValueRef};
 use crate::{Error, Result};
 use time::format_description::FormatItem;
 use time::macros::format_description;
@@ -52,13 +52,12 @@ const LEGACY_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
 );
 
 /// `OffsetDatetime` => RFC3339 format ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM")
-impl ToSql for OffsetDateTime {
-    #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+impl IntoSql for OffsetDateTime {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let time_string = self
             .format(&OFFSET_DATE_TIME_ENCODING)
             .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-        Ok(ToSqlOutput::from(time_string))
+        a.assign_transient_text(time_string)
     }
 }
 
@@ -89,13 +88,13 @@ impl FromSql for OffsetDateTime {
 }
 
 /// ISO 8601 calendar date without timezone => "YYYY-MM-DD"
-impl ToSql for Date {
+impl IntoSql for Date {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let date_str = self
             .format(&DATE_FORMAT)
             .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-        Ok(ToSqlOutput::from(date_str))
+        a.assign_transient_text(date_str)
     }
 }
 
@@ -110,13 +109,13 @@ impl FromSql for Date {
 }
 
 /// ISO 8601 time without timezone => "HH:MM:SS.SSS"
-impl ToSql for Time {
+impl IntoSql for Time {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let time_str = self
             .format(&TIME_ENCODING)
             .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-        Ok(ToSqlOutput::from(time_str))
+        a.assign_transient_text(time_str)
     }
 }
 
@@ -131,23 +130,23 @@ impl FromSql for Time {
 }
 
 /// ISO 8601 combined date and time without timezone => "YYYY-MM-DD HH:MM:SS.SSS"
-impl ToSql for PrimitiveDateTime {
+impl IntoSql for PrimitiveDateTime {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let date_time_str = self
             .format(&PRIMITIVE_DATE_TIME_ENCODING)
             .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-        Ok(ToSqlOutput::from(date_time_str))
+        a.assign_transient_text(date_time_str)
     }
 }
 
-impl ToSql for UtcDateTime {
+impl IntoSql for UtcDateTime {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
         let date_time_str = self
             .format(&UTC_DATE_TIME_FORMAT)
             .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-        Ok(ToSqlOutput::from(date_time_str))
+        a.assign_transient_text(date_time_str)
     }
 }
 
@@ -182,7 +181,7 @@ mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use crate::{Connection, Result, ToSql};
+    use crate::{Connection, IntoSql, Result};
     use time::macros::{date, datetime, time, utc_datetime};
     use time::{Date, OffsetDateTime, PrimitiveDateTime, Time, UtcDateTime};
 
@@ -483,7 +482,7 @@ mod test {
         test_param(OffsetDateTime::now_utc())
     }
 
-    fn test_param<P: ToSql>(p: P) -> Result<()> {
+    fn test_param<P: IntoSql>(p: P) -> Result<()> {
         let db = checked_memory_handle()?;
         let result: Result<bool> = db.one_column(
             "SELECT 1 WHERE ?1 BETWEEN datetime('now', '-1 minute') AND datetime('now', '+1 minute')",

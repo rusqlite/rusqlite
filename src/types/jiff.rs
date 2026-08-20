@@ -6,14 +6,13 @@ use jiff::{
 };
 
 use crate::Result;
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
+use crate::types::{Assign, FromSql, FromSqlError, FromSqlResult, IntoSql, Type, ValueRef};
 
 /// Gregorian calendar date => "YYYY-MM-DD"
-impl ToSql for Date {
+impl IntoSql for Date {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let s = self.to_string();
-        Ok(ToSqlOutput::from(s))
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_text(self.to_string())
     }
 }
 
@@ -27,11 +26,10 @@ impl FromSql for Date {
     }
 }
 /// time => "HH:MM:SS.SSS"
-impl ToSql for Time {
+impl IntoSql for Time {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let date_str = self.to_string();
-        Ok(ToSqlOutput::from(date_str))
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_text(self.to_string())
     }
 }
 
@@ -45,11 +43,10 @@ impl FromSql for Time {
 }
 
 /// Gregorian datetime => "YYYY-MM-DDTHH:MM:SS.SSS"
-impl ToSql for DateTime {
+impl IntoSql for DateTime {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let s = self.to_string();
-        Ok(ToSqlOutput::from(s))
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_text(self.to_string())
     }
 }
 
@@ -64,10 +61,10 @@ impl FromSql for DateTime {
 
 /// UTC time => UTC RFC3339 timestamp
 /// ("YYYY-MM-DDTHH:MM:SS.SSSZ").
-impl ToSql for Timestamp {
+impl IntoSql for Timestamp {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::from(self.to_string()))
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_transient_text(self.to_string())
     }
 }
 

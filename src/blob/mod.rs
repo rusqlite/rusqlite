@@ -191,7 +191,7 @@ use std::io;
 use std::ptr;
 
 use super::ffi;
-use super::types::{ToSql, ToSqlOutput};
+use super::types::{Assign, IntoSql};
 use crate::{Connection, Name, Result};
 
 mod pos_io;
@@ -410,11 +410,10 @@ impl Drop for Blob<'_> {
 #[derive(Copy, Clone)]
 pub struct ZeroBlob(pub u64);
 
-impl ToSql for ZeroBlob {
+impl IntoSql for ZeroBlob {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let Self(length) = *self;
-        Ok(ToSqlOutput::ZeroBlob(length))
+    fn into_sql<A: Assign>(self, a: A) -> Result<()> {
+        a.assign_zeroblob(self.0)
     }
 }
 
@@ -556,9 +555,9 @@ mod test {
 
     #[test]
     fn zero_blob() -> Result<()> {
-        use crate::types::ToSql as _;
+        use crate::types::IntoSql as _;
         let zb = super::ZeroBlob(1);
-        assert!(zb.to_sql().is_ok());
+        assert!(zb.into_sql(()).is_ok());
         Ok(())
     }
 }
