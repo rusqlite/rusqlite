@@ -15,3 +15,6 @@ proc-macro = true
 sqlite3-parser = { version = "0.17", default-features = false, features = ["YYNOERRORRECOVERY"] }
 fallible-iterator = "0.3"
 litrs = "1.0.0"
+
+[lints]
+workspace = true
