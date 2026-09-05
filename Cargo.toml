@@ -8,7 +8,6 @@ rust-version = "1.88.0"
 description = "Ergonomic wrapper for SQLite"
 repository = "https://github.com/rusqlite/rusqlite"
 documentation = "https://docs.rs/rusqlite/"
-readme = "README.md"
 keywords = ["sqlite", "database", "ffi"]
 license = "MIT"
 categories = ["database"]
