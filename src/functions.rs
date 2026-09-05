@@ -513,8 +513,8 @@ impl Connection {
         aggr: D,
     ) -> Result<()>
     where
-        A: RefUnwindSafe + UnwindSafe,
-        D: Aggregate<A, T> + 'static,
+        A: RefUnwindSafe + UnwindSafe + Send,
+        D: Aggregate<A, T> + Send + 'static,
         T: SqlFnOutput,
     {
         self.db
@@ -537,8 +537,8 @@ impl Connection {
         aggr: W,
     ) -> Result<()>
     where
-        A: RefUnwindSafe + UnwindSafe,
-        W: WindowAggregate<A, T> + 'static,
+        A: RefUnwindSafe + UnwindSafe + Send,
+        W: WindowAggregate<A, T> + Send + 'static,
         T: SqlFnOutput,
     {
         self.db
@@ -645,8 +645,8 @@ impl InnerConnection {
         aggr: D,
     ) -> Result<()>
     where
-        A: RefUnwindSafe + UnwindSafe,
-        D: Aggregate<A, T> + 'static,
+        A: RefUnwindSafe + UnwindSafe + Send,
+        D: Aggregate<A, T> + Send + 'static,
         T: SqlFnOutput,
     {
         let boxed_aggr: *mut D = Box::into_raw(Box::new(aggr));
@@ -676,8 +676,8 @@ impl InnerConnection {
         aggr: W,
     ) -> Result<()>
     where
-        A: RefUnwindSafe + UnwindSafe,
-        W: WindowAggregate<A, T> + 'static,
+        A: RefUnwindSafe + UnwindSafe + Send,
+        W: WindowAggregate<A, T> + Send + 'static,
         T: SqlFnOutput,
     {
         let boxed_aggr: *mut W = Box::into_raw(Box::new(aggr));
