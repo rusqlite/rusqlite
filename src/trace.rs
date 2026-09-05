@@ -218,6 +218,7 @@ impl Connection {
 
 #[cfg(all(test, not(miri)))]
 mod test {
+    use std::cell::RefCell;
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -289,5 +290,42 @@ mod test {
         db.blob_open(crate::MAIN_DB, c"test", c"content", rowid, true)?;
 
         Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(all(target_family = "wasm", target_os = "unknown"), ignore)]
+    pub fn already_borrowed() {
+        thread_local! {
+            static CONN: RefCell<Option<Connection>> = const { RefCell::new(None) };
+        }
+        CONN.with_borrow_mut(|c| c.replace(Connection::open_in_memory().unwrap()));
+        let budget: Vec<u8> = vec![0];
+        CONN.with_borrow_mut(|c| {
+            c.as_mut()
+                .unwrap()
+                .trace_v2(
+                    TraceEventCodes::SQLITE_TRACE_STMT,
+                    Some(move |e: TraceEvent<'_>| {
+                        if let TraceEvent::Stmt(_, sql) = e {
+                            println!("{}", sql);
+                        }
+                        CONN.with_borrow_mut(|c| {
+                            c.as_mut()
+                                .unwrap()
+                                .trace_v2(
+                                    TraceEventCodes::SQLITE_TRACE_STMT,
+                                    None::<fn(TraceEvent)>,
+                                )
+                                .unwrap();
+                        });
+                        println!("{}", budget[0]);
+                    }),
+                )
+                .unwrap();
+            c.as_ref()
+                .unwrap()
+                .query_one("SELECT 1;", [], |r| r.get::<_, bool>(0))
+                .unwrap();
+        });
     }
 }
