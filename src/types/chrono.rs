@@ -11,8 +11,7 @@ use crate::types::{Assign, FromSql, FromSqlError, FromSqlResult, ToSql, Type, Va
 impl ToSql for NaiveDate {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let date_str = self.format("%F").to_string();
-        a.assign_transient_text(date_str)
+        a.write_fmt(self)
     }
 }
 
@@ -30,8 +29,7 @@ impl FromSql for NaiveDate {
 impl ToSql for NaiveTime {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let date_str = self.format("%T%.f").to_string();
-        a.assign_transient_text(date_str)
+        a.write_fmt(self)
     }
 }
 
@@ -54,8 +52,7 @@ impl FromSql for NaiveTime {
 impl ToSql for NaiveDateTime {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let date_str = self.format("%F %T%.f").to_string();
-        a.assign_transient_text(date_str)
+        a.write_fmt(self)
     }
 }
 
@@ -81,8 +78,7 @@ impl FromSql for NaiveDateTime {
 impl ToSql for DateTime<Utc> {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let date_str = self.format("%F %T%.f%:z").to_string();
-        a.assign_transient_text(date_str)
+        a.write_fmt(self.format("%F %T%.f%:z"))
     }
 }
 
@@ -91,8 +87,7 @@ impl ToSql for DateTime<Utc> {
 impl ToSql for DateTime<Local> {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let date_str = self.with_timezone(&Utc).format("%F %T%.f%:z").to_string();
-        a.assign_transient_text(date_str)
+        a.write_fmt(self.with_timezone(&Utc).format("%F %T%.f%:z"))
     }
 }
 
@@ -101,8 +96,7 @@ impl ToSql for DateTime<Local> {
 impl ToSql for DateTime<FixedOffset> {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let date_str = self.format("%F %T%.f%:z").to_string();
-        a.assign_transient_text(date_str)
+        a.write_fmt(self.format("%F %T%.f%:z"))
     }
 }
 

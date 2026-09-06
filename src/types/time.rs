@@ -22,12 +22,6 @@ const OFFSET_DATE_TIME_ENCODING: &[FormatItem<'_>] = format_description!(
     version = 2,
     "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond][offset_hour sign:mandatory]:[offset_minute]"
 );
-const PRIMITIVE_DATE_TIME_ENCODING: &[FormatItem<'_>] = format_description!(
-    version = 2,
-    "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond]"
-);
-const TIME_ENCODING: &[FormatItem<'_>] =
-    format_description!(version = 2, "[hour]:[minute]:[second].[subsecond]");
 
 const DATE_FORMAT: &[FormatItem<'_>] = format_description!(version = 2, "[year]-[month]-[day]");
 const TIME_FORMAT: &[FormatItem<'_>] = format_description!(
@@ -55,10 +49,21 @@ const LEGACY_DATE_TIME_FORMAT: &[FormatItem<'_>] = format_description!(
 impl ToSql for OffsetDateTime {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let time_string = self
-            .format(&OFFSET_DATE_TIME_ENCODING)
-            .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-        a.assign_transient_text(time_string)
+        match a {
+            #[cfg(feature = "bumpalo")]
+            Assign::Stmt { bump, .. } => {
+                let mut buf = bumpalo::collections::Vec::new_in(bump);
+                self.format_into(&mut buf, &OFFSET_DATE_TIME_ENCODING)
+                    .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
+                a.assign_text_slice(buf, crate::ffi::SQLITE_STATIC())
+            }
+            _ => {
+                let time_string = self
+                    .format(&OFFSET_DATE_TIME_ENCODING)
+                    .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
+                a.assign_transient_text(time_string)
+            }
+        }
     }
 }
 
@@ -92,10 +97,7 @@ impl FromSql for OffsetDateTime {
 impl ToSql for Date {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let date_str = self
-            .format(&DATE_FORMAT)
-            .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-        a.assign_transient_text(date_str)
+        a.write_fmt(self)
     }
 }
 
@@ -113,10 +115,7 @@ impl FromSql for Date {
 impl ToSql for Time {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let time_str = self
-            .format(&TIME_ENCODING)
-            .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-        a.assign_transient_text(time_str)
+        a.write_fmt(self)
     }
 }
 
@@ -134,20 +133,28 @@ impl FromSql for Time {
 impl ToSql for PrimitiveDateTime {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let date_time_str = self
-            .format(&PRIMITIVE_DATE_TIME_ENCODING)
-            .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-        a.assign_transient_text(date_time_str)
+        a.write_fmt(self)
     }
 }
 
 impl ToSql for UtcDateTime {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        let date_time_str = self
-            .format(&UTC_DATE_TIME_FORMAT)
-            .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-        a.assign_transient_text(date_time_str)
+        match a {
+            #[cfg(feature = "bumpalo")]
+            Assign::Stmt { bump, .. } => {
+                let mut buf = bumpalo::collections::Vec::new_in(bump);
+                self.format_into(&mut buf, &UTC_DATE_TIME_FORMAT)
+                    .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
+                a.assign_text_slice(buf, crate::ffi::SQLITE_STATIC())
+            }
+            _ => {
+                let date_time_str = self
+                    .format(&UTC_DATE_TIME_FORMAT)
+                    .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
+                a.assign_transient_text(date_time_str)
+            }
+        }
     }
 }
 

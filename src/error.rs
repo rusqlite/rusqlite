@@ -269,6 +269,13 @@ impl From<ffi::InitError> for Error {
     }
 }
 
+#[cfg(feature = "serde_json")]
+impl From<serde_json::Error> for Error {
+    fn from(value: serde_json::Error) -> Self {
+        Self::ToSqlConversionFailure(value.into())
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {

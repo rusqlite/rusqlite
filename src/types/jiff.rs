@@ -12,7 +12,7 @@ use crate::types::{Assign, FromSql, FromSqlError, FromSqlResult, ToSql, Type, Va
 impl ToSql for Date {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        a.assign_transient_text(self.to_string())
+        a.write_fmt(self)
     }
 }
 
@@ -29,7 +29,7 @@ impl FromSql for Date {
 impl ToSql for Time {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        a.assign_transient_text(self.to_string())
+        a.write_fmt(self)
     }
 }
 
@@ -46,7 +46,7 @@ impl FromSql for Time {
 impl ToSql for DateTime {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        a.assign_transient_text(self.to_string())
+        a.write_fmt(self)
     }
 }
 
@@ -64,7 +64,7 @@ impl FromSql for DateTime {
 impl ToSql for Timestamp {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
-        a.assign_transient_text(self.to_string())
+        a.write_fmt(self)
     }
 }
 

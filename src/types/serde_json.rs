@@ -1,9 +1,8 @@
 //! [`ToSql`] and [`FromSql`] implementation for JSON `Value`.
-
 use serde_json::{Number, Value};
 
+use crate::Result;
 use crate::types::{Assign, FromSql, FromSqlError, FromSqlResult, ToSql, ValueRef};
-use crate::{Error, Result};
 
 /// Serialize JSON `Value` to text:
 ///
@@ -21,11 +20,15 @@ impl ToSql for Value {
             Self::Null => a.assign_null(),
             Self::Number(n) if n.is_i64() => a.assign_int(n.as_i64().unwrap()),
             Self::Number(n) if n.is_f64() => a.assign_real(n.as_f64().unwrap()),
-            _ => {
-                let s = serde_json::to_string(&self)
-                    .map_err(|err| Error::ToSqlConversionFailure(err.into()))?;
-                a.assign_transient_text(s)
-            }
+            _ => match a {
+                #[cfg(feature = "bumpalo")]
+                Assign::Stmt { bump, .. } => {
+                    let mut buf = bumpalo::collections::Vec::new_in(bump);
+                    serde_json::to_writer(&mut buf, self)?;
+                    a.assign_text_slice(buf, crate::ffi::SQLITE_STATIC())
+                }
+                _ => a.assign_transient_text(serde_json::to_string(self)?),
+            },
         }
     }
 }

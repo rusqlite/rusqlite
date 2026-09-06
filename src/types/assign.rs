@@ -16,7 +16,15 @@ use std::mem;
 /// `sqlite3_stmt` or `sqlite3_context`
 pub enum Assign<'v> {
     /// Statement parameter
-    Stmt((*mut sqlite3_stmt, c_int)),
+    Stmt {
+        /// Statement
+        s: *mut sqlite3_stmt,
+        /// nth parameter
+        n: c_int,
+        /// Allocator
+        #[cfg(feature = "bumpalo")]
+        bump: &'v bumpalo::Bump,
+    },
     /// SQL function or virtual table result
     #[cfg(any(feature = "functions", feature = "vtab"))]
     Ctx((*mut sqlite3_context, &'v [*mut sqlite3_value])),
@@ -36,7 +44,7 @@ impl Assign<'_> {
             return Ok(());
         }
         Err(match self {
-            Self::Stmt(s) => unsafe { error_from_handle(ffi::sqlite3_db_handle(s.0), code) },
+            Self::Stmt { s, .. } => unsafe { error_from_handle(ffi::sqlite3_db_handle(s), code) },
             #[cfg(any(feature = "functions", feature = "vtab"))]
             Self::Ctx(x) => unsafe { error_from_handle(ffi::sqlite3_context_db_handle(x.0), code) },
             Self::Pragma(_) => unreachable!(),
@@ -48,7 +56,7 @@ impl Assign<'_> {
     /// `sqlite3_bind_null` or `sqlite3_result_null`
     pub fn assign_null(self) -> Result<()> {
         match self {
-            Self::Stmt(s) => self.decode_result(unsafe { ffi::sqlite3_bind_null(s.0, s.1) }),
+            Self::Stmt { s, n, .. } => self.decode_result(unsafe { ffi::sqlite3_bind_null(s, n) }),
             #[cfg(any(feature = "functions", feature = "vtab"))]
             Self::Ctx(x) => unsafe {
                 ffi::sqlite3_result_null(x.0);
@@ -63,7 +71,9 @@ impl Assign<'_> {
     /// `sqlite3_bind_int64` or `sqlite3_result_int64`
     pub fn assign_int(self, i: i64) -> Result<()> {
         match self {
-            Self::Stmt(s) => self.decode_result(unsafe { ffi::sqlite3_bind_int64(s.0, s.1, i) }),
+            Self::Stmt { s, n, .. } => {
+                self.decode_result(unsafe { ffi::sqlite3_bind_int64(s, n, i) })
+            }
             #[cfg(any(feature = "functions", feature = "vtab"))]
             Self::Ctx(x) => unsafe {
                 ffi::sqlite3_result_int64(x.0, i);
@@ -81,7 +91,9 @@ impl Assign<'_> {
     /// `sqlite3_bind_double` or `sqlite3_result_double`
     pub fn assign_real(self, r: f64) -> Result<()> {
         match self {
-            Self::Stmt(s) => self.decode_result(unsafe { ffi::sqlite3_bind_double(s.0, s.1, r) }),
+            Self::Stmt { s, n, .. } => {
+                self.decode_result(unsafe { ffi::sqlite3_bind_double(s, n, r) })
+            }
             #[cfg(any(feature = "functions", feature = "vtab"))]
             Self::Ctx(x) => unsafe {
                 ffi::sqlite3_result_double(x.0, r);
@@ -99,10 +111,10 @@ impl Assign<'_> {
     /// like `sqlite3_bind_zeroblob64` or `sqlite3_result_zeroblob64` for text
     pub fn assign_empty_text(self) -> Result<()> {
         match self {
-            Self::Stmt(s) => self.decode_result(unsafe {
+            Self::Stmt { s, n, .. } => self.decode_result(unsafe {
                 ffi::sqlite3_bind_text64(
-                    s.0,
-                    s.1,
+                    s,
+                    n,
                     "".as_ptr().cast::<c_char>(),
                     0,
                     SQLITE_STATIC(),
@@ -130,14 +142,7 @@ impl Assign<'_> {
     }
     /// `sqlite3_bind_text64` or `sqlite3_result_text64`
     pub fn assign_text(self, s: &str, destructor: sqlite3_destructor_type) -> Result<()> {
-        unsafe {
-            self.assign_raw_text(
-                s.as_ptr().cast::<c_char>(),
-                s.len() as _,
-                destructor,
-                SQLITE_UTF8 as _,
-            )
-        }
+        self.assign_text_slice(s, destructor)
     }
     /// `sqlite3_bind_text64` or `sqlite3_result_text64`
     ///
@@ -155,8 +160,8 @@ impl Assign<'_> {
             self.assign_empty_text()
         } else {
             match self {
-                Self::Stmt(s) => self.decode_result(unsafe {
-                    ffi::sqlite3_bind_text64(s.0, s.1, t, len, destructor, encoding)
+                Self::Stmt { s, n, .. } => self.decode_result(unsafe {
+                    ffi::sqlite3_bind_text64(s, n, t, len, destructor, encoding)
                 }),
                 #[cfg(any(feature = "functions", feature = "vtab"))]
                 Self::Ctx(x) => unsafe {
@@ -181,6 +186,38 @@ impl Assign<'_> {
     pub fn assign_transient_text<T: AsRef<str>>(self, s: T) -> Result<()> {
         self.assign_text(s.as_ref(), SQLITE_TRANSIENT())
     }
+    /// Like `assign_text` with a byte slice
+    pub fn assign_text_slice<T: AsRef<[u8]>>(
+        self,
+        s: T,
+        destructor: sqlite3_destructor_type,
+    ) -> Result<()> {
+        unsafe {
+            self.assign_raw_text(
+                s.as_ref().as_ptr().cast::<c_char>(),
+                s.as_ref().len() as _,
+                destructor,
+                SQLITE_UTF8 as _,
+            )
+        }
+    }
+
+    /// Try to avoid allocating twice (only for statement with `bumpalo`):
+    /// - first in Rust while converting `v` to `String`
+    /// - then in SQLite for ensuring that the transient Rust `String` is not used after free
+    pub fn write_fmt<T: std::fmt::Display>(self, v: T) -> Result<()> {
+        match self {
+            #[cfg(feature = "bumpalo")]
+            Assign::Stmt { bump, .. } => {
+                use std::fmt::Write as _;
+                let mut buf = bumpalo::collections::string::String::new_in(bump);
+                buf.write_fmt(format_args!("{v}"))
+                    .map_err(|err| crate::Error::ToSqlConversionFailure(err.into()))?;
+                self.assign_text(&buf, SQLITE_STATIC())
+            }
+            _ => self.assign_transient_text(format!("{v}")),
+        }
+    }
 
     /// `sqlite3_bind_blob64` or `sqlite3_result_blob64`
     #[inline]
@@ -202,8 +239,8 @@ impl Assign<'_> {
             self.assign_zeroblob(0)
         } else {
             match self {
-                Self::Stmt(s) => self.decode_result({
-                    unsafe { ffi::sqlite3_bind_blob64(s.0, s.1, b, len, destructor) }
+                Self::Stmt { s, n, .. } => self.decode_result({
+                    unsafe { ffi::sqlite3_bind_blob64(s, n, b, len, destructor) }
                 }),
                 #[cfg(any(feature = "functions", feature = "vtab"))]
                 Self::Ctx(x) => unsafe {
@@ -228,8 +265,8 @@ impl Assign<'_> {
     /// `sqlite3_bind_zeroblob64` or `sqlite3_result_zeroblob64`
     pub fn assign_zeroblob(self, len: u64) -> Result<()> {
         match self {
-            Self::Stmt(s) => {
-                self.decode_result(unsafe { ffi::sqlite3_bind_zeroblob64(s.0, s.1, len) })
+            Self::Stmt { s, n, .. } => {
+                self.decode_result(unsafe { ffi::sqlite3_bind_zeroblob64(s, n, len) })
             }
             #[cfg(any(feature = "functions", feature = "vtab"))]
             Self::Ctx(x) => self.decode_result(unsafe { ffi::sqlite3_result_zeroblob64(x.0, len) }),
@@ -243,13 +280,12 @@ impl Assign<'_> {
     #[cfg(feature = "functions")]
     pub fn assign_arg(self, idx: usize) -> Result<()> {
         match self {
-            Self::Stmt(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value")),
+            Self::Stmt { .. } => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value")),
             #[cfg(any(feature = "functions", feature = "vtab"))]
             Self::Ctx(x) => unsafe {
                 ffi::sqlite3_result_value(x.0, x.1[idx]);
                 Ok(())
             },
-
             Self::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"ARG\"")),
             #[cfg(test)]
             Self::U => Ok(()),
@@ -268,8 +304,8 @@ impl Assign<'_> {
         destructor: sqlite3_destructor_type,
     ) -> Result<()> {
         match self {
-            Self::Stmt(s) => self.decode_result(unsafe {
-                ffi::sqlite3_bind_pointer(s.0, s.1, ptr, ptr_type.as_ptr(), destructor)
+            Self::Stmt { s, n, .. } => self.decode_result(unsafe {
+                ffi::sqlite3_bind_pointer(s, n, ptr, ptr_type.as_ptr(), destructor)
             }),
             #[cfg(any(feature = "functions", feature = "vtab"))]
             Self::Ctx(x) => unsafe {

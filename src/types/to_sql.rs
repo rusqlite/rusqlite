@@ -3,7 +3,7 @@ use super::{Assign, Null, Value, ValueRef};
 use crate::util::free_boxed_value;
 use crate::{Error, Result, ffi};
 use std::borrow::Cow;
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CStr, CString};
 use std::rc::Rc;
 
 /// A trait for types that can be converted into SQLite values. Returns
@@ -26,14 +26,7 @@ impl ToSql for ValueRef<'_> {
             ValueRef::Null => a.assign_null(),
             ValueRef::Integer(i) => a.assign_int(*i),
             ValueRef::Real(r) => a.assign_real(*r),
-            ValueRef::Text(t) => unsafe {
-                a.assign_raw_text(
-                    t.as_ptr().cast::<c_char>(),
-                    t.len() as _,
-                    ffi::SQLITE_TRANSIENT(),
-                    ffi::SQLITE_UTF8 as _,
-                )
-            },
+            ValueRef::Text(t) => a.assign_text_slice(t, ffi::SQLITE_TRANSIENT()),
             ValueRef::Blob(b) => a.assign_transient_blob(*b),
         }
     }

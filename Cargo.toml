@@ -144,6 +144,7 @@ bundled-full = ["modern-full", "bundled"]
 default = ["cache", "ffi-sqlite-wasm-rs"]
 
 [dependencies]
+bumpalo = { version = "3.20.3", optional = true, features = ["collections", "std"]}
 # Jiff Date/Time/Timestamp persistence
 jiff = { version = "0.2", optional = true, default-features = false, features = [
     "std",
