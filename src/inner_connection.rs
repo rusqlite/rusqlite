@@ -337,13 +337,25 @@ impl InnerConnection {
         crate::error::check(unsafe { ffi::sqlite3_file_control(self.db, cn, op, arg) })
     }
 
-    pub fn set_clientdata<T: Send + 'static, N: Name>(
+    pub fn set_clientdata<
+        T: Send + 'static,
+        N: Name,
+        F: Fn(*mut ffi::sqlite3, *mut c_void) -> c_int,
+    >(
         &mut self,
         name: N,
         data: Option<T>,
+        preset: F,
     ) -> Result<*mut T> {
         let name = name.as_cstr()?;
         let ptr = data.map_or(ptr::null_mut(), |d| Box::into_raw(Box::new(d)));
+        let res = self.decode_result(preset(self.db, ptr.cast()));
+        if res.is_err() {
+            if !ptr.is_null() {
+                unsafe { crate::util::free_boxed_value::<T>(ptr.cast()) };
+            }
+            res?;
+        }
         self.decode_result(unsafe {
             ffi::sqlite3_set_clientdata(
                 self.db,

@@ -344,7 +344,7 @@ impl Connection {
     ///
     /// The callback returns `true` to rollback.
     #[inline]
-    pub fn commit_hook<F>(&self, hook: Option<F>) -> Result<()>
+    pub fn commit_hook<F>(&mut self, hook: Option<F>) -> Result<()>
     where
         F: FnMut() -> bool + Send + 'static,
     {
@@ -354,7 +354,7 @@ impl Connection {
     /// Register a callback function to be invoked whenever
     /// a transaction is rolled back.
     #[inline]
-    pub fn rollback_hook<F>(&self, hook: Option<F>) -> Result<()>
+    pub fn rollback_hook<F>(&mut self, hook: Option<F>) -> Result<()>
     where
         F: FnMut() + Send + 'static,
     {
@@ -372,7 +372,7 @@ impl Connection {
     /// - the name of the table that is updated,
     /// - the ROWID of the row that is updated.
     #[inline]
-    pub fn update_hook<F>(&self, hook: Option<F>) -> Result<()>
+    pub fn update_hook<F>(&mut self, hook: Option<F>) -> Result<()>
     where
         F: FnMut(Action, &str, &str, i64) + Send + 'static,
     {
@@ -385,7 +385,7 @@ impl Connection {
     /// Calling `wal_hook` replaces any previously registered write-ahead log callback.
     /// Note that the `sqlite3_wal_autocheckpoint()` interface and the `wal_autocheckpoint` pragma
     /// both invoke `sqlite3_wal_hook()` and will overwrite any prior `sqlite3_wal_hook()` settings.
-    pub fn wal_hook<F>(&self, hook: Option<F>) -> Result<()>
+    pub fn wal_hook<F>(&mut self, hook: Option<F>) -> Result<()>
     where
         F: FnMut(&Wal, c_int) -> Result<()> + Send + 'static,
     {
@@ -414,10 +414,10 @@ impl Connection {
         }
         let x = hook.as_ref().map(|_| wal_hook_callback::<F> as _);
         let mut c = self.db.borrow_mut();
-        let bh = c.set_clientdata(c"sqlite3_wal_hook", hook)?;
-        unsafe {
-            ffi::sqlite3_wal_hook(c.db(), x, bh.cast());
-        }
+        c.set_clientdata(c"sqlite3_wal_hook", hook, |db, bh| unsafe {
+            ffi::sqlite3_wal_hook(db, x, bh);
+            ffi::SQLITE_OK
+        })?;
         Ok(())
     }
 
@@ -429,7 +429,7 @@ impl Connection {
     /// is disabled.
     ///
     /// If the progress callback returns `true`, the operation is interrupted.
-    pub fn progress_handler<F>(&self, num_ops: c_int, handler: Option<F>) -> Result<()>
+    pub fn progress_handler<F>(&mut self, num_ops: c_int, handler: Option<F>) -> Result<()>
     where
         F: FnMut() -> bool + Send + 'static,
     {
@@ -439,7 +439,7 @@ impl Connection {
     /// Register an authorizer callback that's invoked
     /// as a statement is being prepared.
     #[inline]
-    pub fn authorizer<F>(&self, hook: Option<F>) -> Result<()>
+    pub fn authorizer<F>(&mut self, hook: Option<F>) -> Result<()>
     where
         F: for<'r> FnMut(AuthContext<'r>) -> Authorization + Send + 'static,
     {
@@ -507,7 +507,7 @@ impl InnerConnection {
     /// ```compile_fail
     /// use rusqlite::{Connection, Result};
     /// fn main() -> Result<()> {
-    ///     let db = Connection::open_in_memory()?;
+    ///     let mut db = Connection::open_in_memory()?;
     ///     {
     ///         let mut called = std::sync::atomic::AtomicBool::new(false);
     ///         db.commit_hook(Some(|| {
@@ -542,15 +542,17 @@ impl InnerConnection {
             }
         }
         let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
-        let bh = self.set_clientdata(c"sqlite3_commit_hook", hook)?;
-        unsafe { ffi::sqlite3_commit_hook(self.db(), x, bh.cast()) };
+        self.set_clientdata(c"sqlite3_commit_hook", hook, |db, bh| unsafe {
+            ffi::sqlite3_commit_hook(db, x, bh);
+            ffi::SQLITE_OK
+        })?;
         Ok(())
     }
 
     /// ```compile_fail
     /// use rusqlite::{Connection, Result};
     /// fn main() -> Result<()> {
-    ///     let db = Connection::open_in_memory()?;
+    ///     let mut db = Connection::open_in_memory()?;
     ///     {
     ///         let mut called = std::sync::atomic::AtomicBool::new(false);
     ///         db.rollback_hook(Some(|| {
@@ -584,15 +586,17 @@ impl InnerConnection {
         }
 
         let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
-        let bh = self.set_clientdata(c"sqlite3_rollback_hook", hook)?;
-        unsafe { ffi::sqlite3_rollback_hook(self.db(), x, bh.cast()) };
+        self.set_clientdata(c"sqlite3_rollback_hook", hook, |db, bh| unsafe {
+            ffi::sqlite3_rollback_hook(db, x, bh);
+            ffi::SQLITE_OK
+        })?;
         Ok(())
     }
 
     /// ```compile_fail
     /// use rusqlite::{Connection, Result};
     /// fn main() -> Result<()> {
-    ///     let db = Connection::open_in_memory()?;
+    ///     let mut db = Connection::open_in_memory()?;
     ///     {
     ///         let mut called = std::sync::atomic::AtomicBool::new(false);
     ///         db.update_hook(Some(|_, _: &str, _: &str, _| {
@@ -630,15 +634,17 @@ impl InnerConnection {
         }
 
         let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
-        let bh = self.set_clientdata(c"sqlite3_update_hook", hook)?;
-        unsafe { ffi::sqlite3_update_hook(self.db(), x, bh.cast()) };
+        self.set_clientdata(c"sqlite3_update_hook", hook, |db, bh| unsafe {
+            ffi::sqlite3_update_hook(db, x, bh);
+            ffi::SQLITE_OK
+        })?;
         Ok(())
     }
 
     /// ```compile_fail
     /// use rusqlite::{Connection, Result};
     /// fn main() -> Result<()> {
-    ///     let db = Connection::open_in_memory()?;
+    ///     let mut db = Connection::open_in_memory()?;
     ///     {
     ///         let mut called = std::sync::atomic::AtomicBool::new(false);
     ///         db.progress_handler(
@@ -673,17 +679,17 @@ impl InnerConnection {
         }
 
         let x = handler.as_ref().map(|_| call_boxed_closure::<F> as _);
-        let bh = self.set_clientdata(c"sqlite3_progress_handler", handler)?;
-        unsafe {
-            ffi::sqlite3_progress_handler(self.db(), num_ops, x, bh.cast());
-        };
+        self.set_clientdata(c"sqlite3_progress_handler", handler, |db, bh| unsafe {
+            ffi::sqlite3_progress_handler(db, num_ops, x, bh);
+            ffi::SQLITE_OK
+        })?;
         Ok(())
     }
 
     /// ```compile_fail
     /// use rusqlite::{Connection, Result};
     /// fn main() -> Result<()> {
-    ///     let db = Connection::open_in_memory()?;
+    ///     let mut db = Connection::open_in_memory()?;
     ///     {
     ///         let mut called = std::sync::atomic::AtomicBool::new(false);
     ///         db.authorizer(Some(|_: rusqlite::hooks::AuthContext<'_>| {
@@ -737,21 +743,10 @@ impl InnerConnection {
         let x_auth = authorizer
             .as_ref()
             .map(|_| call_boxed_closure::<'c, F> as _);
-        let bh = self.set_clientdata(c"sqlite3_set_authorizer", authorizer)?;
-
-        match unsafe { ffi::sqlite3_set_authorizer(self.db(), x_auth, bh.cast()) } {
-            ffi::SQLITE_OK => Ok(()),
-            err_code => {
-                // The only error that `sqlite3_set_authorizer` returns is `SQLITE_MISUSE`
-                // when compiled with `ENABLE_API_ARMOR` and the db pointer is invalid.
-                // This library does not allow constructing a null db ptr, so if this branch
-                // is hit, something very bad has happened. Panicking instead of returning
-                // `Result` keeps this hook's API consistent with the others.
-                panic!("unexpectedly failed to set_authorizer: {}", unsafe {
-                    crate::error::error_from_handle(self.db(), err_code)
-                });
-            }
-        }
+        self.set_clientdata(c"sqlite3_set_authorizer", authorizer, |db, bh| unsafe {
+            ffi::sqlite3_set_authorizer(db, x_auth, bh)
+        })?;
+        Ok(())
     }
 }
 
@@ -788,7 +783,7 @@ mod test {
 
     #[test]
     fn test_commit_hook() -> Result<()> {
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
 
         static CALLED: AtomicBool = AtomicBool::new(false);
         db.commit_hook(Some(|| {
@@ -802,7 +797,7 @@ mod test {
 
     #[test]
     fn test_fn_commit_hook() -> Result<()> {
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
 
         fn hook() -> bool {
             true
@@ -816,7 +811,7 @@ mod test {
 
     #[test]
     fn test_rollback_hook() -> Result<()> {
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
 
         static CALLED: AtomicBool = AtomicBool::new(false);
         db.rollback_hook(Some(|| {
@@ -829,7 +824,7 @@ mod test {
 
     #[test]
     fn test_update_hook() -> Result<()> {
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
 
         static CALLED: AtomicBool = AtomicBool::new(false);
         db.update_hook(Some(|action, db: &str, tbl: &str, row_id| {
@@ -847,7 +842,7 @@ mod test {
 
     #[test]
     fn test_progress_handler() -> Result<()> {
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
 
         static CALLED: AtomicBool = AtomicBool::new(false);
         db.progress_handler(
@@ -864,7 +859,7 @@ mod test {
 
     #[test]
     fn test_progress_handler_interrupt() -> Result<()> {
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
 
         fn handler() -> bool {
             true
@@ -880,7 +875,7 @@ mod test {
     fn test_authorizer() -> Result<()> {
         use super::{AuthAction, AuthContext, Authorization};
 
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo (public TEXT, private TEXT)")?;
 
         let authorizer = move |ctx: AuthContext<'_>| match ctx.action {
@@ -919,7 +914,7 @@ mod test {
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir.path().join("wal-hook.db3");
 
-        let db = Connection::open(&path)?;
+        let mut db = Connection::open(&path)?;
         let journal_mode: String =
             db.pragma_update_and_check(None, "journal_mode", "wal", |row| row.get(0))?;
         assert_eq!(journal_mode, "wal");
@@ -948,7 +943,7 @@ mod test {
 
     #[test]
     fn test_non_owning_hooks_cleanup() -> Result<()> {
-        let conn = Connection::open_in_memory()?;
+        let mut conn = Connection::open_in_memory()?;
 
         static CALLED: AtomicBool = AtomicBool::new(false);
         CALLED.store(false, Ordering::Relaxed);

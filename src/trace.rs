@@ -158,7 +158,7 @@ impl ConnRef<'_> {
 
 impl Connection {
     /// Register or clear a trace callback function
-    pub fn trace_v2<F>(&self, mask: TraceEventCodes, trace_fn: Option<F>) -> Result<()>
+    pub fn trace_v2<F>(&mut self, mask: TraceEventCodes, trace_fn: Option<F>) -> Result<()>
     where
         F: FnMut(TraceEvent<'_>) + Send + 'static,
     {
@@ -208,16 +208,17 @@ impl Connection {
         }
         let mut c = self.db.borrow_mut();
         let x = trace_fn.as_ref().map(|_| trace_callback::<F> as _);
-        let bh = c.set_clientdata(c"sqlite3_trace_v2", trace_fn)?;
-        unsafe {
-            ffi::sqlite3_trace_v2(c.db(), mask.bits(), x, bh.cast());
-        }
+        c.set_clientdata(c"sqlite3_trace_v2", trace_fn, |db, bh| unsafe {
+            ffi::sqlite3_trace_v2(db, mask.bits(), x, bh);
+            ffi::SQLITE_OK
+        })?;
         Ok(())
     }
 }
 
 #[cfg(all(test, not(miri)))]
 mod test {
+    use std::cell::RefCell;
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
@@ -231,7 +232,7 @@ mod test {
         use std::borrow::Borrow as _;
         use std::cmp::Ordering;
 
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
         db.trace_v2(
             TraceEventCodes::all(),
             Some(|e: TraceEvent<'_>| match e {
@@ -265,14 +266,14 @@ mod test {
         db.one_column::<u32, _>("PRAGMA user_version", [])?;
         drop(db);
 
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
         db.trace_v2(TraceEventCodes::empty(), None::<fn(TraceEvent<'_>)>)
     }
 
     #[test]
     #[cfg(feature = "blob")]
     pub fn null_sql() -> Result<()> {
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
         let sql = "CREATE TABLE test (content BLOB);
                    INSERT INTO test VALUES (ZEROBLOB(10));";
         db.execute_batch(sql)?;
@@ -289,5 +290,42 @@ mod test {
         db.blob_open(crate::MAIN_DB, c"test", c"content", rowid, true)?;
 
         Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(all(target_family = "wasm", target_os = "unknown"), ignore)]
+    pub fn already_borrowed() {
+        thread_local! {
+            static CONN: RefCell<Option<Connection>> = const { RefCell::new(None) };
+        }
+        CONN.with_borrow_mut(|c| c.replace(Connection::open_in_memory().unwrap()));
+        let budget: Vec<u8> = vec![0];
+        CONN.with_borrow_mut(|c| {
+            c.as_mut()
+                .unwrap()
+                .trace_v2(
+                    TraceEventCodes::SQLITE_TRACE_STMT,
+                    Some(move |e: TraceEvent<'_>| {
+                        if let TraceEvent::Stmt(_, sql) = e {
+                            println!("{}", sql);
+                        }
+                        CONN.with_borrow_mut(|c| {
+                            c.as_mut()
+                                .unwrap()
+                                .trace_v2(
+                                    TraceEventCodes::SQLITE_TRACE_STMT,
+                                    None::<fn(TraceEvent)>,
+                                )
+                                .unwrap();
+                        });
+                        println!("{}", budget[0]);
+                    }),
+                )
+                .unwrap();
+            c.as_ref()
+                .unwrap()
+                .query_one("SELECT 1;", [], |r| r.get::<_, bool>(0))
+                .unwrap();
+        });
     }
 }

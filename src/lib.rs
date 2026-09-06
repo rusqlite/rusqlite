@@ -1117,7 +1117,9 @@ impl Connection {
         name: N,
         data: Option<T>,
     ) -> Result<*mut T> {
-        self.db.borrow_mut().set_clientdata(name, data)
+        self.db
+            .borrow_mut()
+            .set_clientdata(name, data, |_, _| ffi::SQLITE_OK)
     }
     /// Retrieve client data
     ///
