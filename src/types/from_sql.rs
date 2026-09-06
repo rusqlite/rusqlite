@@ -448,7 +448,7 @@ mod test {
             Ok(Cow::Owned(vec![0x09, 0xab, 0x20, 0xfd, 0xee, 0x87])),
         );
         assert_eq!(
-            db.query_row("SELECT 24.5", [], |r| r.get::<_, Cow<'_, f32>>(0),),
+            db.query_row("SELECT 24.5", [], |r| r.get::<_, Cow<'_, f32>>(0)),
             Ok(Cow::Borrowed(&24.5)),
         );
 
@@ -489,7 +489,7 @@ mod test {
             Ok(Arc::from("This is inside an Arc.")),
         );
         assert_eq!(
-            db.query_row("SELECT x'afd374'", [], |r| r.get::<_, Arc<[u8]>>(0),),
+            db.query_row("SELECT x'afd374'", [], |r| r.get::<_, Arc<[u8]>>(0)),
             Ok(Arc::from(b"\xaf\xd3\x74".as_slice())),
         );
 

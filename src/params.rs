@@ -143,7 +143,7 @@ use sealed::Sealed;
 /// The empty tuple:
 ///
 /// ```rust,no_run
-/// # use rusqlite::{Connection, Result, params};
+/// # use rusqlite::{Connection, Result};
 /// fn delete_all_users(conn: &Connection) -> Result<()> {
 ///     // You may also use `()`.
 ///     conn.execute("DELETE FROM users", ())?;
@@ -154,7 +154,7 @@ use sealed::Sealed;
 /// The empty array:
 ///
 /// ```rust,no_run
-/// # use rusqlite::{Connection, Result, params};
+/// # use rusqlite::{Connection, Result};
 /// fn delete_all_users(conn: &Connection) -> Result<()> {
 ///     // Just use an empty array (e.g. `[]`) for no params.
 ///     conn.execute("DELETE FROM users", [])?;
@@ -241,8 +241,7 @@ impl<T: ToSql> Params for (T,) {
     #[inline]
     fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
         stmt.ensure_parameter_count(1)?;
-        stmt.raw_bind_parameter(1, self.0)?;
-        Ok(())
+        stmt.raw_bind_parameter(1, self.0)
     }
 }
 
@@ -308,7 +307,7 @@ macro_rules! impl_for_array_ref {
         impl<T: ToSql> Params for [T; $N] {
             #[inline]
             fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
-                stmt.bind_parameters(&self)
+                stmt.bind_parameters(self)
             }
         }
     )+};

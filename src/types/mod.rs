@@ -42,7 +42,7 @@ For example, to store datetimes as `i64`s counting the number of seconds since
 the Unix epoch:
 
 ```
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
+use rusqlite::types::{Assign, FromSql, FromSqlError, FromSqlResult, ToSql, ValueRef};
 use rusqlite::Result;
 
 pub struct DateTimeSql(pub time::OffsetDateTime);
@@ -58,8 +58,8 @@ impl FromSql for DateTimeSql {
 }
 
 impl ToSql for DateTimeSql {
-    fn to_sql(&self) -> Result<ToSqlOutput> {
-        Ok(self.0.unix_timestamp().into())
+    fn to_sql(&self, a: Assign) -> Result<()> {
+        a.assign_int(self.0.unix_timestamp())
     }
 }
 ```
@@ -70,13 +70,17 @@ impl ToSql for DateTimeSql {
 //! implements [`ToSql`] or [`FromSql`] for the cases where you want to know if
 //! a value was NULL (which gets translated to `None`).
 
+pub use self::assign::Assign;
+#[cfg(test)]
+pub(crate) use self::assign::SINK;
 pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
-pub use self::to_sql::{ToSql, ToSqlOutput};
+pub use self::to_sql::ToSql;
 pub use self::value::Value;
 pub use self::value_ref::ValueRef;
 
 use std::fmt;
 
+mod assign;
 #[cfg(feature = "chrono")]
 mod chrono;
 mod from_sql;

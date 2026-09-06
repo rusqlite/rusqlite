@@ -63,8 +63,7 @@ use std::sync::Arc;
 
 use crate::ffi::{self, sqlite3_context, sqlite3_value};
 
-use crate::context::set_result;
-use crate::types::{FromSql, FromSqlError, ToSql, ToSqlOutput, ValueRef};
+use crate::types::{Assign, FromSql, FromSqlError, ToSql, ValueRef};
 use crate::util::free_boxed_value;
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
@@ -304,19 +303,34 @@ pub type SubType = Option<c_uint>;
 /// Result of an SQL function
 pub trait SqlFnOutput {
     /// Converts Rust value to SQLite value with an optional subtype
-    fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)>;
+    fn to_sql(&self, a: Assign) -> Result<SubType>;
+    /// by-value
+    fn into_sql(self, a: Assign) -> Result<SubType>
+    where
+        Self: Sized,
+    {
+        self.to_sql(a)
+    }
 }
 
 impl<T: ToSql> SqlFnOutput for T {
     #[inline]
-    fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> {
-        ToSql::to_sql(self).map(|o| (o, None))
+    fn to_sql(&self, a: Assign) -> Result<SubType> {
+        self.to_sql(a).map(|_| None)
+    }
+    #[inline]
+    fn into_sql(self, a: Assign) -> Result<SubType> {
+        self.into_sql(a).map(|_| None)
     }
 }
 
 impl<T: ToSql> SqlFnOutput for (T, SubType) {
-    fn to_sql(&self) -> Result<(ToSqlOutput<'_>, SubType)> {
-        ToSql::to_sql(&self.0).map(|o| (o, self.1))
+    fn to_sql(&self, a: Assign) -> Result<SubType> {
+        self.0.to_sql(a).map(|_| self.1)
+    }
+    #[inline]
+    fn into_sql(self, a: Assign) -> Result<SubType> {
+        self.0.into_sql(a).map(|_| self.1)
     }
 }
 
@@ -325,8 +339,11 @@ pub struct SqlFnArg {
     idx: usize,
 }
 impl ToSql for SqlFnArg {
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        Ok(ToSqlOutput::Arg(self.idx))
+    fn to_sql(&self, a: Assign) -> Result<()> {
+        a.assign_arg(self.idx)
+    }
+    fn into_sql(self, a: Assign) -> Result<()> {
+        a.assign_arg(self.idx)
     }
 }
 
@@ -348,12 +365,8 @@ unsafe fn _sql_result<T: SqlFnOutput>(
     r: Result<T>,
 ) -> Result<()> {
     let r = r?;
-    let (value, sub_type) = r.to_sql()?;
-    unsafe {
-        set_result(ctx, args, value)?;
-        if let Some(sub_type) = sub_type {
-            ffi::sqlite3_result_subtype(ctx, sub_type);
-        }
+    if let Some(sub_type) = r.into_sql(Assign::Ctx((ctx, args)))? {
+        unsafe { ffi::sqlite3_result_subtype(ctx, sub_type) }
     }
     Ok(())
 }
@@ -1222,19 +1235,19 @@ mod test {
     #[test]
     #[cfg(feature = "pointer")]
     fn test_rc_pointer() -> Result<()> {
-        use crate::types::ToSqlOutput;
+        use std::ffi::CStr;
         use std::ops::Deref as _;
         use std::rc::Rc;
 
-        const PTR_TYPE: &std::ffi::CStr = c"my_rust_ptr";
+        const PTR_TYPE: &CStr = c"my_rust_ptr";
         let rc = Rc::new(1);
         {
-            let ptr = ToSqlOutput::from_rc(rc.clone(), PTR_TYPE);
+            let ptr = (rc.clone(), PTR_TYPE);
             assert_eq!(2, Rc::strong_count(&rc));
-            fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
+            fn myfunc(ctx: &Context<'_>) -> Result<(Rc<i32>, &'static CStr)> {
                 let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
                 assert_eq!(x, Some(&1));
-                Ok(ToSqlOutput::from_rc(Rc::new(*x.unwrap()), PTR_TYPE))
+                Ok((Rc::new(*x.unwrap()), PTR_TYPE))
             }
             let db = Connection::open_in_memory()?;
             db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;
@@ -1251,15 +1264,15 @@ mod test {
     #[test]
     #[cfg(feature = "pointer")]
     fn test_box_pointer() -> Result<()> {
-        use crate::types::ToSqlOutput;
+        use std::ffi::CStr;
 
-        const PTR_TYPE: &std::ffi::CStr = c"my_rust_ptr";
+        const PTR_TYPE: &CStr = c"my_rust_ptr";
         let value = 1;
-        let ptr = ToSqlOutput::new_boxed(value, PTR_TYPE);
-        fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
+        let ptr = (Box::new(value), PTR_TYPE);
+        fn myfunc(ctx: &Context<'_>) -> Result<(Box<i32>, &'static CStr)> {
             let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
             assert_eq!(x, Some(&1));
-            Ok(ToSqlOutput::new_boxed(*x.unwrap(), PTR_TYPE))
+            Ok((Box::new(*x.unwrap()), PTR_TYPE))
         }
         let db = Connection::open_in_memory()?;
         db.create_scalar_function("myfunc", 1, FunctionFlags::SQLITE_DETERMINISTIC, myfunc)?;

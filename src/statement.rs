@@ -1,19 +1,20 @@
-use std::ffi::{c_int, c_void};
+use std::ffi::c_int;
 use std::slice::from_raw_parts;
 use std::{fmt, mem, ptr, str};
 
-use super::ffi::{self, sqlite3_stmt};
-use super::str_for_sqlite;
+use super::ffi::{self};
 use super::{
     AndThenRows, Connection, Error, MappedRows, Params, RawStatement, Result, Row, Rows, ValueRef,
 };
 use crate::bind::BindIndex;
-use crate::types::{ToSql, ToSqlOutput, Value};
+use crate::types::{Assign, ToSql};
 
 /// A prepared statement.
 pub struct Statement<'conn> {
     pub(crate) conn: &'conn Connection,
     pub(crate) stmt: RawStatement,
+    #[cfg(feature = "bumpalo")]
+    bump: bumpalo::Bump,
 }
 
 impl Statement<'_> {
@@ -91,7 +92,7 @@ impl Statement<'_> {
     /// ### Use without parameters
     ///
     /// ```rust,no_run
-    /// # use rusqlite::{Connection, Result, params};
+    /// # use rusqlite::{Connection, Result};
     /// fn delete_all(conn: &Connection) -> Result<()> {
     ///     let mut stmt = conn.prepare("DELETE FROM users")?;
     ///     stmt.execute([])?;
@@ -483,7 +484,7 @@ impl Statement<'_> {
             if index > expected {
                 break;
             }
-            self.bind_parameter(&p, index)?;
+            self.bind_parameter(p, index)?;
         }
         if index == expected {
             Ok(())
@@ -509,8 +510,7 @@ impl Statement<'_> {
     ) -> Result<()> {
         for (name, value) in params {
             let i = name.idx(self)?;
-            let ts: &dyn ToSql = &value;
-            self.bind_parameter(ts, i)?;
+            self.bind_parameter(value, i)?;
         }
         Ok(())
     }
@@ -571,7 +571,7 @@ impl Statement<'_> {
     ) -> Result<()> {
         // This is the same as `bind_parameter` but slightly more ergonomic and
         // correctly takes `&mut self`.
-        self.bind_parameter(&param, one_based_index.idx(self)?)
+        self.bind_parameter(param, one_based_index.idx(self)?)
     }
 
     /// Low level API to execute a statement given that all parameters were
@@ -611,80 +611,14 @@ impl Statement<'_> {
     }
 
     // generic because many of these branches can constant fold away.
-    fn bind_parameter<P: ?Sized + ToSql>(&self, param: &P, ndx: usize) -> Result<()> {
-        let value = param.to_sql()?;
-
+    fn bind_parameter<P: ToSql>(&self, param: P, ndx: usize) -> Result<()> {
         let ptr = unsafe { self.stmt.ptr() };
-        self.conn.decode_result(match value {
-            ToSqlOutput::Borrowed(ValueRef::Null) | ToSqlOutput::Owned(Value::Null) => {
-                unsafe { ffi::sqlite3_bind_null(ptr, ndx as c_int) }
-            },
-            ToSqlOutput::Borrowed(ValueRef::Integer(i)) | ToSqlOutput::Owned(Value::Integer(i)) => {
-                unsafe { ffi::sqlite3_bind_int64(ptr, ndx as c_int, i) }
-            },
-            ToSqlOutput::Borrowed(ValueRef::Real(r)) | ToSqlOutput::Owned(Value::Real(r)) => {
-                unsafe { ffi::sqlite3_bind_double(ptr, ndx as c_int, r) }
-            },
-            ToSqlOutput::Borrowed(ValueRef::Text(s)) => {
-                Self::bind_text(ptr, ndx, s)
-            },
-             ToSqlOutput::Owned(Value::Text(s)) => {
-                Self::bind_text(ptr, ndx, s.as_bytes())
-            },
-            ToSqlOutput::Borrowed(ValueRef::Blob(b)) => {
-                Self::bind_blob(ptr, ndx, b)
-            },
-            ToSqlOutput::Owned(Value::Blob(b)) => {
-                Self::bind_blob(ptr, ndx, b.as_slice())
-            },
-            #[cfg(feature = "blob")]
-            ToSqlOutput::ZeroBlob(len) => {
-                unsafe {
-                    ffi::sqlite3_bind_zeroblob64(ptr, ndx as c_int, len)
-                }
-            }
-            #[cfg(feature = "functions")]
-            ToSqlOutput::Arg(_) => {
-                return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
-            }
-            #[cfg(feature = "pointer")]
-            ToSqlOutput::Pointer(p) => {
-                unsafe {
-                    ffi::sqlite3_bind_pointer(ptr, ndx as c_int, p.0.cast_mut(), p.1.as_ptr(), p.2)
-                }
-            }
+        param.into_sql(Assign::Stmt {
+            s: ptr,
+            n: ndx as _,
+            #[cfg(feature = "bumpalo")]
+            bump: &self.bump,
         })
-    }
-
-    fn bind_text(stmt: *mut sqlite3_stmt, ndx: usize, s: &[u8]) -> c_int {
-        unsafe {
-            let (c_str, len, destructor) = str_for_sqlite(s);
-            ffi::sqlite3_bind_text64(
-                stmt,
-                ndx as c_int,
-                c_str,
-                len,
-                destructor,
-                ffi::SQLITE_UTF8 as _, // TODO SQLITE_UTF8_ZT
-            )
-        }
-    }
-
-    fn bind_blob(stmt: *mut sqlite3_stmt, ndx: usize, b: &[u8]) -> c_int {
-        unsafe {
-            let length = b.len();
-            if length == 0 {
-                ffi::sqlite3_bind_zeroblob64(stmt, ndx as c_int, 0)
-            } else {
-                ffi::sqlite3_bind_blob64(
-                    stmt,
-                    ndx as c_int,
-                    b.as_ptr().cast::<c_void>(),
-                    length as ffi::sqlite3_uint64,
-                    ffi::SQLITE_TRANSIENT(),
-                )
-            }
-        }
     }
 
     #[inline]
@@ -774,6 +708,8 @@ impl Statement<'_> {
     /// Reset all bindings
     pub fn clear_bindings(&mut self) {
         self.stmt.clear_bindings();
+        #[cfg(feature = "bumpalo")]
+        self.bump.reset();
     }
 
     pub(crate) unsafe fn ptr(&self) -> *mut ffi::sqlite3_stmt {
@@ -807,7 +743,12 @@ impl Drop for Statement<'_> {
 impl Statement<'_> {
     #[inline]
     pub(super) fn new(conn: &Connection, stmt: RawStatement) -> Statement<'_> {
-        Statement { conn, stmt }
+        Statement {
+            conn,
+            stmt,
+            #[cfg(feature = "bumpalo")]
+            bump: bumpalo::Bump::new(),
+        }
     }
 
     pub(super) fn value_ref(&self, col: usize) -> ValueRef<'_> {
@@ -1261,7 +1202,7 @@ mod test {
     fn test_expanded_sql() -> Result<()> {
         let db = Connection::open_in_memory()?;
         let stmt = db.prepare("SELECT ?1")?;
-        stmt.bind_parameter(&1, 1)?;
+        stmt.bind_parameter(1, 1)?;
         assert_eq!(Some("SELECT 1".to_owned()), stmt.expanded_sql());
         Ok(())
     }
@@ -1369,7 +1310,7 @@ mod test {
         assert_eq!("UTF-16le", encoding);
         db.execute_batch("CREATE TABLE foo(x TEXT)")?;
         let expected = "テスト";
-        db.execute("INSERT INTO foo(x) VALUES (?1)", [&expected])?;
+        db.execute("INSERT INTO foo(x) VALUES (?1)", [expected])?;
         let actual: String = db.one_column("SELECT x FROM foo", [])?;
         assert_eq!(expected, actual);
         Ok(())

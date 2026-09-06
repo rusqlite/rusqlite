@@ -5,14 +5,13 @@ use chrono::{
 };
 
 use crate::Result;
-use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Type, ValueRef};
+use crate::types::{Assign, FromSql, FromSqlError, FromSqlResult, ToSql, Type, ValueRef};
 
 /// ISO 8601 calendar date without timezone => "YYYY-MM-DD"
 impl ToSql for NaiveDate {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let date_str = self.format("%F").to_string();
-        Ok(ToSqlOutput::from(date_str))
+    fn to_sql(&self, a: Assign) -> Result<()> {
+        a.write_fmt(self)
     }
 }
 
@@ -29,9 +28,8 @@ impl FromSql for NaiveDate {
 /// ISO 8601 time without timezone => "HH:MM:SS.SSS"
 impl ToSql for NaiveTime {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let date_str = self.format("%T%.f").to_string();
-        Ok(ToSqlOutput::from(date_str))
+    fn to_sql(&self, a: Assign) -> Result<()> {
+        a.write_fmt(self)
     }
 }
 
@@ -53,9 +51,8 @@ impl FromSql for NaiveTime {
 /// "YYYY-MM-DD HH:MM:SS.SSS"
 impl ToSql for NaiveDateTime {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let date_str = self.format("%F %T%.f").to_string();
-        Ok(ToSqlOutput::from(date_str))
+    fn to_sql(&self, a: Assign) -> Result<()> {
+        a.write_fmt(self)
     }
 }
 
@@ -80,9 +77,8 @@ impl FromSql for NaiveDateTime {
 /// ("YYYY-MM-DD HH:MM:SS.SSS+00:00").
 impl ToSql for DateTime<Utc> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let date_str = self.format("%F %T%.f%:z").to_string();
-        Ok(ToSqlOutput::from(date_str))
+    fn to_sql(&self, a: Assign) -> Result<()> {
+        a.write_fmt(self.format("%F %T%.f%:z"))
     }
 }
 
@@ -90,9 +86,8 @@ impl ToSql for DateTime<Utc> {
 /// ("YYYY-MM-DD HH:MM:SS.SSS+00:00").
 impl ToSql for DateTime<Local> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let date_str = self.with_timezone(&Utc).format("%F %T%.f%:z").to_string();
-        Ok(ToSqlOutput::from(date_str))
+    fn to_sql(&self, a: Assign) -> Result<()> {
+        a.write_fmt(self.with_timezone(&Utc).format("%F %T%.f%:z"))
     }
 }
 
@@ -100,9 +95,8 @@ impl ToSql for DateTime<Local> {
 /// ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM").
 impl ToSql for DateTime<FixedOffset> {
     #[inline]
-    fn to_sql(&self) -> Result<ToSqlOutput<'_>> {
-        let date_str = self.format("%F %T%.f%:z").to_string();
-        Ok(ToSqlOutput::from(date_str))
+    fn to_sql(&self, a: Assign) -> Result<()> {
+        a.write_fmt(self.format("%F %T%.f%:z"))
     }
 }
 
