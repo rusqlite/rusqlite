@@ -257,6 +257,10 @@ Depending on the set of enabled cargo `features`, rusqlite and libsqlite3-sys wi
 
 Both of these are quite permissive, have no bearing on the license of the code in `rusqlite` or `libsqlite3-sys` themselves, and can be entirely ignored if you do not use the feature in question.
 
-## Minimum supported Rust version (MSRV)
+## Minimum Supported Rust Version (MSRV)
 
-Latest stable Rust version at the time of release. It might compile with older versions.
+The minimum supported Rust version (MSRV) is specified by the `rust-version` key
+in the `[workspace.package]` section of `Cargo.toml`.
+
+The MSRV may be updated in any release, including minor and patch releases.
+It may be updated to the latest stable Rust version available at the time of release.
