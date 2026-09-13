@@ -128,7 +128,7 @@ use sealed::Sealed;
 ///     // Alternatively:
 ///     stmt.execute(&[(":key", "three"), (":val", "four")])?;
 ///     // Or:
-///     stmt.execute(&[(":key", &100), (":val", &200)])?;
+///     stmt.execute(&[(":key", 100), (":val", 200)])?;
 ///     Ok(())
 /// }
 /// ```
@@ -297,8 +297,8 @@ macro_rules! impl_for_array_ref {
                 stmt.bind_parameters(self)
             }
         }
-        impl<S: BindIndex, T: ToSql + ?Sized> Sealed for &[(S, &T); $N] {}
-        impl<S: BindIndex, T: ToSql + ?Sized> Params for &[(S, &T); $N] {
+        impl<S: BindIndex, T: ToSql> Sealed for &[(S, T); $N] {}
+        impl<S: BindIndex, T: ToSql> Params for &[(S, T); $N] {
             fn __bind_in(self, stmt: &mut Statement<'_>) -> Result<()> {
                 stmt.bind_parameters_named(self)
             }

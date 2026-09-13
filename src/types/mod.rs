@@ -183,7 +183,7 @@ mod test {
         let db = checked_memory_handle()?;
 
         let s = "hello, world!";
-        db.execute("INSERT INTO foo(t) VALUES (?1)", [&s])?;
+        db.execute("INSERT INTO foo(t) VALUES (?1)", [s])?;
 
         let from: String = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(from, s);

@@ -82,7 +82,7 @@ impl Statement<'_> {
     ///     // However, named parameters can also be passed like:
     ///     stmt.execute(&[(":key", "three"), (":val", "four")])?;
     ///     // Or even: (note that a &T is required for the value type, currently)
-    ///     stmt.execute(&[(":key", &100), (":val", &200)])?;
+    ///     stmt.execute(&[(":key", 100), (":val", 200)])?;
     ///     Ok(())
     /// }
     /// ```
@@ -257,7 +257,7 @@ impl Statement<'_> {
     /// # use rusqlite::{Connection, Result};
     /// fn get_names(conn: &Connection) -> Result<Vec<String>> {
     ///     let mut stmt = conn.prepare("SELECT name FROM people WHERE id = :id")?;
-    ///     let rows = stmt.query_map(&[(":id", &"one")], |row| row.get(0))?;
+    ///     let rows = stmt.query_map(&[(":id", "one")], |row| row.get(0))?;
     ///
     ///     let mut names = Vec::new();
     ///     for name_result in rows {
@@ -856,11 +856,11 @@ mod test {
         db.execute_batch("CREATE TABLE foo(x INTEGER)")?;
 
         assert_eq!(
-            db.execute("INSERT INTO foo(x) VALUES (:x)", &[(":x", &1i32)])?,
+            db.execute("INSERT INTO foo(x) VALUES (:x)", &[(":x", 1i32)])?,
             1
         );
         assert_eq!(
-            db.execute("INSERT INTO foo(x) VALUES (:x)", &[(":x", &2i32)])?,
+            db.execute("INSERT INTO foo(x) VALUES (:x)", &[(":x", 2i32)])?,
             1
         );
         assert_eq!(
@@ -875,7 +875,7 @@ mod test {
             6i32,
             db.query_row::<i32, _, _>(
                 "SELECT SUM(x) FROM foo WHERE x > :x",
-                &[(":x", &0i32)],
+                &[(":x", 0i32)],
                 |r| r.get(0)
             )?
         );
@@ -883,7 +883,7 @@ mod test {
             5i32,
             db.query_row::<i32, _, _>(
                 "SELECT SUM(x) FROM foo WHERE x > :x",
-                &[(":x", &1i32)],
+                &[(":x", 1i32)],
                 |r| r.get(0)
             )?
         );
