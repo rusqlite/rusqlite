@@ -13,8 +13,6 @@ use crate::types::{Assign, ToSql};
 pub struct Statement<'conn> {
     pub(crate) conn: &'conn Connection,
     pub(crate) stmt: RawStatement,
-    #[cfg(feature = "bumpalo")]
-    bump: bumpalo::Bump,
 }
 
 impl Statement<'_> {
@@ -613,12 +611,7 @@ impl Statement<'_> {
     // generic because many of these branches can constant fold away.
     fn bind_parameter<P: ToSql>(&self, param: P, ndx: usize) -> Result<()> {
         let ptr = unsafe { self.stmt.ptr() };
-        param.into_sql(Assign::Stmt {
-            s: ptr,
-            n: ndx as _,
-            #[cfg(feature = "bumpalo")]
-            bump: &self.bump,
-        })
+        param.into_sql(Assign::Stmt((ptr, ndx as _)))
     }
 
     #[inline]
@@ -708,8 +701,6 @@ impl Statement<'_> {
     /// Reset all bindings
     pub fn clear_bindings(&mut self) {
         self.stmt.clear_bindings();
-        #[cfg(feature = "bumpalo")]
-        self.bump.reset();
     }
 
     pub(crate) unsafe fn ptr(&self) -> *mut ffi::sqlite3_stmt {
@@ -743,12 +734,7 @@ impl Drop for Statement<'_> {
 impl Statement<'_> {
     #[inline]
     pub(super) fn new(conn: &Connection, stmt: RawStatement) -> Statement<'_> {
-        Statement {
-            conn,
-            stmt,
-            #[cfg(feature = "bumpalo")]
-            bump: bumpalo::Bump::new(),
-        }
+        Statement { conn, stmt }
     }
 
     pub(super) fn value_ref(&self, col: usize) -> ValueRef<'_> {
