@@ -649,6 +649,17 @@ impl Connection {
         self.db.borrow_mut().release_memory()
     }
 
+    /// Sets the rowid returned from [`last_insert_rowid`] without inserting a row into the database.
+    ///
+    /// Uses [sqlite3_set_last_insert_rowid](https://www.sqlite.org/c3ref/set_last_insert_rowid.html) under
+    /// the hood.
+    ///
+    /// [`last_insert_rowid`]: Self::last_insert_rowid
+    #[inline]
+    pub fn set_last_insert_rowid(&self, rowid: i64) {
+        self.db.borrow_mut().set_last_insert_rowid(rowid);
+    }
+
     /// Get the SQLite rowid of the most recent successful INSERT.
     ///
     /// Uses [sqlite3_last_insert_rowid](https://www.sqlite.org/c3ref/last_insert_rowid.html) under
@@ -1874,6 +1885,20 @@ mod test {
 
         let err = db.prepare("SELECT * FROM does_not_exist").unwrap_err();
         assert!(format!("{err}").contains("does_not_exist"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_set_last_insert_rowid() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE foo(x INTEGER PRIMARY KEY)")?;
+        db.execute_batch("INSERT INTO foo DEFAULT VALUES")?;
+
+        assert_eq!(db.last_insert_rowid(), 1);
+
+        db.set_last_insert_rowid(0);
+
+        assert_eq!(db.last_insert_rowid(), 0);
         Ok(())
     }
 
