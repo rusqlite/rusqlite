@@ -8,6 +8,8 @@ use crate::ffi;
 
 use crate::{Connection, InnerConnection, Result, error::decode_result_raw};
 
+pub use crate::CheckpointMode;
+
 #[cfg(feature = "preupdate_hook")]
 pub use preupdate_hook::*;
 
@@ -447,24 +449,6 @@ impl Connection {
     }
 }
 
-/// Checkpoint mode
-#[derive(Clone, Copy)]
-#[repr(i32)]
-#[non_exhaustive]
-pub enum CheckpointMode {
-    /// Do as much as possible w/o blocking
-    PASSIVE = ffi::SQLITE_CHECKPOINT_PASSIVE,
-    /// Wait for writers, then checkpoint
-    FULL = ffi::SQLITE_CHECKPOINT_FULL,
-    /// Like FULL but wait for readers
-    RESTART = ffi::SQLITE_CHECKPOINT_RESTART,
-    /// Like RESTART but also truncate WAL
-    TRUNCATE = ffi::SQLITE_CHECKPOINT_TRUNCATE,
-    /// Do no work at all
-    #[cfg(feature = "modern_sqlite")] // 3.51.0
-    NOOP = -1, //ffi::SQLITE_CHECKPOINT_NOOP,
-}
-
 /// Write-Ahead Log
 pub struct Wal {
     db: *mut ffi::sqlite3,
@@ -479,21 +463,7 @@ impl Wal {
 
     /// Checkpoint a database
     pub fn checkpoint_v2(&self, mode: CheckpointMode) -> Result<(c_int, c_int)> {
-        let mut n_log = 0;
-        let mut n_ckpt = 0;
-        unsafe {
-            decode_result_raw(
-                self.db,
-                ffi::sqlite3_wal_checkpoint_v2(
-                    self.db,
-                    self.db_name,
-                    mode as c_int,
-                    &raw mut n_log,
-                    &raw mut n_ckpt,
-                ),
-            )?;
-        };
-        Ok((n_log, n_ckpt))
+        unsafe { crate::inner_connection::wal_checkpoint_v2(self.db, self.db_name, mode) }
     }
 
     /// Name of the database that was written to

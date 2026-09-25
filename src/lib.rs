@@ -1168,6 +1168,34 @@ impl Connection {
         };
         unsafe { self.db.borrow().file_control(db_name, op, arg) }
     }
+
+    /// Checkpoint a database in WAL mode
+    ///
+    /// Equivalent to [`Connection::checkpoint_v2`] with [`CheckpointMode::PASSIVE`],
+    /// without reporting the frame counts.
+    /// `None` checkpoints all attached databases.
+    ///
+    /// See `https://sqlite.org/c3ref/wal_checkpoint.html` for details.
+    pub fn checkpoint<N: Name>(&self, db_name: Option<N>) -> Result<()> {
+        self.db.borrow().checkpoint(db_name)
+    }
+
+    /// Checkpoint a database in WAL mode
+    ///
+    /// `None` checkpoints all attached databases.
+    /// Returns the total number of frames in the log and the number of frames checkpointed
+    /// (`-1` when the database is not in WAL mode).
+    /// Fails with `SQLITE_BUSY` when another checkpoint is already running,
+    /// or when a non-passive mode gives up waiting for readers or writers.
+    ///
+    /// See `https://sqlite.org/c3ref/wal_checkpoint_v2.html` for details.
+    pub fn checkpoint_v2<N: Name>(
+        &self,
+        db_name: Option<N>,
+        mode: CheckpointMode,
+    ) -> Result<(c_int, c_int)> {
+        self.db.borrow().checkpoint_v2(db_name, mode)
+    }
 }
 
 impl fmt::Debug for Connection {
@@ -1363,6 +1391,24 @@ impl InterruptHandle {
             unsafe { ffi::sqlite3_interrupt(*db_handle) }
         }
     }
+}
+
+/// Checkpoint mode
+#[derive(Clone, Copy)]
+#[repr(i32)]
+#[non_exhaustive]
+pub enum CheckpointMode {
+    /// Do as much as possible w/o blocking
+    PASSIVE = ffi::SQLITE_CHECKPOINT_PASSIVE,
+    /// Wait for writers, then checkpoint
+    FULL = ffi::SQLITE_CHECKPOINT_FULL,
+    /// Like FULL but wait for readers
+    RESTART = ffi::SQLITE_CHECKPOINT_RESTART,
+    /// Like RESTART but also truncate WAL
+    TRUNCATE = ffi::SQLITE_CHECKPOINT_TRUNCATE,
+    /// Do no work at all
+    #[cfg(feature = "modern_sqlite")] // 3.51.0
+    NOOP = -1, //ffi::SQLITE_CHECKPOINT_NOOP,
 }
 
 /// Standard File Control Opcodes
@@ -2538,6 +2584,44 @@ mod test {
         db.file_control(DEFAULT_NAME, FileControl::ReserveBytes(&mut reserve_bytes))?;
         assert_ne!(reserve_bytes, -1);
 
+        Ok(())
+    }
+
+    #[cfg_attr(
+        all(target_family = "wasm", target_os = "unknown"),
+        ignore = "no filesystem on this platform"
+    )]
+    #[test]
+    fn checkpoint() -> Result<()> {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("checkpoint.db3");
+        let db = Connection::open(&path)?;
+
+        // not in WAL mode: nothing to checkpoint
+        let (log, ckpt) = db.checkpoint_v2(DEFAULT_NAME, CheckpointMode::PASSIVE)?;
+        assert_eq!((log, ckpt), (-1, -1));
+
+        let journal_mode: String =
+            db.pragma_update_and_check(None, "journal_mode", "wal", |row| row.get(0))?;
+        assert_eq!(journal_mode, "wal");
+        db.pragma_update(None, "wal_autocheckpoint", 0)?;
+
+        db.execute_batch("CREATE TABLE x(c); INSERT INTO x VALUES (1);")?;
+        let (log, ckpt) = db.checkpoint_v2(Some(MAIN_DB), CheckpointMode::FULL)?;
+        assert!(log > 0);
+        assert_eq!(log, ckpt);
+
+        db.execute_batch("INSERT INTO x VALUES (2);")?;
+        let (log, ckpt) = db.checkpoint_v2(DEFAULT_NAME, CheckpointMode::TRUNCATE)?;
+        assert_eq!((log, ckpt), (0, 0));
+
+        db.execute_batch("INSERT INTO x VALUES (3);")?;
+        db.checkpoint(DEFAULT_NAME)?;
+        let (log, ckpt) = db.checkpoint_v2(DEFAULT_NAME, CheckpointMode::PASSIVE)?;
+        assert_eq!(log, ckpt);
+
+        db.checkpoint_v2(Some("no_such_db"), CheckpointMode::PASSIVE)
+            .unwrap_err();
         Ok(())
     }
 }
