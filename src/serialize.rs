@@ -1,6 +1,6 @@
 //! Serialize a database.
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::ptr::NonNull;
 
 use crate::error::{error_from_handle, error_from_sqlite_code};
@@ -62,6 +62,19 @@ impl Deref for Data<'_> {
             }
         };
         unsafe { std::slice::from_raw_parts(ptr, sz) }
+    }
+}
+
+impl Deref for OwnedData {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.ptr.as_ptr(), self.sz) }
+    }
+}
+impl DerefMut for OwnedData {
+    fn deref_mut(&mut self) -> &mut [u8] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_mut(), self.sz) }
     }
 }
 
@@ -129,8 +142,9 @@ impl Connection {
         if ptr.is_null() {
             return Err(error_from_sqlite_code(ffi::SQLITE_NOMEM, None));
         }
-        let buf = unsafe { std::slice::from_raw_parts_mut(ptr, sz) };
-        read.read_exact(buf).map_err(|e| {
+        let ptr = NonNull::new(ptr).unwrap();
+        let mut data = unsafe { OwnedData::from_raw_nonnull(ptr, sz) };
+        read.read_exact(data.deref_mut()).map_err(|e| {
             Error::SqliteFailure(
                 ffi::Error {
                     code: ffi::ErrorCode::CannotOpen,
@@ -139,8 +153,6 @@ impl Connection {
                 Some(format!("{e}")),
             )
         })?;
-        let ptr = NonNull::new(ptr).unwrap();
-        let data = unsafe { OwnedData::from_raw_nonnull(ptr, sz) };
         self.deserialize(schema, data, read_only)
     }
 
