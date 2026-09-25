@@ -6,7 +6,7 @@ use std::str;
 use std::sync::{Arc, Mutex};
 
 use super::ffi;
-use super::{Connection, InterruptHandle, Name, OpenFlags, PrepFlags, Result};
+use super::{CheckpointMode, Connection, InterruptHandle, Name, OpenFlags, PrepFlags, Result};
 use crate::error::{Error, decode_result_raw, error_from_handle, error_with_offset};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
@@ -337,6 +337,22 @@ impl InnerConnection {
         crate::error::check(unsafe { ffi::sqlite3_file_control(self.db, cn, op, arg) })
     }
 
+    pub fn checkpoint<N: Name>(&self, db_name: Option<N>) -> Result<()> {
+        let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
+        let cn = cs.as_ref().map_or(ptr::null(), |s| s.as_ptr());
+        self.decode_result(unsafe { ffi::sqlite3_wal_checkpoint(self.db, cn) })
+    }
+
+    pub fn checkpoint_v2<N: Name>(
+        &self,
+        db_name: Option<N>,
+        mode: CheckpointMode,
+    ) -> Result<(c_int, c_int)> {
+        let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
+        let cn = cs.as_ref().map_or(ptr::null(), |s| s.as_ptr());
+        unsafe { wal_checkpoint_v2(self.db, cn, mode) }
+    }
+
     pub fn set_clientdata<
         T: Send + 'static,
         N: Name,
@@ -396,6 +412,29 @@ pub(crate) unsafe fn db_filename<N: Name>(
             CStr::from_ptr(db_filename).to_str().ok()
         }
     }
+}
+
+/// `db_name` may be null to checkpoint all attached databases.
+pub(crate) unsafe fn wal_checkpoint_v2(
+    db: *mut ffi::sqlite3,
+    db_name: *const c_char,
+    mode: CheckpointMode,
+) -> Result<(c_int, c_int)> {
+    let mut n_log = 0;
+    let mut n_ckpt = 0;
+    unsafe {
+        decode_result_raw(
+            db,
+            ffi::sqlite3_wal_checkpoint_v2(
+                db,
+                db_name,
+                mode as c_int,
+                &raw mut n_log,
+                &raw mut n_ckpt,
+            ),
+        )?;
+    }
+    Ok((n_log, n_ckpt))
 }
 
 impl Drop for InnerConnection {
