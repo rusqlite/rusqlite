@@ -3,7 +3,7 @@
 use std::ops::Deref;
 
 use crate::ffi;
-use crate::types::{ToSql, ToSqlOutput, ValueRef};
+use crate::types::{Assign, ToSql};
 use crate::{Connection, Result, Row};
 
 pub struct Sql {
@@ -67,32 +67,8 @@ impl Sql {
         }
     }
 
-    pub fn push_value(&mut self, value: &dyn ToSql) -> Result<()> {
-        let value = value.to_sql()?;
-        let value = match value {
-            ToSqlOutput::Borrowed(v) => v,
-            ToSqlOutput::Owned(ref v) => ValueRef::from(v),
-            #[cfg(any(feature = "blob", feature = "functions", feature = "pointer"))]
-            _ => {
-                return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
-            }
-        };
-        match value {
-            ValueRef::Integer(i) => {
-                self.push_int(i);
-            }
-            ValueRef::Real(r) => {
-                self.push_real(r);
-            }
-            ValueRef::Text(s) => {
-                let s = std::str::from_utf8(s)?;
-                self.push_string_literal(s);
-            }
-            _ => {
-                return Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"{value:?}\""));
-            }
-        }
-        Ok(())
+    pub fn push_value<V: ToSql>(&mut self, value: V) -> Result<()> {
+        value.into_sql(Assign::Pragma(self))
     }
 
     pub fn push_string_literal(&mut self, s: &str) {
@@ -225,7 +201,7 @@ impl Connection {
         // or it may be separated from the pragma name by an equal sign.
         // The two syntaxes yield identical results.
         sql.open_brace();
-        sql.push_value(&pragma_value)?;
+        sql.push_value(pragma_value)?;
         sql.close_brace();
         let mut stmt = self.prepare(&sql)?;
         let mut rows = stmt.query([])?;
@@ -255,7 +231,7 @@ impl Connection {
         // or it may be separated from the pragma name by an equal sign.
         // The two syntaxes yield identical results.
         sql.push_equal_sign();
-        sql.push_value(&pragma_value)?;
+        sql.push_value(pragma_value)?;
         self.execute_batch(&sql)
     }
 
@@ -279,7 +255,7 @@ impl Connection {
         // or it may be separated from the pragma name by an equal sign.
         // The two syntaxes yield identical results.
         sql.push_equal_sign();
-        sql.push_value(&pragma_value)?;
+        sql.push_value(pragma_value)?;
         self.query_row(&sql, [], f)
     }
 }

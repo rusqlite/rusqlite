@@ -18,11 +18,10 @@ use std::slice;
 
 use crate::ffi::{sqlite3_context, sqlite3_free, sqlite3_value};
 
-use crate::context::set_result;
 use crate::error::{check, error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
-use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
+use crate::types::{Assign, FromSql, FromSqlError, ToSql, ValueRef};
 use crate::util::{alloc, free_boxed_value};
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
@@ -805,8 +804,7 @@ impl Context {
     /// Set current cell value
     #[inline]
     pub fn set_result<T: ToSql>(&mut self, value: T) -> Result<()> {
-        let t = value.to_sql()?;
-        unsafe { set_result(self.0, &[], t) }
+        value.into_sql(Assign::Ctx((self.0, &[])))
     }
 
     /// Determine if column access is for UPDATE
