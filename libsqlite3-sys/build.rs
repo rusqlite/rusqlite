@@ -137,22 +137,36 @@ mod build_bundled {
             !(cfg!(feature = "bundled-windows") && !cfg!(feature = "bundled") && !win_target()),
             "This module should not be used: we're not on Windows and the bundled feature has not been enabled"
         );
+        let (include_dir, source) = cfg_select! {
+            feature = "bundled-sqlcipher" => {
+                let dir = sqlcipher_src::source_dir();
+                (dir.to_owned(), dir.join(sqlcipher_src::SOURCE_FILE))
+            }
+            _ => {
+                let dir = format!("{}/{lib_name}", env!("CARGO_MANIFEST_DIR"));
+                let source = format!("{lib_name}/sqlite3.c");
+                (
+                    std::path::PathBuf::from(dir),
+                    std::path::PathBuf::from(source),
+                )
+            }
+        };
 
         cfg_select! {
             feature = "buildtime_bindgen" => {
                 use super::{HeaderLocation, bindings};
-                let header = HeaderLocation::FromPath(lib_name.to_owned());
+                let header = HeaderLocation::FromPath(include_dir.to_string_lossy().into());
                 bindings::write_to_out_dir(header, out_path);
             }
             _ => {
                 super::copy_bindings(lib_name, "bindgen_bundled_version", out_path);
             }
         }
-        println!("cargo:include={}/{lib_name}", env!("CARGO_MANIFEST_DIR"));
-        println!("cargo:rerun-if-changed={lib_name}/sqlite3.c");
+        println!("cargo:include={}", include_dir.display());
+        println!("cargo:rerun-if-changed={}", source.display());
         println!("cargo:rerun-if-changed=sqlite3/wasm32-wasi-vfs.c");
         let mut cfg = cc::Build::new();
-        cfg.file(format!("{lib_name}/sqlite3.c"))
+        cfg.file(&source)
             .flag("-DSQLITE_CORE")
             .flag("-DSQLITE_DEFAULT_FOREIGN_KEYS=1")
             .flag("-DSQLITE_ENABLE_API_ARMOR")
