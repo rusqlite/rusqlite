@@ -157,6 +157,8 @@ mod version;
 pub mod vtab;
 
 pub(crate) mod util;
+#[cfg(feature = "wal")]
+pub mod wal;
 
 // Actually, only sqlite3_enable_load_extension is disabled (not sqlite3_load_extension)
 #[cfg(all(feature = "loadable_extension", feature = "load_extension"))]

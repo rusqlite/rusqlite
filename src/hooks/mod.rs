@@ -6,8 +6,9 @@ use std::panic::catch_unwind;
 
 use crate::ffi;
 
-use crate::{Connection, InnerConnection, Result, error::decode_result_raw};
+use crate::{Connection, InnerConnection, Result};
 
+use crate::wal::CheckpointMode;
 #[cfg(feature = "preupdate_hook")]
 pub use preupdate_hook::*;
 
@@ -387,7 +388,7 @@ impl Connection {
     /// both invoke `sqlite3_wal_hook()` and will overwrite any prior `sqlite3_wal_hook()` settings.
     pub fn wal_hook<F>(&mut self, hook: Option<F>) -> Result<()>
     where
-        F: FnMut(&Wal, c_int) -> Result<()> + Send + 'static,
+        F: FnMut(&mut Wal, c_int) -> Result<()> + Send + 'static,
     {
         unsafe extern "C" fn wal_hook_callback<F>(
             client_data: *mut c_void,
@@ -396,13 +397,16 @@ impl Connection {
             pages: c_int,
         ) -> c_int
         where
-            F: FnMut(&Wal, c_int) -> Result<()>,
+            F: FnMut(&mut Wal, c_int) -> Result<()>,
         {
             unsafe {
-                let wal = Wal { db, db_name };
                 catch_unwind(|| {
                     let hook_fn: *mut F = client_data.cast::<F>();
-                    match (*hook_fn)(&wal, pages) {
+                    let mut wal = Wal {
+                        db: InnerConnection::new(db, false),
+                        db_name,
+                    };
+                    match (*hook_fn)(&mut wal, pages) {
                         Ok(()) => ffi::SQLITE_OK,
                         Err(e) => e
                             .sqlite_error()
@@ -447,53 +451,23 @@ impl Connection {
     }
 }
 
-/// Checkpoint mode
-#[derive(Clone, Copy)]
-#[repr(i32)]
-#[non_exhaustive]
-pub enum CheckpointMode {
-    /// Do as much as possible w/o blocking
-    PASSIVE = ffi::SQLITE_CHECKPOINT_PASSIVE,
-    /// Wait for writers, then checkpoint
-    FULL = ffi::SQLITE_CHECKPOINT_FULL,
-    /// Like FULL but wait for readers
-    RESTART = ffi::SQLITE_CHECKPOINT_RESTART,
-    /// Like RESTART but also truncate WAL
-    TRUNCATE = ffi::SQLITE_CHECKPOINT_TRUNCATE,
-    /// Do no work at all
-    #[cfg(feature = "modern_sqlite")] // 3.51.0
-    NOOP = -1, //ffi::SQLITE_CHECKPOINT_NOOP,
-}
-
 /// Write-Ahead Log
 pub struct Wal {
-    db: *mut ffi::sqlite3,
+    db: InnerConnection,
     db_name: *const c_char,
 }
 
 impl Wal {
     /// Checkpoint a database
-    pub fn checkpoint(&self) -> Result<()> {
-        unsafe { decode_result_raw(self.db, ffi::sqlite3_wal_checkpoint(self.db, self.db_name)) }
+    pub fn checkpoint(&mut self) -> Result<()> {
+        self.checkpoint_v2(CheckpointMode::default())?;
+        Ok(())
     }
 
     /// Checkpoint a database
-    pub fn checkpoint_v2(&self, mode: CheckpointMode) -> Result<(c_int, c_int)> {
-        let mut n_log = 0;
-        let mut n_ckpt = 0;
-        unsafe {
-            decode_result_raw(
-                self.db,
-                ffi::sqlite3_wal_checkpoint_v2(
-                    self.db,
-                    self.db_name,
-                    mode as c_int,
-                    &raw mut n_log,
-                    &raw mut n_ckpt,
-                ),
-            )?;
-        };
-        Ok((n_log, n_ckpt))
+    pub fn checkpoint_v2(&mut self, mode: CheckpointMode) -> Result<(c_int, c_int)> {
+        self.db
+            .wal_checkpoint_v2(Some(unsafe { CStr::from_ptr(self.db_name) }), mode)
     }
 
     /// Name of the database that was written to
@@ -920,7 +894,7 @@ mod test {
         assert_eq!(journal_mode, "wal");
 
         static CALLED: AtomicBool = AtomicBool::new(false);
-        db.wal_hook(Some(|wal: &'_ Wal, pages| {
+        db.wal_hook(Some(|wal: &'_ mut Wal, pages| {
             assert_eq!(wal.name(), MAIN_DB);
             assert!(pages > 0);
             CALLED.swap(true, Ordering::Relaxed);
@@ -929,7 +903,7 @@ mod test {
         db.execute_batch("CREATE TABLE x(c);")?;
         assert!(CALLED.load(Ordering::Relaxed));
 
-        db.wal_hook(Some(|wal: &'_ Wal, pages| {
+        db.wal_hook(Some(|wal: &'_ mut Wal, pages| {
             assert!(pages > 0);
             let (log, ckpt) = wal.checkpoint_v2(super::CheckpointMode::TRUNCATE)?;
             assert_eq!(log, 0);
@@ -938,7 +912,7 @@ mod test {
         }))?;
         db.execute_batch("CREATE TABLE y(c);")?;
 
-        db.wal_hook(None::<fn(&Wal, std::ffi::c_int) -> Result<()>>)
+        db.wal_hook(None::<fn(&mut Wal, std::ffi::c_int) -> Result<()>>)
     }
 
     #[test]

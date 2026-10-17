@@ -63,7 +63,7 @@ limits = []
 # Used to generate a cdylib
 loadable_extension = ["libsqlite3-sys?/loadable_extension"]
 # sqlite3_commit_hook, sqlite3_rollback_hook, ...
-hooks = []
+hooks = ["wal"]
 # if SQLITE_ENABLE_PREUPDATE_HOOK
 preupdate_hook = ["libsqlite3-sys?/preupdate_hook", "hooks"]
 # u64, usize, NonZeroU64, NonZeroUsize
@@ -105,6 +105,8 @@ serialize = []
 pointer = []
 # On wasm32-unknown-unknown builds use the sqlite-wasm-rs crate instead of libsqlite3-sys
 ffi-sqlite-wasm-rs = ["dep:sqlite-wasm-rs"]
+# sqlite3_wal_checkpoint_v2
+wal = []
 
 # Helper feature for enabling most non-build-related optional features
 # or dependencies (except `session`). This is useful for running tests / clippy
@@ -136,6 +138,7 @@ modern-full = [
     "url",
     "uuid",
     "vtab",
+    "wal",
     "window",
 ]
 
