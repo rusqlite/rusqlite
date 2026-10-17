@@ -155,12 +155,8 @@ mod build_bundled {
         cfg_select! {
             feature = "buildtime_bindgen" => {
                 use super::{HeaderLocation, bindings};
-                let header_dir = if cfg!(feature = "bundled-sqlcipher") {
-                    include_dir.to_string_lossy().into_owned()
-                } else {
-                    lib_name.to_owned()
-                };
-                bindings::write_to_out_dir(HeaderLocation::FromPath(header_dir), out_path);
+                let header = HeaderLocation::FromPath(include_dir.to_string_lossy().into());
+                bindings::write_to_out_dir(header, out_path);
             }
             _ => {
                 super::copy_bindings(lib_name, "bindgen_bundled_version", out_path);

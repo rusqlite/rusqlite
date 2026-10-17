@@ -2543,31 +2543,22 @@ mod test {
         Ok(())
     }
 
-    #[cfg(feature = "bundled-sqlcipher")]
     #[test]
-    fn test_bundled_sqlcipher_is_active() -> Result<()> {
+    #[cfg(feature = "bundled-sqlcipher")]
+    fn bundled_sqlcipher() -> Result<()> {
         let db = checked_memory_handle();
-        // PRAGMA cipher_version returns a row only when SQLCipher is compiled in
         let version: String = db.one_column("PRAGMA cipher_version", [])?;
         assert!(!version.is_empty());
 
-        // On targets with a filesystem, confirm the key seals the content
-        #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("test.db3");
         {
-            let dir = tempfile::tempdir().unwrap();
-            let path = dir.path().join("sealed.db");
-            {
-                let enc = Connection::open(&path)?;
-                enc.execute_batch("PRAGMA key = 'secret'; CREATE TABLE t (v TEXT);")?;
-                enc.execute("INSERT INTO t VALUES (?1)", ["plaintext_sentinel"])?;
-            }
-            let raw = std::fs::read(&path).unwrap();
-            assert!(
-                !raw.windows(b"plaintext_sentinel".len())
-                    .any(|w| w == b"plaintext_sentinel"),
-                "plaintext found in encrypted database file"
-            );
+            let db = Connection::open(&path)?;
+            db.execute_batch("PRAGMA key = 'secret'; CREATE TABLE foo(x TEXT);")?;
+            db.execute("INSERT INTO foo VALUES(?1)", ["plaintext"])?;
         }
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(!bytes.windows(9).any(|w| w == b"plaintext"));
         Ok(())
     }
 }
