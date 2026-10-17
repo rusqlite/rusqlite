@@ -137,22 +137,36 @@ mod build_bundled {
             !(cfg!(feature = "bundled-windows") && !cfg!(feature = "bundled") && !win_target()),
             "This module should not be used: we're not on Windows and the bundled feature has not been enabled"
         );
+        #[cfg(feature = "bundled-sqlcipher")]
+        let (include_dir, source) = {
+            let dir = sqlcipher_src::source_dir();
+            (dir.to_owned(), dir.join(sqlcipher_src::SOURCE_FILE))
+        };
+        #[cfg(not(feature = "bundled-sqlcipher"))]
+        let (include_dir, source) = (
+            std::path::PathBuf::from(format!("{}/{lib_name}", env!("CARGO_MANIFEST_DIR"))),
+            std::path::PathBuf::from(format!("{lib_name}/sqlite3.c")),
+        );
 
         cfg_select! {
             feature = "buildtime_bindgen" => {
                 use super::{HeaderLocation, bindings};
-                let header = HeaderLocation::FromPath(lib_name.to_owned());
-                bindings::write_to_out_dir(header, out_path);
+                let header_dir = if cfg!(feature = "bundled-sqlcipher") {
+                    include_dir.to_string_lossy().into_owned()
+                } else {
+                    lib_name.to_owned()
+                };
+                bindings::write_to_out_dir(HeaderLocation::FromPath(header_dir), out_path);
             }
             _ => {
                 super::copy_bindings(lib_name, "bindgen_bundled_version", out_path);
             }
         }
-        println!("cargo:include={}/{lib_name}", env!("CARGO_MANIFEST_DIR"));
-        println!("cargo:rerun-if-changed={lib_name}/sqlite3.c");
+        println!("cargo:include={}", include_dir.display());
+        println!("cargo:rerun-if-changed={}", source.display());
         println!("cargo:rerun-if-changed=sqlite3/wasm32-wasi-vfs.c");
         let mut cfg = cc::Build::new();
-        cfg.file(format!("{lib_name}/sqlite3.c"))
+        cfg.file(&source)
             .flag("-DSQLITE_CORE")
             .flag("-DSQLITE_DEFAULT_FOREIGN_KEYS=1")
             .flag("-DSQLITE_ENABLE_API_ARMOR")

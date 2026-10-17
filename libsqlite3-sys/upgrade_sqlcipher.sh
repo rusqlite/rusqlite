@@ -1,32 +1,23 @@
 #!/bin/sh -e
 
+# Regenerates sqlcipher/bindgen_bundled_version.rs from the header of the pinned sqlcipher-src.
+
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 echo "$SCRIPT_DIR"
 cd "$SCRIPT_DIR" || { echo "fatal error" >&2; exit 1; }
+
 cargo clean -p libsqlite3-sys
 mkdir -p "$SCRIPT_DIR/../target" "$SCRIPT_DIR/sqlcipher"
-export SQLCIPHER_LIB_DIR="$SCRIPT_DIR/sqlcipher"
-export SQLCIPHER_INCLUDE_DIR="$SQLCIPHER_LIB_DIR"
 
-SQLCIPHER_VERSION="4.17.0"
-# Download and generate sqlcipher amalgamation
-mkdir -p $SCRIPT_DIR/sqlcipher.src
-[ -e "v${SQLCIPHER_VERSION}.tar.gz" ] || curl -sfL -O "https://github.com/sqlcipher/sqlcipher/archive/v${SQLCIPHER_VERSION}.tar.gz"
-tar xzf "v${SQLCIPHER_VERSION}.tar.gz" --strip-components=1 -C "$SCRIPT_DIR/sqlcipher.src"
-cd "$SCRIPT_DIR/sqlcipher.src"
-./configure
-make sqlite3.c
-cp sqlite3.c sqlite3.h sqlite3ext.h "$SCRIPT_DIR/sqlcipher/"
-cd "$SCRIPT_DIR"
-rm -rf "v${SQLCIPHER_VERSION}.tar.gz" sqlcipher.src
+# Remove the stale bindings so a fresh one is copied in.
+rm -f "$SCRIPT_DIR/sqlcipher/bindgen_bundled_version.rs"
+find "$SCRIPT_DIR/../target" -type f -name bindgen.rs -delete
 
-# Regenerate bindgen file for sqlcipher
-rm -f "$SQLCIPHER_LIB_DIR/bindgen_bundled_version.rs"
-
-# cargo update
-find "$SCRIPT_DIR/../target" -type f -name bindgen.rs -exec rm {} \;
-env LIBSQLITE3_SYS_BUNDLING=1 cargo build --features "sqlcipher buildtime_bindgen session"
-find "$SCRIPT_DIR/../target" -type f -name bindgen.rs -exec mv {} "$SQLCIPHER_LIB_DIR/bindgen_bundled_version.rs" \;
+# Build with buildtime_bindgen to regenerate bindings from the crate header.
+env LIBSQLITE3_SYS_BUNDLING=1 cargo build \
+  --features "bundled-sqlcipher buildtime_bindgen session"
+find "$SCRIPT_DIR/../target" -type f -name bindgen.rs \
+  -exec cp {} "$SCRIPT_DIR/sqlcipher/bindgen_bundled_version.rs" \;
 
 # Sanity checks
 cd "$SCRIPT_DIR/.." || { echo "fatal error" >&2; exit 1; }
