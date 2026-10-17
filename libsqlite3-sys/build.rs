@@ -137,16 +137,20 @@ mod build_bundled {
             !(cfg!(feature = "bundled-windows") && !cfg!(feature = "bundled") && !win_target()),
             "This module should not be used: we're not on Windows and the bundled feature has not been enabled"
         );
-        #[cfg(feature = "bundled-sqlcipher")]
-        let (include_dir, source) = {
-            let dir = sqlcipher_src::source_dir();
-            (dir.to_owned(), dir.join(sqlcipher_src::SOURCE_FILE))
+        let (include_dir, source) = cfg_select! {
+            feature = "bundled-sqlcipher" => {
+                let dir = sqlcipher_src::source_dir();
+                (dir.to_owned(), dir.join(sqlcipher_src::SOURCE_FILE))
+            }
+            _ => {
+                let dir = format!("{}/{lib_name}", env!("CARGO_MANIFEST_DIR"));
+                let source = format!("{lib_name}/sqlite3.c");
+                (
+                    std::path::PathBuf::from(dir),
+                    std::path::PathBuf::from(source),
+                )
+            }
         };
-        #[cfg(not(feature = "bundled-sqlcipher"))]
-        let (include_dir, source) = (
-            std::path::PathBuf::from(format!("{}/{lib_name}", env!("CARGO_MANIFEST_DIR"))),
-            std::path::PathBuf::from(format!("{lib_name}/sqlite3.c")),
-        );
 
         cfg_select! {
             feature = "buildtime_bindgen" => {
