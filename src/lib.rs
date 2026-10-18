@@ -2542,4 +2542,23 @@ mod test {
 
         Ok(())
     }
+
+    #[test]
+    #[cfg(feature = "bundled-sqlcipher")]
+    fn bundled_sqlcipher() -> Result<()> {
+        let db = checked_memory_handle();
+        let version: String = db.one_column("PRAGMA cipher_version", [])?;
+        assert!(!version.is_empty());
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("test.db3");
+        {
+            let db = Connection::open(&path)?;
+            db.execute_batch("PRAGMA key = 'secret'; CREATE TABLE foo(x TEXT);")?;
+            db.execute("INSERT INTO foo VALUES(?1)", ["plaintext"])?;
+        }
+        let bytes = std::fs::read(&path).unwrap();
+        assert!(!bytes.windows(9).any(|w| w == b"plaintext"));
+        Ok(())
+    }
 }

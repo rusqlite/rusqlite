@@ -251,7 +251,7 @@ Rusqlite and libsqlite3-sys are available under the MIT license. See the LICENSE
 
 Depending on the set of enabled cargo `features`, rusqlite and libsqlite3-sys will also bundle other libraries, which have their own licensing terms:
 
-- If `--features=bundled-sqlcipher` is enabled, the vendored source of [SQLcipher](https://github.com/sqlcipher/sqlcipher) will be compiled and statically linked in. SQLcipher is distributed under a BSD-style license, as described [here](libsqlite3-sys/sqlcipher/LICENSE).
+- If `--features=bundled-sqlcipher` is enabled, the source of [SQLcipher](https://github.com/sqlcipher/sqlcipher) shipped by the [`sqlcipher-src`](https://crates.io/crates/sqlcipher-src) crate will be compiled and statically linked in. SQLcipher is distributed under a BSD-style license, as described [here](https://github.com/sqlcipher/sqlcipher/blob/master/LICENSE.md).
 
 - If `--features=bundled` is enabled, the vendored source of SQLite will be compiled and linked in. SQLite is in the public domain, as described [here](https://www.sqlite.org/copyright.html).
 
