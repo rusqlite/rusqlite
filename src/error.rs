@@ -91,6 +91,9 @@ pub enum Error {
     /// Error when a query that was expected to insert one row did not insert
     /// any or insert many.
     StatementChangedRows(usize),
+    /// Error when a query that was expected to insert a row did not change the connection's
+    /// last_insert_rowid().
+    StatementFailedToInsertRow,
 
     /// Error returned by
     /// [`functions::Context::get`](crate::functions::Context::get) when the
@@ -182,6 +185,7 @@ impl PartialEq for Error {
                 i1 == i2 && t1 == t2 && n1 == n2
             }
             (Self::StatementChangedRows(n1), Self::StatementChangedRows(n2)) => n1 == n2,
+            (Self::StatementFailedToInsertRow, Self::StatementFailedToInsertRow) => true,
             #[cfg(feature = "functions")]
             (
                 Self::InvalidFunctionParameterType(i1, t1),
@@ -317,6 +321,7 @@ impl fmt::Display for Error {
                 "Wrong number of parameters passed to query. Got {i1}, needed {n1}"
             ),
             Self::StatementChangedRows(i) => write!(f, "Query changed {i} rows"),
+            Self::StatementFailedToInsertRow => write!(f, "Statement failed to insert new row"),
 
             #[cfg(feature = "functions")]
             Self::InvalidFunctionParameterType(i, ref t) => {
@@ -370,6 +375,7 @@ impl error::Error for Error {
             | Self::InvalidPath(_)
             | Self::InvalidParameterCount(..)
             | Self::StatementChangedRows(_)
+            | Self::StatementFailedToInsertRow
             | Self::InvalidQuery
             | Self::MultipleStatement => None,
 

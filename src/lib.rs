@@ -659,6 +659,10 @@ impl Connection {
     pub fn last_insert_rowid(&self) -> i64 {
         self.db.borrow_mut().last_insert_rowid()
     }
+    #[inline]
+    pub(crate) fn set_last_insert_rowid(&self, rowid: i64) {
+        self.db.borrow_mut().set_last_insert_rowid(rowid);
+    }
 
     /// Convenience method to execute a query that is expected to return a
     /// single row.

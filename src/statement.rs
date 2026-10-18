@@ -125,9 +125,16 @@ impl Statement<'_> {
     /// Will return `Err` if no row is inserted or many rows are inserted.
     #[inline]
     pub fn insert<P: Params>(&mut self, params: P) -> Result<i64> {
+        // Some non-insertion queries could still return 1 change (an UPDATE, for example), so
+        // to guard against that we can check that the connection's last_insert_rowid() changes
+        // after we execute the statement.
+        self.conn.set_last_insert_rowid(0);
         let changes = self.execute(params)?;
         match changes {
-            1 => Ok(self.conn.last_insert_rowid()),
+            1 => match self.conn.last_insert_rowid() {
+                0 => Err(Error::StatementFailedToInsertRow),
+                rowid => Ok(rowid),
+            },
             _ => Err(Error::StatementChangedRows(changes)),
         }
     }
@@ -1128,6 +1135,21 @@ mod test {
             Error::StatementChangedRows(2) => (),
             err => panic!("Unexpected error {err}"),
         }
+
+        let mut upsert =
+            db.prepare("INSERT INTO foo(x) VALUES (?1) ON CONFLICT DO UPDATE SET x = x")?;
+        std::assert_matches!(
+            upsert.insert([1i32]),
+            Err(Error::StatementFailedToInsertRow)
+        );
+        let mut update = db.prepare("UPDATE foo SET x = ?1 WHERE x = ?1")?;
+        std::assert_matches!(
+            update.insert([1i32]),
+            Err(Error::StatementFailedToInsertRow)
+        );
+        let mut pragma = db.prepare("PRAGMA ignore_check_constraints = false;")?;
+        std::assert_matches!(pragma.insert([]), Err(Error::StatementFailedToInsertRow));
+
         Ok(())
     }
 

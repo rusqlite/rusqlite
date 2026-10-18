@@ -175,6 +175,10 @@ impl InnerConnection {
     pub fn last_insert_rowid(&self) -> i64 {
         unsafe { ffi::sqlite3_last_insert_rowid(self.db()) }
     }
+    #[inline]
+    pub fn set_last_insert_rowid(&mut self, rowid: i64) {
+        unsafe { ffi::sqlite3_set_last_insert_rowid(self.db(), rowid) }
+    }
 
     pub fn prepare<'a>(
         &mut self,
