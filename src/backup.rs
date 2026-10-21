@@ -99,11 +99,11 @@ impl Connection {
     ///
     /// Will return `Err` if the destination path cannot be opened
     /// or if the restore fails.
-    pub fn restore<N: Name, P: AsRef<Path>, F: Fn(Progress)>(
+    pub fn restore<N: Name, P: AsRef<Path>>(
         &mut self,
         name: N,
         src_path: P,
-        progress: Option<F>,
+        progress: Option<fn(Progress)>,
     ) -> Result<()> {
         use self::StepResult::{Busy, Done, Locked, More};
         let src = Self::open(src_path)?;
