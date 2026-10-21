@@ -352,7 +352,7 @@ unsafe impl VTabCursor for VTabLogCursor<'_> {
                 ctx.get_connection().map(|c| c.is_busy())
             });
         }
-        ctx.set_result(&value)
+        ctx.set_result(value)
     }
 
     fn rowid(&self) -> Result<i64> {

@@ -3,9 +3,7 @@
 use std::borrow::Cow;
 use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
 use std::marker::PhantomData;
-use std::mem;
 use std::panic::catch_unwind;
-use std::ptr;
 use std::time::Duration;
 
 use super::ffi;
@@ -29,7 +27,7 @@ use crate::{Connection, MAIN_DB, Result, StatementStatus};
 pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> Result<()> {
     extern "C" fn log_callback(p_arg: *mut c_void, err: c_int, msg: *const c_char) {
         let s = unsafe { CStr::from_ptr(msg).to_string_lossy() };
-        let callback: fn(c_int, &str) = unsafe { mem::transmute(p_arg) };
+        let callback: fn(c_int, &str) = unsafe { std::mem::transmute(p_arg) };
 
         drop(catch_unwind(|| callback(err, &s)));
     }
@@ -41,7 +39,7 @@ pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> Result<()> {
                 f as *mut c_void,
             )
         } else {
-            let nullptr: *mut c_void = ptr::null_mut();
+            let nullptr: *mut c_void = std::ptr::null_mut();
             ffi::sqlite3_config(ffi::SQLITE_CONFIG_LOG, nullptr, nullptr)
         }
     };
@@ -57,9 +55,7 @@ pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> Result<()> {
 #[inline]
 pub fn log(err_code: c_int, msg: &str) {
     let msg = CString::new(msg).expect("SQLite log messages cannot contain embedded zeroes");
-    unsafe {
-        ffi::sqlite3_log(err_code, c"%s".as_ptr(), msg.as_ptr());
-    }
+    unsafe { ffi::sqlite3_log(err_code, c"%s".as_ptr(), msg.as_ptr()) };
 }
 
 bitflags::bitflags! {
