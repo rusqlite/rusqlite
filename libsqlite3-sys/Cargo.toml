@@ -1,6 +1,6 @@
 [package]
 name = "libsqlite3-sys"
-version = "0.39.0"
+version = "0.39.1"
 authors = ["The rusqlite developers"]
 edition = "2024"
 rust-version = "1.88.0"

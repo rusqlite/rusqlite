@@ -23,13 +23,13 @@ unsafe extern "C" {
     ) -> ::core::ffi::c_int;
 }
 
-pub const SQLITE_VERSION: &::core::ffi::CStr = c"3.54.0";
-pub const SQLITE_VERSION_NUMBER: i32 = 3054000;
+pub const SQLITE_VERSION: &::core::ffi::CStr = c"3.54.1";
+pub const SQLITE_VERSION_NUMBER: i32 = 3054001;
 pub const SQLITE_SOURCE_ID: &::core::ffi::CStr =
-    c"2026-10-09 15:46:58 be8d059e9a49089ab2dce5ed26dd87aaf598fdc5fbe0b107c0dd758464bcd5e3";
-pub const SQLITE_SCM_BRANCH: &::core::ffi::CStr = c"trunk";
-pub const SQLITE_SCM_TAGS: &::core::ffi::CStr = c"release major-release version-3.54.0";
-pub const SQLITE_SCM_DATETIME: &::core::ffi::CStr = c"2026-10-09T15:46:58.543Z";
+    c"2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76";
+pub const SQLITE_SCM_BRANCH: &::core::ffi::CStr = c"branch-3.54";
+pub const SQLITE_SCM_TAGS: &::core::ffi::CStr = c"release version-3.54.1";
+pub const SQLITE_SCM_DATETIME: &::core::ffi::CStr = c"2026-10-16T14:45:20.546Z";
 pub const SQLITE_OK: i32 = 0;
 pub const SQLITE_ERROR: i32 = 1;
 pub const SQLITE_INTERNAL: i32 = 2;
