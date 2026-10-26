@@ -816,7 +816,10 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    #[expect(clippy::result_large_err)]
+    #[cfg_attr(
+        all(feature = "cache", target_pointer_width = "64"),
+        expect(clippy::result_large_err)
+    )]
     #[inline]
     pub fn close(self) -> Result<(), (Self, Error)> {
         #[cfg(feature = "cache")]
