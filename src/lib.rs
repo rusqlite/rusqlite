@@ -2550,26 +2550,33 @@ mod test {
         let version: String = db.one_column("PRAGMA cipher_version", [])?;
         assert!(!version.is_empty());
 
-        #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
-        let temp_dir = tempfile::tempdir().unwrap();
-        #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
-        let path = temp_dir.path().join("test.db3");
-        #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-        let path = std::path::PathBuf::from("bundled-sqlcipher.db3");
+        let (_temp_dir, path) = cfg_select! {
+            all(target_family = "wasm", target_os = "unknown") => {
+                // no_fmt
+                ((), std::path::PathBuf::from("bundled-sqlcipher.db3"))
+            }
+            _ => {
+                let temp_dir = tempfile::tempdir().unwrap();
+                let path = temp_dir.path().join("test.db3");
+                (temp_dir, path)
+            }
+        };
         {
             let db = Connection::open(&path)?;
             db.execute_batch("PRAGMA key = 'secret'; CREATE TABLE foo(x TEXT);")?;
             db.execute("INSERT INTO foo VALUES(?1)", ["plaintext"])?;
         }
-        #[cfg(not(all(target_family = "wasm", target_os = "unknown")))]
-        let bytes = std::fs::read(&path).unwrap();
-        #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-        // SAFETY: Wasm tests access the VFS on its installing thread.
-        let vfs = unsafe { sqlite_wasm_rs::vfs::memvfs::MemVfsUtil::get() }.unwrap();
-        #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-        let bytes = {
-            use sqlite_wasm_rs::vfs::transfer::DbTransfer as _;
-            vfs.export_db(path.to_str().unwrap()).unwrap()
+        let bytes = cfg_select! {
+            all(target_family = "wasm", target_os = "unknown") => {
+                use sqlite_wasm_rs::vfs::transfer::DbTransfer as _;
+                // SAFETY: Wasm tests access the VFS on its installing thread.
+                let vfs = unsafe { sqlite_wasm_rs::vfs::memvfs::MemVfsUtil::get() }.unwrap();
+                vfs.export_db(path.to_str().unwrap()).unwrap()
+            }
+            _ => {
+                // no_fmt
+                std::fs::read(&path).unwrap()
+            }
         };
         assert!(!bytes.windows(9).any(|w| w == b"plaintext"));
         for key in ["", "PRAGMA key = 'wrong'"] {
@@ -2588,13 +2595,6 @@ mod test {
             db.one_column::<String, _>("SELECT x FROM foo", [])?,
             "plaintext"
         );
-        drop(db);
-
-        #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-        {
-            use sqlite_wasm_rs::vfs::VfsFilesManager as _;
-            vfs.remove(path.to_str().unwrap()).unwrap();
-        }
         Ok(())
     }
 }
