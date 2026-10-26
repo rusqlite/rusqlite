@@ -5,6 +5,10 @@
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 #[cfg(not(feature = "loadable_extension"))]
+#[cfg_attr(
+    all(target_family = "wasm", target_os = "unknown"),
+    ignore = "threading safety check is a no-op on this platform"
+)]
 #[test]
 fn test_error_when_singlethread_mode() {
     use rusqlite::Connection;
