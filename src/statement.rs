@@ -1,5 +1,4 @@
 use std::ffi::{c_int, c_void};
-use std::slice::from_raw_parts;
 use std::{fmt, mem, ptr, str};
 
 use super::ffi::{self, sqlite3_stmt};
@@ -9,6 +8,7 @@ use super::{
 };
 use crate::bind::BindIndex;
 use crate::types::{ToSql, ToSqlOutput, Value};
+use crate::util::from_raw_parts;
 
 /// A prepared statement.
 pub struct Statement<'conn> {
@@ -833,7 +833,7 @@ impl Statement<'_> {
                         !text.is_null(),
                         "unexpected SQLITE_TEXT column type with NULL data"
                     );
-                    from_raw_parts(text.cast::<u8>(), len as usize)
+                    from_raw_parts(text.cast::<u8>(), len)
                 };
 
                 ValueRef::Text(s)
@@ -855,7 +855,7 @@ impl Statement<'_> {
                         !blob.is_null(),
                         "unexpected SQLITE_BLOB column type with NULL data"
                     );
-                    ValueRef::Blob(unsafe { from_raw_parts(blob.cast::<u8>(), len as usize) })
+                    ValueRef::Blob(unsafe { from_raw_parts(blob.cast::<u8>(), len) })
                 } else {
                     // The return value from sqlite3_column_blob() for a zero-length BLOB
                     // is a NULL pointer.
