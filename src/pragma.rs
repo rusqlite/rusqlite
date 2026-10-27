@@ -3,7 +3,7 @@
 use std::ops::Deref;
 
 use crate::ffi;
-use crate::types::{ToSql, ToSqlOutput, ValueRef};
+use crate::types::{FromSql, ToSql, ToSqlOutput, ValueRef};
 use crate::{Connection, Result, Row};
 
 pub struct Sql {
@@ -17,7 +17,7 @@ impl Sql {
 
     pub fn push_pragma(
         &mut self,
-        conn: &Connection,
+        _conn: &Connection,
         schema_name: Option<&str>,
         pragma_name: &str,
     ) -> Result<()> {
@@ -27,22 +27,38 @@ impl Sql {
             self.push_schema_name(schema_name);
             self.push_dot();
         }
-        const SQL: &str = "SELECT 1 FROM pragma_pragma_list WHERE name = ?";
-        let mut stmt = cfg_select! {
-            feature = "cache" => {
-                // no_fmt
-                conn.prepare_cached(SQL)
+        cfg_select! {
+            any(
+                feature = "bundled-sqlcipher",
+                feature = "bundled-sqlcipher-vendored-openssl",
+                not(feature = "extra_check")
+            ) => {
+                if !pragma_name.is_empty() && is_identifier(pragma_name) {
+                    self.buf.push_str(pragma_name);
+                    Ok(())
+                } else {
+                    Err(err!(ffi::SQLITE_MISUSE, "Invalid pragma \"{pragma_name}\""))
+                }
             }
             _ => {
-                // no_fmt
-                conn.prepare(SQL)
+                const SQL: &str = "SELECT 1 FROM pragma_pragma_list WHERE name = ?";
+                let mut stmt = cfg_select! {
+                    feature = "cache" => {
+                        // no_fmt
+                        _conn.prepare_cached(SQL)
+                    }
+                    _ => {
+                        // no_fmt
+                        _conn.prepare(SQL)
+                    }
+                }?;
+                if stmt.exists([pragma_name])? {
+                    self.buf.push_str(pragma_name);
+                    Ok(())
+                } else {
+                    Err(err!(ffi::SQLITE_MISUSE, "Invalid pragma \"{pragma_name}\""))
+                }
             }
-        }?;
-        if stmt.exists([pragma_name])? {
-            self.buf.push_str(pragma_name);
-            Ok(())
-        } else {
-            Err(err!(ffi::SQLITE_MISUSE, "Invalid pragma \"{pragma_name}\""))
         }
     }
 
@@ -154,6 +170,16 @@ impl Deref for Sql {
 }
 
 impl Connection {
+    /// Query the current value of `pragma_name`.
+    pub fn pragma_query_one<T: FromSql>(
+        &self,
+        schema_name: Option<&str>,
+        pragma_name: &str,
+    ) -> Result<T> {
+        let mut query = Sql::new();
+        query.push_pragma(self, schema_name, pragma_name)?;
+        self.one_column(&query, [])
+    }
     /// Query the current value of `pragma_name`.
     ///
     /// Some pragmas will return multiple rows/values which cannot be retrieved
@@ -326,7 +352,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::Sql;
-    use crate::{Connection, Result, error::error_from_sqlite_code, ffi, pragma};
+    use crate::{Connection, Result, pragma};
 
     #[test]
     #[cfg_attr(miri, ignore)]
@@ -464,7 +490,13 @@ mod test {
 
     #[test]
     #[cfg_attr(miri, ignore)]
+    #[cfg(all(
+        not(feature = "bundled-sqlcipher"),
+        not(feature = "bundled-sqlcipher-vendored-openssl"),
+        feature = "extra_check"
+    ))]
     fn invalid_pragma() -> Result<()> {
+        use crate::{error::error_from_sqlite_code, ffi};
         let db = Connection::open_in_memory()?;
         let err = db.pragma_update(None, "boom", "1").unwrap_err();
         assert_eq!(
