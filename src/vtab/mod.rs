@@ -23,7 +23,7 @@ use crate::error::{check, error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
 use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
-use crate::util::{alloc, free_boxed_value};
+use crate::util::{alloc, free_boxed_value, from_raw_parts, from_raw_parts_mut};
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
 // let conn: Connection = ...;
@@ -449,11 +449,9 @@ impl IndexInfo {
     /// Iterate on index constraint and its associated usage.
     #[inline]
     pub fn constraints_and_usages(&mut self) -> IndexConstraintAndUsageIter<'_> {
-        let constraints =
-            unsafe { slice::from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint as usize) };
-        let constraint_usages = unsafe {
-            slice::from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint as usize)
-        };
+        let constraints = unsafe { from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint) };
+        let constraint_usages =
+            unsafe { from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint) };
         IndexConstraintAndUsageIter {
             iter: constraints.iter().zip(constraint_usages.iter_mut()),
         }
@@ -463,8 +461,7 @@ impl IndexInfo {
     #[inline]
     #[must_use]
     pub fn constraints(&self) -> IndexConstraintIter<'_> {
-        let constraints =
-            unsafe { slice::from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint as usize) };
+        let constraints = unsafe { from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint) };
         IndexConstraintIter {
             iter: constraints.iter(),
         }
@@ -474,8 +471,7 @@ impl IndexInfo {
     #[inline]
     #[must_use]
     pub fn order_bys(&self) -> OrderByIter<'_> {
-        let order_bys =
-            unsafe { slice::from_raw_parts((*self.0).aOrderBy, (*self.0).nOrderBy as usize) };
+        let order_bys = unsafe { from_raw_parts((*self.0).aOrderBy, (*self.0).nOrderBy) };
         OrderByIter {
             iter: order_bys.iter(),
         }
@@ -491,9 +487,8 @@ impl IndexInfo {
     /// Information about what parameters to pass to [`VTabCursor::filter`].
     #[inline]
     pub fn constraint_usage(&mut self, constraint_idx: usize) -> IndexConstraintUsage<'_> {
-        let constraint_usages = unsafe {
-            slice::from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint as usize)
-        };
+        let constraint_usages =
+            unsafe { from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint) };
         IndexConstraintUsage(&mut constraint_usages[constraint_idx])
     }
 
@@ -1249,7 +1244,7 @@ where
     let mut conn = VTabConnection(db);
     let aux = aux.cast::<T::Aux>();
     unsafe {
-        let args = slice::from_raw_parts(argv, argc as usize);
+        let args = from_raw_parts(argv, argc);
         let vec = args
             .iter()
             .map(|&cs| CStr::from_ptr(cs).to_bytes()) // FIXME .to_str() -> Result<&str, Utf8Error>
@@ -1285,7 +1280,7 @@ where
     let mut conn = VTabConnection(db);
     let aux = aux.cast::<T::Aux>();
     unsafe {
-        let args = slice::from_raw_parts(argv, argc as usize);
+        let args = from_raw_parts(argv, argc);
         let vec = args
             .iter()
             .map(|&cs| CStr::from_ptr(cs).to_bytes()) // FIXME .to_str() -> Result<&str, Utf8Error>
@@ -1403,7 +1398,7 @@ where
             let c_slice = CStr::from_ptr(idx_str).to_bytes();
             Some(str::from_utf8_unchecked(c_slice))
         };
-        let args = slice::from_raw_parts_mut(argv, argc as usize);
+        let args = from_raw_parts_mut(argv, argc);
         let values = Values { args };
         let cr = cursor.cast::<C>();
         cursor_error(cursor, (*cr).filter(idx_num, idx_name, &Filters { values }))
@@ -1470,7 +1465,7 @@ where
     assert!(argc >= 1);
     let vt = vtab.cast::<T>();
     unsafe {
-        let args = slice::from_raw_parts_mut(argv, argc as usize);
+        let args = from_raw_parts_mut(argv, argc);
         let r = if args.len() == 1 {
             (*vt).delete(ValueRef::from_value(args[0]))
         } else if ffi::sqlite3_value_type(args[0]) == ffi::SQLITE_NULL {
