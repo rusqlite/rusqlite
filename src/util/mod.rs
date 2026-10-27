@@ -12,6 +12,20 @@ pub(crate) unsafe extern "C" fn free_boxed_value<T>(p: *mut std::ffi::c_void) {
     drop(unsafe { Box::from_raw(p.cast::<T>()) });
 }
 
+pub(crate) unsafe fn from_raw_parts<'a, T>(data: *const T, len: std::ffi::c_int) -> &'a [T] {
+    if len > 0 {
+        return unsafe { std::slice::from_raw_parts(data, len as usize) };
+    }
+    &[]
+}
+#[cfg(any(feature = "session", feature = "vtab"))]
+pub(crate) unsafe fn from_raw_parts_mut<'a, T>(data: *mut T, len: std::ffi::c_int) -> &'a mut [T] {
+    if len > 0 {
+        return unsafe { std::slice::from_raw_parts_mut(data, len as usize) };
+    }
+    &mut []
+}
+
 use crate::Result;
 use std::ffi::CStr;
 

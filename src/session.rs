@@ -6,7 +6,6 @@ use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::panic::catch_unwind;
 use std::ptr;
-use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 use fallible_streaming_iterator::FallibleStreamingIterator;
 
@@ -14,6 +13,7 @@ use crate::error::{Error, check, error_from_sqlite_code};
 use crate::ffi;
 use crate::hooks::Action;
 use crate::types::ValueRef;
+use crate::util::{from_raw_parts, from_raw_parts_mut};
 use crate::{Connection, MAIN_DB, Name, Result, errmsg_to_string};
 
 // https://sqlite.org/session.html
@@ -509,7 +509,7 @@ impl ChangesetItem {
                 &mut pks,
                 &mut number_of_columns,
             ))?;
-            Ok(from_raw_parts(pks, number_of_columns as usize))
+            Ok(from_raw_parts(pks, number_of_columns))
         }
     }
 }
@@ -742,7 +742,7 @@ unsafe extern "C" fn x_input(p_in: *mut c_void, data: *mut c_void, len: *mut c_i
         return ffi::SQLITE_MISUSE;
     }
     unsafe {
-        let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, *len as usize);
+        let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, *len);
         let input = p_in as *mut &mut dyn Read;
         match (*input).read(bytes) {
             Ok(n) => {
@@ -762,7 +762,7 @@ unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_in
     unsafe {
         // The sessions module never invokes an xOutput callback with the third
         // parameter set to a value less than or equal to zero.
-        let bytes: &[u8] = from_raw_parts(data as *const u8, len as usize);
+        let bytes: &[u8] = from_raw_parts(data as *const u8, len);
         let output = p_out as *mut &mut dyn Write;
         match (*output).write_all(bytes) {
             Ok(_) => ffi::SQLITE_OK,

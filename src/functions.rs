@@ -58,14 +58,13 @@ use std::marker::PhantomData;
 use std::ops::Deref;
 use std::panic::{RefUnwindSafe, UnwindSafe, catch_unwind};
 use std::ptr;
-use std::slice;
 use std::sync::Arc;
 
 use crate::ffi::{self, sqlite3_context, sqlite3_value};
 
 use crate::context::set_result;
 use crate::types::{FromSql, FromSqlError, ToSql, ToSqlOutput, ValueRef};
-use crate::util::free_boxed_value;
+use crate::util::{free_boxed_value, from_raw_parts};
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
 unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
@@ -604,7 +603,7 @@ impl InnerConnection {
             T: SqlFnOutput,
         {
             unsafe {
-                let args = slice::from_raw_parts(argv, argc as usize);
+                let args = from_raw_parts(argv, argc);
                 let r = catch_unwind(|| {
                     let boxed_f: *const F = ffi::sqlite3_user_data(ctx).cast::<F>();
                     assert!(!boxed_f.is_null(), "Internal error - null function pointer");
@@ -749,7 +748,7 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
             );
             let mut ctx = Context {
                 ctx,
-                args: slice::from_raw_parts(argv, argc as usize),
+                args: from_raw_parts(argv, argc),
             };
 
             if (*pac).is_null() {
@@ -793,7 +792,7 @@ unsafe extern "C" fn call_boxed_inverse<A, W, T>(
             );
             let mut ctx = Context {
                 ctx,
-                args: slice::from_raw_parts(argv, argc as usize),
+                args: from_raw_parts(argv, argc),
             };
             (*boxed_aggr).inverse(&mut ctx, &mut **pac)
         });
@@ -911,6 +910,30 @@ mod test {
         let result: f64 = db.one_column("SELECT half(6)", [])?;
 
         assert!((3f64 - result).abs() < f64::EPSILON);
+        Ok(())
+    }
+
+    #[test]
+    fn test_no_arg() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.create_scalar_function(
+            c"one",
+            0,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+            |ctx| {
+                assert!(ctx.is_empty());
+                Ok(1)
+            },
+        )?;
+        // A deterministic function of no arguments, compared against an indexed
+        // column after ANALYZE, is called by SQLite with a null `argv`.
+        db.execute_batch(
+            "CREATE TABLE t AS SELECT 1 as x;
+                 CREATE INDEX t_x ON t(x);
+                 ANALYZE;",
+        )?;
+        let result: i8 = db.one_column("SELECT 1 FROM t WHERE x = one()", [])?;
+        assert_eq!(result, 1);
         Ok(())
     }
 
