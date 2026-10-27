@@ -1365,7 +1365,7 @@ mod test {
     fn test_utf16_conversion() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.pragma_update(None, "encoding", "UTF-16le")?;
-        let encoding: String = db.pragma_query_value(None, "encoding", |row| row.get(0))?;
+        let encoding: String = db.pragma_query_one(None, "encoding")?;
         assert_eq!("UTF-16le", encoding);
         db.execute_batch("CREATE TABLE foo(x TEXT)")?;
         let expected = "テスト";

@@ -874,7 +874,7 @@ mod test {
         db.execute_batch("DROP TABLE foo").unwrap_err();
 
         db.authorizer(None::<fn(AuthContext<'_>) -> Authorization>)?;
-        db.execute_batch("PRAGMA user_version=1")?; // Disallowed by first authorizer, but it's now removed.
+        db.pragma_update(None, "user_version", 1)?; // Disallowed by first authorizer, but it's now removed.
 
         Ok(())
     }
