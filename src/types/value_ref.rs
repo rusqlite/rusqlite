@@ -211,7 +211,7 @@ where
 impl ValueRef<'_> {
     pub(crate) unsafe fn from_value(value: *mut crate::ffi::sqlite3_value) -> Self {
         use crate::ffi;
-        use std::slice::from_raw_parts;
+        use crate::util::from_raw_parts;
 
         unsafe {
             match ffi::sqlite3_value_type(value) {
@@ -225,7 +225,7 @@ impl ValueRef<'_> {
                         !text.is_null(),
                         "unexpected SQLITE_TEXT value type with NULL data"
                     );
-                    let s = from_raw_parts(text.cast::<u8>(), len as usize);
+                    let s = from_raw_parts(text.cast::<u8>(), len);
                     ValueRef::Text(s)
                 }
                 ffi::SQLITE_BLOB => {
@@ -243,7 +243,7 @@ impl ValueRef<'_> {
                             !blob.is_null(),
                             "unexpected SQLITE_BLOB value type with NULL data"
                         );
-                        ValueRef::Blob(from_raw_parts(blob.cast::<u8>(), len as usize))
+                        ValueRef::Blob(from_raw_parts(blob.cast::<u8>(), len))
                     } else {
                         // The return value from sqlite3_value_blob() for a zero-length BLOB
                         // is a NULL pointer.

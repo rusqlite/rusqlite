@@ -721,7 +721,6 @@ impl Connection {
     }
 
     // https://sqlite.org/tclsqlite.html#onecolumn
-    #[cfg(test)]
     pub(crate) fn one_column<T, P>(&self, sql: &str, params: P) -> Result<T>
     where
         T: types::FromSql,
@@ -816,7 +815,10 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if the underlying SQLite call fails.
-    #[expect(clippy::result_large_err)]
+    #[cfg_attr(
+        all(feature = "cache", target_pointer_width = "64"),
+        expect(clippy::result_large_err)
+    )]
     #[inline]
     pub fn close(self) -> Result<(), (Self, Error)> {
         #[cfg(feature = "cache")]
@@ -1846,7 +1848,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         assert_eq!(
             "memory",
-            db.one_column::<String, _>("PRAGMA journal_mode", [])?
+            db.pragma_query_one::<String>(None, "journal_mode")?
         );
         let mode = db.one_column::<String, _>("PRAGMA journal_mode=off", [])?;
         if cfg!(feature = "bundled") {
@@ -2547,18 +2549,55 @@ mod test {
     #[cfg(feature = "bundled-sqlcipher")]
     fn bundled_sqlcipher() -> Result<()> {
         let db = checked_memory_handle();
-        let version: String = db.one_column("PRAGMA cipher_version", [])?;
+        let version: String = db.pragma_query_one(None, "cipher_version")?;
         assert!(!version.is_empty());
 
-        let temp_dir = tempfile::tempdir().unwrap();
-        let path = temp_dir.path().join("test.db3");
+        let (_temp_dir, path) = cfg_select! {
+            all(target_family = "wasm", target_os = "unknown") => {
+                // no_fmt
+                ((), std::path::PathBuf::from("bundled-sqlcipher.db3"))
+            }
+            _ => {
+                let temp_dir = tempfile::tempdir().unwrap();
+                let path = temp_dir.path().join("test.db3");
+                (temp_dir, path)
+            }
+        };
         {
             let db = Connection::open(&path)?;
-            db.execute_batch("PRAGMA key = 'secret'; CREATE TABLE foo(x TEXT);")?;
+            db.pragma_update(None, "key", "secret")?;
+            db.execute_batch("CREATE TABLE foo(x TEXT);")?;
             db.execute("INSERT INTO foo VALUES(?1)", ["plaintext"])?;
         }
-        let bytes = std::fs::read(&path).unwrap();
+        let bytes = cfg_select! {
+            all(target_family = "wasm", target_os = "unknown") => {
+                use sqlite_wasm_rs::vfs::transfer::DbTransfer as _;
+                // SAFETY: Wasm tests access the VFS on its installing thread.
+                let vfs = unsafe { sqlite_wasm_rs::vfs::memvfs::MemVfsUtil::get() }.unwrap();
+                vfs.export_db(path.to_str().unwrap()).unwrap()
+            }
+            _ => {
+                // no_fmt
+                std::fs::read(&path).unwrap()
+            }
+        };
         assert!(!bytes.windows(9).any(|w| w == b"plaintext"));
+        for key in ["", "PRAGMA key = 'wrong'"] {
+            let db = Connection::open(&path)?;
+            db.execute_batch(key)?;
+            assert_eq!(
+                db.one_column::<String, _>("SELECT x FROM foo", [])
+                    .unwrap_err()
+                    .sqlite_error_code(),
+                Some(ErrorCode::NotADatabase)
+            );
+        }
+        let db = Connection::open(&path)?;
+        db.pragma_update(None, "key", "secret")?;
+        assert_eq!(
+            db.one_column::<String, _>("SELECT x FROM foo", [])?,
+            "plaintext"
+        );
         Ok(())
     }
 }

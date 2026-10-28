@@ -140,6 +140,8 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Test unit and integration tests
         run: wasm-pack test --node --features 'modern-full sqlite-wasm-rs/wasm-bindgen'
+      - name: Test bundled SQLCipher on wasm32-unknown-unknown
+        run: wasm-pack test --node --features 'bundled-sqlcipher sqlite-wasm-rs/wasm-bindgen'
 
   sqlcipher:
     name: Test with sqlcipher

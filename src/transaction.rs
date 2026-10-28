@@ -807,7 +807,7 @@ mod test {
         assert_eq!(TransactionState::None, db.transaction_state(DEFAULT_NAME)?);
         db.execute_batch("BEGIN")?;
         assert_eq!(TransactionState::None, db.transaction_state(DEFAULT_NAME)?);
-        let _: i32 = db.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        let _: i32 = db.pragma_query_one(None, "user_version")?;
         assert_eq!(TransactionState::Read, db.transaction_state(DEFAULT_NAME)?);
         db.pragma_update(None, "user_version", 1)?;
         assert_eq!(TransactionState::Write, db.transaction_state(DEFAULT_NAME)?);
