@@ -43,6 +43,8 @@ backup = []
 blob = []
 # Prepared statements cache by connection (like https://www.sqlite.org/tclsqlite.html#cache)
 cache = ["hashlink"]
+# SQLCipher
+codec = []
 # sqlite3_create_collation_v2
 collation = []
 # sqlite3_create_function_v2
@@ -52,7 +54,7 @@ trace = []
 # Use bundled SQLite sources (instead of the one provided by your OS / distribution)
 bundled = ["libsqlite3-sys?/bundled", "modern_sqlite"]
 # Use SQLCipher instead of SQLite
-bundled-sqlcipher = ["libsqlite3-sys?/bundled-sqlcipher", "bundled", "sqlite-wasm-rs?/sqlcipher"]
+bundled-sqlcipher = ["libsqlite3-sys?/bundled-sqlcipher", "bundled", "codec", "sqlite-wasm-rs?/sqlcipher"]
 bundled-sqlcipher-vendored-openssl = [
     "libsqlite3-sys?/bundled-sqlcipher-vendored-openssl",
     "bundled-sqlcipher",

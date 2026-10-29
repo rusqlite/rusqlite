@@ -122,6 +122,8 @@ pub mod blob;
 mod busy;
 #[cfg(feature = "cache")]
 mod cache;
+#[cfg(feature = "codec")]
+mod codec;
 #[cfg(feature = "collation")]
 mod collation;
 mod column;
@@ -2565,7 +2567,7 @@ mod test {
         };
         {
             let db = Connection::open(&path)?;
-            db.pragma_update(None, "key", "secret")?;
+            db.key(DEFAULT_NAME, "secret", false)?;
             db.execute_batch("CREATE TABLE foo(x TEXT);")?;
             db.execute("INSERT INTO foo VALUES(?1)", ["plaintext"])?;
         }
@@ -2593,7 +2595,7 @@ mod test {
             );
         }
         let db = Connection::open(&path)?;
-        db.pragma_update(None, "key", "secret")?;
+        db.key(DEFAULT_NAME, "secret", false)?;
         assert_eq!(
             db.one_column::<String, _>("SELECT x FROM foo", [])?,
             "plaintext"
