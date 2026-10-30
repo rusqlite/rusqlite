@@ -173,6 +173,8 @@ struct SeriesTabCursor<'vtab> {
     base: ffi::sqlite3_vtab_cursor,
     /// True to count down rather than up
     is_desc: bool,
+    /// True once the next value would overflow `i64`
+    is_done: bool,
     /// The rowid
     row_id: i64,
     /// Current value ("value")
@@ -182,7 +184,7 @@ struct SeriesTabCursor<'vtab> {
     /// Maximum value ("stop")
     max_value: i64,
     /// Increment ("step")
-    step: i64,
+    step: u64,
     phantom: PhantomData<&'vtab SeriesTab>,
 }
 
@@ -203,14 +205,10 @@ unsafe impl VTabCursor for SeriesTabCursor<'_> {
             self.max_value = 0xffff_ffff;
         }
         if idx_num.contains(QueryPlanFlags::STEP) {
-            self.step = args.get::<Option<_>>(i)?.unwrap_or_default();
-            if self.step == 0 {
-                self.step = 1;
-            } else if self.step < 0 {
-                self.step = -self.step;
-                if !idx_num.contains(QueryPlanFlags::ASC) {
-                    idx_num |= QueryPlanFlags::DESC;
-                }
+            let step: i64 = args.get::<Option<_>>(i)?.unwrap_or_default();
+            self.step = step.unsigned_abs().max(1);
+            if step < 0 && !idx_num.contains(QueryPlanFlags::ASC) {
+                idx_num |= QueryPlanFlags::DESC;
             }
         } else {
             self.step = 1;
@@ -224,10 +222,13 @@ unsafe impl VTabCursor for SeriesTabCursor<'_> {
             }
         }
         self.is_desc = idx_num.contains(QueryPlanFlags::DESC);
+        self.is_done = false;
         if self.is_desc {
             self.value = self.max_value;
-            if self.step > 0 {
-                self.value -= (self.max_value - self.min_value) % self.step;
+            if self.max_value > self.min_value {
+                // At most `max_value - min_value`, so `value` stays >= `min_value`.
+                let offset = self.max_value.abs_diff(self.min_value) % self.step;
+                self.value = self.max_value.wrapping_sub_unsigned(offset);
             }
         } else {
             self.value = self.min_value;
@@ -237,17 +238,23 @@ unsafe impl VTabCursor for SeriesTabCursor<'_> {
     }
 
     fn next(&mut self) -> Result<()> {
-        if self.is_desc {
-            self.value -= self.step;
+        let value = if self.is_desc {
+            self.value.checked_sub_unsigned(self.step)
         } else {
-            self.value += self.step;
+            self.value.checked_add_unsigned(self.step)
+        };
+        match value {
+            Some(value) => self.value = value,
+            None => self.is_done = true,
         }
         self.row_id += 1;
         Ok(())
     }
 
     fn eof(&self) -> bool {
-        if self.is_desc {
+        if self.is_done {
+            true
+        } else if self.is_desc {
             self.value < self.min_value
         } else {
             self.value > self.max_value
@@ -258,7 +265,7 @@ unsafe impl VTabCursor for SeriesTabCursor<'_> {
         let x = match i {
             SERIES_COLUMN_START => self.min_value,
             SERIES_COLUMN_STOP => self.max_value,
-            SERIES_COLUMN_STEP => self.step,
+            SERIES_COLUMN_STEP => self.step as i64,
             _ => self.value,
         };
         ctx.set_result(x)
@@ -330,6 +337,45 @@ mod test {
         let series: Vec<i32> = s.query([])?.map(|r| r.get(0)).collect()?;
         assert_eq!(empty, series);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_series_bounds_near_i64_limits() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        series::load_module(&db)?;
+
+        let query = |sql: &str| -> Result<Vec<i64>> {
+            let mut s = db.prepare(sql)?;
+            s.query([])?.map(|r| r.get(0)).collect()
+        };
+
+        assert_eq!(
+            vec![i64::MAX - 1, i64::MAX],
+            query("SELECT value FROM generate_series(9223372036854775806, 9223372036854775807)")?
+        );
+        assert_eq!(
+            vec![i64::MAX - 2, i64::MAX],
+            query(
+                "SELECT value FROM generate_series(9223372036854775805, 9223372036854775807, 2)"
+            )?
+        );
+        assert_eq!(
+            vec![i64::MIN + 1, i64::MIN],
+            query(
+                "SELECT value FROM generate_series(-9223372036854775808, -9223372036854775807)                  ORDER BY value DESC"
+            )?
+        );
+        assert_eq!(
+            vec![i64::MAX - 2, -1, i64::MIN + 1],
+            query(
+                "SELECT value FROM generate_series(-9223372036854775807, 9223372036854775807,                  9223372036854775806) ORDER BY value DESC"
+            )?
+        );
+        assert_eq!(
+            vec![0],
+            query("SELECT value FROM generate_series(0, 0, -9223372036854775808)")?
+        );
         Ok(())
     }
 }
