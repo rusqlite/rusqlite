@@ -55,7 +55,7 @@
 use std::any::Any;
 use std::ffi::{c_int, c_uint, c_void};
 use std::marker::PhantomData;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::panic::{RefUnwindSafe, UnwindSafe, catch_unwind};
 use std::ptr;
 use std::sync::Arc;
@@ -63,8 +63,8 @@ use std::sync::Arc;
 use crate::ffi::{self, sqlite3_context, sqlite3_value};
 
 use crate::context::set_result;
-use crate::types::{FromSql, FromSqlError, ToSql, ToSqlOutput, ValueRef};
-use crate::util::{free_boxed_value, from_raw_parts};
+use crate::types::{FromSql, ToSql, ToSqlOutput, ValueRef, Values};
+use crate::util::{self, free_boxed_value};
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
 unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
@@ -87,7 +87,20 @@ unsafe fn report_error(ctx: *mut sqlite3_context, err: &Error) {
 /// evaluation context.
 pub struct Context<'a> {
     ctx: *mut sqlite3_context,
-    args: &'a [*mut sqlite3_value],
+    args: Values<'a>,
+}
+
+impl<'a> Deref for Context<'a> {
+    type Target = Values<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.args
+    }
+}
+impl<'a> DerefMut for Context<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.args
+    }
 }
 
 impl Context<'_> {
@@ -115,21 +128,7 @@ impl Context<'_> {
     /// Will return Err if the underlying SQLite type cannot be converted to a
     /// `T`.
     pub fn get<T: FromSql>(&self, idx: usize) -> Result<T> {
-        let arg = self.args[idx];
-        let value = unsafe { ValueRef::from_value(arg) };
-        FromSql::column_result(value).map_err(|err| match err {
-            FromSqlError::InvalidType => {
-                Error::InvalidFunctionParameterType(idx, value.data_type())
-            }
-            FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
-            FromSqlError::Utf8Error(err) => Error::Utf8Error(idx, err),
-            FromSqlError::Other(err) => {
-                Error::FromSqlConversionFailure(idx, value.data_type(), err)
-            }
-            FromSqlError::InvalidBlobSize { .. } => {
-                Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
-            }
-        })
+        self.args.get(idx)
     }
 
     /// Return raw pointer at `idx`
@@ -142,13 +141,7 @@ impl Context<'_> {
         idx: usize,
         ptr_type: &'static std::ffi::CStr,
     ) -> Option<&T> {
-        let arg = self.args[idx];
-        debug_assert_eq!(unsafe { ffi::sqlite3_value_type(arg) }, ffi::SQLITE_NULL);
-        unsafe {
-            ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr())
-                .cast::<T>()
-                .as_ref()
-        }
+        unsafe { self[idx].get_pointer(ptr_type) }
     }
 
     /// Returns the `idx`th argument as a `ValueRef`.
@@ -160,8 +153,7 @@ impl Context<'_> {
     #[inline]
     #[must_use]
     pub fn get_raw(&self, idx: usize) -> ValueRef<'_> {
-        let arg = self.args[idx];
-        unsafe { ValueRef::from_value(arg) }
+        self.args[idx].get_raw()
     }
 
     /// Returns the `idx`th argument as a `SqlFnArg`.
@@ -181,8 +173,7 @@ impl Context<'_> {
     /// [`self.len()`](Context::len).
     #[must_use]
     pub fn get_subtype(&self, idx: usize) -> c_uint {
-        let arg = self.args[idx];
-        unsafe { ffi::sqlite3_value_subtype(arg) }
+        self.args.get_subtype(idx)
     }
 
     /// Fetch or insert the auxiliary data associated with a particular
@@ -489,7 +480,7 @@ impl Connection {
         x_func: F,
     ) -> Result<()>
     where
-        F: Fn(&Context<'_>) -> Result<T> + Send + 'static,
+        F: Fn(&mut Context<'_>) -> Result<T> + Send + 'static,
         T: SqlFnOutput,
     {
         self.db
@@ -576,7 +567,7 @@ impl InnerConnection {
     ///                 called.store(true, std::sync::atomic::Ordering::Relaxed);
     ///                 Ok(true)
     ///             },
-    ///         );
+    ///         )?;
     ///     }
     ///     let result: Result<bool> = db.query_row("SELECT test()", [], |r| r.get(0));
     ///     assert!(result?);
@@ -591,7 +582,7 @@ impl InnerConnection {
         x_func: F,
     ) -> Result<()>
     where
-        F: Fn(&Context<'_>) -> Result<T> + Send + 'static,
+        F: Fn(&mut Context<'_>) -> Result<T> + Send + 'static,
         T: SqlFnOutput,
     {
         unsafe extern "C" fn call_boxed_closure<F, T>(
@@ -599,22 +590,24 @@ impl InnerConnection {
             argc: c_int,
             argv: *mut *mut sqlite3_value,
         ) where
-            F: Fn(&Context<'_>) -> Result<T>,
+            F: Fn(&mut Context<'_>) -> Result<T>,
             T: SqlFnOutput,
         {
             unsafe {
-                let args = from_raw_parts(argv, argc);
                 let r = catch_unwind(|| {
                     let boxed_f: *const F = ffi::sqlite3_user_data(ctx).cast::<F>();
                     assert!(!boxed_f.is_null(), "Internal error - null function pointer");
-                    let ctx = Context { ctx, args };
-                    (*boxed_f)(&ctx)
+                    let mut ctx = Context {
+                        ctx,
+                        args: Values::from_raw_parts(argv, argc),
+                    };
+                    (*boxed_f)(&mut ctx)
                 });
                 let Ok(r) = r else {
                     report_error(ctx, &Error::UnwindingPanic);
                     return;
                 };
-                sql_result(ctx, args, r);
+                sql_result(ctx, util::from_raw_parts(argv, argc), r);
             }
         }
 
@@ -748,7 +741,7 @@ unsafe extern "C" fn call_boxed_step<A, D, T>(
             );
             let mut ctx = Context {
                 ctx,
-                args: from_raw_parts(argv, argc),
+                args: Values::from_raw_parts(argv, argc),
             };
 
             if (*pac).is_null() {
@@ -792,7 +785,7 @@ unsafe extern "C" fn call_boxed_inverse<A, W, T>(
             );
             let mut ctx = Context {
                 ctx,
-                args: from_raw_parts(argv, argc),
+                args: Values::from_raw_parts(argv, argc),
             };
             (*boxed_aggr).inverse(&mut ctx, &mut **pac)
         });
@@ -834,7 +827,10 @@ where
                 !boxed_aggr.is_null(),
                 "Internal error - null aggregate pointer"
             );
-            let mut ctx = Context { ctx, args: &mut [] };
+            let mut ctx = Context {
+                ctx,
+                args: Values::empty(),
+            };
             (*boxed_aggr).finalize(&mut ctx, a)
         });
         let Ok(r) = r else {
@@ -885,7 +881,7 @@ mod test {
     use regex::Regex;
     use std::ffi::c_double;
 
-    fn half(ctx: &Context<'_>) -> Result<c_double> {
+    fn half(ctx: &mut Context<'_>) -> Result<c_double> {
         assert!(!ctx.is_empty());
         assert_eq!(ctx.len(), 1, "called with unexpected number of arguments");
         assert!(unsafe {
@@ -956,7 +952,7 @@ mod test {
     // This implementation of a regexp scalar function uses SQLite's auxiliary data
     // (https://www.sqlite.org/c3ref/get_auxdata.html) to avoid recompiling the regular
     // expression multiple times within one query.
-    fn regexp_with_auxiliary(ctx: &Context<'_>) -> Result<bool> {
+    fn regexp_with_auxiliary(ctx: &mut Context<'_>) -> Result<bool> {
         assert_eq!(ctx.len(), 2, "called with unexpected number of arguments");
         type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
         let regexp: std::sync::Arc<Regex> = ctx
@@ -1191,10 +1187,10 @@ mod test {
 
     #[test]
     fn test_sub_type() -> Result<()> {
-        fn test_getsubtype(ctx: &Context<'_>) -> Result<i32> {
+        fn test_getsubtype(ctx: &mut Context<'_>) -> Result<i32> {
             Ok(ctx.get_subtype(0) as i32)
         }
-        fn test_setsubtype(ctx: &Context<'_>) -> Result<(SqlFnArg, SubType)> {
+        fn test_setsubtype(ctx: &mut Context<'_>) -> Result<(SqlFnArg, SubType)> {
             use std::ffi::c_uint;
             let value = ctx.get_arg(0);
             let sub_type = ctx.get::<c_uint>(1)?;
@@ -1225,7 +1221,7 @@ mod test {
 
     #[test]
     fn test_blob() -> Result<()> {
-        fn test_len(ctx: &Context<'_>) -> Result<u32> {
+        fn test_len(ctx: &mut Context<'_>) -> Result<u32> {
             let blob = ctx.get_raw(0);
             Ok(blob
                 .as_bytes_or_null()?
@@ -1254,7 +1250,7 @@ mod test {
         {
             let ptr = ToSqlOutput::from_rc(rc.clone(), PTR_TYPE);
             assert_eq!(2, Rc::strong_count(&rc));
-            fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
+            fn myfunc(ctx: &mut Context<'_>) -> Result<ToSqlOutput<'static>> {
                 let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
                 assert_eq!(x, Some(&1));
                 Ok(ToSqlOutput::from_rc(Rc::new(*x.unwrap()), PTR_TYPE))
@@ -1279,7 +1275,7 @@ mod test {
         const PTR_TYPE: &std::ffi::CStr = c"my_rust_ptr";
         let value = 1;
         let ptr = ToSqlOutput::new_boxed(value, PTR_TYPE);
-        fn myfunc(ctx: &Context<'_>) -> Result<ToSqlOutput<'static>> {
+        fn myfunc(ctx: &mut Context<'_>) -> Result<ToSqlOutput<'static>> {
             let x = unsafe { ctx.get_pointer(0, PTR_TYPE) };
             assert_eq!(x, Some(&1));
             Ok(ToSqlOutput::new_boxed(*x.unwrap(), PTR_TYPE))
