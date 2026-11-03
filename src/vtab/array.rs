@@ -118,6 +118,14 @@ unsafe impl<'vtab> VTab<'vtab> for ArrayTab {
             info.set_estimated_rows(2_147_483_647);
             info.set_idx_num(0);
         }
+        // If sqlite wants ORDER BY rowid, tell it we've already done that, so it doesn't sort.
+        if info.num_of_order_by() == 1
+            && let Some(o) = info.order_bys().next()
+            && o.column() == -1
+            && !o.is_order_by_desc()
+        {
+            info.set_order_by_consumed(true);
+        }
         Ok(true)
     }
 
