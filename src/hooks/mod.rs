@@ -710,7 +710,7 @@ impl InnerConnection {
                     let boxed_hook: *mut F = p_arg.cast::<F>();
                     (*boxed_hook)(auth_ctx)
                 })
-                .map_or_else(|_| ffi::SQLITE_ERROR, Authorization::into_raw)
+                .map_or(ffi::SQLITE_ERROR, Authorization::into_raw)
             }
         }
 
