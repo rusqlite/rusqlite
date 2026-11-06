@@ -585,7 +585,7 @@ impl Connection {
     pub fn apply<F, C>(&self, cs: &Changeset, filter: Option<F>, conflict: C) -> Result<()>
     where
         F: Fn(&str) -> bool + Send + 'static,
-        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+        C: Fn(ConflictType, &ChangesetItem) -> ConflictAction + Send + 'static,
     {
         let db = self.db.borrow_mut().db;
 
@@ -623,7 +623,7 @@ impl Connection {
     ) -> Result<()>
     where
         F: Fn(&str) -> bool + Send + 'static,
-        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+        C: Fn(ConflictType, &ChangesetItem) -> ConflictAction + Send + 'static,
     {
         let input_ref = &input;
         let db = self.db.borrow_mut().db;
@@ -696,7 +696,7 @@ pub enum ConflictAction {
 unsafe extern "C" fn call_filter<F, C>(p_ctx: *mut c_void, tbl_str: *const c_char) -> c_int
 where
     F: Fn(&str) -> bool + Send + 'static,
-    C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+    C: Fn(ConflictType, &ChangesetItem) -> ConflictAction + Send + 'static,
 {
     unsafe {
         let tbl_name = CStr::from_ptr(tbl_str).to_str();
@@ -721,14 +721,14 @@ unsafe extern "C" fn call_conflict<F, C>(
 ) -> c_int
 where
     F: Fn(&str) -> bool + Send + 'static,
-    C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+    C: Fn(ConflictType, &ChangesetItem) -> ConflictAction + Send + 'static,
 {
     let conflict_type = ConflictType::from(e_conflict);
     let item = ChangesetItem { it: p };
     unsafe {
         if let Ok(action) = catch_unwind(|| {
             let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
-            (*tuple).1(conflict_type, item)
+            (*tuple).1(conflict_type, &item)
         }) {
             action as c_int
         } else {
