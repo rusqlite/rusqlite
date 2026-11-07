@@ -62,3 +62,25 @@ impl Name for &CStr {
         Ok(Named::C(self))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::ops::Deref as _;
+
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    #[test]
+    fn from_raw_parts() {
+        let slice = unsafe { super::from_raw_parts(std::ptr::null::<u8>(), 0) };
+        assert!(slice.is_empty());
+    }
+    #[test]
+    fn str_as_cstr() -> crate::Result<()> {
+        use super::Name as _;
+        let named = "foo".as_cstr()?;
+        let cstr = named.deref();
+        assert_eq!(cstr, c"foo");
+        Ok(())
+    }
+}

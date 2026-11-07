@@ -92,15 +92,11 @@ pub enum Error {
     /// any or insert many.
     StatementChangedRows(usize),
 
-    /// Error returned by
-    /// [`functions::Context::get`](crate::functions::Context::get) when the
-    /// function argument cannot be converted to the requested type.
-    #[cfg(feature = "functions")]
-    InvalidFunctionParameterType(usize, Type),
-    /// Error returned by [`vtab::Values::get`](crate::vtab::Values::get) when
-    /// the filter argument cannot be converted to the requested type.
-    #[cfg(feature = "vtab")]
-    InvalidFilterParameterType(usize, Type),
+    /// Error returned by:
+    /// - [`functions::Context::get`](crate::functions::Context::get) when the function argument cannot be converted to the requested type.
+    /// - or [`vtab::Values::get`](crate::vtab::Values::get) when the filter argument cannot be converted to the requested type.
+    #[cfg(any(feature = "functions", feature = "vtab"))]
+    InvalidParameterType(usize, Type),
 
     /// An error case available for implementors of custom user functions (e.g.,
     /// [`create_scalar_function`](crate::Connection::create_scalar_function)).
@@ -182,16 +178,10 @@ impl PartialEq for Error {
                 i1 == i2 && t1 == t2 && n1 == n2
             }
             (Self::StatementChangedRows(n1), Self::StatementChangedRows(n2)) => n1 == n2,
-            #[cfg(feature = "functions")]
-            (
-                Self::InvalidFunctionParameterType(i1, t1),
-                Self::InvalidFunctionParameterType(i2, t2),
-            ) => i1 == i2 && t1 == t2,
-            #[cfg(feature = "vtab")]
-            (
-                Self::InvalidFilterParameterType(i1, t1),
-                Self::InvalidFilterParameterType(i2, t2),
-            ) => i1 == i2 && t1 == t2,
+            #[cfg(any(feature = "functions", feature = "vtab"))]
+            (Self::InvalidParameterType(i1, t1), Self::InvalidParameterType(i2, t2)) => {
+                i1 == i2 && t1 == t2
+            }
             (Self::InvalidQuery, Self::InvalidQuery) => true,
             #[cfg(feature = "vtab")]
             (Self::ModuleError(s1), Self::ModuleError(s2)) => s1 == s2,
@@ -318,13 +308,12 @@ impl fmt::Display for Error {
             ),
             Self::StatementChangedRows(i) => write!(f, "Query changed {i} rows"),
 
-            #[cfg(feature = "functions")]
-            Self::InvalidFunctionParameterType(i, ref t) => {
-                write!(f, "Invalid function parameter type {t} at index {i}")
-            }
-            #[cfg(feature = "vtab")]
-            Self::InvalidFilterParameterType(i, ref t) => {
-                write!(f, "Invalid filter parameter type {t} at index {i}")
+            #[cfg(any(feature = "functions", feature = "vtab"))]
+            Self::InvalidParameterType(i, ref t) => {
+                write!(
+                    f,
+                    "Invalid function or filter parameter type {t} at index {i}"
+                )
             }
             #[cfg(feature = "functions")]
             Self::UserFunctionError(ref err) => err.fmt(f),
@@ -373,10 +362,8 @@ impl error::Error for Error {
             | Self::InvalidQuery
             | Self::MultipleStatement => None,
 
-            #[cfg(feature = "functions")]
-            Self::InvalidFunctionParameterType(..) => None,
-            #[cfg(feature = "vtab")]
-            Self::InvalidFilterParameterType(..) => None,
+            #[cfg(any(feature = "functions", feature = "vtab"))]
+            Self::InvalidParameterType(..) => None,
 
             #[cfg(feature = "functions")]
             Self::UserFunctionError(ref err) => Some(&**err),

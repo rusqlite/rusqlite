@@ -10,7 +10,7 @@
 //!
 //! (See [SQLite doc](http://sqlite.org/vtab.html))
 use std::borrow::Cow::{self, Borrowed, Owned};
-use std::ffi::{CStr, c_char, c_int, c_uint, c_void};
+use std::ffi::{CStr, c_char, c_int, c_void};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr;
@@ -22,7 +22,8 @@ use crate::context::set_result;
 use crate::error::{check, error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
-use crate::types::{FromSql, FromSqlError, ToSql, ValueRef};
+use crate::types::{ToSql, ValueRef};
+pub use crate::types::{ValueIter, Values};
 use crate::util::{alloc, free_boxed_value, from_raw_parts, from_raw_parts_mut};
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
@@ -896,118 +897,6 @@ impl<'a> fallible_iterator::FallibleIterator for InValues<'a> {
     }
 }
 
-/// Wrapper to [`ffi::sqlite3_value`]s
-pub struct Values<'a> {
-    args: &'a [*mut sqlite3_value],
-}
-
-impl Values<'_> {
-    /// Returns the number of values.
-    #[inline]
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.args.len()
-    }
-
-    /// Returns `true` if there is no value.
-    #[inline]
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.args.is_empty()
-    }
-
-    /// Returns value at `idx`
-    pub fn get<T: FromSql>(&self, idx: usize) -> Result<T> {
-        let arg = self.args[idx];
-        let value = unsafe { ValueRef::from_value(arg) };
-        FromSql::column_result(value).map_err(|err| match err {
-            FromSqlError::InvalidType => Error::InvalidFilterParameterType(idx, value.data_type()),
-            FromSqlError::Other(err) => {
-                Error::FromSqlConversionFailure(idx, value.data_type(), err)
-            }
-            FromSqlError::InvalidBlobSize { .. } => {
-                Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
-            }
-            FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
-            FromSqlError::Utf8Error(err) => Error::Utf8Error(idx, err),
-        })
-    }
-
-    /// Returns the subtype of value at `idx`.
-    ///
-    /// # Failure
-    ///
-    /// Will panic if `idx` is greater than or equal to
-    /// [`self.len()`](Values::len).
-    #[inline]
-    #[must_use]
-    pub fn get_subtype(&self, idx: usize) -> c_uint {
-        let arg = self.args[idx];
-        unsafe { ffi::sqlite3_value_subtype(arg) }
-    }
-
-    /// Return raw pointer at `idx`
-    /// # Safety
-    /// This function is unsafe because it uses raw pointer and cast
-    // `sqlite3_value_type` returns `SQLITE_NULL` for pointer.
-    // So it seems not possible to enhance `ValueRef::from_value`.
-    #[cfg(feature = "pointer")]
-    #[must_use]
-    pub unsafe fn get_pointer<'a, T: 'static>(
-        &self,
-        idx: usize,
-        ptr_type: &'static CStr,
-    ) -> Option<&'a T> {
-        let arg = self.args[idx];
-        debug_assert_eq!(unsafe { ffi::sqlite3_value_type(arg) }, ffi::SQLITE_NULL);
-        unsafe {
-            ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr())
-                .cast::<T>()
-                .as_ref()
-        }
-    }
-
-    /// Turns `Values` into an iterator.
-    #[inline]
-    #[must_use]
-    pub fn iter(&self) -> ValueIter<'_> {
-        ValueIter {
-            iter: self.args.iter(),
-        }
-    }
-}
-
-impl<'a> IntoIterator for &'a Values<'a> {
-    type IntoIter = ValueIter<'a>;
-    type Item = ValueRef<'a>;
-
-    #[inline]
-    fn into_iter(self) -> ValueIter<'a> {
-        self.iter()
-    }
-}
-
-/// [`Values`] iterator.
-pub struct ValueIter<'a> {
-    iter: slice::Iter<'a, *mut sqlite3_value>,
-}
-
-impl<'a> Iterator for ValueIter<'a> {
-    type Item = ValueRef<'a>;
-
-    #[inline]
-    fn next(&mut self) -> Option<ValueRef<'a>> {
-        self.iter
-            .next()
-            .map(|&raw| unsafe { ValueRef::from_value(raw) })
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
-    }
-}
-
 /// Wrapper to [`UpdateVTab::insert`] arguments
 pub struct Inserts<'a> {
     values: Values<'a>,
@@ -1398,8 +1287,7 @@ where
             let c_slice = CStr::from_ptr(idx_str).to_bytes();
             Some(str::from_utf8_unchecked(c_slice))
         };
-        let args = from_raw_parts_mut(argv, argc);
-        let values = Values { args };
+        let values = Values::from_raw_parts(argv, argc);
         let cr = cursor.cast::<C>();
         cursor_error(cursor, (*cr).filter(idx_num, idx_name, &Filters { values }))
     }
@@ -1671,7 +1559,7 @@ mod test {
         static FILTER_SUBTYPE: AtomicU32 = AtomicU32::new(0);
         static INSERT_SUBTYPE: AtomicU32 = AtomicU32::new(0);
 
-        fn set_subtype(ctx: &crate::functions::Context<'_>) -> Result<(SqlFnArg, SubType)> {
+        fn set_subtype(ctx: &mut crate::functions::Context<'_>) -> Result<(SqlFnArg, SubType)> {
             let value = ctx.get_arg(0);
             let sub_type = ctx.get::<c_uint>(1)?;
             Ok((value, Some(sub_type)))
