@@ -3,10 +3,9 @@ use std::cmp::Ordering;
 use std::ffi::{CStr, c_char, c_int, c_void};
 use std::panic::catch_unwind;
 use std::ptr;
-use std::slice;
 
 use crate::ffi;
-use crate::util::free_boxed_value;
+use crate::util::{free_boxed_value, from_raw_parts};
 use crate::{Connection, Error, InnerConnection, Name, Result};
 
 impl Connection {
@@ -76,11 +75,11 @@ impl InnerConnection {
                     let boxed_f: *mut C = arg1.cast::<C>();
                     assert!(!boxed_f.is_null(), "Internal error - null function pointer");
                     let s1 = {
-                        let c_slice = slice::from_raw_parts(arg3.cast::<u8>(), arg2 as usize);
+                        let c_slice = from_raw_parts(arg3.cast::<u8>(), arg2);
                         String::from_utf8_lossy(c_slice)
                     };
                     let s2 = {
-                        let c_slice = slice::from_raw_parts(arg5.cast::<u8>(), arg4 as usize);
+                        let c_slice = from_raw_parts(arg5.cast::<u8>(), arg4);
                         String::from_utf8_lossy(c_slice)
                     };
                     (*boxed_f)(s1.as_ref(), s2.as_ref())
@@ -97,8 +96,8 @@ impl InnerConnection {
             }
         }
 
-        let boxed_f: *mut C = Box::into_raw(Box::new(x_compare));
         let c_name = collation_name.as_cstr()?;
+        let boxed_f: *mut C = Box::into_raw(Box::new(x_compare));
         let flags = ffi::SQLITE_UTF8;
         let r = unsafe {
             ffi::sqlite3_create_collation_v2(
@@ -260,5 +259,19 @@ mod test {
         let db = Connection::open_in_memory()?;
         db.create_collation(c"unicase", unicase_compare)?;
         db.remove_collation(c"unicase")
+    }
+
+    #[test]
+    fn invalid_name() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let c = String::with_capacity(5);
+        let err = db
+            .create_collation("bad\0name", move |a, b| {
+                std::hint::black_box(&c);
+                a.cmp(b)
+            })
+            .unwrap_err();
+        std::assert_matches!(err, crate::Error::NulError(_));
+        Ok(())
     }
 }

@@ -12,7 +12,6 @@ on:
   workflow_dispatch:
 
 env:
-  MSRV: 1.88.0
   RUST_BACKTRACE: short
   # CI builds don't benefit very much from this.
   CARGO_INCREMENTAL: 0
@@ -140,7 +139,9 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Test unit and integration tests
-        run: wasm-pack test --node --features modern-full
+        run: wasm-pack test --node --features 'modern-full sqlite-wasm-rs/wasm-bindgen'
+      - name: Test bundled SQLCipher on wasm32-unknown-unknown
+        run: wasm-pack test --node --features 'bundled-sqlcipher sqlite-wasm-rs/wasm-bindgen'
 
   sqlcipher:
     name: Test with sqlcipher
@@ -170,12 +171,7 @@ jobs:
         env:
           RUSTFLAGS: -Zsanitizer=address -Cdebuginfo=0
           RUSTDOCFLAGS: -Zsanitizer=address
-          ASAN_OPTIONS: "detect_stack_use_after_return=1:detect_leaks=0"
-          # Work around https://github.com/rust-lang/rust/issues/59125 by
-          # disabling backtraces. In an ideal world we'd probably suppress the
-          # leak sanitization, but we don't care about backtraces here, so long
-          # as the other tests have them.
-          RUST_BACKTRACE: "0"
+          ASAN_OPTIONS: "detect_stack_use_after_return=1:detect_leaks=1"
         run: cargo -Z build-std test --features 'bundled-full session buildtime_bindgen preupdate_hook with-asan' --target x86_64-unknown-linux-gnu
 
   msrv:
@@ -185,7 +181,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: $MSRV
+          toolchain: "1.89"
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --features bundled-full
 

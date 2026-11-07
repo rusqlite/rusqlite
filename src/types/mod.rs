@@ -74,6 +74,8 @@ pub use self::assign::Assign;
 #[cfg(test)]
 pub(crate) use self::assign::SINK;
 pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
+#[cfg(any(feature = "functions", feature = "vtab"))]
+pub use self::raw_value::{RawValue, ValueIter, Values};
 pub use self::to_sql::ToSql;
 pub use self::value::Value;
 pub use self::value_ref::ValueRef;
@@ -86,6 +88,8 @@ mod chrono;
 mod from_sql;
 #[cfg(feature = "jiff")]
 mod jiff;
+#[cfg(any(feature = "functions", feature = "vtab"))]
+mod raw_value;
 #[cfg(feature = "serde_json")]
 mod serde_json;
 #[cfg(feature = "time")]

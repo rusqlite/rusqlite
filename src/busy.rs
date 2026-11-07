@@ -52,7 +52,7 @@ impl Connection {
     /// Newly created connections default to a
     /// [`busy_timeout()`](Connection::busy_timeout) handler with a timeout
     /// of 5000ms, although this is subject to change.
-    pub fn busy_handler<F>(&self, callback: Option<F>) -> Result<()>
+    pub fn busy_handler<F>(&mut self, callback: Option<F>) -> Result<()>
     where
         F: FnMut(i32) -> bool + Send + 'static,
     {
@@ -72,8 +72,10 @@ impl Connection {
         }
         let x = callback.as_ref().map(|_| busy_handler_callback::<F> as _);
         let mut c = self.db.borrow_mut();
-        let bh = c.set_clientdata(c"sqlite3_busy_handler", callback)?;
-        c.decode_result(unsafe { ffi::sqlite3_busy_handler(c.db(), x, bh.cast()) })
+        c.set_clientdata(c"sqlite3_busy_handler", callback, |db, bh| unsafe {
+            ffi::sqlite3_busy_handler(db, x, bh)
+        })?;
+        Ok(())
     }
 }
 
@@ -83,7 +85,9 @@ impl InnerConnection {
         let r = unsafe { ffi::sqlite3_busy_timeout(self.db, timeout) };
         let res = self.decode_result(r);
         if res.is_ok() {
-            self.set_clientdata(c"sqlite3_busy_handler", None::<c_void>)?;
+            self.set_clientdata(c"sqlite3_busy_handler", None::<c_void>, |_, _| {
+                ffi::SQLITE_OK
+            })?;
         }
         res
     }
@@ -135,9 +139,9 @@ mod test {
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir.path().join("busy-handler.db3");
 
-        let db1 = Connection::open(&path)?;
+        let mut db1 = Connection::open(&path)?;
         db1.execute_batch("CREATE TABLE IF NOT EXISTS t(a)")?;
-        let db2 = Connection::open(&path)?;
+        let mut db2 = Connection::open(&path)?;
         db2.busy_handler(Some(busy_handler))?;
         db1.execute_batch("BEGIN EXCLUSIVE")?;
         let err = db2.prepare("SELECT * FROM t").unwrap_err();

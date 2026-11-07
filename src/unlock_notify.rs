@@ -40,9 +40,8 @@ fn unpoison<T>(r: Result<T, std::sync::PoisonError<T>>) -> T {
 
 /// This function is an unlock-notify callback
 unsafe extern "C" fn unlock_notify_cb(ap_arg: *mut *mut c_void, n_arg: c_int) {
-    use std::slice::from_raw_parts;
     unsafe {
-        let args = from_raw_parts(ap_arg as *const &UnlockNotification, n_arg as usize);
+        let args = crate::util::from_raw_parts(ap_arg as *const &UnlockNotification, n_arg);
         for un in args {
             drop(catch_unwind(|| un.fired()));
         }

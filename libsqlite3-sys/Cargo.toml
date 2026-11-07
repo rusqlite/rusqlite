@@ -1,6 +1,6 @@
 [package]
 name = "libsqlite3-sys"
-version = "0.38.1"
+version = "0.39.1"
 authors = ["The rusqlite developers"]
 edition = "2024"
 rust-version = "1.88.0"
@@ -19,7 +19,7 @@ default = ["min_sqlite_version_3_45_3"]
 bundled = ["cc", "bundled_bindings"]
 bundled-windows = ["cc", "bundled_bindings"]
 # Use bundled SQLCipher sources
-bundled-sqlcipher = ["bundled"]
+bundled-sqlcipher = ["bundled", "dep:sqlcipher-src"]
 bundled-sqlcipher-vendored-openssl = [
     "bundled-sqlcipher",
     "openssl-sys/vendored",
@@ -50,11 +50,12 @@ wasm32-wasi-vfs = []
 openssl-sys = { version = "0.9.103", optional = true }
 
 [build-dependencies]
-bindgen = { version = "0.72", optional = true, default-features = false, features = [
+bindgen = { version = "0.73", optional = true, default-features = false, features = [
     "runtime",
 ] }
 pkg-config = { version = "0.3.19", optional = true }
 cc = { version = "1.2.27", optional = true }
+sqlcipher-src = { version = "=419.0.6", optional = true }
 vcpkg = { version = "0.2.15", optional = true }
 # for loadable_extension:
 prettyplease = { version = "0.3.0", optional = true }
@@ -66,3 +67,6 @@ syn = { version = "3.0.1", optional = true, features = [
     "extra-traits",
     "visit-mut",
 ] }
+
+[lints]
+workspace = true

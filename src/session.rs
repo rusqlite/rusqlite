@@ -6,7 +6,6 @@ use std::io::{Read, Write};
 use std::marker::PhantomData;
 use std::panic::catch_unwind;
 use std::ptr;
-use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 use fallible_streaming_iterator::FallibleStreamingIterator;
 
@@ -14,6 +13,7 @@ use crate::error::{Error, check, error_from_sqlite_code};
 use crate::ffi;
 use crate::hooks::Action;
 use crate::types::ValueRef;
+use crate::util::{from_raw_parts, from_raw_parts_mut};
 use crate::{Connection, MAIN_DB, Name, Result, errmsg_to_string};
 
 // https://sqlite.org/session.html
@@ -147,19 +147,23 @@ impl Session<'_> {
     }
 
     /// Load the difference between tables.
-    pub fn diff<D: Name, N: Name>(&mut self, from: N, table: N) -> Result<()> {
+    pub fn diff<F: Name, T: Name>(&mut self, from: F, table: T) -> Result<()> {
         let from = from.as_cstr()?;
         let table = table.as_cstr()?;
         let table = table.as_ptr();
         unsafe {
-            let mut errmsg = ptr::null_mut();
+            let mut errmsg = ptr::null_mut::<c_char>();
             let r =
                 ffi::sqlite3session_diff(self.s, from.as_ptr(), table, &mut errmsg as *mut *mut _);
             if r != ffi::SQLITE_OK {
-                let errmsg: *mut c_char = errmsg;
-                let message = errmsg_to_string(&*errmsg);
-                ffi::sqlite3_free(errmsg as *mut c_void);
-                return Err(error_from_sqlite_code(r, Some(message)));
+                let message = if errmsg.is_null() {
+                    None
+                } else {
+                    let message = errmsg_to_string(&*errmsg);
+                    ffi::sqlite3_free(errmsg as *mut c_void);
+                    Some(message)
+                };
+                return Err(error_from_sqlite_code(r, message));
             }
         }
         Ok(())
@@ -507,7 +511,7 @@ impl ChangesetItem {
                 &mut pks,
                 &mut number_of_columns,
             ))?;
-            Ok(from_raw_parts(pks, number_of_columns as usize))
+            Ok(from_raw_parts(pks, number_of_columns))
         }
     }
 }
@@ -580,10 +584,36 @@ impl Drop for Changegroup {
 
 impl Connection {
     /// Apply a changeset to a database
+    ///
+    /// ```compile_fail
+    /// use std::cell::RefCell;
+    /// use rusqlite::{Connection, Result, session::{ChangesetItem, ConflictAction, Session}};
+    /// fn main() -> Result<()> {
+    ///     thread_local! {
+    ///         static CSI: RefCell<Option<&ChangesetItem>> = const { RefCell::new(None) };
+    ///     }
+    ///     let mut db = Connection::open_in_memory()?;
+    ///     db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")?;
+    ///
+    ///     let mut session = Session::new(&db)?;
+    ///     session.attach::<&str>(None)?;
+    ///     db.execute("INSERT INTO foo (t) VALUES (?1);", ["bar"])?;
+    ///     let cs = session.changeset()?;
+    ///     db.apply(
+    ///         &cs,
+    ///         None::<fn(&str) -> bool>,
+    ///         |_, item| {
+    ///           CSI.with_borrow_mut(|c| c.replace(item));
+    ///           ConflictAction::SQLITE_CHANGESET_OMIT
+    ///         },
+    ///     )?;
+    ///     Ok(())
+    /// }
+    /// ```
     pub fn apply<F, C>(&self, cs: &Changeset, filter: Option<F>, conflict: C) -> Result<()>
     where
         F: Fn(&str) -> bool + Send + 'static,
-        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+        C: Fn(ConflictType, &ChangesetItem) -> ConflictAction + Send + 'static,
     {
         let db = self.db.borrow_mut().db;
 
@@ -621,7 +651,7 @@ impl Connection {
     ) -> Result<()>
     where
         F: Fn(&str) -> bool + Send + 'static,
-        C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+        C: Fn(ConflictType, &ChangesetItem) -> ConflictAction + Send + 'static,
     {
         let input_ref = &input;
         let db = self.db.borrow_mut().db;
@@ -694,7 +724,7 @@ pub enum ConflictAction {
 unsafe extern "C" fn call_filter<F, C>(p_ctx: *mut c_void, tbl_str: *const c_char) -> c_int
 where
     F: Fn(&str) -> bool + Send + 'static,
-    C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+    C: Fn(ConflictType, &ChangesetItem) -> ConflictAction + Send + 'static,
 {
     unsafe {
         let tbl_name = CStr::from_ptr(tbl_str).to_str();
@@ -719,14 +749,14 @@ unsafe extern "C" fn call_conflict<F, C>(
 ) -> c_int
 where
     F: Fn(&str) -> bool + Send + 'static,
-    C: Fn(ConflictType, ChangesetItem) -> ConflictAction + Send + 'static,
+    C: Fn(ConflictType, &ChangesetItem) -> ConflictAction + Send + 'static,
 {
     let conflict_type = ConflictType::from(e_conflict);
     let item = ChangesetItem { it: p };
     unsafe {
         if let Ok(action) = catch_unwind(|| {
             let tuple: *mut (Option<F>, C) = p_ctx.cast::<(Option<F>, C)>();
-            (*tuple).1(conflict_type, item)
+            (*tuple).1(conflict_type, &item)
         }) {
             action as c_int
         } else {
@@ -740,7 +770,7 @@ unsafe extern "C" fn x_input(p_in: *mut c_void, data: *mut c_void, len: *mut c_i
         return ffi::SQLITE_MISUSE;
     }
     unsafe {
-        let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, *len as usize);
+        let bytes: &mut [u8] = from_raw_parts_mut(data as *mut u8, *len);
         let input = p_in as *mut &mut dyn Read;
         match (*input).read(bytes) {
             Ok(n) => {
@@ -760,7 +790,7 @@ unsafe extern "C" fn x_output(p_out: *mut c_void, data: *const c_void, len: c_in
     unsafe {
         // The sessions module never invokes an xOutput callback with the third
         // parameter set to a value less than or equal to zero.
-        let bytes: &[u8] = from_raw_parts(data as *const u8, len as usize);
+        let bytes: &[u8] = from_raw_parts(data as *const u8, len);
         let output = p_out as *mut &mut dyn Write;
         match (*output).write_all(bytes) {
             Ok(_) => ffi::SQLITE_OK,
@@ -825,7 +855,7 @@ mod test {
     }
 
     #[test]
-    fn test_changeset() -> Result<()> {
+    fn changeset() -> Result<()> {
         let changeset = one_changeset_insert()?;
         let mut iter = changeset.iter()?;
         let item = iter.next()?;
@@ -847,7 +877,7 @@ mod test {
     }
 
     #[test]
-    fn test_changeset_strm() -> Result<()> {
+    fn changeset_strm() -> Result<()> {
         let output = one_changeset_strm()?;
         assert!(!output.is_empty());
         assert_eq!(14, output.len());
@@ -860,7 +890,7 @@ mod test {
     }
 
     #[test]
-    fn test_changeset_values() -> Result<()> {
+    fn changeset_values() -> Result<()> {
         let changeset = one_changeset_update()?;
         let mut iter = changeset.iter()?;
         let item = iter.next()?.unwrap();
@@ -873,7 +903,7 @@ mod test {
     }
 
     #[test]
-    fn test_changeset_apply() -> Result<()> {
+    fn changeset_apply() -> Result<()> {
         let changeset = one_changeset_insert()?;
 
         let db = Connection::open_in_memory()?;
@@ -912,7 +942,7 @@ mod test {
     }
 
     #[test]
-    fn test_changeset_apply_strm() -> Result<()> {
+    fn changeset_apply_strm() -> Result<()> {
         let output = one_changeset_strm()?;
 
         let db = Connection::open_in_memory()?;
@@ -933,7 +963,7 @@ mod test {
     }
 
     #[test]
-    fn test_session_empty() -> Result<()> {
+    fn session_empty() -> Result<()> {
         let db = Connection::open_in_memory()?;
         db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")?;
 
@@ -948,7 +978,7 @@ mod test {
     }
 
     #[test]
-    fn test_session_set_enabled() -> Result<()> {
+    fn session_set_enabled() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
         let mut session = Session::new(&db)?;
@@ -959,13 +989,26 @@ mod test {
     }
 
     #[test]
-    fn test_session_set_indirect() -> Result<()> {
+    fn session_set_indirect() -> Result<()> {
         let db = Connection::open_in_memory()?;
 
         let mut session = Session::new(&db)?;
         assert!(!session.is_indirect());
         session.set_indirect(true);
         assert!(session.is_indirect());
+        Ok(())
+    }
+
+    #[test]
+    fn diff_no_such_table() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        db.execute_batch("CREATE TABLE foo(t TEXT PRIMARY KEY NOT NULL);")?;
+
+        let mut session = Session::new(&db)?;
+        session.attach::<&str>(None)?;
+        session.set_enabled(false);
+        let err = session.diff(c"main", c"foo").unwrap_err();
+        std::assert_matches!(err, crate::Error::SqliteFailure(_, None));
         Ok(())
     }
 }

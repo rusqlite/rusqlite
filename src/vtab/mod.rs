@@ -21,8 +21,9 @@ use crate::ffi::{sqlite3_context, sqlite3_free, sqlite3_value};
 use crate::error::{check, error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
-use crate::types::{Assign, FromSql, FromSqlError, ToSql, ValueRef};
-use crate::util::{alloc, free_boxed_value};
+use crate::types::{Assign, ToSql, ValueRef};
+pub use crate::types::{ValueIter, Values};
+use crate::util::{alloc, free_boxed_value, from_raw_parts, from_raw_parts_mut};
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
 // let conn: Connection = ...;
@@ -448,11 +449,9 @@ impl IndexInfo {
     /// Iterate on index constraint and its associated usage.
     #[inline]
     pub fn constraints_and_usages(&mut self) -> IndexConstraintAndUsageIter<'_> {
-        let constraints =
-            unsafe { slice::from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint as usize) };
-        let constraint_usages = unsafe {
-            slice::from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint as usize)
-        };
+        let constraints = unsafe { from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint) };
+        let constraint_usages =
+            unsafe { from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint) };
         IndexConstraintAndUsageIter {
             iter: constraints.iter().zip(constraint_usages.iter_mut()),
         }
@@ -462,8 +461,7 @@ impl IndexInfo {
     #[inline]
     #[must_use]
     pub fn constraints(&self) -> IndexConstraintIter<'_> {
-        let constraints =
-            unsafe { slice::from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint as usize) };
+        let constraints = unsafe { from_raw_parts((*self.0).aConstraint, (*self.0).nConstraint) };
         IndexConstraintIter {
             iter: constraints.iter(),
         }
@@ -473,8 +471,7 @@ impl IndexInfo {
     #[inline]
     #[must_use]
     pub fn order_bys(&self) -> OrderByIter<'_> {
-        let order_bys =
-            unsafe { slice::from_raw_parts((*self.0).aOrderBy, (*self.0).nOrderBy as usize) };
+        let order_bys = unsafe { from_raw_parts((*self.0).aOrderBy, (*self.0).nOrderBy) };
         OrderByIter {
             iter: order_bys.iter(),
         }
@@ -490,9 +487,8 @@ impl IndexInfo {
     /// Information about what parameters to pass to [`VTabCursor::filter`].
     #[inline]
     pub fn constraint_usage(&mut self, constraint_idx: usize) -> IndexConstraintUsage<'_> {
-        let constraint_usages = unsafe {
-            slice::from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint as usize)
-        };
+        let constraint_usages =
+            unsafe { from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint) };
         IndexConstraintUsage(&mut constraint_usages[constraint_idx])
     }
 
@@ -899,105 +895,6 @@ impl<'a> fallible_iterator::FallibleIterator for InValues<'a> {
     }
 }
 
-/// Wrapper to [`ffi::sqlite3_value`]s
-pub struct Values<'a> {
-    args: &'a [*mut sqlite3_value],
-}
-
-impl Values<'_> {
-    /// Returns the number of values.
-    #[inline]
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.args.len()
-    }
-
-    /// Returns `true` if there is no value.
-    #[inline]
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.args.is_empty()
-    }
-
-    /// Returns value at `idx`
-    pub fn get<T: FromSql>(&self, idx: usize) -> Result<T> {
-        let arg = self.args[idx];
-        let value = unsafe { ValueRef::from_value(arg) };
-        FromSql::column_result(value).map_err(|err| match err {
-            FromSqlError::InvalidType => Error::InvalidFilterParameterType(idx, value.data_type()),
-            FromSqlError::Other(err) => {
-                Error::FromSqlConversionFailure(idx, value.data_type(), err)
-            }
-            FromSqlError::InvalidBlobSize { .. } => {
-                Error::FromSqlConversionFailure(idx, value.data_type(), Box::new(err))
-            }
-            FromSqlError::OutOfRange(i) => Error::IntegralValueOutOfRange(idx, i),
-            FromSqlError::Utf8Error(err) => Error::Utf8Error(idx, err),
-        })
-    }
-
-    /// Return raw pointer at `idx`
-    /// # Safety
-    /// This function is unsafe because it uses raw pointer and cast
-    // `sqlite3_value_type` returns `SQLITE_NULL` for pointer.
-    // So it seems not possible to enhance `ValueRef::from_value`.
-    #[cfg(feature = "pointer")]
-    #[must_use]
-    pub unsafe fn get_pointer<'a, T: 'static>(
-        &self,
-        idx: usize,
-        ptr_type: &'static CStr,
-    ) -> Option<&'a T> {
-        let arg = self.args[idx];
-        debug_assert_eq!(unsafe { ffi::sqlite3_value_type(arg) }, ffi::SQLITE_NULL);
-        unsafe {
-            ffi::sqlite3_value_pointer(arg, ptr_type.as_ptr())
-                .cast::<T>()
-                .as_ref()
-        }
-    }
-
-    /// Turns `Values` into an iterator.
-    #[inline]
-    #[must_use]
-    pub fn iter(&self) -> ValueIter<'_> {
-        ValueIter {
-            iter: self.args.iter(),
-        }
-    }
-}
-
-impl<'a> IntoIterator for &'a Values<'a> {
-    type IntoIter = ValueIter<'a>;
-    type Item = ValueRef<'a>;
-
-    #[inline]
-    fn into_iter(self) -> ValueIter<'a> {
-        self.iter()
-    }
-}
-
-/// [`Values`] iterator.
-pub struct ValueIter<'a> {
-    iter: slice::Iter<'a, *mut sqlite3_value>,
-}
-
-impl<'a> Iterator for ValueIter<'a> {
-    type Item = ValueRef<'a>;
-
-    #[inline]
-    fn next(&mut self) -> Option<ValueRef<'a>> {
-        self.iter
-            .next()
-            .map(|&raw| unsafe { ValueRef::from_value(raw) })
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.iter.size_hint()
-    }
-}
-
 /// Wrapper to [`UpdateVTab::insert`] arguments
 pub struct Inserts<'a> {
     values: Values<'a>,
@@ -1234,7 +1131,7 @@ where
     let mut conn = VTabConnection(db);
     let aux = aux.cast::<T::Aux>();
     unsafe {
-        let args = slice::from_raw_parts(argv, argc as usize);
+        let args = from_raw_parts(argv, argc);
         let vec = args
             .iter()
             .map(|&cs| CStr::from_ptr(cs).to_bytes()) // FIXME .to_str() -> Result<&str, Utf8Error>
@@ -1270,7 +1167,7 @@ where
     let mut conn = VTabConnection(db);
     let aux = aux.cast::<T::Aux>();
     unsafe {
-        let args = slice::from_raw_parts(argv, argc as usize);
+        let args = from_raw_parts(argv, argc);
         let vec = args
             .iter()
             .map(|&cs| CStr::from_ptr(cs).to_bytes()) // FIXME .to_str() -> Result<&str, Utf8Error>
@@ -1388,8 +1285,7 @@ where
             let c_slice = CStr::from_ptr(idx_str).to_bytes();
             Some(str::from_utf8_unchecked(c_slice))
         };
-        let args = slice::from_raw_parts_mut(argv, argc as usize);
-        let values = Values { args };
+        let values = Values::from_raw_parts(argv, argc);
         let cr = cursor.cast::<C>();
         cursor_error(cursor, (*cr).filter(idx_num, idx_name, &Filters { values }))
     }
@@ -1455,7 +1351,7 @@ where
     assert!(argc >= 1);
     let vt = vtab.cast::<T>();
     unsafe {
-        let args = slice::from_raw_parts_mut(argv, argc as usize);
+        let args = from_raw_parts_mut(argv, argc);
         let r = if args.len() == 1 {
             (*vt).delete(ValueRef::from_value(args[0]))
         } else if ffi::sqlite3_value_type(args[0]) == ffi::SQLITE_NULL {
@@ -1641,5 +1537,169 @@ mod test {
             Ok(("key", Cow::Borrowed("foo=bar"))),
             super::parameter(b"key='foo=bar'")
         );
+    }
+
+    #[cfg(all(feature = "functions", not(miri)))]
+    #[test]
+    fn test_values_get_subtype() -> crate::Result<()> {
+        use std::ffi::{CStr, c_int, c_uint};
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        use crate::ffi;
+        use crate::functions::{FunctionFlags, SqlFnArg, SubType};
+        use crate::types::Value;
+        use crate::vtab::{
+            Context, CreateVTab, Filters, IndexConstraintOp, IndexInfo, Inserts, Module,
+            UpdateVTab, Updates, VTab, VTabConnection, VTabCursor, VTabKind,
+        };
+        use crate::{Connection, Result};
+
+        static FILTER_SUBTYPE: AtomicU32 = AtomicU32::new(0);
+        static INSERT_SUBTYPE: AtomicU32 = AtomicU32::new(0);
+
+        fn set_subtype(ctx: &mut crate::functions::Context<'_>) -> Result<(SqlFnArg, SubType)> {
+            let value = ctx.get_arg(0);
+            let sub_type = ctx.get::<c_uint>(1)?;
+            Ok((value, Some(sub_type)))
+        }
+
+        #[repr(C)]
+        struct SubTypeVTab {
+            base: ffi::sqlite3_vtab,
+        }
+        #[repr(C)]
+        struct SubTypeVTabCursor {
+            base: ffi::sqlite3_vtab_cursor,
+        }
+
+        unsafe impl<'vtab> VTab<'vtab> for SubTypeVTab {
+            type Aux = ();
+            type Cursor = SubTypeVTabCursor;
+
+            fn connect(
+                _db: &mut VTabConnection,
+                _aux: Option<&Self::Aux>,
+                _module_name: &[u8],
+                _database_name: &[u8],
+                _table_name: &[u8],
+                _args: &[&[u8]],
+            ) -> Result<(Cow<'static, CStr>, Self)> {
+                Ok((
+                    Cow::Borrowed(c"CREATE TABLE x(value BLOB)"),
+                    Self {
+                        base: ffi::sqlite3_vtab::default(),
+                    },
+                ))
+            }
+
+            fn best_index(&self, info: &mut IndexInfo) -> Result<bool> {
+                let mut argv_index = 1;
+                let mut usable_constraints = Vec::new();
+                for (i, constraint) in info.constraints().enumerate() {
+                    if constraint.is_usable()
+                        && constraint.operator() == IndexConstraintOp::SQLITE_INDEX_CONSTRAINT_EQ
+                    {
+                        usable_constraints.push(i);
+                    }
+                }
+                for i in usable_constraints {
+                    let mut usage = info.constraint_usage(i);
+                    usage.set_argv_index(argv_index);
+                    usage.set_omit(true);
+                    argv_index += 1;
+                }
+                info.set_estimated_cost(1.0);
+                Ok(true)
+            }
+
+            fn open(&'vtab mut self) -> Result<Self::Cursor> {
+                Ok(SubTypeVTabCursor {
+                    base: ffi::sqlite3_vtab_cursor::default(),
+                })
+            }
+        }
+
+        impl CreateVTab<'_> for SubTypeVTab {
+            const KIND: VTabKind = VTabKind::Default;
+        }
+
+        impl UpdateVTab<'_> for SubTypeVTab {
+            fn delete(&mut self, _arg: crate::types::ValueRef<'_>) -> Result<()> {
+                Ok(())
+            }
+
+            fn insert(&mut self, args: &Inserts<'_>) -> Result<i64> {
+                // args[0]: old rowid (NULL for new rows)
+                // args[1]: new rowid
+                // args[2]: first column value
+                INSERT_SUBTYPE.store(args.get_subtype(2), Ordering::SeqCst);
+                Ok(0)
+            }
+
+            fn update(&mut self, _args: &Updates<'_>) -> Result<()> {
+                Ok(())
+            }
+        }
+
+        unsafe impl VTabCursor for SubTypeVTabCursor {
+            fn filter(
+                &mut self,
+                _idx_num: c_int,
+                _idx_str: Option<&str>,
+                args: &Filters<'_>,
+            ) -> Result<()> {
+                FILTER_SUBTYPE.store(args.get_subtype(0), Ordering::SeqCst);
+                Ok(())
+            }
+
+            fn next(&mut self) -> Result<()> {
+                Ok(())
+            }
+
+            fn eof(&self) -> bool {
+                true
+            }
+
+            fn column(&self, ctx: &mut Context, _i: c_int) -> Result<()> {
+                ctx.set_result(Value::Null)
+            }
+
+            fn rowid(&self) -> Result<i64> {
+                Ok(0)
+            }
+        }
+
+        let db = Connection::open_in_memory()?;
+        db.create_scalar_function(
+            c"set_subtype",
+            2,
+            FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_RESULT_SUBTYPE,
+            set_subtype,
+        )?;
+        const MODULE: Module<SubTypeVTab> = Module::update_module();
+        db.create_module(c"subtype_vtab", &MODULE, None)?;
+
+        db.execute("CREATE VIRTUAL TABLE st USING subtype_vtab()", [])?;
+
+        FILTER_SUBTYPE.store(0, Ordering::SeqCst);
+        INSERT_SUBTYPE.store(0, Ordering::SeqCst);
+
+        // Test filter callback can read subtype from scalar function result.
+        let _: Result<String> = db.query_row(
+            "SELECT value FROM st WHERE value = set_subtype('a', 223)",
+            [],
+            |row| row.get(0),
+        );
+        assert_eq!(FILTER_SUBTYPE.load(Ordering::SeqCst), 223);
+
+        // Test insert callback can read subtype from scalar function result.
+        // Use a BLOB literal as input so the value remains a BLOB when inserted.
+        db.execute(
+            "INSERT INTO st(rowid, value) VALUES (1, set_subtype(X'62', 225))",
+            [],
+        )?;
+        assert_eq!(INSERT_SUBTYPE.load(Ordering::SeqCst), 225);
+
+        Ok(())
     }
 }

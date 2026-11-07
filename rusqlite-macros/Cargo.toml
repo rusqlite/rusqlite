@@ -1,6 +1,6 @@
 [package]
 name = "rusqlite-macros"
-version = "0.4.3"
+version = "0.4.4"
 authors = ["The rusqlite developers"]
 edition = "2024"
 description = "Private implementation detail of rusqlite crate"
@@ -15,3 +15,6 @@ proc-macro = true
 sqlite3-parser = { version = "0.17", default-features = false, features = ["YYNOERRORRECOVERY"] }
 fallible-iterator = "0.3"
 litrs = "1.0.0"
+
+[lints]
+workspace = true

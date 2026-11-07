@@ -153,7 +153,7 @@
 - [X] `sqlite3_value_text`
 - [X] `sqlite3_value_bytes` (not public, internal use only)
 - [X] `sqlite3_value_type`
-- [ ] `sqlite3_value_numeric_type`
+- [X] `sqlite3_value_numeric_type`
 - [X] `sqlite3_value_nochange`
 - [ ] `sqlite3_value_frombind`
 - [ ] `sqlite3_value_encoding`
@@ -285,7 +285,7 @@
 
 - [X] `sqlite3_wal_hook` (Boxed callback, destroyed by SQLite)
 - [ ] `sqlite3_wal_autocheckpoint`
-- [X] `sqlite3_wal_checkpoint`
+- [ ] `sqlite3_wal_checkpoint`
 - [X] `sqlite3_wal_checkpoint_v2`
 
 - [X] `sqlite3_vtab_config`

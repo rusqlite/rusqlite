@@ -129,7 +129,7 @@ impl Connection {
     /// - a variant of the PreUpdateCase enum which allows access to extra functions depending
     ///   on whether it's an update, delete or insert.
     #[inline]
-    pub fn preupdate_hook<F>(&self, hook: Option<F>) -> Result<()>
+    pub fn preupdate_hook<F>(&mut self, hook: Option<F>) -> Result<()>
     where
         F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
     {
@@ -203,8 +203,10 @@ impl InnerConnection {
         }
 
         let x_pre_update = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
-        let bh = self.set_clientdata(c"sqlite3_preupdate_hook", hook)?;
-        unsafe { ffi::sqlite3_preupdate_hook(self.db(), x_pre_update, bh as *mut _) };
+        self.set_clientdata(c"sqlite3_preupdate_hook", hook, |db, bh| unsafe {
+            ffi::sqlite3_preupdate_hook(db, x_pre_update, bh);
+            ffi::SQLITE_OK
+        })?;
         Ok(())
     }
 }
@@ -222,7 +224,7 @@ mod test {
 
     #[test]
     fn test_preupdate_hook_insert() -> Result<()> {
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
 
         static CALLED: AtomicBool = AtomicBool::new(false);
 
@@ -255,7 +257,7 @@ mod test {
 
     #[test]
     fn test_preupdate_hook_delete() -> Result<()> {
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
 
         static CALLED: AtomicBool = AtomicBool::new(false);
 
@@ -291,7 +293,7 @@ mod test {
 
     #[test]
     fn test_preupdate_hook_update() -> Result<()> {
-        let db = Connection::open_in_memory()?;
+        let mut db = Connection::open_in_memory()?;
 
         static CALLED: AtomicBool = AtomicBool::new(false);
 

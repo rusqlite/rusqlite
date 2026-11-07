@@ -137,22 +137,36 @@ mod build_bundled {
             !(cfg!(feature = "bundled-windows") && !cfg!(feature = "bundled") && !win_target()),
             "This module should not be used: we're not on Windows and the bundled feature has not been enabled"
         );
+        let (include_dir, source) = cfg_select! {
+            feature = "bundled-sqlcipher" => {
+                let dir = sqlcipher_src::source_dir();
+                (dir.to_owned(), dir.join(sqlcipher_src::SOURCE_FILE))
+            }
+            _ => {
+                let dir = format!("{}/{lib_name}", env!("CARGO_MANIFEST_DIR"));
+                let source = format!("{lib_name}/sqlite3.c");
+                (
+                    std::path::PathBuf::from(dir),
+                    std::path::PathBuf::from(source),
+                )
+            }
+        };
 
         cfg_select! {
             feature = "buildtime_bindgen" => {
                 use super::{HeaderLocation, bindings};
-                let header = HeaderLocation::FromPath(lib_name.to_owned());
+                let header = HeaderLocation::FromPath(include_dir.to_string_lossy().into());
                 bindings::write_to_out_dir(header, out_path);
             }
             _ => {
                 super::copy_bindings(lib_name, "bindgen_bundled_version", out_path);
             }
         }
-        println!("cargo:include={}/{lib_name}", env!("CARGO_MANIFEST_DIR"));
-        println!("cargo:rerun-if-changed={lib_name}/sqlite3.c");
+        println!("cargo:include={}", include_dir.display());
+        println!("cargo:rerun-if-changed={}", source.display());
         println!("cargo:rerun-if-changed=sqlite3/wasm32-wasi-vfs.c");
         let mut cfg = cc::Build::new();
-        cfg.file(format!("{lib_name}/sqlite3.c"))
+        cfg.file(&source)
             .flag("-DSQLITE_CORE")
             .flag("-DSQLITE_DEFAULT_FOREIGN_KEYS=1")
             .flag("-DSQLITE_ENABLE_API_ARMOR")
@@ -163,7 +177,6 @@ mod build_bundled {
             .flag("-DSQLITE_ENABLE_FTS5")
             .flag("-DSQLITE_ENABLE_JSON1")
             .flag("-DSQLITE_ENABLE_LOAD_EXTENSION=1")
-            .flag("-DSQLITE_ENABLE_MEMORY_MANAGEMENT")
             .flag("-DSQLITE_ENABLE_RTREE")
             .flag("-DSQLITE_ENABLE_STAT4")
             .flag("-DSQLITE_SOUNDEX")
@@ -345,6 +358,8 @@ mod build_bundled {
     fn env(name: &str) -> Option<OsString> {
         let prefix = env::var("TARGET").unwrap().to_uppercase().replace('-', "_");
         let prefixed = format!("{prefix}_{name}");
+        println!("cargo:rerun-if-env-changed={prefixed}");
+        println!("cargo:rerun-if-env-changed={name}");
         let var = env::var_os(prefixed);
 
         match var {
@@ -584,6 +599,7 @@ mod bindings {
         let mut bindings = bindgen::builder()
             .default_macro_constant_type(bindgen::MacroTypeVariation::Signed)
             .disable_nested_struct_naming()
+            .generate_comments(false)
             .generate_cstr(true)
             .use_core()
             .trust_clang_mangling(false)

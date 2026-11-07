@@ -12,6 +12,20 @@ pub(crate) unsafe extern "C" fn free_boxed_value<T>(p: *mut std::ffi::c_void) {
     drop(unsafe { Box::from_raw(p.cast::<T>()) });
 }
 
+pub(crate) unsafe fn from_raw_parts<'a, T>(data: *const T, len: std::ffi::c_int) -> &'a [T] {
+    if len > 0 {
+        return unsafe { std::slice::from_raw_parts(data, len as usize) };
+    }
+    &[]
+}
+#[cfg(any(feature = "session", feature = "vtab"))]
+pub(crate) unsafe fn from_raw_parts_mut<'a, T>(data: *mut T, len: std::ffi::c_int) -> &'a mut [T] {
+    if len > 0 {
+        return unsafe { std::slice::from_raw_parts_mut(data, len as usize) };
+    }
+    &mut []
+}
+
 use crate::Result;
 use std::ffi::CStr;
 
@@ -46,5 +60,27 @@ impl Name for &CStr {
     #[inline]
     fn as_cstr(&self) -> Result<Named<'_>> {
         Ok(Named::C(self))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::ops::Deref as _;
+
+    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    #[test]
+    fn from_raw_parts() {
+        let slice = unsafe { super::from_raw_parts(std::ptr::null::<u8>(), 0) };
+        assert!(slice.is_empty());
+    }
+    #[test]
+    fn str_as_cstr() -> crate::Result<()> {
+        use super::Name as _;
+        let named = "foo".as_cstr()?;
+        let cstr = named.deref();
+        assert_eq!(cstr, c"foo");
+        Ok(())
     }
 }

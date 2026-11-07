@@ -45,6 +45,10 @@ pub enum Limit {
     SQLITE_LIMIT_WORKER_THREADS = ffi::SQLITE_LIMIT_WORKER_THREADS,
     /// The maximum depth of the parse tree on any expression.
     SQLITE_LIMIT_PARSER_DEPTH = 12, // 3.53.0
+    /// The maximum number of objects (tables, indexes, triggers, and views) defined by the database schema.
+    SQLITE_LIMIT_SCHEMA = 13, // 3.54.0
+    ///The maximum number of SQL statements that can be contained within a single trigger.
+    SQLITE_LIMIT_TRIGGER_STEPS = 14, // 3.54.0
     /// Only used for testing
     #[cfg(test)]
     INVALID = -1,
