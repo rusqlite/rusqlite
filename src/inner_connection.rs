@@ -349,9 +349,30 @@ impl InnerConnection {
     ) -> Result<*mut T> {
         let name = name.as_cstr()?;
         let ptr = data.map_or(ptr::null_mut(), |d| Box::into_raw(Box::new(d)));
+        // `sqlite3_set_clientdata` can only fail (SQLITE_NOMEM) when it has to
+        // allocate a new entry, and then it frees `ptr`. So make sure the entry
+        // exists (without destructor) before `preset` installs a callback which
+        // uses `ptr`.
+        if !ptr.is_null()
+            && unsafe { ffi::sqlite3_get_clientdata(self.db, name.as_ptr()) }.is_null()
+        {
+            let res = self.decode_result(unsafe {
+                ffi::sqlite3_set_clientdata(self.db, name.as_ptr(), ptr.cast(), None)
+            });
+            if res.is_err() {
+                unsafe { crate::util::free_boxed_value::<T>(ptr.cast()) };
+                res?;
+            }
+        }
         let res = self.decode_result(preset(self.db, ptr.cast()));
         if res.is_err() {
             if !ptr.is_null() {
+                if unsafe { ffi::sqlite3_get_clientdata(self.db, name.as_ptr()) } == ptr.cast() {
+                    // remove the entry reserved above
+                    unsafe {
+                        ffi::sqlite3_set_clientdata(self.db, name.as_ptr(), ptr::null_mut(), None)
+                    };
+                }
                 unsafe { crate::util::free_boxed_value::<T>(ptr.cast()) };
             }
             res?;

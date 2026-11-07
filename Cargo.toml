@@ -213,6 +213,9 @@ bencher = "0.1"
 name = "auto_ext"
 
 [[test]]
+name = "clientdata_oom"
+
+[[test]]
 name = "config_log"
 harness = false
 
