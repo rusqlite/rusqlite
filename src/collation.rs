@@ -96,8 +96,8 @@ impl InnerConnection {
             }
         }
 
-        let boxed_f: *mut C = Box::into_raw(Box::new(x_compare));
         let c_name = collation_name.as_cstr()?;
+        let boxed_f: *mut C = Box::into_raw(Box::new(x_compare));
         let flags = ffi::SQLITE_UTF8;
         let r = unsafe {
             ffi::sqlite3_create_collation_v2(
@@ -259,5 +259,19 @@ mod test {
         let db = Connection::open_in_memory()?;
         db.create_collation(c"unicase", unicase_compare)?;
         db.remove_collation(c"unicase")
+    }
+
+    #[test]
+    fn invalid_name() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let c = String::with_capacity(5);
+        let err = db
+            .create_collation("bad\0name", move |a, b| {
+                std::hint::black_box(&c);
+                a.cmp(b)
+            })
+            .unwrap_err();
+        std::assert_matches!(err, crate::Error::NulError(_));
+        Ok(())
     }
 }

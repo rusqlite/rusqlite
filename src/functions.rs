@@ -618,8 +618,8 @@ impl InnerConnection {
             }
         }
 
-        let boxed_f: *mut F = Box::into_raw(Box::new(x_func));
         let c_name = fn_name.as_cstr()?;
+        let boxed_f: *mut F = Box::into_raw(Box::new(x_func));
         let r = unsafe {
             ffi::sqlite3_create_function_v2(
                 self.db(),
@@ -648,8 +648,8 @@ impl InnerConnection {
         D: Aggregate<A, T> + Send + 'static,
         T: SqlFnOutput,
     {
-        let boxed_aggr: *mut D = Box::into_raw(Box::new(aggr));
         let c_name = fn_name.as_cstr()?;
+        let boxed_aggr: *mut D = Box::into_raw(Box::new(aggr));
         let r = unsafe {
             ffi::sqlite3_create_function_v2(
                 self.db(),
@@ -679,8 +679,8 @@ impl InnerConnection {
         W: WindowAggregate<A, T> + Send + 'static,
         T: SqlFnOutput,
     {
-        let boxed_aggr: *mut W = Box::into_raw(Box::new(aggr));
         let c_name = fn_name.as_cstr()?;
+        let boxed_aggr: *mut W = Box::into_raw(Box::new(aggr));
         let r = unsafe {
             ffi::sqlite3_create_window_function(
                 self.db(),
@@ -1291,6 +1291,25 @@ mod test {
             unsafe { r.get_pointer::<_, i32>(0, PTR_TYPE) }.map(|opt| opt.cloned())
         })?;
         assert_eq!(result.unwrap(), value);
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_name() -> Result<()> {
+        let db = Connection::open_in_memory()?;
+        let c = String::with_capacity(5);
+        let err = db
+            .create_scalar_function(
+                "bad\0name",
+                0,
+                FunctionFlags::SQLITE_DETERMINISTIC,
+                move |_| {
+                    std::hint::black_box(&c);
+                    Ok(0)
+                },
+            )
+            .unwrap_err();
+        std::assert_matches!(err, Error::NulError(_));
         Ok(())
     }
 }
