@@ -205,7 +205,11 @@ impl InnerConnection {
 
         let x_pre_update = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
         self.set_clientdata(c"sqlite3_preupdate_hook", hook, |db, bh| unsafe {
-            ffi::sqlite3_preupdate_hook(db, x_pre_update, bh);
+            if bh.is_null() {
+                ffi::sqlite3_preupdate_hook(db, None, bh);
+            } else {
+                ffi::sqlite3_preupdate_hook(db, x_pre_update, bh);
+            }
             ffi::SQLITE_OK
         })?;
         Ok(())

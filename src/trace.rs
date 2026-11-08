@@ -209,7 +209,11 @@ impl Connection {
         let mut c = self.db.borrow_mut();
         let x = trace_fn.as_ref().map(|_| trace_callback::<F> as _);
         c.set_clientdata(c"sqlite3_trace_v2", trace_fn, |db, bh| unsafe {
-            ffi::sqlite3_trace_v2(db, mask.bits(), x, bh);
+            if bh.is_null() {
+                ffi::sqlite3_trace_v2(db, mask.bits(), None, bh);
+            } else {
+                ffi::sqlite3_trace_v2(db, mask.bits(), x, bh);
+            }
             ffi::SQLITE_OK
         })?;
         Ok(())
