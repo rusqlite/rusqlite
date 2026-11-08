@@ -419,7 +419,11 @@ impl Connection {
         let x = hook.as_ref().map(|_| wal_hook_callback::<F> as _);
         let mut c = self.db.borrow_mut();
         c.set_clientdata(c"sqlite3_wal_hook", hook, |db, bh| unsafe {
-            ffi::sqlite3_wal_hook(db, x, bh);
+            if bh.is_null() {
+                ffi::sqlite3_wal_hook(db, None, bh);
+            } else {
+                ffi::sqlite3_wal_hook(db, x, bh);
+            }
             ffi::SQLITE_OK
         })?;
         Ok(())
@@ -517,7 +521,11 @@ impl InnerConnection {
         }
         let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
         self.set_clientdata(c"sqlite3_commit_hook", hook, |db, bh| unsafe {
-            ffi::sqlite3_commit_hook(db, x, bh);
+            if bh.is_null() {
+                ffi::sqlite3_commit_hook(db, None, bh);
+            } else {
+                ffi::sqlite3_commit_hook(db, x, bh);
+            }
             ffi::SQLITE_OK
         })?;
         Ok(())
@@ -561,7 +569,11 @@ impl InnerConnection {
 
         let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
         self.set_clientdata(c"sqlite3_rollback_hook", hook, |db, bh| unsafe {
-            ffi::sqlite3_rollback_hook(db, x, bh);
+            if bh.is_null() {
+                ffi::sqlite3_rollback_hook(db, None, bh);
+            } else {
+                ffi::sqlite3_rollback_hook(db, x, bh);
+            }
             ffi::SQLITE_OK
         })?;
         Ok(())
@@ -609,7 +621,11 @@ impl InnerConnection {
 
         let x = hook.as_ref().map(|_| call_boxed_closure::<F> as _);
         self.set_clientdata(c"sqlite3_update_hook", hook, |db, bh| unsafe {
-            ffi::sqlite3_update_hook(db, x, bh);
+            if bh.is_null() {
+                ffi::sqlite3_update_hook(db, None, bh);
+            } else {
+                ffi::sqlite3_update_hook(db, x, bh);
+            }
             ffi::SQLITE_OK
         })?;
         Ok(())
@@ -654,7 +670,11 @@ impl InnerConnection {
 
         let x = handler.as_ref().map(|_| call_boxed_closure::<F> as _);
         self.set_clientdata(c"sqlite3_progress_handler", handler, |db, bh| unsafe {
-            ffi::sqlite3_progress_handler(db, num_ops, x, bh);
+            if bh.is_null() {
+                ffi::sqlite3_progress_handler(db, num_ops, None, bh);
+            } else {
+                ffi::sqlite3_progress_handler(db, num_ops, x, bh);
+            }
             ffi::SQLITE_OK
         })?;
         Ok(())
@@ -718,7 +738,11 @@ impl InnerConnection {
             .as_ref()
             .map(|_| call_boxed_closure::<'c, F> as _);
         self.set_clientdata(c"sqlite3_set_authorizer", authorizer, |db, bh| unsafe {
-            ffi::sqlite3_set_authorizer(db, x_auth, bh)
+            if bh.is_null() {
+                ffi::sqlite3_set_authorizer(db, None, bh)
+            } else {
+                ffi::sqlite3_set_authorizer(db, x_auth, bh)
+            }
         })?;
         Ok(())
     }

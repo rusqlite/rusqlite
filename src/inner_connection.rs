@@ -349,6 +349,8 @@ impl InnerConnection {
     ) -> Result<*mut T> {
         let name = name.as_cstr()?;
         let ptr = data.map_or(ptr::null_mut(), |d| Box::into_raw(Box::new(d)));
+        // we call `sqlite3_set_clientdata` (which frees previous data) after `preset` to make sure
+        // that SQLite doesn't have a dangling pointer to the previous data.
         let res = self.decode_result(preset(self.db, ptr.cast()));
         if res.is_err() {
             if !ptr.is_null() {
@@ -356,7 +358,7 @@ impl InnerConnection {
             }
             res?;
         }
-        self.decode_result(unsafe {
+        let res = self.decode_result(unsafe {
             ffi::sqlite3_set_clientdata(
                 self.db,
                 name.as_ptr(),
@@ -367,7 +369,12 @@ impl InnerConnection {
                     Some(crate::util::free_boxed_value::<T>)
                 },
             )
-        })?;
+        });
+        // if `sqlite3_set_clientdata` fails, reset:
+        if res.is_err() {
+            preset(self.db, ptr::null_mut());
+            res?;
+        }
         Ok(ptr)
     }
     pub unsafe fn get_clientdata<T, N: Name>(&self, name: N) -> Result<*mut T> {

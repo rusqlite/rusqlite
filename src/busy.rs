@@ -73,7 +73,11 @@ impl Connection {
         let x = callback.as_ref().map(|_| busy_handler_callback::<F> as _);
         let mut c = self.db.borrow_mut();
         c.set_clientdata(c"sqlite3_busy_handler", callback, |db, bh| unsafe {
-            ffi::sqlite3_busy_handler(db, x, bh)
+            if bh.is_null() {
+                ffi::sqlite3_busy_handler(db, None, bh)
+            } else {
+                ffi::sqlite3_busy_handler(db, x, bh)
+            }
         })?;
         Ok(())
     }
