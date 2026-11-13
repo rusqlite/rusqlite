@@ -181,7 +181,7 @@ impl InnerConnection {
         conn: &'a Connection,
         sql: &str,
         flags: PrepFlags,
-    ) -> Result<(Statement<'a>, usize)> {
+    ) -> Result<(Option<Statement<'a>>, usize)> {
         let mut c_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
         let Ok(len) = c_int::try_from(sql.len()) else {
             return Err(err!(ffi::SQLITE_TOOBIG));
@@ -245,7 +245,11 @@ impl InnerConnection {
             }
         };
         Ok((
-            Statement::new(conn, unsafe { RawStatement::new(c_stmt) }),
+            if c_stmt.is_null() {
+                None
+            } else {
+                Some(Statement::new(conn, unsafe { RawStatement::new(c_stmt) }))
+            },
             tail,
         ))
     }

@@ -107,6 +107,8 @@ pub enum Error {
     /// [`ToSql`](crate::types::ToSql) trait.
     ToSqlConversionFailure(Box<dyn error::Error + Send + Sync + 'static>),
 
+    /// Empty or comment only SQL
+    Empty,
     /// Error when the SQL is not a `SELECT`, is not read-only.
     InvalidQuery,
 
@@ -182,6 +184,7 @@ impl PartialEq for Error {
             (Self::InvalidParameterType(i1, t1), Self::InvalidParameterType(i2, t2)) => {
                 i1 == i2 && t1 == t2
             }
+            (Self::Empty, Self::Empty) => true,
             (Self::InvalidQuery, Self::InvalidQuery) => true,
             #[cfg(feature = "vtab")]
             (Self::ModuleError(s1), Self::ModuleError(s2)) => s1 == s2,
@@ -318,6 +321,7 @@ impl fmt::Display for Error {
             #[cfg(feature = "functions")]
             Self::UserFunctionError(ref err) => err.fmt(f),
             Self::ToSqlConversionFailure(ref err) => err.fmt(f),
+            Self::Empty => write!(f, "SQL is empty or comment only"),
             Self::InvalidQuery => write!(f, "Query is not read-only"),
             #[cfg(feature = "vtab")]
             Self::ModuleError(ref desc) => write!(f, "{desc}"),
@@ -359,6 +363,7 @@ impl error::Error for Error {
             | Self::InvalidPath(_)
             | Self::InvalidParameterCount(..)
             | Self::StatementChangedRows(_)
+            | Self::Empty
             | Self::InvalidQuery
             | Self::MultipleStatement => None,
 

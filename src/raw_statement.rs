@@ -39,11 +39,6 @@ impl RawStatement {
     }
 
     #[inline]
-    pub fn is_null(&self) -> bool {
-        self.ptr.is_null()
-    }
-
-    #[inline]
     #[cfg(feature = "cache")]
     pub(crate) fn set_statement_cache_key(&mut self, p: impl Into<Arc<str>>) {
         self.statement_cache_key = Some(p.into());
