@@ -783,11 +783,7 @@ impl Statement<'_> {
 
 impl fmt::Debug for Statement<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let sql = if self.stmt.is_null() {
-            Ok("")
-        } else {
-            self.stmt.sql().unwrap().to_str()
-        };
+        let sql = self.stmt.sql().unwrap().to_str();
         f.debug_struct("Statement")
             .field("conn", self.conn)
             .field("stmt", &self.stmt)
@@ -1322,26 +1318,16 @@ mod test {
     #[test]
     fn test_empty_stmt() -> Result<()> {
         let conn = Connection::open_in_memory()?;
-        let mut stmt = conn.prepare("")?;
-        assert_eq!(0, stmt.column_count());
-        stmt.parameter_index("test")?;
-        let err = stmt.step().unwrap_err();
-        assert_eq!(err.sqlite_error_code(), Some(crate::ErrorCode::ApiMisuse));
-        assert_eq!(
-            err.sqlite_extended_error_code(),
-            Some(crate::ffi::SQLITE_MISUSE)
-        );
-        // error msg is different with sqlcipher, so we use assert_ne:
-        assert_ne!(err.to_string(), "not an error".to_owned());
-        stmt.reset()?; // SQLITE_OMIT_AUTORESET = false
-        stmt.execute([]).unwrap_err();
+        let err = conn.prepare("").unwrap_err();
+        std::assert_matches!(err, Error::Empty);
         Ok(())
     }
 
     #[test]
     fn test_comment_stmt() -> Result<()> {
         let conn = Connection::open_in_memory()?;
-        conn.prepare("/*SELECT 1;*/")?;
+        let err = conn.prepare("/*SELECT 1;*/").unwrap_err();
+        std::assert_matches!(err, Error::Empty);
         Ok(())
     }
 
@@ -1356,8 +1342,8 @@ mod test {
     #[test]
     fn test_semi_colon_stmt() -> Result<()> {
         let conn = Connection::open_in_memory()?;
-        let stmt = conn.prepare(";")?;
-        assert_eq!(0, stmt.column_count());
+        let err = conn.prepare(";").unwrap_err();
+        std::assert_matches!(err, Error::Empty);
         Ok(())
     }
 

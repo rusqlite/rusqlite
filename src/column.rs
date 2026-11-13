@@ -193,7 +193,6 @@ impl Statement<'_> {
     /// each column of this query's results originate.
     ///
     /// Computed or otherwise derived columns will have None values for these fields.
-    // FIXME
     #[cfg(feature = "column_metadata")]
     pub fn columns_with_metadata(
         &self,

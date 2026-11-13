@@ -563,7 +563,9 @@ impl Connection {
                 .db
                 .borrow_mut()
                 .prepare(self, sql, PrepFlags::default())?;
-            if !stmt.stmt.is_null() && stmt.step()? {
+            if let Some(stmt) = stmt
+                && stmt.step()?
+            {
                 // Some PRAGMA may return rows
                 if false {
                     return Err(Error::ExecuteReturnedResults);
@@ -797,12 +799,19 @@ impl Connection {
     /// # Failure
     ///
     /// Will return `Err` if `sql` cannot be converted to a C-compatible string
-    /// or if the underlying SQLite call fails.
+    /// or if the underlying SQLite call fails or if `sql` is empty or comment only.
     #[inline]
     pub fn prepare_with_flags(&self, sql: &str, flags: PrepFlags) -> Result<Statement<'_>> {
         let (stmt, tail) = self.db.borrow_mut().prepare(self, sql, flags)?;
-        if tail != 0 && !self.prepare(&sql[tail..])?.stmt.is_null() {
-            Err(Error::MultipleStatement)
+        let Some(stmt) = stmt else {
+            return Err(Error::Empty);
+        };
+        if tail != 0 {
+            match self.prepare(&sql[tail..]) {
+                Err(Error::Empty) => Ok(stmt),
+                Ok(_) => Err(Error::MultipleStatement),
+                Err(e) => Err(e),
+            }
         } else {
             Ok(stmt)
         }
@@ -1241,9 +1250,9 @@ impl<'conn> fallible_iterator::FallibleIterator for Batch<'conn, '_> {
             } else {
                 self.tail += tail;
             }
-            if next.stmt.is_null() {
+            let Some(next) = next else {
                 continue;
-            }
+            };
             return Ok(Some(next));
         }
         Ok(None)
