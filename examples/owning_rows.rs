@@ -22,6 +22,5 @@ fn main() -> Result<()> {
             assert_eq!(Ok(1), row.get(0));
         }
         Ok(())
-    })?;
-    Ok(())
+    })
 }

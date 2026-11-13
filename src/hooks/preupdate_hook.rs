@@ -133,8 +133,7 @@ impl Connection {
     where
         F: FnMut(Action, &str, &str, &PreUpdateCase) + Send + 'static,
     {
-        self.db.borrow_mut().preupdate_hook(hook)?;
-        Ok(())
+        self.db.borrow_mut().preupdate_hook(hook)
     }
 }
 
