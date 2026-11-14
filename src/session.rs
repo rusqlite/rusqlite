@@ -313,7 +313,7 @@ pub struct ChangesetIter<'changeset> {
 impl ChangesetIter<'_> {
     /// Create an iterator on `input`
     #[inline]
-    pub fn start_strm<'input>(input: &&'input mut dyn Read) -> Result<ChangesetIter<'input>> {
+    pub fn start_strm<'input>(input: &'input &mut dyn Read) -> Result<ChangesetIter<'input>> {
         let mut it = ptr::null_mut();
         check(unsafe {
             ffi::sqlite3changeset_start_strm(
