@@ -5,7 +5,7 @@ use std::marker::PhantomData;
 use std::str::FromStr as _;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use fallible_iterator::FallibleIterator as _;
+use fallible_streaming_iterator::FallibleStreamingIterator as _;
 
 use crate::types::Type;
 use crate::vtab::{
@@ -287,11 +287,10 @@ unsafe impl VTabCursor for VTabLogCursor<'_> {
         );
         for (i, arg) in args.iter().enumerate() {
             if arg.data_type() == Type::Null {
-                println!(
-                    " in_values[{}]: {:?}",
-                    i,
-                    args.in_values(i)?.collect::<Vec<ValueRef>>()
-                );
+                let mut in_values = args.in_values(i)?;
+                while let Some(iv) = in_values.next()? {
+                    println!(" in_values[{}]: {:?}", i, iv);
+                }
             }
         }
         self.row_id = 0;
