@@ -865,6 +865,7 @@ impl Filters<'_> {
             list,
             phantom: PhantomData,
             first: true,
+            item: None,
         })
     }
 }
@@ -874,12 +875,13 @@ pub struct InValues<'a> {
     list: *mut sqlite3_value,
     phantom: PhantomData<Filters<'a>>,
     first: bool,
+    item: Option<ValueRef<'a>>,
 }
-impl<'a> fallible_iterator::FallibleIterator for InValues<'a> {
+impl<'a> fallible_streaming_iterator::FallibleStreamingIterator for InValues<'a> {
     type Error = Error;
     type Item = ValueRef<'a>;
 
-    fn next(&mut self) -> Result<Option<Self::Item>> {
+    fn advance(&mut self) -> Result<()> {
         let mut val: *mut sqlite3_value = ptr::null_mut();
         let rc = unsafe {
             if self.first {
@@ -890,10 +892,20 @@ impl<'a> fallible_iterator::FallibleIterator for InValues<'a> {
             }
         };
         match rc {
-            ffi::SQLITE_OK => Ok(Some(unsafe { ValueRef::from_value(val) })),
-            ffi::SQLITE_DONE => Ok(None),
+            ffi::SQLITE_OK => {
+                self.item = Some(unsafe { ValueRef::from_value(val) });
+                Ok(())
+            }
+            ffi::SQLITE_DONE => {
+                self.item = None;
+                Ok(())
+            }
             _ => Err(error_from_sqlite_code(rc, None)),
         }
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        self.item.as_ref()
     }
 }
 
