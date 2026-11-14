@@ -22,7 +22,7 @@ use crate::context::set_result;
 use crate::error::{check, error_from_sqlite_code, to_sqlite_error};
 use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
-use crate::types::{ToSql, ValueRef};
+use crate::types::{RawValue, ToSql, ValueRef};
 pub use crate::types::{ValueIter, Values};
 use crate::util::{alloc, free_boxed_value, from_raw_parts, from_raw_parts_mut};
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
@@ -875,11 +875,11 @@ pub struct InValues<'a> {
     list: *mut sqlite3_value,
     phantom: PhantomData<Filters<'a>>,
     first: bool,
-    item: Option<ValueRef<'a>>,
+    item: Option<&'a RawValue>,
 }
 impl<'a> fallible_streaming_iterator::FallibleStreamingIterator for InValues<'a> {
     type Error = Error;
-    type Item = ValueRef<'a>;
+    type Item = RawValue;
 
     fn advance(&mut self) -> Result<()> {
         let mut val: *mut sqlite3_value = ptr::null_mut();
@@ -893,7 +893,7 @@ impl<'a> fallible_streaming_iterator::FallibleStreamingIterator for InValues<'a>
         };
         match rc {
             ffi::SQLITE_OK => {
-                self.item = Some(unsafe { ValueRef::from_value(val) });
+                self.item = Some(unsafe { RawValue::from_ptr(val) });
                 Ok(())
             }
             ffi::SQLITE_DONE => {
@@ -905,7 +905,7 @@ impl<'a> fallible_streaming_iterator::FallibleStreamingIterator for InValues<'a>
     }
 
     fn get(&self) -> Option<&Self::Item> {
-        self.item.as_ref()
+        self.item
     }
 }
 

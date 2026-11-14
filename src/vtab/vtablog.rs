@@ -289,7 +289,7 @@ unsafe impl VTabCursor for VTabLogCursor<'_> {
             if arg.data_type() == Type::Null {
                 let mut in_values = args.in_values(i)?;
                 while let Some(iv) = in_values.next()? {
-                    println!(" in_values[{}]: {:?}", i, iv);
+                    println!(" in_values[{}]: {:?}", i, iv.get_raw());
                 }
             }
         }
