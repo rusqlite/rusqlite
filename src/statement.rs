@@ -1258,7 +1258,7 @@ mod test {
         let db = Connection::open_in_memory()?;
         let stmt = db.prepare("SELECT ?1")?;
         stmt.bind_parameter(&1, 1)?;
-        assert_eq!(Some("SELECT 1".to_owned()), stmt.expanded_sql());
+        assert_eq!(Some("SELECT 1"), stmt.expanded_sql().as_deref());
         Ok(())
     }
 
