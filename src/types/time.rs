@@ -76,7 +76,7 @@ impl FromSql for OffsetDateTime {
                 // legacy
                 return Self::parse(s, &LEGACY_DATE_TIME_FORMAT).map_err(FromSqlError::other);
             }
-            if s[8..].contains('+') || s[8..].contains('-') {
+            if s.len() >= 8 && (s[8..].contains('+') || s[8..].contains('-')) {
                 // Formats 2-7 with timezone
                 return Self::parse(s, &OFFSET_DATE_TIME_FORMAT).map_err(FromSqlError::other);
             }

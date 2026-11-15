@@ -152,9 +152,6 @@ impl StatementCache {
 
     // Return a statement to the cache.
     fn cache_stmt(&self, mut stmt: RawStatement) {
-        if stmt.is_null() {
-            return;
-        }
         let mut cache = self.0.borrow_mut();
         stmt.clear_bindings();
         if let Some(sql) = stmt.statement_cache_key() {
@@ -345,7 +342,10 @@ mod test {
     #[test]
     fn test_empty_stmt() -> Result<()> {
         let conn = Connection::open_in_memory()?;
-        conn.prepare_cached("")?;
+        let Err(err) = conn.prepare_cached("") else {
+            unreachable!()
+        };
+        std::assert_matches!(err, crate::Error::Empty);
         Ok(())
     }
 }

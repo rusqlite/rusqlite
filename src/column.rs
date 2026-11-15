@@ -1,4 +1,4 @@
-use std::ffi::{CStr, c_char};
+use std::ffi::{CStr, CString, c_char};
 use std::ptr;
 use std::str;
 
@@ -193,7 +193,6 @@ impl Statement<'_> {
     /// each column of this query's results originate.
     ///
     /// Computed or otherwise derived columns will have None values for these fields.
-    // FIXME
     #[cfg(feature = "column_metadata")]
     pub fn columns_with_metadata(
         &self,
@@ -238,8 +237,8 @@ impl Statement<'_> {
             &CStr,
             &CStr,
             &CStr,
-            Option<&CStr>,
-            Option<&CStr>,
+            Option<CString>,
+            Option<CString>,
             bool,
             bool,
             bool,
@@ -301,7 +300,7 @@ impl Connection {
         db_name: Option<N>,
         table_name: N,
         column_name: N,
-    ) -> Result<(Option<&CStr>, Option<&CStr>, bool, bool, bool)> {
+    ) -> Result<(Option<CString>, Option<CString>, bool, bool, bool)> {
         let cs = db_name.as_ref().map(N::as_cstr).transpose()?;
         let db_name = cs.as_ref().map_or(ptr::null(), |s| s.as_ptr());
         let table_name = table_name.as_cstr()?;
@@ -331,12 +330,12 @@ impl Connection {
             if data_type.is_null() {
                 None
             } else {
-                Some(unsafe { CStr::from_ptr(data_type) })
+                Some(unsafe { CStr::from_ptr(data_type).to_owned() })
             },
             if coll_seq.is_null() {
                 None
             } else {
-                Some(unsafe { CStr::from_ptr(coll_seq) })
+                Some(unsafe { CStr::from_ptr(coll_seq).to_owned() })
             },
             not_null != 0,
             primary_key != 0,
@@ -558,8 +557,8 @@ mod test {
         assert_eq!(db_name, crate::MAIN_DB);
         assert_eq!(table_name, c"sqlite_master");
         assert_eq!(col_name, c"type");
-        assert_eq!(data_type, Some(c"TEXT"));
-        assert_eq!(coll_seq, Some(c"BINARY"));
+        assert_eq!(data_type.as_deref(), Some(c"TEXT"));
+        assert_eq!(coll_seq.as_deref(), Some(c"BINARY"));
         assert!(!not_null);
         assert!(!primary_key);
         assert!(!auto_inc);
@@ -594,7 +593,7 @@ mod test {
             data_type.map(|cs| cs.to_str().unwrap().to_ascii_uppercase()),
             Some("TEXT".to_owned())
         );
-        assert_eq!(coll_seq, Some(c"BINARY"));
+        assert_eq!(coll_seq.as_deref(), Some(c"BINARY"));
         assert!(!not_null);
         assert!(!primary_key);
         assert!(!auto_inc);

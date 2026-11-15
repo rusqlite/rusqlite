@@ -240,11 +240,10 @@ mod test {
     #[cfg(all(target_family = "wasm", target_os = "unknown"))]
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
-    use crate::{Connection, Result};
-
     #[test]
     #[cfg(feature = "functions")]
-    fn values() -> Result<()> {
+    fn values() -> crate::Result<()> {
+        use crate::Connection;
         use crate::functions::FunctionFlags;
         use crate::types::Type;
 
