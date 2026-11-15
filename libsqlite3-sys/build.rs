@@ -169,6 +169,8 @@ mod build_bundled {
         cfg.file(&source)
             .flag("-DSQLITE_CORE")
             .flag("-DSQLITE_DEFAULT_FOREIGN_KEYS=1")
+            // Memory statistics take a global mutex on every allocation.
+            .flag("-DSQLITE_DEFAULT_MEMSTATUS=0")
             .flag("-DSQLITE_ENABLE_API_ARMOR")
             .flag("-DSQLITE_ENABLE_COLUMN_METADATA")
             .flag("-DSQLITE_ENABLE_DBSTAT_VTAB")
