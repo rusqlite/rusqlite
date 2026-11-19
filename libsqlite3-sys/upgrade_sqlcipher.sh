@@ -18,5 +18,5 @@ find "$SCRIPT_DIR/../target" -type f -name bindgen.rs -exec mv {} "$SQLCIPHER_LI
 # Sanity checks
 cd "$SCRIPT_DIR/.." || { echo "fatal error" >&2; exit 1; }
 cargo update --quiet
-cargo test --features "backup blob chrono functions limits load_extension serde_json trace vtab bundled-sqlcipher-vendored-openssl"
+cargo test --features "backup blob time functions limits load_extension serde_json trace vtab bundled-sqlcipher-vendored-openssl"
 printf '    \e[35;1mFinished\e[0m bundled-sqlcipher-vendored-openssl/sqlcipher tests\n'

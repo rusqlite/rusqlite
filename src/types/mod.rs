@@ -79,8 +79,6 @@ pub use self::value_ref::ValueRef;
 
 use std::fmt;
 
-#[cfg(feature = "chrono")]
-mod chrono;
 mod from_sql;
 #[cfg(feature = "jiff")]
 mod jiff;

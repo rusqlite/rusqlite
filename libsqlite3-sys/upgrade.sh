@@ -38,5 +38,5 @@ mv "$SQLITE3_LIB_DIR"/sqlite3ext.h{.bk,}
 # Sanity checks
 cd "$SCRIPT_DIR/.." || { echo "fatal error" >&2; exit 1; }
 cargo update --quiet
-cargo test --features "backup blob chrono functions limits load_extension serde_json trace vtab bundled"
+cargo test --features "backup blob time functions limits load_extension serde_json trace vtab bundled"
 printf '    \e[35;1mFinished\e[0m bundled sqlite3 tests\n'
