@@ -36,7 +36,7 @@ use crate::types::{Assign, ToSql, Value};
 use crate::vtab::{
     Context, Filters, IndexConstraintOp, IndexInfo, Module, VTab, VTabConnection, VTabCursor,
 };
-use crate::{Connection, Result};
+use crate::{Connection, Error, Result};
 
 // http://sqlite.org/bindptr.html
 
@@ -48,7 +48,7 @@ pub type Array = Rc<Vec<Value>>;
 
 impl ToSql for Array {
     fn to_sql(&self, _: Assign) -> Result<()> {
-        Err(err!(ffi::SQLITE_MISUSE, "Pointer must be passed by value"))
+        Err(Error::PointerMustBePassedByValue)
     }
 
     #[inline]

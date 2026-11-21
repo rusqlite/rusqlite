@@ -609,9 +609,9 @@ impl Statement<'_> {
     }
 
     // generic because many of these branches can constant fold away.
-    fn bind_parameter<P: ToSql>(&self, param: P, ndx: usize) -> Result<()> {
+    fn bind_parameter<P: ToSql>(&mut self, param: P, ndx: usize) -> Result<()> {
         let ptr = unsafe { self.stmt.ptr() };
-        param.into_sql(Assign::Stmt((ptr, ndx as _)))
+        param.into_sql(Assign::stmt((ptr, ndx as _)))
     }
 
     #[inline]
@@ -1183,7 +1183,7 @@ mod test {
     #[test]
     fn test_expanded_sql() -> Result<()> {
         let db = Connection::open_in_memory()?;
-        let stmt = db.prepare("SELECT ?1")?;
+        let mut stmt = db.prepare("SELECT ?1")?;
         stmt.bind_parameter(1, 1)?;
         assert_eq!(Some("SELECT 1"), stmt.expanded_sql().as_deref());
         Ok(())

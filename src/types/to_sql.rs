@@ -26,7 +26,7 @@ impl ToSql for ValueRef<'_> {
             ValueRef::Null => a.assign_null(),
             ValueRef::Integer(i) => a.assign_int(*i),
             ValueRef::Real(r) => a.assign_real(*r),
-            ValueRef::Text(t) => a.assign_text_slice(t, ffi::SQLITE_TRANSIENT()),
+            ValueRef::Text(t) => a.assign_text_slice(*t, ffi::SQLITE_TRANSIENT()),
             ValueRef::Blob(b) => a.assign_transient_blob(*b),
         }
     }
@@ -300,7 +300,7 @@ impl<T: ToSql> ToSql for Option<T> {
 #[cfg(feature = "pointer")]
 impl<T> ToSql for (Rc<T>, &'static CStr) {
     fn to_sql(&self, _: Assign) -> Result<()> {
-        Err(err!(ffi::SQLITE_MISUSE, "Pointer must be passed by value"))
+        Err(Error::PointerMustBePassedByValue)
     }
     /// Pass a `Rc` as a raw pointer to SQLite
     fn into_sql(self, a: Assign) -> Result<()> {
@@ -313,7 +313,7 @@ impl<T> ToSql for (Rc<T>, &'static CStr) {
 #[cfg(feature = "pointer")]
 impl<T> ToSql for (Box<T>, &'static CStr) {
     fn to_sql(&self, _: Assign) -> Result<()> {
-        Err(err!(ffi::SQLITE_MISUSE, "Pointer must be passed by value"))
+        Err(Error::PointerMustBePassedByValue)
     }
     /// Pass a `Rc` as a raw pointer to SQLite
     fn into_sql(self, a: Assign) -> Result<()> {
@@ -606,7 +606,7 @@ mod test {
 
         let mut stmt = db.prepare("SELECT id, label FROM foo WHERE id = ?1")?;
 
-        let mut rows = stmt.query(params![id])?;
+        let mut rows = stmt.query([id])?;
         let row = rows.next()?.unwrap();
 
         let found_id: Uuid = row.get_unwrap(0);

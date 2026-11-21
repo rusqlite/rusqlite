@@ -14,7 +14,25 @@ use std::ffi::{c_char, c_int, c_uchar, c_void};
 use std::mem;
 
 /// `sqlite3_stmt` or `sqlite3_context`
-pub enum Assign<'v> {
+pub struct Assign<'v>(Inner<'v>);
+
+impl<'v> Assign<'v> {
+    #[inline]
+    pub(crate) fn stmt(stmt: (*mut sqlite3_stmt, c_int)) -> Self {
+        Self(Inner::Stmt(stmt))
+    }
+    #[cfg(any(feature = "functions", feature = "vtab"))]
+    #[inline]
+    pub(crate) fn ctx(ctx: (*mut sqlite3_context, &'v [*mut sqlite3_value])) -> Self {
+        Self(Inner::Ctx(ctx))
+    }
+    #[inline]
+    pub(crate) fn pragma(sql: &'v mut Sql) -> Self {
+        Self(Inner::Pragma(sql))
+    }
+}
+
+enum Inner<'v> {
     /// Statement parameter
     Stmt((*mut sqlite3_stmt, c_int)),
     /// SQL function or virtual table result
@@ -27,7 +45,7 @@ pub enum Assign<'v> {
     U,
 }
 #[cfg(test)]
-pub(crate) const SINK: Assign = Assign::U;
+pub(crate) const SINK: Assign = Assign(Inner::U);
 
 impl Assign<'_> {
     /// error handling
@@ -35,71 +53,73 @@ impl Assign<'_> {
         if code == SQLITE_OK {
             return Ok(());
         }
-        Err(match self {
-            Self::Stmt(s) => unsafe { error_from_handle(ffi::sqlite3_db_handle(s.0), code) },
+        Err(match self.0 {
+            Inner::Stmt(s) => unsafe { error_from_handle(ffi::sqlite3_db_handle(s.0), code) },
             #[cfg(any(feature = "functions", feature = "vtab"))]
-            Self::Ctx(x) => unsafe { error_from_handle(ffi::sqlite3_context_db_handle(x.0), code) },
-            Self::Pragma(_) => unreachable!(),
+            Inner::Ctx(x) => unsafe {
+                error_from_handle(ffi::sqlite3_context_db_handle(x.0), code)
+            },
+            Inner::Pragma(_) => unreachable!(),
             #[cfg(test)]
-            Self::U => unreachable!(),
+            Inner::U => unreachable!(),
         })
     }
 
     /// `sqlite3_bind_null` or `sqlite3_result_null`
     pub fn assign_null(self) -> Result<()> {
-        match self {
-            Self::Stmt(s) => self.decode_result(unsafe { ffi::sqlite3_bind_null(s.0, s.1) }),
+        match self.0 {
+            Inner::Stmt(s) => self.decode_result(unsafe { ffi::sqlite3_bind_null(s.0, s.1) }),
             #[cfg(any(feature = "functions", feature = "vtab"))]
-            Self::Ctx(x) => unsafe {
+            Inner::Ctx(x) => unsafe {
                 ffi::sqlite3_result_null(x.0);
                 Ok(())
             },
-            Self::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"NULL\"")),
+            Inner::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"NULL\"")),
             #[cfg(test)]
-            Self::U => Ok(()),
+            Inner::U => Ok(()),
         }
     }
 
     /// `sqlite3_bind_int64` or `sqlite3_result_int64`
     pub fn assign_int(self, i: i64) -> Result<()> {
-        match self {
-            Self::Stmt(s) => self.decode_result(unsafe { ffi::sqlite3_bind_int64(s.0, s.1, i) }),
+        match self.0 {
+            Inner::Stmt(s) => self.decode_result(unsafe { ffi::sqlite3_bind_int64(s.0, s.1, i) }),
             #[cfg(any(feature = "functions", feature = "vtab"))]
-            Self::Ctx(x) => unsafe {
+            Inner::Ctx(x) => unsafe {
                 ffi::sqlite3_result_int64(x.0, i);
                 Ok(())
             },
-            Self::Pragma(sql) => {
+            Inner::Pragma(sql) => {
                 sql.push_int(i);
                 Ok(())
             }
             #[cfg(test)]
-            Self::U => Ok(()),
+            Inner::U => Ok(()),
         }
     }
 
     /// `sqlite3_bind_double` or `sqlite3_result_double`
     pub fn assign_real(self, r: f64) -> Result<()> {
-        match self {
-            Self::Stmt(s) => self.decode_result(unsafe { ffi::sqlite3_bind_double(s.0, s.1, r) }),
+        match self.0 {
+            Inner::Stmt(s) => self.decode_result(unsafe { ffi::sqlite3_bind_double(s.0, s.1, r) }),
             #[cfg(any(feature = "functions", feature = "vtab"))]
-            Self::Ctx(x) => unsafe {
+            Inner::Ctx(x) => unsafe {
                 ffi::sqlite3_result_double(x.0, r);
                 Ok(())
             },
-            Self::Pragma(sql) => {
+            Inner::Pragma(sql) => {
                 sql.push_real(r);
                 Ok(())
             }
             #[cfg(test)]
-            Self::U => Ok(()),
+            Inner::U => Ok(()),
         }
     }
 
     /// like `sqlite3_bind_zeroblob64` or `sqlite3_result_zeroblob64` for text
     pub fn assign_empty_text(self) -> Result<()> {
-        match self {
-            Self::Stmt(s) => self.decode_result(unsafe {
+        match self.0 {
+            Inner::Stmt(s) => self.decode_result(unsafe {
                 ffi::sqlite3_bind_text64(
                     s.0,
                     s.1,
@@ -110,7 +130,7 @@ impl Assign<'_> {
                 )
             }),
             #[cfg(any(feature = "functions", feature = "vtab"))]
-            Self::Ctx(x) => unsafe {
+            Inner::Ctx(x) => unsafe {
                 ffi::sqlite3_result_text64(
                     x.0,
                     "".as_ptr().cast::<c_char>(),
@@ -120,12 +140,12 @@ impl Assign<'_> {
                 );
                 Ok(())
             },
-            Self::Pragma(sql) => {
+            Inner::Pragma(sql) => {
                 sql.push_string_literal("");
                 Ok(())
             }
             #[cfg(test)]
-            Self::U => Ok(()),
+            Inner::U => Ok(()),
         }
     }
     /// `sqlite3_bind_text64` or `sqlite3_result_text64`
@@ -135,7 +155,7 @@ impl Assign<'_> {
     /// `sqlite3_bind_text64` or `sqlite3_result_text64`
     ///
     /// # Safety
-    /// `b` should be NULL or a pointer to a well-formed UTF8 string of `len` bytes
+    /// `t` should be NULL or a pointer to a well-formed UTF8 string of `len` bytes
     pub unsafe fn assign_raw_text(
         self,
         t: *const c_char,
@@ -147,22 +167,22 @@ impl Assign<'_> {
             destroy(t as _, destructor);
             self.assign_empty_text()
         } else {
-            match self {
-                Self::Stmt(s) => self.decode_result(unsafe {
+            match self.0 {
+                Inner::Stmt(s) => self.decode_result(unsafe {
                     ffi::sqlite3_bind_text64(s.0, s.1, t, len, destructor, encoding)
                 }),
                 #[cfg(any(feature = "functions", feature = "vtab"))]
-                Self::Ctx(x) => unsafe {
+                Inner::Ctx(x) => unsafe {
                     ffi::sqlite3_result_text64(x.0, t, len, destructor, encoding);
                     Ok(())
                 },
-                Self::Pragma(sql) => unsafe {
+                Inner::Pragma(sql) => unsafe {
                     let slice = std::slice::from_raw_parts(t as *const u8, len as _);
                     sql.push_string_literal(str::from_utf8(slice)?);
                     Ok(())
                 },
                 #[cfg(test)]
-                Self::U => {
+                Inner::U => {
                     destroy(t as _, destructor);
                     Ok(())
                 }
@@ -209,18 +229,18 @@ impl Assign<'_> {
             destroy(b as _, destructor);
             self.assign_zeroblob(0)
         } else {
-            match self {
-                Self::Stmt(s) => self.decode_result({
+            match self.0 {
+                Inner::Stmt(s) => self.decode_result({
                     unsafe { ffi::sqlite3_bind_blob64(s.0, s.1, b, len, destructor) }
                 }),
                 #[cfg(any(feature = "functions", feature = "vtab"))]
-                Self::Ctx(x) => unsafe {
+                Inner::Ctx(x) => unsafe {
                     ffi::sqlite3_result_blob64(x.0, b, len, destructor);
                     Ok(())
                 },
-                Self::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"BLOB\"")),
+                Inner::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"BLOB\"")),
                 #[cfg(test)]
-                Self::U => {
+                Inner::U => {
                     destroy(b as _, destructor);
                     Ok(())
                 }
@@ -235,31 +255,33 @@ impl Assign<'_> {
 
     /// `sqlite3_bind_zeroblob64` or `sqlite3_result_zeroblob64`
     pub fn assign_zeroblob(self, len: u64) -> Result<()> {
-        match self {
-            Self::Stmt(s) => {
+        match self.0 {
+            Inner::Stmt(s) => {
                 self.decode_result(unsafe { ffi::sqlite3_bind_zeroblob64(s.0, s.1, len) })
             }
             #[cfg(any(feature = "functions", feature = "vtab"))]
-            Self::Ctx(x) => self.decode_result(unsafe { ffi::sqlite3_result_zeroblob64(x.0, len) }),
-            Self::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"BLOB\"")),
+            Inner::Ctx(x) => {
+                self.decode_result(unsafe { ffi::sqlite3_result_zeroblob64(x.0, len) })
+            }
+            Inner::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"BLOB\"")),
             #[cfg(test)]
-            Self::U => Ok(()),
+            Inner::U => Ok(()),
         }
     }
 
     /// `sqlite3_result_value`
     #[cfg(feature = "functions")]
     pub fn assign_arg(self, idx: usize) -> Result<()> {
-        match self {
-            Self::Stmt(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value")),
+        match self.0 {
+            Inner::Stmt(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value")),
             #[cfg(any(feature = "functions", feature = "vtab"))]
-            Self::Ctx(x) => unsafe {
+            Inner::Ctx(x) => unsafe {
                 ffi::sqlite3_result_value(x.0, x.1[idx]);
                 Ok(())
             },
-            Self::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"ARG\"")),
+            Inner::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"ARG\"")),
             #[cfg(test)]
-            Self::U => Ok(()),
+            Inner::U => Ok(()),
         }
     }
 
@@ -274,18 +296,18 @@ impl Assign<'_> {
         ptr_type: &'static CStr,
         destructor: sqlite3_destructor_type,
     ) -> Result<()> {
-        match self {
-            Self::Stmt(s) => self.decode_result(unsafe {
+        match self.0 {
+            Inner::Stmt(s) => self.decode_result(unsafe {
                 ffi::sqlite3_bind_pointer(s.0, s.1, ptr, ptr_type.as_ptr(), destructor)
             }),
             #[cfg(any(feature = "functions", feature = "vtab"))]
-            Self::Ctx(x) => unsafe {
+            Inner::Ctx(x) => unsafe {
                 ffi::sqlite3_result_pointer(x.0, ptr, ptr_type.as_ptr(), destructor);
                 Ok(())
             },
-            Self::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"PTR\"")),
+            Inner::Pragma(_) => Err(err!(ffi::SQLITE_MISUSE, "Unsupported value \"PTR\"")),
             #[cfg(test)]
-            Self::U => {
+            Inner::U => {
                 destroy(ptr, destructor);
                 Ok(())
             }

@@ -355,7 +355,7 @@ unsafe fn _sql_result<T: SqlFnOutput>(
     r: Result<T>,
 ) -> Result<()> {
     let r = r?;
-    if let Some(sub_type) = r.into_sql(Assign::Ctx((ctx, args)))? {
+    if let Some(sub_type) = r.into_sql(Assign::ctx((ctx, args)))? {
         unsafe { ffi::sqlite3_result_subtype(ctx, sub_type) }
     }
     Ok(())

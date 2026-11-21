@@ -157,6 +157,9 @@ pub enum Error {
     /// Error when the schema of a particular database is requested, but the index
     /// is out of range.
     InvalidDatabaseIndex(usize),
+    /// Pointer passed to SQLite
+    #[cfg(feature = "pointer")]
+    PointerMustBePassedByValue,
 }
 
 impl PartialEq for Error {
@@ -213,6 +216,8 @@ impl PartialEq for Error {
             #[cfg(feature = "loadable_extension")]
             (Self::InitError(e1), Self::InitError(e2)) => e1 == e2,
             (Self::InvalidDatabaseIndex(i1), Self::InvalidDatabaseIndex(i2)) => i1 == i2,
+            #[cfg(feature = "pointer")]
+            (Self::PointerMustBePassedByValue, Self::PointerMustBePassedByValue) => true,
             (..) => false,
         }
     }
@@ -347,6 +352,8 @@ impl fmt::Display for Error {
             #[cfg(feature = "loadable_extension")]
             Self::InitError(ref err) => err.fmt(f),
             Self::InvalidDatabaseIndex(i) => write!(f, "Invalid database index: {i}"),
+            #[cfg(feature = "pointer")]
+            Self::PointerMustBePassedByValue => write!(f, "Pointer must be passed by value"),
         }
     }
 }
@@ -397,6 +404,8 @@ impl error::Error for Error {
             #[cfg(feature = "loadable_extension")]
             Self::InitError(ref err) => Some(err),
             Self::InvalidDatabaseIndex(_) => None,
+            #[cfg(feature = "pointer")]
+            Self::PointerMustBePassedByValue => None,
         }
     }
 }

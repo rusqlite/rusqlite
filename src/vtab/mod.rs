@@ -800,7 +800,7 @@ impl Context {
     /// Set current cell value
     #[inline]
     pub fn set_result<T: ToSql>(&mut self, value: T) -> Result<()> {
-        value.into_sql(Assign::Ctx((self.0, &[])))
+        value.into_sql(Assign::ctx((self.0, &[])))
     }
 
     /// Determine if column access is for UPDATE

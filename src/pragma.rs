@@ -84,7 +84,7 @@ impl Sql {
     }
 
     pub fn push_value<V: ToSql>(&mut self, value: V) -> Result<()> {
-        value.into_sql(Assign::Pragma(self))
+        value.into_sql(Assign::pragma(self))
     }
 
     pub fn push_string_literal(&mut self, s: &str) {
