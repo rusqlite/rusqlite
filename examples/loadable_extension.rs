@@ -17,7 +17,6 @@ use std::os::raw::{c_char, c_int};
 
 use rusqlite::ffi;
 use rusqlite::functions::FunctionFlags;
-use rusqlite::types::{ToSqlOutput, Value};
 use rusqlite::{Connection, Result};
 
 /// Entry point for SQLite to load the extension.
@@ -38,11 +37,7 @@ fn extension_init(db: Connection) -> Result<bool> {
         c"rusqlite_test_function",
         0,
         FunctionFlags::SQLITE_DETERMINISTIC,
-        |_ctx| {
-            Ok(ToSqlOutput::Owned(Value::Text(
-                "Rusqlite extension loaded correctly!".to_string(),
-            )))
-        },
+        |_ctx| Ok("Rusqlite extension loaded correctly!".to_string()),
     )?;
     rusqlite::trace::log(ffi::SQLITE_WARNING, "Rusqlite extension initialized");
     Ok(false)

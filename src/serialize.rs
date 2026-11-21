@@ -38,9 +38,7 @@ impl OwnedData {
 
 impl Drop for OwnedData {
     fn drop(&mut self) {
-        unsafe {
-            ffi::sqlite3_free(self.ptr.as_ptr().cast());
-        }
+        unsafe { ffi::sqlite3_free(self.ptr.as_ptr().cast()) };
     }
 }
 
@@ -275,8 +273,7 @@ mod test {
     fn deserialize_bytes() -> Result<()> {
         let data = b"";
         let mut dst = Connection::open_in_memory()?;
-        dst.deserialize_bytes(MAIN_DB, data)?;
-        Ok(())
+        dst.deserialize_bytes(MAIN_DB, data)
     }
 
     #[test]

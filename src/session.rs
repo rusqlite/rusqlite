@@ -296,9 +296,7 @@ impl Changeset {
 impl Drop for Changeset {
     #[inline]
     fn drop(&mut self) {
-        unsafe {
-            ffi::sqlite3_free(self.cs);
-        }
+        unsafe { ffi::sqlite3_free(self.cs) };
     }
 }
 
