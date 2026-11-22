@@ -524,18 +524,22 @@ pub fn check(code: c_int) -> Result<()> {
 /// Transform Rust error to SQLite error (message and code).
 /// # Safety
 /// This function is unsafe because it uses raw pointer
-pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut c_char) -> c_int {
+pub unsafe fn to_sqlite_error(
+    db: *mut ffi::sqlite3,
+    e: &Error,
+    err_msg: *mut *mut c_char,
+) -> c_int {
     use crate::util::alloc;
 
     match e {
         Error::SqliteFailure(err, s) => {
             if let Some(s) = s {
-                unsafe { *err_msg = alloc(s) };
+                unsafe { *err_msg = alloc(db, s).unwrap_or_default() };
             }
             err.extended_code
         }
         err => {
-            unsafe { *err_msg = alloc(&err.to_string()) };
+            unsafe { *err_msg = alloc(db, err).unwrap_or_default() };
             ffi::SQLITE_ERROR
         }
     }

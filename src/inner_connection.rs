@@ -183,9 +183,7 @@ impl InnerConnection {
         flags: PrepFlags,
     ) -> Result<(Option<Statement<'a>>, usize)> {
         let mut c_stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
-        let Ok(len) = c_int::try_from(sql.len()) else {
-            return Err(err!(ffi::SQLITE_TOOBIG));
-        };
+        let len = c_int::try_from(sql.len()).map_err(|e| err!(ffi::SQLITE_TOOBIG, "{}", e))?;
         let c_sql = sql.as_bytes().as_ptr().cast::<c_char>();
         let mut c_tail: *const c_char = ptr::null();
         let r = cfg_select! {
@@ -441,7 +439,7 @@ fn ensure_safe_sqlite_threading_mode() -> Result<()> {
     // returns for its mutex allocation function in Single-thread mode.
     const SQLITE_SINGLETHREADED_MUTEX_MAGIC: usize = 8;
     let is_singlethreaded = unsafe {
-        let mutex_ptr = ffi::sqlite3_mutex_alloc(0);
+        let mutex_ptr = ffi::sqlite3_mutex_alloc(ffi::SQLITE_MUTEX_FAST);
         let is_singlethreaded = mutex_ptr as usize == SQLITE_SINGLETHREADED_MUTEX_MAGIC;
         ffi::sqlite3_mutex_free(mutex_ptr);
         is_singlethreaded
