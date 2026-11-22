@@ -2,7 +2,6 @@
 use std::{
     ffi::{c_char, c_int},
     fmt::{self, Write as _},
-    ptr,
 };
 
 use crate::{Error, Result, error::check, ffi};
@@ -14,8 +13,8 @@ pub(crate) struct Sqlite3Str {
 
 // Space to hold this string must be obtained
 // from an SQLite memory allocation function
-pub(crate) fn alloc<D: fmt::Display + ?Sized>(d: &D) -> Result<*mut c_char> {
-    let mut str = Sqlite3Str::new(ptr::null_mut());
+pub(crate) fn alloc<D: fmt::Display + ?Sized>(db: *mut ffi::sqlite3, d: &D) -> Result<*mut c_char> {
+    let mut str = Sqlite3Str::new(db);
     let _ = write!(&mut str, "{}", d);
     str.into_raw().map(|raw| raw.0)
 }
@@ -83,7 +82,7 @@ mod test {
 
     #[test]
     fn null_error() -> Result<()> {
-        let err = super::alloc("el\0barto").unwrap_err();
+        let err = super::alloc(std::ptr::null_mut(), "el\0barto").unwrap_err();
         std::assert_matches!(
             err,
             Error::SqliteFailure(
@@ -99,7 +98,7 @@ mod test {
 
     #[test]
     fn alloc() -> Result<()> {
-        let raw = super::alloc("error")?;
+        let raw = super::alloc(std::ptr::null_mut(), "error")?;
         assert_eq!(unsafe { CStr::from_ptr(raw) }, c"error");
         unsafe { ffi::sqlite3_free(raw.cast()) };
         Ok(())

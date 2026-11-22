@@ -35,7 +35,7 @@ pub unsafe fn init_auto_extension(
         })
         .unwrap_or_else(|_| Err(Error::UnwindingPanic));
         match r {
-            Err(e) => to_sqlite_error(&e, pz_err_msg),
+            Err(e) => to_sqlite_error(db, &e, pz_err_msg),
             _ => ffi::SQLITE_OK,
         }
     }
