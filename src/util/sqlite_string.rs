@@ -7,15 +7,8 @@ use std::ffi::{CStr, c_char};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 
-// Space to hold this string must be obtained
-// from an SQLite memory allocation function
-pub(crate) fn alloc(s: &str) -> *mut c_char {
-    SqliteMallocString::from_str(s).into_raw()
-}
-
 /// A string we own that's allocated on the SQLite heap. Automatically calls
-/// `sqlite3_free` when dropped, unless `into_raw` (or `into_inner`) is called
-/// on it. If constructed from a rust string, `sqlite3_malloc64` is used.
+/// `sqlite3_free` when dropped.
 ///
 /// It has identical representation to a nonnull `*mut c_char`, so you can use
 /// it transparently as one. It's nonnull, so Option<SqliteMallocString> can be
@@ -57,22 +50,6 @@ impl SqliteMallocString {
         unsafe { NonNull::new(ptr).map(|p| Self::from_raw_nonnull(p)) }
     }
 
-    /// Get the pointer behind `self`. After this is called, we no longer manage
-    /// it.
-    #[inline]
-    pub(crate) fn into_inner(self) -> NonNull<c_char> {
-        let p = self.ptr;
-        std::mem::forget(self);
-        p
-    }
-
-    /// Get the pointer behind `self`. After this is called, we no longer manage
-    /// it.
-    #[inline]
-    pub(crate) fn into_raw(self) -> *mut c_char {
-        self.into_inner().as_ptr()
-    }
-
     /// Borrow the pointer behind `self`. We still manage it when this function
     /// returns. If you want to relinquish ownership, use `into_raw`.
     #[inline]
@@ -89,142 +66,11 @@ impl SqliteMallocString {
     pub(crate) fn to_string_lossy(&self) -> std::borrow::Cow<'_, str> {
         self.as_cstr().to_string_lossy()
     }
-
-    /// Convert `s` into a SQLite string.
-    ///
-    /// This should almost never be done except for cases like error messages or
-    /// other strings that SQLite frees.
-    ///
-    /// If `s` contains internal NULs, we'll replace them with
-    /// `NUL_REPLACE_CHAR`.
-    ///
-    /// Except for `debug_assert`s which may trigger during testing, this
-    /// function never panics. If we hit integer overflow or the allocation
-    /// fails, we call `handle_alloc_error` which aborts the program after
-    /// calling a global hook.
-    ///
-    /// This means it's safe to use in extern "C" functions even outside
-    /// `catch_unwind`.
-    pub(crate) fn from_str(s: &str) -> Self {
-        let s = if s.as_bytes().contains(&0) {
-            std::borrow::Cow::Owned(make_nonnull(s))
-        } else {
-            std::borrow::Cow::Borrowed(s)
-        };
-        debug_assert!(!s.as_bytes().contains(&0));
-        let bytes: &[u8] = s.as_ref().as_bytes();
-        let src_ptr: *const c_char = bytes.as_ptr().cast();
-        let src_len = bytes.len();
-        let maybe_len_plus_1 = s.len().checked_add(1).and_then(|v| v.try_into().ok());
-        unsafe {
-            let res_ptr = maybe_len_plus_1
-                .and_then(|len_to_alloc| {
-                    // `>` because we added 1.
-                    debug_assert!(len_to_alloc > 0);
-                    debug_assert_eq!((len_to_alloc - 1) as usize, src_len);
-                    NonNull::new(ffi::sqlite3_malloc64(len_to_alloc).cast::<c_char>())
-                })
-                .unwrap_or_else(|| {
-                    use std::alloc::{Layout, handle_alloc_error};
-                    // Report via handle_alloc_error so that it can be handled with any
-                    // other allocation errors and properly diagnosed.
-                    //
-                    // This is safe:
-                    // - `align` is never 0
-                    // - `align` is always a power of 2.
-                    // - `size` needs no realignment because it's guaranteed to be aligned
-                    //   (everything is aligned to 1)
-                    // - `size` is also never zero, although this function doesn't actually require
-                    //   it now.
-                    let len = s.len().saturating_add(1).min(isize::MAX as usize);
-                    let layout = Layout::from_size_align_unchecked(len, 1);
-                    // Note: This call does not return.
-                    handle_alloc_error(layout);
-                });
-            let buf: *mut c_char = res_ptr.as_ptr().cast::<c_char>();
-            src_ptr.copy_to_nonoverlapping(buf, src_len);
-            buf.add(src_len).write(0);
-            debug_assert_eq!(CStr::from_ptr(res_ptr.as_ptr()).to_bytes(), bytes);
-            Self::from_raw_nonnull(res_ptr)
-        }
-    }
-}
-
-const NUL_REPLACE: &str = "␀";
-
-#[cold]
-fn make_nonnull(v: &str) -> String {
-    v.replace('\0', NUL_REPLACE)
 }
 
 impl Drop for SqliteMallocString {
     #[inline]
     fn drop(&mut self) {
         unsafe { ffi::sqlite3_free(self.ptr.as_ptr().cast()) };
-    }
-}
-
-#[cfg(all(test, not(miri)))]
-mod test {
-    #[cfg(all(target_family = "wasm", target_os = "unknown"))]
-    use wasm_bindgen_test::wasm_bindgen_test as test;
-
-    use super::*;
-    #[test]
-    fn test_from_str() {
-        let to_check = [
-            ("", ""),
-            ("\0", "␀"),
-            ("␀", "␀"),
-            ("\0bar", "␀bar"),
-            ("foo\0bar", "foo␀bar"),
-            ("foo\0", "foo␀"),
-            ("a\0b\0c\0\0d", "a␀b␀c␀␀d"),
-            ("foobar0123", "foobar0123"),
-        ];
-
-        for &(input, output) in &to_check {
-            let s = SqliteMallocString::from_str(input);
-            assert_eq!(s.to_string_lossy(), output);
-            assert_eq!(s.as_cstr().to_str().unwrap(), output);
-        }
-    }
-
-    // This will trigger an asan error if into_raw still freed the ptr.
-    #[test]
-    fn test_lossy() {
-        let p = SqliteMallocString::from_str("abcd").into_raw();
-        // Make invalid
-        let s = unsafe {
-            p.cast::<u8>().write(b'\xff');
-            SqliteMallocString::from_raw(p).unwrap()
-        };
-        assert_eq!(s.to_string_lossy().as_ref(), "\u{FFFD}bcd");
-    }
-
-    // This will trigger an asan error if into_raw still freed the ptr.
-    #[test]
-    fn test_into_raw() {
-        let mut v = vec![];
-        for i in 0..1000 {
-            v.push(SqliteMallocString::from_str(&i.to_string()).into_raw());
-            v.push(SqliteMallocString::from_str(&format!("abc {i} 😀")).into_raw());
-        }
-        unsafe {
-            for (i, s) in v.chunks_mut(2).enumerate() {
-                let s0 = std::mem::replace(&mut s[0], std::ptr::null_mut());
-                let s1 = std::mem::replace(&mut s[1], std::ptr::null_mut());
-                assert_eq!(CStr::from_ptr(s0).to_str().unwrap(), &i.to_string());
-                assert_eq!(CStr::from_ptr(s1).to_str().unwrap(), &format!("abc {i} 😀"));
-                let _ = SqliteMallocString::from_raw(s0).unwrap();
-                let _ = SqliteMallocString::from_raw(s1).unwrap();
-            }
-        }
-    }
-
-    #[test]
-    fn test_alloc() {
-        let err = alloc("error");
-        unsafe { ffi::sqlite3_free(err.cast()) };
     }
 }

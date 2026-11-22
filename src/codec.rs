@@ -33,8 +33,5 @@ impl Connection {
 }
 
 fn to_c_int(n: usize) -> Result<std::ffi::c_int> {
-    let Ok(n) = std::ffi::c_int::try_from(n) else {
-        return Err(err!(ffi::SQLITE_MISUSE, "Invalid key length {n}"));
-    };
-    Ok(n)
+    std::ffi::c_int::try_from(n).map_err(|_| err!(ffi::SQLITE_MISUSE, "Invalid key length {n}"))
 }

@@ -514,12 +514,12 @@ pub unsafe fn to_sqlite_error(e: &Error, err_msg: *mut *mut c_char) -> c_int {
     match e {
         Error::SqliteFailure(err, s) => {
             if let Some(s) = s {
-                unsafe { *err_msg = alloc(s) };
+                unsafe { *err_msg = alloc(s).unwrap_or_default() };
             }
             err.extended_code
         }
         err => {
-            unsafe { *err_msg = alloc(&err.to_string()) };
+            unsafe { *err_msg = alloc(err).unwrap_or_default() };
             ffi::SQLITE_ERROR
         }
     }

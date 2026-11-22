@@ -142,9 +142,11 @@ impl RawValue {
     pub(crate) unsafe fn from_ptr<'a>(ptr: *mut ffi::sqlite3_value) -> &'a mut Self {
         unsafe { &mut *(ptr as *mut Self) }
     }
+    #[inline]
     fn as_mut_ptr(&mut self) -> *mut ffi::sqlite3_value {
         &mut self.ptr as *mut ffi::sqlite3_value
     }
+    #[inline]
     fn as_ptr(&self) -> *mut ffi::sqlite3_value {
         &self.ptr as *const ffi::sqlite3_value as *mut _
     }
