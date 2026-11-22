@@ -507,7 +507,7 @@ impl IndexInfo {
             if (*self.0).needToFreeIdxStr == 1 {
                 sqlite3_free((*self.0).idxStr.cast());
             }
-            (*self.0).idxStr = alloc(idx_str)?;
+            (*self.0).idxStr = alloc(ptr::null_mut(), idx_str)?;
             (*self.0).needToFreeIdxStr = 1;
         }
         Ok(())
@@ -1160,10 +1160,10 @@ where
                     ffi::SQLITE_OK
                 } else {
                     let err = error_from_sqlite_code(rc, None);
-                    to_sqlite_error(&err, err_msg)
+                    to_sqlite_error(db, &err, err_msg)
                 }
             }
-            Err(err) => to_sqlite_error(&err, err_msg),
+            Err(err) => to_sqlite_error(db, &err, err_msg),
         }
     }
 }
@@ -1196,10 +1196,10 @@ where
                     ffi::SQLITE_OK
                 } else {
                     let err = error_from_sqlite_code(rc, None);
-                    to_sqlite_error(&err, err_msg)
+                    to_sqlite_error(db, &err, err_msg)
                 }
             }
-            Err(err) => to_sqlite_error(&err, err_msg),
+            Err(err) => to_sqlite_error(db, &err, err_msg),
         }
     }
 }
@@ -1450,7 +1450,7 @@ unsafe fn set_err_msg(vtab: *mut sqlite3_vtab, err_msg: &str) {
         if !(*vtab).zErrMsg.is_null() {
             sqlite3_free((*vtab).zErrMsg.cast::<c_void>());
         }
-        (*vtab).zErrMsg = alloc(err_msg).unwrap_or_default();
+        (*vtab).zErrMsg = alloc(ptr::null_mut(), err_msg).unwrap_or_default();
     }
 }
 

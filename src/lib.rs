@@ -1017,7 +1017,7 @@ impl Connection {
                 .and(Self::from_handle(db))
                 .and_then(init)
             {
-                Err(err) => to_sqlite_error(&err, pz_err_msg),
+                Err(err) => to_sqlite_error(db, &err, pz_err_msg),
                 Ok(true) => ffi::SQLITE_OK_LOAD_PERMANENTLY,
                 _ => ffi::SQLITE_OK,
             }
