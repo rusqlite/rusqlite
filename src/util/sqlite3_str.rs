@@ -1,21 +1,23 @@
 //! Wrapper for `sqlite3_str`
 use std::{
     ffi::{c_char, c_int},
-    fmt::{self, Write as _},
+    io::Write as _,
 };
 
-use crate::{Error, Result, error::check, ffi};
+use crate::{Result, error::check, ffi};
 
 pub(crate) struct Sqlite3Str {
     ptr: *mut ffi::sqlite3_str,
-    err: Option<Error>,
 }
 
 // Space to hold this string must be obtained
 // from an SQLite memory allocation function
-pub(crate) fn alloc<D: fmt::Display + ?Sized>(db: *mut ffi::sqlite3, d: &D) -> Result<*mut c_char> {
+pub(crate) fn alloc<D: std::fmt::Display + ?Sized>(
+    db: *mut ffi::sqlite3,
+    d: &D,
+) -> Result<*mut c_char> {
     let mut str = Sqlite3Str::new(db);
-    let _ = write!(&mut str, "{}", d);
+    write!(&mut str, "{}", d)?;
     str.into_raw().map(|raw| raw.0)
 }
 
@@ -23,14 +25,10 @@ impl Sqlite3Str {
     pub fn new(db: *mut ffi::sqlite3) -> Self {
         Sqlite3Str {
             ptr: unsafe { ffi::sqlite3_str_new(db) },
-            err: None,
         }
     }
-    pub fn into_raw(mut self) -> Result<(*mut c_char, ffi::sqlite3_uint64)> {
-        check(unsafe { ffi::sqlite3_str_errcode(self.ptr) }).and(match self.err.take() {
-            None => Ok(()),
-            Some(err) => Err(err),
-        })?;
+    pub fn into_raw(self) -> Result<(*mut c_char, ffi::sqlite3_uint64)> {
+        check(unsafe { ffi::sqlite3_str_errcode(self.ptr) })?;
         let len = self.len();
         let ptr = unsafe { ffi::sqlite3_str_finish(self.ptr) };
         std::mem::forget(self);
@@ -41,26 +39,34 @@ impl Sqlite3Str {
     }
 }
 
-impl std::fmt::Write for Sqlite3Str {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        if let Some(pos) = s.find('\0') {
-            self.err = Some(err!(
+impl std::io::Write for Sqlite3Str {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if let Some(pos) = buf.iter().position(|&b| b == b'\0') {
+            let err = err!(
                 ffi::SQLITE_MISUSE,
                 "data provided contains an interior nul byte at pos {}",
                 pos
-            ));
-            return Err(std::fmt::Error);
+            );
+            return Err(std::io::Error::other(err));
         }
+        let len = usize::try_from(self.len()).unwrap();
         unsafe {
             ffi::sqlite3_str_append(
                 self.ptr,
-                s.as_ptr().cast(),
-                c_int::try_from(s.len()).map_err(|e| {
-                    self.err = Some(err!(ffi::SQLITE_TOOBIG, "{}", e));
-                    std::fmt::Error
+                buf.as_ptr().cast(),
+                c_int::try_from(buf.len()).map_err(|e| {
+                    let err = err!(ffi::SQLITE_TOOBIG, "{}", e);
+                    std::io::Error::other(err)
                 })?,
             );
         }
+        Ok(usize::try_from(self.len())
+            .unwrap()
+            .checked_sub(len)
+            .unwrap())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }
 }

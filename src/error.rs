@@ -460,6 +460,14 @@ macro_rules! err {
     };
 }
 
+impl From<std::io::Error> for Error {
+    fn from(value: std::io::Error) -> Self {
+        value
+            .downcast()
+            .unwrap_or_else(|e| err!(ffi::SQLITE_IOERR, "{}", e))
+    }
+}
+
 #[cold]
 pub unsafe fn error_from_handle(db: *mut ffi::sqlite3, code: c_int) -> Error {
     error_from_sqlite_code(code, unsafe { error_msg(db, code) })

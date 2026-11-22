@@ -20,6 +20,7 @@ impl ToSql for Value {
             Self::Null => a.assign_null(),
             Self::Number(n) if n.is_i64() => a.assign_int(n.as_i64().unwrap()),
             Self::Number(n) if n.is_f64() => a.assign_real(n.as_f64().unwrap()),
+            // _ => a.write_text(|w| serde_json::to_writer(w, self).map_err(Error::from)), slower
             _ => a.assign_transient_text(serde_json::to_string(self)?),
         }
     }

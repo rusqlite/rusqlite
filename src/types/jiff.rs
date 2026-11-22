@@ -64,6 +64,7 @@ impl FromSql for DateTime {
 impl ToSql for Timestamp {
     #[inline]
     fn to_sql(&self, a: Assign) -> Result<()> {
+        // a.write_text(|w| write!(w, "{}", self).map_err(Error::from)) slower
         a.assign_transient_text(self.to_string())
     }
 }

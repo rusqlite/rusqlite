@@ -8,6 +8,7 @@ use crate::ffi::{
 use crate::ffi::{sqlite3_context, sqlite3_value};
 
 use crate::pragma::Sql;
+use crate::util::sqlite3_str::Sqlite3Str;
 #[cfg(feature = "pointer")]
 use std::ffi::CStr;
 use std::ffi::{c_char, c_int, c_uchar, c_void};
@@ -312,6 +313,22 @@ impl Assign<'_> {
                 Ok(())
             }
         }
+    }
+
+    /// Like `assign_text` but write it directly
+    pub fn write_text<F: FnOnce(&mut dyn std::io::Write) -> Result<()>>(self, cb: F) -> Result<()> {
+        let db = match self.0 {
+            Inner::Stmt(s) => unsafe { ffi::sqlite3_db_handle(s.0) },
+            #[cfg(any(feature = "functions", feature = "vtab"))]
+            Inner::Ctx(x) => unsafe { ffi::sqlite3_context_db_handle(x.0) },
+            Inner::Pragma(_) => unreachable!(),
+            #[cfg(test)]
+            Inner::U => unreachable!(),
+        };
+        let mut str = Sqlite3Str::new(db);
+        cb(&mut str)?;
+        let (t, len) = str.into_raw()?;
+        unsafe { self.assign_raw_text(t, len, Some(ffi::sqlite3_free), SQLITE_UTF8 as _) }
     }
 }
 
