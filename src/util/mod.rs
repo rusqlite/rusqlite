@@ -4,9 +4,11 @@ mod small_cstr;
 pub(crate) use param_cache::ParamIndexCache;
 pub(crate) use small_cstr::SmallCString;
 
+pub(crate) mod sqlite3_str;
+pub(crate) use sqlite3_str::alloc;
 // Doesn't use any modern features or vtab stuff, but is only used by them.
 mod sqlite_string;
-pub(crate) use sqlite_string::{SqliteMallocString, alloc};
+pub(crate) use sqlite_string::SqliteMallocString;
 
 pub(crate) unsafe extern "C" fn free_boxed_value<T>(p: *mut std::ffi::c_void) {
     drop(unsafe { Box::from_raw(p.cast::<T>()) });

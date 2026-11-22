@@ -502,14 +502,15 @@ impl IndexInfo {
     }
 
     /// String used to identify the index
-    pub fn set_idx_str(&mut self, idx_str: &str) {
+    pub fn set_idx_str(&mut self, idx_str: &str) -> Result<()> {
         unsafe {
             if (*self.0).needToFreeIdxStr == 1 {
                 sqlite3_free((*self.0).idxStr.cast());
             }
-            (*self.0).idxStr = alloc(idx_str);
+            (*self.0).idxStr = alloc(idx_str)?;
             (*self.0).needToFreeIdxStr = 1;
         }
+        Ok(())
     }
 
     /// String used to identify the index
@@ -1449,7 +1450,7 @@ unsafe fn set_err_msg(vtab: *mut sqlite3_vtab, err_msg: &str) {
         if !(*vtab).zErrMsg.is_null() {
             sqlite3_free((*vtab).zErrMsg.cast::<c_void>());
         }
-        (*vtab).zErrMsg = alloc(err_msg);
+        (*vtab).zErrMsg = alloc(err_msg).unwrap_or_default();
     }
 }
 
