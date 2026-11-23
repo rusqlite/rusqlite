@@ -295,7 +295,7 @@ unsafe impl VTabCursor for CsvTabCursor<'_> {
     fn filter(
         &mut self,
         _idx_num: c_int,
-        _idx_str: Option<&str>,
+        _idx_str: Option<&CStr>,
         _args: &Filters<'_>,
     ) -> Result<()> {
         {

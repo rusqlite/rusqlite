@@ -66,7 +66,7 @@ fn test_dummy_module() -> rusqlite::Result<()> {
         fn filter(
             &mut self,
             _idx_num: c_int,
-            _idx_str: Option<&str>,
+            _idx_str: Option<&CStr>,
             _args: &Filters<'_>,
         ) -> Result<()> {
             self.row_id = 1;
