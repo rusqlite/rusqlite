@@ -8,6 +8,7 @@ use crate::ffi;
 
 use crate::{Connection, InnerConnection, Result};
 
+use crate::util::cstr_from_ptr;
 use crate::wal::CheckpointMode;
 #[cfg(feature = "preupdate_hook")]
 pub use preupdate_hook::*;
@@ -748,26 +749,16 @@ impl InnerConnection {
     }
 }
 
-unsafe fn expect_utf8<'a>(p_str: *const c_char, description: &'static str) -> &'a str {
-    unsafe {
-        expect_optional_utf8(p_str, description)
-            .unwrap_or_else(|| panic!("received empty {description}"))
-    }
+fn expect_utf8<'a>(p_str: *const c_char, description: &'static str) -> &'a str {
+    expect_optional_utf8(p_str, description)
+        .unwrap_or_else(|| panic!("received empty {description}"))
 }
 
-unsafe fn expect_optional_utf8<'a>(
-    p_str: *const c_char,
-    description: &'static str,
-) -> Option<&'a str> {
-    if p_str.is_null() {
-        return None;
-    }
-    unsafe {
-        CStr::from_ptr(p_str)
-            .to_str()
+fn expect_optional_utf8<'a>(p_str: *const c_char, description: &'static str) -> Option<&'a str> {
+    cstr_from_ptr(p_str).map(|s| {
+        s.to_str()
             .unwrap_or_else(|_| panic!("received non-utf8 string as {description}"))
-            .into()
-    }
+    })
 }
 
 #[cfg(all(test, not(miri)))]

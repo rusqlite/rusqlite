@@ -161,7 +161,7 @@ impl Session<'_> {
                 } else {
                     let message = errmsg_to_string(&*errmsg);
                     ffi::sqlite3_free(errmsg as *mut c_void);
-                    Some(message)
+                    message
                 };
                 return Err(error_from_sqlite_code(r, message));
             }
