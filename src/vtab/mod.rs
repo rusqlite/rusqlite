@@ -776,7 +776,7 @@ impl OrderBy<'_> {
 pub unsafe trait VTabCursor: Sized {
     /// Begin a search of a virtual table.
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xfilter_method))
-    fn filter(&mut self, idx_num: c_int, idx_str: Option<&str>, args: &Filters<'_>) -> Result<()>;
+    fn filter(&mut self, idx_num: c_int, idx_str: Option<&CStr>, args: &Filters<'_>) -> Result<()>;
     /// Advance cursor to the next row of a result set initiated by
     /// [`filter`](VTabCursor::filter). (See [SQLite doc](https://sqlite.org/vtab.html#the_xnext_method))
     fn next(&mut self) -> Result<()>;
@@ -1292,13 +1292,12 @@ unsafe extern "C" fn rust_filter<C>(
 where
     C: VTabCursor,
 {
-    use std::str;
     unsafe {
         let idx_name = if idx_str.is_null() {
             None
         } else {
-            let c_slice = CStr::from_ptr(idx_str).to_bytes();
-            Some(str::from_utf8_unchecked(c_slice))
+            let c_slice = CStr::from_ptr(idx_str);
+            Some(c_slice)
         };
         let values = Values::from_raw_parts(argv, argc);
         let cr = cursor.cast::<C>();
@@ -1660,7 +1659,7 @@ mod test {
             fn filter(
                 &mut self,
                 _idx_num: c_int,
-                _idx_str: Option<&str>,
+                _idx_str: Option<&CStr>,
                 args: &Filters<'_>,
             ) -> Result<()> {
                 FILTER_SUBTYPE.store(args.get_subtype(0), Ordering::SeqCst);

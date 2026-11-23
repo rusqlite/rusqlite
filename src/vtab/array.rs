@@ -156,7 +156,12 @@ impl ArrayTabCursor<'_> {
     }
 }
 unsafe impl VTabCursor for ArrayTabCursor<'_> {
-    fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Filters<'_>) -> Result<()> {
+    fn filter(
+        &mut self,
+        idx_num: c_int,
+        _idx_str: Option<&CStr>,
+        args: &Filters<'_>,
+    ) -> Result<()> {
         if idx_num > 0 {
             self.ptr = unsafe { args.get_pointer(0, ARRAY_TYPE) };
         } else {
