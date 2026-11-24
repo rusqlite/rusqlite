@@ -506,6 +506,12 @@ impl IndexInfo {
         unsafe {
             if (*self.0).needToFreeIdxStr == 1 {
                 sqlite3_free((*self.0).idxStr.cast());
+                // Like SQLite's own freeIdxStr(): clear the pointer and the
+                // ownership flag together. If the allocation below fails,
+                // SQLite and xFilter then see NULL instead of a dangling
+                // pointer.
+                (*self.0).idxStr = ptr::null_mut();
+                (*self.0).needToFreeIdxStr = 0;
             }
             (*self.0).idxStr = alloc(ptr::null_mut(), idx_str)?;
             (*self.0).needToFreeIdxStr = 1;
