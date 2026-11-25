@@ -143,10 +143,13 @@ impl FromSql for DateTime<Local> {
     }
 }
 
-/// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") into `DateTime<FixedOffset>`.
+/// RFC3339 ("YYYY-MM-DD HH:MM:SS.SSS[+-]HH:MM") or unix timestamp (in seconds) into `DateTime<FixedOffset>`.
 impl FromSql for DateTime<FixedOffset> {
     #[inline]
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        if value.data_type() == Type::Integer {
+            return DateTime::<Utc>::column_result(value).map(Into::into);
+        }
         let s = String::column_result(value)?;
         Self::parse_from_rfc3339(s.as_str())
             .or_else(|_| Self::parse_from_str(s.as_str(), "%F %T%.f%:z"))
@@ -160,7 +163,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use crate::{
-        Connection, Result,
+        Connection, Error, Result,
         types::{FromSql as _, ValueRef},
     };
     use chrono::{
@@ -284,6 +287,15 @@ mod test {
         let v: DateTime<FixedOffset> = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(time.offset(), v.offset());
         assert_eq!(time, v);
+        let v: DateTime<FixedOffset> = db.one_column("SELECT i FROM foo", [])?;
+        assert_eq!(time, v);
+        assert_eq!(FixedOffset::east_opt(0).unwrap(), *v.offset());
+
+        let v: DateTime<FixedOffset> = db.one_column("SELECT -1", [])?;
+        assert_eq!("1969-12-31T23:59:59+00:00", v.to_rfc3339());
+
+        let r: Result<DateTime<FixedOffset>> = db.one_column("SELECT ?1", [i64::MAX]);
+        assert_eq!(Err(Error::IntegralValueOutOfRange(0, i64::MAX)), r);
         Ok(())
     }
 
