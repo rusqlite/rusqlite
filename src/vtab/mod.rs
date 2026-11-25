@@ -24,7 +24,7 @@ use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
 use crate::types::{RawValue, ToSql, ValueRef};
 pub use crate::types::{ValueIter, Values};
-use crate::util::{alloc, free_boxed_value, from_raw_parts, from_raw_parts_mut};
+use crate::util::{alloc, cstr_from_ptr, free_boxed_value, from_raw_parts, from_raw_parts_mut};
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
 // let conn: Connection = ...;
@@ -1298,13 +1298,8 @@ unsafe extern "C" fn rust_filter<C>(
 where
     C: VTabCursor,
 {
+    let idx_name = cstr_from_ptr(idx_str);
     unsafe {
-        let idx_name = if idx_str.is_null() {
-            None
-        } else {
-            let c_slice = CStr::from_ptr(idx_str);
-            Some(c_slice)
-        };
         let values = Values::from_raw_parts(argv, argc);
         let cr = cursor.cast::<C>();
         cursor_error(cursor, (*cr).filter(idx_num, idx_name, &Filters { values }))

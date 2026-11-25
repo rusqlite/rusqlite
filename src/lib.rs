@@ -104,6 +104,7 @@ pub use crate::transaction::TransactionState;
 pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
 pub use crate::types::ToSql;
 pub use crate::util::Name;
+use crate::util::to_string_lossy;
 pub use crate::version::*;
 #[cfg(feature = "rusqlite-macros")]
 #[doc(hidden)]
@@ -309,10 +310,8 @@ impl<T> OptionalExtension<T> for Result<T> {
     }
 }
 
-unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
-    unsafe { CStr::from_ptr(errmsg) }
-        .to_string_lossy()
-        .into_owned()
+unsafe fn errmsg_to_string(errmsg: *const c_char) -> Option<String> {
+    to_string_lossy(errmsg).map(|s| s.into_owned())
 }
 
 #[cfg(any(feature = "functions", feature = "vtab", test))]

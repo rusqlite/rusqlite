@@ -1,8 +1,9 @@
-use std::ffi::{CStr, CString, c_char};
+use std::ffi::{CString, c_char};
 use std::ptr;
 use std::str;
 
 use crate::ffi;
+use crate::util::cstr_from_ptr;
 use crate::{Connection, Error, Name, Result, Statement};
 
 /// Information about a column of a SQLite query.
@@ -234,9 +235,9 @@ impl Statement<'_> {
         col: usize,
     ) -> Result<
         Option<(
-            &CStr,
-            &CStr,
-            &CStr,
+            &std::ffi::CStr,
+            &std::ffi::CStr,
+            &std::ffi::CStr,
             Option<CString>,
             Option<CString>,
             bool,
@@ -327,16 +328,8 @@ impl Connection {
         })?;
 
         Ok((
-            if data_type.is_null() {
-                None
-            } else {
-                Some(unsafe { CStr::from_ptr(data_type).to_owned() })
-            },
-            if coll_seq.is_null() {
-                None
-            } else {
-                Some(unsafe { CStr::from_ptr(coll_seq).to_owned() })
-            },
+            cstr_from_ptr(data_type).map(|s| s.to_owned()),
+            cstr_from_ptr(coll_seq).map(|s| s.to_owned()),
             not_null != 0,
             primary_key != 0,
             auto_inc != 0,

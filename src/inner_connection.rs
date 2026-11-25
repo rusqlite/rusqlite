@@ -10,6 +10,7 @@ use super::{Connection, InterruptHandle, Name, OpenFlags, PrepFlags, Result};
 use crate::error::{Error, decode_result_raw, error_from_handle, error_with_offset};
 use crate::raw_statement::RawStatement;
 use crate::statement::Statement;
+use crate::util::cstr_from_ptr;
 use crate::version_number;
 
 pub struct InnerConnection {
@@ -166,7 +167,7 @@ impl InnerConnection {
             } else {
                 let message = super::errmsg_to_string(errmsg);
                 ffi::sqlite3_free(errmsg.cast::<c_void>());
-                Err(crate::error::error_from_sqlite_code(r, Some(message)))
+                Err(crate::error::error_from_sqlite_code(r, message))
             }
         }
     }
@@ -397,14 +398,8 @@ pub(crate) unsafe fn db_filename<N: Name>(
     db_name: N,
 ) -> Option<&str> {
     let db_name = db_name.as_cstr().unwrap();
-    unsafe {
-        let db_filename = ffi::sqlite3_db_filename(ptr, db_name.as_ptr());
-        if db_filename.is_null() {
-            None
-        } else {
-            CStr::from_ptr(db_filename).to_str().ok()
-        }
-    }
+    let db_filename = unsafe { ffi::sqlite3_db_filename(ptr, db_name.as_ptr()) };
+    cstr_from_ptr(db_filename).and_then(|s| s.to_str().ok())
 }
 
 impl Drop for InnerConnection {
