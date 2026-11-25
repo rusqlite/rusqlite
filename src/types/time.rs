@@ -16,6 +16,7 @@ use crate::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, Typ
 use crate::{Error, Result};
 use time::format_description::FormatItem;
 use time::macros::format_description;
+use time::parsing::Parsed;
 use time::{Date, OffsetDateTime, PrimitiveDateTime, Time, UtcDateTime};
 
 const OFFSET_DATE_TIME_ENCODING: &[FormatItem<'_>] = format_description!(
@@ -70,21 +71,25 @@ impl FromSql for OffsetDateTime {
             return value
                 .as_i64()
                 .and_then(|i| OffsetDateTime::from_unix_timestamp(i).map_err(FromSqlError::other));
+        } else if value.data_type() != Type::Text {
+            return Err(FromSqlError::InvalidType);
         }
-        value.as_str().and_then(|s| {
-            if let Some(b' ') = s.as_bytes().get(23) {
-                // legacy
-                return Self::parse(s, &LEGACY_DATE_TIME_FORMAT).map_err(FromSqlError::other);
-            }
-            if s.len() >= 8 && (s[8..].contains('+') || s[8..].contains('-')) {
-                // Formats 2-7 with timezone
-                return Self::parse(s, &OFFSET_DATE_TIME_FORMAT).map_err(FromSqlError::other);
-            }
-            // Formats 2-7 without timezone
-            PrimitiveDateTime::parse(s, &UTC_DATE_TIME_FORMAT)
-                .map(PrimitiveDateTime::assume_utc)
-                .map_err(FromSqlError::other)
-        })
+        let bytes = value.as_bytes()?;
+        let no_default = Parsed::new();
+        if let Some(b' ') = bytes.get(23) {
+            // legacy
+            return Self::parse_with_defaults(bytes, &LEGACY_DATE_TIME_FORMAT, no_default)
+                .map_err(FromSqlError::other);
+        }
+        if bytes.len() >= 8 && (bytes[8..].contains(&b'+') || bytes[8..].contains(&b'-')) {
+            // Formats 2-7 with timezone
+            return Self::parse_with_defaults(bytes, &OFFSET_DATE_TIME_FORMAT, no_default)
+                .map_err(FromSqlError::other);
+        }
+        // Formats 2-7 without timezone
+        PrimitiveDateTime::parse_with_defaults(bytes, &UTC_DATE_TIME_FORMAT, no_default)
+            .map(PrimitiveDateTime::assume_utc)
+            .map_err(FromSqlError::other)
     }
 }
 
