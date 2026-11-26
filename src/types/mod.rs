@@ -42,7 +42,7 @@ For example, to store datetimes as `i64`s counting the number of seconds since
 the Unix epoch:
 
 ```
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
+use rusqlite::types::{Assign, FromSql, FromSqlError, FromSqlResult, ToSql, ValueRef};
 use rusqlite::Result;
 
 pub struct DateTimeSql(pub time::OffsetDateTime);
@@ -58,8 +58,8 @@ impl FromSql for DateTimeSql {
 }
 
 impl ToSql for DateTimeSql {
-    fn to_sql(&self) -> Result<ToSqlOutput> {
-        Ok(self.0.unix_timestamp().into())
+    fn to_sql(&self, a: Assign) -> Result<()> {
+        a.assign_int(self.0.unix_timestamp())
     }
 }
 ```
@@ -70,15 +70,19 @@ impl ToSql for DateTimeSql {
 //! implements [`ToSql`] or [`FromSql`] for the cases where you want to know if
 //! a value was NULL (which gets translated to `None`).
 
+pub use self::assign::Assign;
+#[cfg(test)]
+pub(crate) use self::assign::SINK;
 pub use self::from_sql::{FromSql, FromSqlError, FromSqlResult};
 #[cfg(any(feature = "functions", feature = "vtab"))]
 pub use self::raw_value::{RawValue, ValueIter, Values};
-pub use self::to_sql::{ToSql, ToSqlOutput};
+pub use self::to_sql::ToSql;
 pub use self::value::Value;
 pub use self::value_ref::ValueRef;
 
 use std::fmt;
 
+mod assign;
 #[cfg(feature = "chrono")]
 mod chrono;
 mod from_sql;
@@ -145,7 +149,7 @@ mod test {
     use wasm_bindgen_test::wasm_bindgen_test as test;
 
     use super::Value;
-    use crate::{Connection, Error, Result, Statement, params};
+    use crate::{Connection, Error, Result, Statement};
     use std::ffi::{c_double, c_int};
 
     fn checked_memory_handle() -> Result<Connection> {
@@ -183,7 +187,7 @@ mod test {
         let db = checked_memory_handle()?;
 
         let s = "hello, world!";
-        db.execute("INSERT INTO foo(t) VALUES (?1)", [&s])?;
+        db.execute("INSERT INTO foo(t) VALUES (?1)", [s])?;
 
         let from: String = db.one_column("SELECT t FROM foo", [])?;
         assert_eq!(from, s);
@@ -366,7 +370,7 @@ mod test {
 
     macro_rules! test_conversion {
         ($db_etc:ident, $insert_value:expr, $get_type:ty,expect $expected_value:expr) => {
-            $db_etc.insert_statement.execute(params![$insert_value])?;
+            $db_etc.insert_statement.execute([$insert_value])?;
             let res = $db_etc
                 .query_statement
                 .query_row([], |row| row.get::<_, $get_type>(0));
@@ -374,7 +378,7 @@ mod test {
             $db_etc.delete_statement.execute([])?;
         };
         ($db_etc:ident, $insert_value:expr, $get_type:ty,expect_from_sql_error) => {
-            $db_etc.insert_statement.execute(params![$insert_value])?;
+            $db_etc.insert_statement.execute([$insert_value])?;
             let res = $db_etc
                 .query_statement
                 .query_row([], |row| row.get::<_, $get_type>(0));
@@ -384,7 +388,7 @@ mod test {
         ($db_etc:ident, $insert_value:expr, $get_type:ty,expect_to_sql_error) => {
             $db_etc
                 .insert_statement
-                .execute(params![$insert_value])
+                .execute([$insert_value])
                 .unwrap_err();
         };
     }

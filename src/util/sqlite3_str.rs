@@ -17,10 +17,7 @@ pub(crate) fn alloc<D: std::fmt::Display + ?Sized>(
     d: &D,
 ) -> Result<*mut c_char> {
     let mut str = Sqlite3Str::new(db);
-    write!(&mut str, "{}", d).map_err(|e| {
-        e.downcast()
-            .unwrap_or_else(|e| err!(ffi::SQLITE_IOERR, "{}", e))
-    })?;
+    write!(&mut str, "{}", d)?;
     str.into_raw().map(|raw| raw.0)
 }
 

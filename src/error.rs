@@ -157,6 +157,9 @@ pub enum Error {
     /// Error when the schema of a particular database is requested, but the index
     /// is out of range.
     InvalidDatabaseIndex(usize),
+    /// Pointer passed to SQLite
+    #[cfg(feature = "pointer")]
+    PointerMustBePassedByValue,
 }
 
 impl PartialEq for Error {
@@ -213,6 +216,8 @@ impl PartialEq for Error {
             #[cfg(feature = "loadable_extension")]
             (Self::InitError(e1), Self::InitError(e2)) => e1 == e2,
             (Self::InvalidDatabaseIndex(i1), Self::InvalidDatabaseIndex(i2)) => i1 == i2,
+            #[cfg(feature = "pointer")]
+            (Self::PointerMustBePassedByValue, Self::PointerMustBePassedByValue) => true,
             (..) => false,
         }
     }
@@ -259,6 +264,13 @@ impl From<ffi::InitError> for Error {
     #[cold]
     fn from(err: ffi::InitError) -> Self {
         Self::InitError(err)
+    }
+}
+
+#[cfg(feature = "serde_json")]
+impl From<serde_json::Error> for Error {
+    fn from(value: serde_json::Error) -> Self {
+        Self::ToSqlConversionFailure(value.into())
     }
 }
 
@@ -340,6 +352,8 @@ impl fmt::Display for Error {
             #[cfg(feature = "loadable_extension")]
             Self::InitError(ref err) => err.fmt(f),
             Self::InvalidDatabaseIndex(i) => write!(f, "Invalid database index: {i}"),
+            #[cfg(feature = "pointer")]
+            Self::PointerMustBePassedByValue => write!(f, "Pointer must be passed by value"),
         }
     }
 }
@@ -390,6 +404,8 @@ impl error::Error for Error {
             #[cfg(feature = "loadable_extension")]
             Self::InitError(ref err) => Some(err),
             Self::InvalidDatabaseIndex(_) => None,
+            #[cfg(feature = "pointer")]
+            Self::PointerMustBePassedByValue => None,
         }
     }
 }
@@ -442,6 +458,14 @@ macro_rules! err {
     ($code:expr, $fmt:expr, $($arg:tt)*) => {
         $crate::error::error_from_sqlite_code($code, Some(format!($fmt, $($arg)*)))
     };
+}
+
+impl From<std::io::Error> for Error {
+    fn from(value: std::io::Error) -> Self {
+        value
+            .downcast()
+            .unwrap_or_else(|e| err!(ffi::SQLITE_IOERR, "{}", e))
+    }
 }
 
 #[cold]

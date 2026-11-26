@@ -190,8 +190,7 @@ impl Transaction<'_> {
 
     #[inline]
     fn commit_(&mut self) -> Result<()> {
-        self.conn.execute_batch("COMMIT")?;
-        Ok(())
+        self.conn.execute_batch("COMMIT")
     }
 
     /// A convenience method which consumes and rolls back a transaction.
@@ -202,8 +201,7 @@ impl Transaction<'_> {
 
     #[inline]
     fn rollback_(&mut self) -> Result<()> {
-        self.conn.execute_batch("ROLLBACK")?;
-        Ok(())
+        self.conn.execute_batch("ROLLBACK")
     }
 
     /// Consumes the transaction, committing or rolling back according to the
@@ -687,8 +685,7 @@ mod test {
             }
             assert_current_sum(1, &tx)?;
         }
-        assert_current_sum(1, &db)?;
-        Ok(())
+        assert_current_sum(1, &db)
     }
 
     #[test]
@@ -709,8 +706,7 @@ mod test {
             assert_current_sum(6, &sp1)?;
             sp1.commit()?;
         }
-        assert_current_sum(6, &tx)?;
-        Ok(())
+        assert_current_sum(6, &tx)
     }
 
     #[test]
@@ -774,8 +770,7 @@ mod test {
             assert_current_sum(8, &sp1)?;
             sp1.commit()?;
         }
-        assert_current_sum(8, &db)?;
-        Ok(())
+        assert_current_sum(8, &db)
     }
 
     #[test]
@@ -811,8 +806,7 @@ mod test {
         assert_eq!(TransactionState::Read, db.transaction_state(DEFAULT_NAME)?);
         db.pragma_update(None, "user_version", 1)?;
         assert_eq!(TransactionState::Write, db.transaction_state(DEFAULT_NAME)?);
-        db.execute_batch("ROLLBACK")?;
-        Ok(())
+        db.execute_batch("ROLLBACK")
     }
 
     #[test]
