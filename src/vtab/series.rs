@@ -187,7 +187,12 @@ struct SeriesTabCursor<'vtab> {
 }
 
 unsafe impl VTabCursor for SeriesTabCursor<'_> {
-    fn filter(&mut self, idx_num: c_int, _idx_str: Option<&str>, args: &Filters<'_>) -> Result<()> {
+    fn filter(
+        &mut self,
+        idx_num: c_int,
+        _idx_str: Option<&CStr>,
+        args: &Filters<'_>,
+    ) -> Result<()> {
         let mut idx_num = QueryPlanFlags::from_bits_truncate(idx_num);
         let mut i = 0;
         if idx_num.contains(QueryPlanFlags::START) {

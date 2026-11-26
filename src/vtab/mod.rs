@@ -23,7 +23,7 @@ use crate::ffi;
 pub use crate::ffi::{sqlite3_vtab, sqlite3_vtab_cursor};
 use crate::types::{Assign, RawValue, ToSql, ValueRef};
 pub use crate::types::{ValueIter, Values};
-use crate::util::{alloc, free_boxed_value, from_raw_parts, from_raw_parts_mut};
+use crate::util::{alloc, cstr_from_ptr, free_boxed_value, from_raw_parts, from_raw_parts_mut};
 use crate::{Connection, Error, InnerConnection, Name, Result, str_to_cstring};
 
 // let conn: Connection = ...;
@@ -505,6 +505,12 @@ impl IndexInfo {
         unsafe {
             if (*self.0).needToFreeIdxStr == 1 {
                 sqlite3_free((*self.0).idxStr.cast());
+                // Like SQLite's own freeIdxStr(): clear the pointer and the
+                // ownership flag together. If the allocation below fails,
+                // SQLite and xFilter then see NULL instead of a dangling
+                // pointer.
+                (*self.0).idxStr = ptr::null_mut();
+                (*self.0).needToFreeIdxStr = 0;
             }
             (*self.0).idxStr = alloc(ptr::null_mut(), idx_str)?;
             (*self.0).needToFreeIdxStr = 1;
@@ -775,7 +781,7 @@ impl OrderBy<'_> {
 pub unsafe trait VTabCursor: Sized {
     /// Begin a search of a virtual table.
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xfilter_method))
-    fn filter(&mut self, idx_num: c_int, idx_str: Option<&str>, args: &Filters<'_>) -> Result<()>;
+    fn filter(&mut self, idx_num: c_int, idx_str: Option<&CStr>, args: &Filters<'_>) -> Result<()>;
     /// Advance cursor to the next row of a result set initiated by
     /// [`filter`](VTabCursor::filter). (See [SQLite doc](https://sqlite.org/vtab.html#the_xnext_method))
     fn next(&mut self) -> Result<()>;
@@ -1290,14 +1296,8 @@ unsafe extern "C" fn rust_filter<C>(
 where
     C: VTabCursor,
 {
-    use std::str;
+    let idx_name = cstr_from_ptr(idx_str);
     unsafe {
-        let idx_name = if idx_str.is_null() {
-            None
-        } else {
-            let c_slice = CStr::from_ptr(idx_str).to_bytes();
-            Some(str::from_utf8_unchecked(c_slice))
-        };
         let values = Values::from_raw_parts(argv, argc);
         let cr = cursor.cast::<C>();
         cursor_error(cursor, (*cr).filter(idx_num, idx_name, &Filters { values }))
@@ -1658,7 +1658,7 @@ mod test {
             fn filter(
                 &mut self,
                 _idx_num: c_int,
-                _idx_str: Option<&str>,
+                _idx_str: Option<&CStr>,
                 args: &Filters<'_>,
             ) -> Result<()> {
                 FILTER_SUBTYPE.store(args.get_subtype(0), Ordering::SeqCst);

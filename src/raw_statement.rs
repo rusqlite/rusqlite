@@ -2,6 +2,7 @@ use super::StatementStatus;
 use super::ffi;
 use crate::util::ParamIndexCache;
 use crate::util::SqliteMallocString;
+use crate::util::cstr_from_ptr;
 use std::ffi::{CStr, c_int};
 use std::ptr;
 #[cfg(feature = "cache")]
@@ -69,53 +70,29 @@ impl RawStatement {
     #[inline]
     #[cfg(feature = "column_metadata")]
     pub fn column_database_name(&self, idx: usize) -> Option<&CStr> {
-        unsafe {
-            let db_name = ffi::sqlite3_column_database_name(self.ptr, idx as c_int);
-            if db_name.is_null() {
-                None
-            } else {
-                Some(CStr::from_ptr(db_name))
-            }
-        }
+        let db_name = unsafe { ffi::sqlite3_column_database_name(self.ptr, idx as c_int) };
+        cstr_from_ptr(db_name)
     }
 
     #[inline]
     #[cfg(feature = "column_metadata")]
     pub fn column_table_name(&self, idx: usize) -> Option<&CStr> {
-        unsafe {
-            let tbl_name = ffi::sqlite3_column_table_name(self.ptr, idx as c_int);
-            if tbl_name.is_null() {
-                None
-            } else {
-                Some(CStr::from_ptr(tbl_name))
-            }
-        }
+        let tbl_name = unsafe { ffi::sqlite3_column_table_name(self.ptr, idx as c_int) };
+        cstr_from_ptr(tbl_name)
     }
 
     #[inline]
     #[cfg(feature = "column_metadata")]
     pub fn column_origin_name(&self, idx: usize) -> Option<&CStr> {
-        unsafe {
-            let origin_name = ffi::sqlite3_column_origin_name(self.ptr, idx as c_int);
-            if origin_name.is_null() {
-                None
-            } else {
-                Some(CStr::from_ptr(origin_name))
-            }
-        }
+        let origin_name = unsafe { ffi::sqlite3_column_origin_name(self.ptr, idx as c_int) };
+        cstr_from_ptr(origin_name)
     }
 
     #[inline]
     #[cfg(feature = "column_decltype")]
     pub fn column_decltype(&self, idx: usize) -> Option<&CStr> {
-        unsafe {
-            let decltype = ffi::sqlite3_column_decltype(self.ptr, idx as c_int);
-            if decltype.is_null() {
-                None
-            } else {
-                Some(CStr::from_ptr(decltype))
-            }
-        }
+        let decltype = unsafe { ffi::sqlite3_column_decltype(self.ptr, idx as c_int) };
+        cstr_from_ptr(decltype)
     }
 
     #[inline]
@@ -196,14 +173,8 @@ impl RawStatement {
 
     #[inline]
     pub fn bind_parameter_name(&self, index: i32) -> Option<&CStr> {
-        unsafe {
-            let name = ffi::sqlite3_bind_parameter_name(self.ptr, index);
-            if name.is_null() {
-                None
-            } else {
-                Some(CStr::from_ptr(name))
-            }
-        }
+        let name = unsafe { ffi::sqlite3_bind_parameter_name(self.ptr, index) };
+        cstr_from_ptr(name)
     }
 
     #[inline]
@@ -213,11 +184,7 @@ impl RawStatement {
 
     #[inline]
     pub fn sql(&self) -> Option<&CStr> {
-        if self.ptr.is_null() {
-            None
-        } else {
-            Some(unsafe { CStr::from_ptr(ffi::sqlite3_sql(self.ptr)) })
-        }
+        Some(unsafe { CStr::from_ptr(ffi::sqlite3_sql(self.ptr)) })
     }
 
     #[inline]

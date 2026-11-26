@@ -1,12 +1,13 @@
 //! Tracing and profiling functions. Error and warning log.
 
 use std::borrow::Cow;
-use std::ffi::{CStr, CString, c_char, c_int, c_uint, c_void};
+use std::ffi::{CString, c_char, c_int, c_uint, c_void};
 use std::marker::PhantomData;
 use std::panic::catch_unwind;
 use std::time::Duration;
 
 use super::ffi;
+use crate::util::to_string_lossy;
 use crate::{Connection, MAIN_DB, Result, StatementStatus};
 
 /// Set up the process-wide SQLite error logging callback.
@@ -26,7 +27,7 @@ use crate::{Connection, MAIN_DB, Result, StatementStatus};
 #[cfg(not(feature = "loadable_extension"))]
 pub unsafe fn config_log(callback: Option<fn(c_int, &str)>) -> Result<()> {
     extern "C" fn log_callback(p_arg: *mut c_void, err: c_int, msg: *const c_char) {
-        let s = unsafe { CStr::from_ptr(msg).to_string_lossy() };
+        let s = to_string_lossy(msg).unwrap_or_default();
         let callback: fn(c_int, &str) = unsafe { std::mem::transmute(p_arg) };
 
         drop(catch_unwind(|| callback(err, &s)));
@@ -108,13 +109,7 @@ impl StmtRef<'_> {
     #[must_use]
     pub fn sql(&self) -> Cow<'_, str> {
         let sql = unsafe { ffi::sqlite3_sql(self.ptr) };
-
-        if sql.is_null() {
-            return Cow::default();
-        }
-
-        // Safety: sql is a valid pointer to a cstr returned by sqlite3
-        unsafe { CStr::from_ptr(sql).to_string_lossy() }
+        to_string_lossy(sql).unwrap_or_default()
     }
 
     /// Expanded SQL text
@@ -172,7 +167,7 @@ impl Connection {
                     let trace_fn: *mut F = ctx.cast::<F>();
                     match evt {
                         ffi::SQLITE_TRACE_STMT => {
-                            let str = CStr::from_ptr(x as *const c_char).to_string_lossy();
+                            let str = to_string_lossy(x.cast()).unwrap_or_default();
                             (*trace_fn)(TraceEvent::Stmt(
                                 StmtRef::new(p.cast::<ffi::sqlite3_stmt>()),
                                 &str,

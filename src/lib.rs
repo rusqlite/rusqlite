@@ -104,6 +104,7 @@ pub use crate::transaction::TransactionState;
 pub use crate::transaction::{DropBehavior, Savepoint, Transaction, TransactionBehavior};
 pub use crate::types::ToSql;
 pub use crate::util::Name;
+use crate::util::to_string_lossy;
 pub use crate::version::*;
 #[cfg(feature = "rusqlite-macros")]
 #[doc(hidden)]
@@ -307,10 +308,8 @@ impl<T> OptionalExtension<T> for Result<T> {
     }
 }
 
-unsafe fn errmsg_to_string(errmsg: *const c_char) -> String {
-    unsafe { CStr::from_ptr(errmsg) }
-        .to_string_lossy()
-        .into_owned()
+unsafe fn errmsg_to_string(errmsg: *const c_char) -> Option<String> {
+    to_string_lossy(errmsg).map(|s| s.into_owned())
 }
 
 #[cfg(any(feature = "functions", feature = "vtab", test))]
@@ -416,8 +415,8 @@ impl Connection {
     /// make sure to read the following notes:
     ///
     /// - The database is stored in memory by default.
-    /// * With `sqlite-wasm-rs` 0.6, enable its `wasm-bindgen` feature to use the
-    ///   built-in host functions, or provide your own.
+    /// - Enable the `wasm-bindgen` feature to use the built-in host functions
+    ///   of `sqlite-wasm-rs`, or provide your own.
     /// - Persistent VFS (Virtual File Systems) is optional,
     ///   see <https://github.com/Spxg/sqlite-wasm-rs> for details
     #[inline]

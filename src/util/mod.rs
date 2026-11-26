@@ -10,6 +10,19 @@ pub(crate) use sqlite3_str::alloc;
 mod sqlite_string;
 pub(crate) use sqlite_string::SqliteMallocString;
 
+use crate::Result;
+use std::ffi::CStr;
+
+pub(crate) fn cstr_from_ptr<'a>(s: *const std::ffi::c_char) -> Option<&'a CStr> {
+    if s.is_null() {
+        return None;
+    }
+    Some(unsafe { CStr::from_ptr(s) })
+}
+pub(crate) fn to_string_lossy<'a>(s: *const std::ffi::c_char) -> Option<std::borrow::Cow<'a, str>> {
+    cstr_from_ptr(s).map(|s| s.to_string_lossy())
+}
+
 pub(crate) unsafe extern "C" fn free_boxed_value<T>(p: *mut std::ffi::c_void) {
     drop(unsafe { Box::from_raw(p.cast::<T>()) });
 }
@@ -27,9 +40,6 @@ pub(crate) unsafe fn from_raw_parts_mut<'a, T>(data: *mut T, len: std::ffi::c_in
     }
     &mut []
 }
-
-use crate::Result;
-use std::ffi::CStr;
 
 pub enum Named<'a> {
     Small(SmallCString),
