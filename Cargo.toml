@@ -101,6 +101,7 @@ column_metadata = ["libsqlite3-sys?/column_metadata"]
 # if not SQLITE_OMIT_DECLTYPE
 column_decltype = []
 wasm32-wasi-vfs = ["libsqlite3-sys?/wasm32-wasi-vfs"]
+wasm-bindgen = ["sqlite-wasm-rs?/wasm-bindgen"]
 # if not SQLITE_OMIT_DESERIALIZE
 serialize = []
 # pointer passing interfaces: 3.20.0
@@ -166,7 +167,7 @@ chrono = { version = "0.4.42", optional = true, default-features = false, featur
     "clock",
 ] }
 # JSON persistence
-serde_json = { version = "1.0", optional = true }
+serde_json = { version = "1.0.45", optional = true }
 # Virtual table
 csv = { version = "1.1", optional = true }
 # Url persistence
@@ -195,8 +196,8 @@ uuid = { version = "1.28", optional = true, features = ["js"] }
 sqlite-wasm-rs = { version = ">=0.6.3, <0.7.0", default-features = false }
 uuid = { version = "1.28", features = ["js"] }
 getrandom = { version = "0.4", features = ["wasm_js"] }
-wasm-bindgen-test = "0.3.54"
-wasm-bindgen = "0.2.104"
+wasm-bindgen-test = "0.3.78"
+wasm-bindgen = "0.2.128"
 
 [dev-dependencies]
 doc-comment = "0.3"

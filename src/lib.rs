@@ -439,8 +439,8 @@ impl Connection {
     /// make sure to read the following notes:
     ///
     /// - The database is stored in memory by default.
-    /// * With `sqlite-wasm-rs` 0.6, enable its `wasm-bindgen` feature to use the
-    ///   built-in host functions, or provide your own.
+    /// - Enable the `wasm-bindgen` feature to use the built-in host functions
+    ///   of `sqlite-wasm-rs`, or provide your own.
     /// - Persistent VFS (Virtual File Systems) is optional,
     ///   see <https://github.com/Spxg/sqlite-wasm-rs> for details
     #[inline]
