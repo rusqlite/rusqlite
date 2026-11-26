@@ -146,6 +146,8 @@ features](https://doc.rust-lang.org/cargo/reference/manifest.html#the-features-s
 * `ffi-sqlite-wasm-rs` switches to using the `sqlite-wasm-rs` crate (instead of
   `libsqlite3-sys`) on `wasm32-unknown-unknown` builds. This is enabled by
   default and can be opted out by setting `default-features = false`.
+* `wasm-bindgen` enables the `wasm-bindgen` feature of [`sqlite-wasm-rs`](https://crates.io/crates/sqlite-wasm-rs),
+  which provides the host functions that SQLite needs on `wasm32-unknown-unknown`.
 
 
 ## Notes on building rusqlite and libsqlite3-sys
