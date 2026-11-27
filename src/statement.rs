@@ -280,8 +280,12 @@ impl Statement<'_> {
     }
 
     /// Executes the prepared statement and maps a function over the resulting
-    /// rows, where the function returns a `Result` with `Error` type
-    /// implementing `std::convert::From<Error>` (so errors can be unified).
+    /// rows, returning an iterator over the mapped function results where the
+    /// function returns a `Result` with `Error` type implementing
+    /// `std::convert::From<Error>` (so errors can be unified).
+    ///
+    /// `f` is used to transform the _streaming_ iterator into a _standard_
+    /// iterator.
     ///
     /// This is equivalent to `stmt.query(params)?.and_then(f)`.
     ///
@@ -330,7 +334,7 @@ impl Statement<'_> {
     /// }
     /// ```
     ///
-    /// # Failure
+    /// ## Failure
     ///
     /// Will return `Err` if binding parameters fails.
     #[inline]
