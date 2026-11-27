@@ -107,11 +107,8 @@ fn test_dummy_module() -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// The three vtab callback trampolines must contain a user callback panic and
-/// return `SQLITE_ERROR` instead of aborting at the non-unwinding C ABI boundary.
 #[cfg(feature = "vtab")]
-#[test]
-fn test_vtab_callback_panics_are_contained() -> rusqlite::Result<()> {
+fn vtab_callback_test_connection(modes: &[i32]) -> rusqlite::Result<rusqlite::Connection> {
     use rusqlite::vtab::{
         Context, CreateVTab, Filters, IndexInfo, Module, UpdateVTab, Updates, VTab, VTabConnection,
         VTabCursor, VTabKind, sqlite3_vtab, sqlite3_vtab_cursor,
@@ -237,30 +234,43 @@ fn test_vtab_callback_panics_are_contained() -> rusqlite::Result<()> {
     const MODULE: Module<PanicTab> = Module::update_module();
     let db = Connection::open_in_memory()?;
 
-    db.create_module::<PanicTab, _>(c"panic0", &MODULE, Some(0))?;
-    db.execute("CREATE VIRTUAL TABLE t0 USING panic0", [])?;
+    for &mode in modes {
+        let name = format!("panic{mode}");
+        db.create_module::<PanicTab, _>(name.as_str(), &MODULE, Some(mode))?;
+        db.execute(&format!("CREATE VIRTUAL TABLE t{mode} USING {name}"), [])?;
+    }
+    Ok(db)
+}
+
+/// Catching callback panics requires unwinding. Abort-only targets, including
+/// the default wasm32-unknown-unknown configuration, run the in-range controls.
+#[cfg(all(feature = "vtab", panic = "unwind"))]
+#[test]
+fn test_vtab_callback_panics_are_contained() -> rusqlite::Result<()> {
+    let db = vtab_callback_test_connection(&[0, 1, 2])?;
+
     let err = db
         .query_row("SELECT a FROM t0", [], |_| Ok(()))
         .unwrap_err();
     assert!(err.to_string().contains("best_index panicked"), "{err}");
 
-    db.create_module::<PanicTab, _>(c"panic1", &MODULE, Some(1))?;
-    db.execute("CREATE VIRTUAL TABLE t1 USING panic1", [])?;
     let err = db
         .query_row("SELECT a FROM t1 WHERE a = 1", [], |_| Ok(()))
         .unwrap_err();
     assert!(err.to_string().contains("filter panicked"), "{err}");
 
-    db.create_module::<PanicTab, _>(c"panic2", &MODULE, Some(2))?;
-    db.execute("CREATE VIRTUAL TABLE t2 USING panic2", [])?;
     db.execute("INSERT INTO t2 VALUES (1)", [])?;
     let err = db.execute("UPDATE t2 SET a = 2", []).unwrap_err();
     assert!(err.to_string().contains("update panicked"), "{err}");
 
-    for (name, mode) in [("panic3", 3), ("panic4", 4), ("panic5", 5)] {
-        db.create_module::<PanicTab, _>(name, &MODULE, Some(mode))?;
-        db.execute(&format!("CREATE VIRTUAL TABLE t{mode} USING {name}"), [])?;
-    }
+    Ok(())
+}
+
+#[cfg(feature = "vtab")]
+#[test]
+fn test_vtab_callbacks_with_in_range_indices() -> rusqlite::Result<()> {
+    let db = vtab_callback_test_connection(&[3, 4, 5])?;
+
     let row: i64 = db.query_row("SELECT a FROM t3 WHERE a = 1", [], |r| r.get(0))?;
     assert_eq!(row, 1);
     let row: i64 = db.query_row("SELECT a FROM t4 WHERE a = 1", [], |r| r.get(0))?;
