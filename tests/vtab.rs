@@ -195,13 +195,17 @@ fn test_open_error_code_zero_is_not_success() -> rusqlite::Result<()> {
     let db = Connection::open_in_memory()?;
     db.create_module::<ErrorTab, _>(c"errtab", &MODULE, Some(0))?;
     db.execute("CREATE VIRTUAL TABLE t0 USING errtab", [])?;
-    let err = db.query_row("SELECT a FROM t0", [], |_| Ok(())).unwrap_err();
+    let err = db
+        .query_row("SELECT a FROM t0", [], |_| Ok(()))
+        .unwrap_err();
     let sqlite = err.sqlite_error().expect("SQLite failure");
     assert_eq!(sqlite.extended_code, ffi::SQLITE_ERROR);
 
     db.create_module::<ErrorTab, _>(c"errtab1", &MODULE, Some(1))?;
     db.execute("CREATE VIRTUAL TABLE t1 USING errtab1", [])?;
-    let err = db.query_row("SELECT a FROM t1", [], |_| Ok(())).unwrap_err();
+    let err = db
+        .query_row("SELECT a FROM t1", [], |_| Ok(()))
+        .unwrap_err();
     let sqlite = err.sqlite_error().expect("SQLite failure");
     assert_eq!(sqlite.extended_code, 1);
     Ok(())
