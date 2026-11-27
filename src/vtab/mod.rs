@@ -13,6 +13,7 @@ use std::borrow::Cow::{self, Borrowed, Owned};
 use std::ffi::{CStr, c_char, c_int, c_void};
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 use std::slice;
 
@@ -488,6 +489,11 @@ impl IndexInfo {
     /// Information about what parameters to pass to [`VTabCursor::filter`].
     #[inline]
     pub fn constraint_usage(&mut self, constraint_idx: usize) -> IndexConstraintUsage<'_> {
+        let n = unsafe { (*self.0).nConstraint } as usize;
+        assert!(
+            constraint_idx < n,
+            "constraint index {constraint_idx} out of range ({n} constraints)"
+        );
         let constraint_usages =
             unsafe { from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint) };
         IndexConstraintUsage(&mut constraint_usages[constraint_idx])
@@ -1220,10 +1226,14 @@ where
     let vt = vtab.cast::<T>();
     let mut idx_info = IndexInfo(info);
     unsafe {
-        match (*vt).best_index(&mut idx_info) {
-            Ok(true) => ffi::SQLITE_OK,
-            Ok(false) => ffi::SQLITE_CONSTRAINT,
-            err => vtab_error(vtab, err),
+        match catch_unwind(AssertUnwindSafe(|| (*vt).best_index(&mut idx_info))) {
+            Ok(Ok(true)) => ffi::SQLITE_OK,
+            Ok(Ok(false)) => ffi::SQLITE_CONSTRAINT,
+            Ok(err) => vtab_error(vtab, err),
+            Err(_) => {
+                set_err_msg(vtab, "best_index panicked");
+                ffi::SQLITE_ERROR
+            }
         }
     }
 }
