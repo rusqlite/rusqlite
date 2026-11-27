@@ -490,7 +490,10 @@ impl IndexInfo {
     #[inline]
     pub fn constraint_usage(&mut self, constraint_idx: usize) -> IndexConstraintUsage<'_> {
         let n = unsafe { (*self.0).nConstraint } as usize;
-        assert!(constraint_idx < n, "constraint index {constraint_idx} out of range ({n} constraints)");
+        assert!(
+            constraint_idx < n,
+            "constraint index {constraint_idx} out of range ({n} constraints)"
+        );
         let constraint_usages =
             unsafe { from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint) };
         IndexConstraintUsage(&mut constraint_usages[constraint_idx])
@@ -870,7 +873,11 @@ impl<'a> Deref for Filters<'a> {
 impl Filters<'_> {
     /// Find all elements on the right-hand side of an IN constraint
     pub fn in_values(&self, idx: usize) -> Result<InValues<'_>> {
-        assert!(idx < self.args.len(), "in_values index {idx} out of range ({} args)", self.args.len());
+        assert!(
+            idx < self.args.len(),
+            "in_values index {idx} out of range ({} args)",
+            self.args.len()
+        );
         let list = self.args[idx];
         Ok(InValues {
             list,
@@ -960,7 +967,10 @@ impl Updates<'_> {
     #[inline]
     #[must_use]
     pub fn no_change(&self, idx: usize) -> bool {
-        assert!(idx < self.values.args.len(), "no_change index {idx} out of range");
+        assert!(
+            idx < self.values.args.len(),
+            "no_change index {idx} out of range"
+        );
         unsafe { ffi::sqlite3_value_nochange(self.values.args[idx]) != 0 }
     }
 
@@ -1311,7 +1321,9 @@ where
     unsafe {
         let values = Values::from_raw_parts(argv, argc);
         let cr = cursor.cast::<C>();
-        match catch_unwind(AssertUnwindSafe(|| (*cr).filter(idx_num, idx_name, &Filters { values }))) {
+        match catch_unwind(AssertUnwindSafe(|| {
+            (*cr).filter(idx_num, idx_name, &Filters { values })
+        })) {
             Ok(result) => cursor_error(cursor, result),
             Err(_) => {
                 set_err_msg((*cursor).pVtab, "filter panicked");
