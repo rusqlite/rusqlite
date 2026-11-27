@@ -13,6 +13,7 @@ use std::borrow::Cow::{self, Borrowed, Owned};
 use std::ffi::{CStr, c_char, c_int, c_void};
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 use std::slice;
 
@@ -867,6 +868,11 @@ impl<'a> Deref for Filters<'a> {
 impl Filters<'_> {
     /// Find all elements on the right-hand side of an IN constraint
     pub fn in_values(&self, idx: usize) -> Result<InValues<'_>> {
+        assert!(
+            idx < self.args.len(),
+            "in_values index {idx} out of range ({} args)",
+            self.args.len()
+        );
         let list = self.args[idx];
         Ok(InValues {
             list,
@@ -1302,7 +1308,15 @@ where
     unsafe {
         let values = Values::from_raw_parts(argv, argc);
         let cr = cursor.cast::<C>();
-        cursor_error(cursor, (*cr).filter(idx_num, idx_name, &Filters { values }))
+        match catch_unwind(AssertUnwindSafe(|| {
+            (*cr).filter(idx_num, idx_name, &Filters { values })
+        })) {
+            Ok(result) => cursor_error(cursor, result),
+            Err(_) => {
+                set_err_msg((*cursor).pVtab, "filter panicked");
+                ffi::SQLITE_ERROR
+            }
+        }
     }
 }
 
