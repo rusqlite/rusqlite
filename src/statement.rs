@@ -229,8 +229,7 @@ impl Statement<'_> {
     /// rows, returning an iterator over the mapped function results.
     ///
     /// `f` is used to transform the _streaming_ iterator into a _standard_
-    /// iterator. Note that the returned [`MappedRows`] iterator is lazy:
-    /// neither the SQL statement nor `f` is executed until it is iterated.
+    /// iterator.
     ///
     /// This is equivalent to `stmt.query(params)?.mapped(f)`.
     ///
@@ -286,8 +285,7 @@ impl Statement<'_> {
     /// `std::convert::From<Error>` (so errors can be unified).
     ///
     /// `f` is used to transform the _streaming_ iterator into a _standard_
-    /// iterator. Note that the returned [`AndThenRows`] iterator is lazy:
-    /// neither the SQL statement nor `f` is executed until it is iterated.
+    /// iterator.
     ///
     /// This is equivalent to `stmt.query(params)?.and_then(f)`.
     ///
