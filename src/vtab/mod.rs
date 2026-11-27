@@ -13,6 +13,7 @@ use std::borrow::Cow::{self, Borrowed, Owned};
 use std::ffi::{CStr, c_char, c_int, c_void};
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 use std::slice;
 
@@ -956,6 +957,10 @@ impl Updates<'_> {
     #[inline]
     #[must_use]
     pub fn no_change(&self, idx: usize) -> bool {
+        assert!(
+            idx < self.values.args.len(),
+            "no_change index {idx} out of range"
+        );
         unsafe { ffi::sqlite3_value_nochange(self.values.args[idx]) != 0 }
     }
 
@@ -1367,23 +1372,31 @@ where
     let vt = vtab.cast::<T>();
     unsafe {
         let args = from_raw_parts_mut(argv, argc);
-        let r = if args.len() == 1 {
-            (*vt).delete(ValueRef::from_value(args[0]))
-        } else if ffi::sqlite3_value_type(args[0]) == ffi::SQLITE_NULL {
-            // TODO Make the distinction between argv[1] == NULL and argv[1] != NULL ?
-            let values = Values { args };
-            match (*vt).insert(&Inserts { values }) {
-                Ok(rowid) => {
-                    *p_rowid = rowid;
-                    Ok(())
+        let r = catch_unwind(AssertUnwindSafe(|| {
+            if args.len() == 1 {
+                (*vt).delete(ValueRef::from_value(args[0]))
+            } else if ffi::sqlite3_value_type(args[0]) == ffi::SQLITE_NULL {
+                // TODO Make the distinction between argv[1] == NULL and argv[1] != NULL ?
+                let values = Values { args };
+                match (*vt).insert(&Inserts { values }) {
+                    Ok(rowid) => {
+                        *p_rowid = rowid;
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
+            } else {
+                let values = Values { args };
+                (*vt).update(&Updates { values })
             }
-        } else {
-            let values = Values { args };
-            (*vt).update(&Updates { values })
-        };
-        vtab_error(vtab, r)
+        }));
+        match r {
+            Ok(result) => vtab_error(vtab, result),
+            Err(_) => {
+                set_err_msg(vtab, "update panicked");
+                ffi::SQLITE_ERROR
+            }
+        }
     }
 }
 
