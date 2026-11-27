@@ -13,6 +13,7 @@ use std::borrow::Cow::{self, Borrowed, Owned};
 use std::ffi::{CStr, c_char, c_int, c_void};
 use std::marker::PhantomData;
 use std::ops::Deref;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 use std::slice;
 
@@ -488,6 +489,8 @@ impl IndexInfo {
     /// Information about what parameters to pass to [`VTabCursor::filter`].
     #[inline]
     pub fn constraint_usage(&mut self, constraint_idx: usize) -> IndexConstraintUsage<'_> {
+        let n = unsafe { (*self.0).nConstraint } as usize;
+        assert!(constraint_idx < n, "constraint index {constraint_idx} out of range ({n} constraints)");
         let constraint_usages =
             unsafe { from_raw_parts_mut((*self.0).aConstraintUsage, (*self.0).nConstraint) };
         IndexConstraintUsage(&mut constraint_usages[constraint_idx])
@@ -867,6 +870,7 @@ impl<'a> Deref for Filters<'a> {
 impl Filters<'_> {
     /// Find all elements on the right-hand side of an IN constraint
     pub fn in_values(&self, idx: usize) -> Result<InValues<'_>> {
+        assert!(idx < self.args.len(), "in_values index {idx} out of range ({} args)", self.args.len());
         let list = self.args[idx];
         Ok(InValues {
             list,
@@ -956,6 +960,7 @@ impl Updates<'_> {
     #[inline]
     #[must_use]
     pub fn no_change(&self, idx: usize) -> bool {
+        assert!(idx < self.values.args.len(), "no_change index {idx} out of range");
         unsafe { ffi::sqlite3_value_nochange(self.values.args[idx]) != 0 }
     }
 
@@ -1220,10 +1225,14 @@ where
     let vt = vtab.cast::<T>();
     let mut idx_info = IndexInfo(info);
     unsafe {
-        match (*vt).best_index(&mut idx_info) {
-            Ok(true) => ffi::SQLITE_OK,
-            Ok(false) => ffi::SQLITE_CONSTRAINT,
-            err => vtab_error(vtab, err),
+        match catch_unwind(AssertUnwindSafe(|| (*vt).best_index(&mut idx_info))) {
+            Ok(Ok(true)) => ffi::SQLITE_OK,
+            Ok(Ok(false)) => ffi::SQLITE_CONSTRAINT,
+            Ok(err) => vtab_error(vtab, err),
+            Err(_) => {
+                set_err_msg(vtab, "best_index panicked");
+                ffi::SQLITE_ERROR
+            }
         }
     }
 }
@@ -1302,7 +1311,13 @@ where
     unsafe {
         let values = Values::from_raw_parts(argv, argc);
         let cr = cursor.cast::<C>();
-        cursor_error(cursor, (*cr).filter(idx_num, idx_name, &Filters { values }))
+        match catch_unwind(AssertUnwindSafe(|| (*cr).filter(idx_num, idx_name, &Filters { values }))) {
+            Ok(result) => cursor_error(cursor, result),
+            Err(_) => {
+                set_err_msg((*cursor).pVtab, "filter panicked");
+                ffi::SQLITE_ERROR
+            }
+        }
     }
 }
 
@@ -1367,23 +1382,31 @@ where
     let vt = vtab.cast::<T>();
     unsafe {
         let args = from_raw_parts_mut(argv, argc);
-        let r = if args.len() == 1 {
-            (*vt).delete(ValueRef::from_value(args[0]))
-        } else if ffi::sqlite3_value_type(args[0]) == ffi::SQLITE_NULL {
-            // TODO Make the distinction between argv[1] == NULL and argv[1] != NULL ?
-            let values = Values { args };
-            match (*vt).insert(&Inserts { values }) {
-                Ok(rowid) => {
-                    *p_rowid = rowid;
-                    Ok(())
+        let r = catch_unwind(AssertUnwindSafe(|| {
+            if args.len() == 1 {
+                (*vt).delete(ValueRef::from_value(args[0]))
+            } else if ffi::sqlite3_value_type(args[0]) == ffi::SQLITE_NULL {
+                // TODO Make the distinction between argv[1] == NULL and argv[1] != NULL ?
+                let values = Values { args };
+                match (*vt).insert(&Inserts { values }) {
+                    Ok(rowid) => {
+                        *p_rowid = rowid;
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
+            } else {
+                let values = Values { args };
+                (*vt).update(&Updates { values })
             }
-        } else {
-            let values = Values { args };
-            (*vt).update(&Updates { values })
-        };
-        vtab_error(vtab, r)
+        }));
+        match r {
+            Ok(result) => vtab_error(vtab, result),
+            Err(_) => {
+                set_err_msg(vtab, "update panicked");
+                ffi::SQLITE_ERROR
+            }
+        }
     }
 }
 
