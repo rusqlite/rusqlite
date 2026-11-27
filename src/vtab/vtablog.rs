@@ -162,7 +162,7 @@ unsafe impl<'vtab> VTab<'vtab> for VTabLog {
         Ok(true)
     }
 
-    fn open(&'vtab mut self) -> Result<Self::Cursor> {
+    fn open(&mut self) -> Result<Self::Cursor> {
         self.n_cursor += 1;
         println!(
             "VTabLog::open(tab={}, cursor={})",

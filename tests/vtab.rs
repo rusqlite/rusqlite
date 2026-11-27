@@ -47,7 +47,7 @@ fn test_dummy_module() -> rusqlite::Result<()> {
             Ok(true)
         }
 
-        fn open(&'vtab mut self) -> Result<DummyTabCursor<'vtab>> {
+        fn open(&mut self) -> Result<DummyTabCursor<'vtab>> {
             Ok(DummyTabCursor::default())
         }
     }

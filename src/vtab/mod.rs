@@ -297,7 +297,7 @@ pub unsafe trait VTab<'vtab>: Sized {
 
     /// Create a new cursor used for accessing a virtual table.
     /// (See [SQLite doc](https://sqlite.org/vtab.html#the_xopen_method))
-    fn open(&'vtab mut self) -> Result<Self::Cursor>;
+    fn open(&mut self) -> Result<Self::Cursor>;
 }
 
 /// Read-only virtual table instance trait.
@@ -1627,7 +1627,7 @@ mod test {
                 Ok(true)
             }
 
-            fn open(&'vtab mut self) -> Result<Self::Cursor> {
+            fn open(&mut self) -> Result<Self::Cursor> {
                 Ok(SubTypeVTabCursor {
                     base: ffi::sqlite3_vtab_cursor::default(),
                 })
