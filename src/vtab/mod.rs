@@ -1432,7 +1432,13 @@ unsafe fn vtab_error<T>(vtab: *mut sqlite3_vtab, result: Result<T>) -> c_int {
                 if let Some(err_msg) = s {
                     set_err_msg(vtab, &err_msg);
                 }
-                err.extended_code
+                // extended_code == 0 would report success while the operation actually
+                // failed (e.g. OP_VOpen then writes a NULL cursor); never return success.
+                if err.extended_code == 0 {
+                    ffi::SQLITE_ERROR
+                } else {
+                    err.extended_code
+                }
             }
             Err(err) => {
                 set_err_msg(vtab, &err.to_string());
