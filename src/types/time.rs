@@ -76,7 +76,13 @@ impl FromSql for OffsetDateTime {
                 // legacy
                 return Self::parse(s, &LEGACY_DATE_TIME_FORMAT).map_err(FromSqlError::other);
             }
-            if s.len() >= 8 && (s[8..].contains('+') || s[8..].contains('-')) {
+            // Scan the bytes, not `s[8..]`: byte 8 may fall inside a
+            // multi-byte character, where string slicing panics. '+' and
+            // '-' are ASCII, so they can never appear inside a multi-byte
+            // UTF-8 sequence and the byte scan is equivalent.
+            if s.len() >= 8
+                && (s.as_bytes()[8..].contains(&b'+') || s.as_bytes()[8..].contains(&b'-'))
+            {
                 // Formats 2-7 with timezone
                 return Self::parse(s, &OFFSET_DATE_TIME_FORMAT).map_err(FromSqlError::other);
             }
@@ -295,6 +301,25 @@ mod test {
             let result: OffsetDateTime = db.one_column("SELECT ?1", [s])?;
             assert_eq!(result, t);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_offset_date_time_parsing_malformed() -> Result<()> {
+        let db = checked_memory_handle()?;
+        // Shorter than 8 bytes: must error, not panic.
+        let result: Result<OffsetDateTime> = db.one_column("SELECT ?1", ["abc"]);
+        assert!(result.is_err());
+        // A multi-byte character spanning byte index 8 makes `s[8..]`
+        // panic ("not a char boundary") even with the length check:
+        // 'é' occupies bytes 7..9 of this string.
+        let result: Result<OffsetDateTime> = db.one_column("SELECT ?1", ["abcdefg\u{e9}+xx"]);
+        assert!(result.is_err());
+        // Same, with the multi-byte character later in the string and a
+        // '-' after it.
+        let result: Result<OffsetDateTime> =
+            db.one_column("SELECT ?1", ["2013-10-07T08:23:19.123\u{e9}-07:00"]);
+        assert!(result.is_err());
         Ok(())
     }
 
